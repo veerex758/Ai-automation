@@ -2,7 +2,6 @@ import { Pool } from "pg";
 
 declare global {
   // Reuse a pool across development hot reloads.
-  // eslint-disable-next-line no-var
   var aivantaPgPool: Pool | undefined;
 }
 
