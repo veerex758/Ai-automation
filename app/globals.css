@@ -115,3 +115,42 @@ h1 span{color:#809e65}
 .cta-secondary-link:hover{color:var(--green);transform:translateY(-1px)}
 @media(max-width:680px){.cta-actions{align-items:flex-start;gap:17px;flex-direction:column}.cta-secondary-link{padding:4px 0}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+
+/* Responsive finishing pass: restrained motion, sharper interactions, and small-screen safeguards. */
+@keyframes aivanta-rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes aivanta-soft-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-copy { animation: aivanta-rise-in .55s ease-out both; }
+  .preview-wrap { animation: aivanta-rise-in .7s .08s ease-out both; }
+  .floating-note.note-top { animation: aivanta-rise-in .65s .2s ease-out both, aivanta-soft-float 5s 1s ease-in-out infinite; }
+  .floating-note.note-bottom { animation: aivanta-rise-in .65s .3s ease-out both; }
+}
+.capability-card:focus-within { border-color: #a9c58e; box-shadow: 0 8px 24px rgba(40,57,43,.06); }
+.nav-cta:focus-visible, .button:focus-visible, .text-link:focus-visible, .capability-card a:focus-visible { border-radius: 7px; }
+@media (max-width: 680px) {
+  h1 { font-size: clamp(43px, 12vw, 58px); letter-spacing: -2.7px; }
+  .preview-wrap { min-width: 0; }
+  .workflow-card { min-width: 0; }
+  .flow-item { gap: 9px; }
+  .flow-text strong { font-size: 10px; }
+  .flow-state { font-size: 8px; padding: 5px 6px; }
+}
+@media (max-width: 380px) {
+  .shell { width: calc(100% - 28px); }
+  .nav-cta { padding: 9px 8px; font-size: 10px; }
+  .brand { gap: 7px; font-size: 18px; }
+  .brand-mark { width: 29px; height: 29px; }
+  .hero-bottom-line { letter-spacing: .2px; }
+  .workflow-card { padding: 13px; }
+  .workflow-meta { gap: 8px; font-size: 8px; }
+  .floating-note { max-width: 178px; }
+  .floating-note strong { font-size: 9px; }
+  .floating-note small { font-size: 8px; }
+}
