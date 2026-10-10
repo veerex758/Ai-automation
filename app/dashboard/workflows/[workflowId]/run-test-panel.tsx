@@ -165,7 +165,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
           {sendingLive ? "Sending…" : "✉ Run live email"}
         </button>
         {liveError && <p className="dry-run-error" role="alert">{liveError}</p>}
-        {liveResult && <div className="live-run-success" role="status"><strong>Live run {liveResult.run.status}</strong><span>Version {liveResult.run.workflow_version} · {liveResult.run.duration_ms} ms</span><p>{liveResult.sideEffectsPerformed ? "Resend accepted the email. A real message was sent to the configured recipient." : "No email was sent because the workflow condition skipped the action."}</p></div>}
+        {liveResult && <div className="live-run-success" role="status"><strong>Live run {liveResult.run.status}</strong><span>Version {liveResult.run.workflow_version} · {liveResult.run.duration_ms} ms</span><p>{liveResult.run.status === "failed" ? "The email action failed. Check run history and provider configuration before retrying." : liveResult.sideEffectsPerformed ? "Resend accepted the email. A real message was sent to the configured recipient." : "No email was sent because the workflow condition skipped the action."}</p></div>}
       </div>
       {result && <div className="dry-run-results" role="status">
         <div className="dry-run-results-heading"><strong>Run passed</strong><span>{version ? `Version ${version} · ` : ""}{result.steps.length} steps</span></div>
