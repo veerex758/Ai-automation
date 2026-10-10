@@ -5,11 +5,13 @@ Aivanta is being built as a staged business automation platform: conventional wo
 ## Stage 1 — Product foundation
 - [x] Establish a Next.js + TypeScript application shell.
 - [x] Create the initial responsive marketing experience.
-- [ ] Add automated linting, type-checking, and build verification.
-- [ ] Add a dashboard shell and workspace navigation.
-- [ ] Define the workflow data model and validation rules.
+- [x] Add automated linting, type-checking, and build verification.
+- [x] Add a dashboard shell and workspace navigation.
+- [x] Define the initial workflow definition shape and reusable validation rules in `lib/workflows/validation.ts`.
 
 ## Stage 2 — Workflow workspace
+
+Current foundation: the visual builder and dashboard store prototype drafts in browser storage only. Shared validation rules exist, but are not yet connected to an API route or persistent database.
 - [ ] Create, edit, save, and version workflow definitions.
 - [ ] Build a visual workflow editor with explicit triggers, actions, and conditions.
 - [ ] Add a safe test/dry-run mode and useful execution history.
