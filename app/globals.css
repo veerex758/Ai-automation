@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
-@import "tailwindcss";
 
 :root{--ink:#18211d;--muted:#69746e;--paper:#f7f8f4;--green:#c9f26f;--line:#e4e8e1;--deep:#19231f}
 *{box-sizing:border-box}
