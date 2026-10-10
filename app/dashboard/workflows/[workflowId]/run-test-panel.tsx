@@ -12,7 +12,7 @@ type RunStep = {
   conditionMatched?: boolean;
 };
 type RunResult = { mode: "dry_run"; status: "succeeded"; sideEffectsPerformed: false; steps: RunStep[] };
-type IntegrationStatus = { provider: string; configured: boolean; liveExecutionEnabled: boolean; ready: boolean; missing: string[] };
+type IntegrationStatus = { provider: string; configured: boolean; recipientAllowed: boolean; liveExecutionEnabled: boolean; ready: boolean; missing: string[] };
 type LiveRunResult = { run: { id: string; status: string; workflow_version: number; duration_ms: number }; steps: Array<{ step_id: string; position: number; step_type: RunStep["type"]; title: string; status: "simulated" | "skipped" | "executed" | "failed"; result: Record<string, unknown> }>; sideEffectsPerformed: boolean; providerMessageId?: string };
 type RunHistoryItem = {
   id: string;
@@ -55,12 +55,12 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/integrations/resend/status", { cache: "no-store" })
+    fetch(`/api/integrations/resend/status?recipient=${encodeURIComponent(liveEmailRecipient)}`, { cache: "no-store" })
       .then(async (response) => response.ok ? response.json() : null)
       .then((data) => { if (!cancelled && data) setIntegration(data as IntegrationStatus); })
       .catch(() => { if (!cancelled) setIntegration(null); });
     return () => { cancelled = true; };
-  }, []);
+  }, [liveEmailRecipient]);
 
   async function runTest() {
     if (running || hasUnsavedChanges) return;
@@ -165,8 +165,10 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
           : hasUnsavedChanges
             ? "Save your workflow changes before live execution."
             : integration?.ready
-              ? "Resend is configured. Live runs can send one real email from this workflow."
-              : `Configure the server environment: ${integration?.missing?.join(", ") || "email integration status unavailable"}.`}</p>
+              ? "Resend is configured and this recipient is approved for live email."
+              : integration?.recipientAllowed === false && liveEmailRecipient
+                ? "This recipient is not on the server-approved allowlist. Ask the workspace administrator to approve it."
+                : `Configure the server environment: ${integration?.missing?.join(", ") || "email integration status unavailable"}.`}</p>
         <button className="builder-run live-run-button" type="button" onClick={() => void runLive()} disabled={sendingLive || hasUnsavedChanges || workflowStatus !== "active" || !integration?.ready}>
           {sendingLive ? "Sending…" : "✉ Run live email"}
         </button>
