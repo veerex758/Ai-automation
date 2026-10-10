@@ -64,11 +64,13 @@ export default function WorkflowBuilderPage() {
 
   function updateSelected(updates: Partial<Pick<WorkflowNode, "title" | "description">>) {
     if (!selectedNode) return;
+    setValidation(null);
     setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === selectedNode.id ? { ...node, ...updates } : node) }));
   }
 
   function updateSetting(key: string, value: string) {
     if (!selectedNode) return;
+    setValidation(null);
     setDefinition((current) => ({
       ...current,
       nodes: current.nodes.map((node) => node.id === selectedNode.id
@@ -78,6 +80,7 @@ export default function WorkflowBuilderPage() {
   }
 
   function addNode(type: Exclude<NodeType, "trigger">) {
+    setValidation(null);
     const id = `${type}-${Date.now().toString(36)}`;
     const node: WorkflowNode = {
       id, type, title: type === "action" ? "New action" : "Check a condition", description: "",
@@ -92,12 +95,14 @@ export default function WorkflowBuilderPage() {
 
   function removeSelected() {
     if (!selectedNode || selectedNode.type === "trigger") return;
+    setValidation(null);
     setDefinition((current) => ({ ...current, nodes: current.nodes.filter((node) => node.id !== selectedNode.id) }));
     setSelectedId(definition.nodes.find((node) => node.type === "trigger")?.id ?? "");
     setNotice("Step removed. Save your changes to keep this update.");
   }
 
   function moveNode(index: number, direction: -1 | 1) {
+    setValidation(null);
     const target = index + direction;
     if (target < 1 || target >= definition.nodes.length) return;
     setDefinition((current) => {
@@ -108,7 +113,7 @@ export default function WorkflowBuilderPage() {
   }
 
   async function restoreVersion(version: number) {
-    if (saving || restoringVersion !== null) return;
+    if (saving || validating || restoringVersion !== null) return;
     const confirmed = window.confirm(`Restore version ${version}? This will replace any unsaved edits. The restored snapshot will be saved as a new version, and your existing saved versions will remain in history.`);
     if (!confirmed) return;
     setRestoringVersion(version);
@@ -156,7 +161,8 @@ export default function WorkflowBuilderPage() {
   }
 
   async function saveDefinition() {
-    if (saving) return;
+    if (saving || validating || restoringVersion !== null) return;
+    setValidation(null);
     setSaving(true);
     setError("");
     setNotice("");
@@ -268,7 +274,7 @@ export default function WorkflowBuilderPage() {
           <div className="panel-add"><div className="panel-add-heading"><strong>Add a step</strong><span>Choose what happens next</span></div><button onClick={() => addNode("action")} disabled={definition.nodes.length >= 30}><span className="add-icon action-add">↗</span><span><strong>Action</strong><small>Perform a task</small></span><b>＋</b></button><button onClick={() => addNode("condition")} disabled={definition.nodes.length >= 30}><span className="add-icon condition-add">◇</span><span><strong>Condition</strong><small>Check a rule</small></span><b>＋</b></button><p>Triggers, integrations and live execution will be connected in a later release.</p></div>
           <section className="version-history" aria-labelledby="version-history-title">
             <div className="panel-add-heading"><strong id="version-history-title">Version history</strong><span>Last 10 saved versions</span></div>
-            {versions.length ? <ol>{versions.map((item, index) => <li key={item.version} className={index === 0 ? "version-latest" : ""}><span><strong>Version {item.version}</strong>{index === 0 && <small>Latest</small>}<time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></span><button type="button" className="version-restore" onClick={() => void restoreVersion(item.version)} disabled={saving || restoringVersion !== null || index === 0} aria-label={`Restore version ${item.version}`}>{restoringVersion === item.version ? "Restoring…" : index === 0 ? "Current" : "Restore"}</button></li>)}</ol> : <p className="version-empty">Your saved versions will appear here after the first save.</p>}
+            {versions.length ? <ol>{versions.map((item, index) => <li key={item.version} className={index === 0 ? "version-latest" : ""}><span><strong>Version {item.version}</strong>{index === 0 && <small>Latest</small>}<time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></span><button type="button" className="version-restore" onClick={() => void restoreVersion(item.version)} disabled={saving || validating || restoringVersion !== null || index === 0} aria-label={`Restore version ${item.version}`}>{restoringVersion === item.version ? "Restoring…" : index === 0 ? "Current" : "Restore"}</button></li>)}</ol> : <p className="version-empty">Your saved versions will appear here after the first save.</p>}
             <p className="version-footnote">Restoring creates a new version, so your history stays intact.</p>
           </section>
         </aside>
