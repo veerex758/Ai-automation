@@ -34,6 +34,7 @@ test("sends a fixed-provider request with an idempotency key and returns provide
   assert.equal(captured.url, "https://api.resend.com/emails");
   assert.equal(captured.init.headers.Authorization, "Bearer re_test_secret");
   assert.equal(captured.init.headers["Idempotency-Key"], "workflow-run-123");
+  assert.equal(captured.init.redirect, "error");
   assert.deepEqual(captured.body.to, ["owner@example.com"]);
   assert.equal(captured.body.from, "Aivanta <hello@example.com>");
   assert.deepEqual(result, { provider: "resend", messageId: "email_123" });
