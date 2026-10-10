@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { validateWorkflowDefinition } from "@/lib/workflows/validation";
 import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
@@ -64,15 +65,11 @@ export default function WorkflowBuilderPage() {
   }
 
   const currentStep = steps.find(step => step.id === selected) ?? steps[0];
-  const validationIssues = [
-    !name.trim() ? "Give this workflow a name." : "",
-    !steps.some(step => step.kind === "Trigger") ? "Add at least one trigger." : "",
-    steps.some(step => !step.title.trim()) ? "Every step needs a name." : "",
-  ].filter(Boolean);
+  const validationResult = validateWorkflowDefinition({ name, steps });
 
   function reviewWorkflow() {
-    if (validationIssues.length) {
-      setNotice("Review needed: " + validationIssues.join(" "));
+    if (!validationResult.valid) {
+      setNotice("Review needed: " + validationResult.issues.map(issue => issue.message).join(" "));
       return;
     }
     setNotice("Basic checks passed. Activation is still disabled because live integrations, server-side validation, and execution safeguards are not connected.");
