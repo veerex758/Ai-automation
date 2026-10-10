@@ -227,7 +227,7 @@ export default function WorkflowBuilderPage() {
           {notice && <div className="builder-notice" role="status">{notice}</div>}
           {validation && <div className={`builder-validation ${validation.valid ? "validation-pass" : "validation-fail"}`} role="status"><span className="validation-mark">{validation.valid ? "✓" : "!"}</span><div><strong>{validation.valid ? "Draft checks passed" : "Draft needs attention"}</strong><p>{validation.message}</p>{validation.counts && <small>{validation.counts.triggers} trigger · {validation.counts.actions} actions · {validation.counts.conditions} conditions</small>}<small>Checked {new Date(validation.checkedAt).toLocaleTimeString()}</small></div></div>}
           {error && <div className="builder-error-banner" role="alert">{error}</div>}
-          <RunTestPanel workflowId={workflowId} hasUnsavedChanges={isDirty} />
+          <RunTestPanel workflowId={workflowId} hasUnsavedChanges={isDirty} workflowStatus={workflow?.status ?? "draft"} />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
             <div className="canvas-label"><span>CANVAS</span><span>{definition.nodes.length} / 30 steps</span></div>
