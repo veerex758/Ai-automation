@@ -36,7 +36,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
 
     const { data: priorRun, error: priorRunError } = await supabase.from("workflow_runs")
       .select("id, status, workflow_version, mode, created_at")
-      .eq("idempotency_key", idempotencyKey).maybeSingle();
+      .eq("idempotency_key", idempotencyKey)
+      .eq("created_by", user.id)
+      .eq("workflow_id", workflowId)
+      .maybeSingle();
     if (priorRunError) throw priorRunError;
     if (priorRun) return NextResponse.json({
       run: priorRun,
@@ -101,14 +104,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       created_by: user.id,
       idempotency_key: idempotencyKey,
       started_at: new Date(startedAt).toISOString(),
-      completed_at: new Date(startedAt).toISOString(),
+      completed_at: null,
       duration_ms: 0,
     }).select("id, workflow_version, started_at").single();
 
     if (insertError?.code === "23505") {
       const { data: existing, error: existingError } = await supabase.from("workflow_runs")
         .select("id, status, workflow_version, mode, created_at")
-        .eq("idempotency_key", idempotencyKey).maybeSingle();
+        .eq("idempotency_key", idempotencyKey)
+        .eq("created_by", user.id)
+        .eq("workflow_id", workflowId)
+        .maybeSingle();
       if (existingError) throw existingError;
       if (existing) return NextResponse.json({
         run: existing,
