@@ -104,7 +104,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       created_by: user.id,
       idempotency_key: idempotencyKey,
       started_at: new Date(startedAt).toISOString(),
-      completed_at: null,
+      completed_at: new Date(startedAt).toISOString(),
       duration_ms: 0,
     }).select("id, workflow_version, started_at").single();
 
@@ -112,9 +112,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       const { data: existing, error: existingError } = await supabase.from("workflow_runs")
         .select("id, status, workflow_version, mode, created_at")
         .eq("idempotency_key", idempotencyKey)
-      .eq("created_by", user.id)
-      .eq("workflow_id", workflowId)
-      .maybeSingle();
+        .eq("created_by", user.id)
+        .eq("workflow_id", workflowId)
+        .maybeSingle();
       if (existingError) throw existingError;
       if (existing) return NextResponse.json({
         run: existing,
