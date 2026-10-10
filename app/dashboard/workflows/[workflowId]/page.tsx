@@ -32,6 +32,8 @@ export default function WorkflowBuilderPage() {
   const [error, setError] = useState("");
   const [versions, setVersions] = useState<WorkflowVersion[]>([]);
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [validation, setValidation] = useState<{ valid: boolean; message: string; checkedAt: string; counts?: { triggers: number; actions: number; conditions: number } } | null>(null);
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
 
@@ -129,6 +131,30 @@ export default function WorkflowBuilderPage() {
     }
   }
 
+  async function validateDraft() {
+    if (validating || saving || restoringVersion !== null) return;
+    setValidating(true);
+    setError("");
+    setValidation(null);
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/definition`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ definition }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setValidation({ valid: false, message: result.error || "This draft needs attention before it can pass validation.", checkedAt: new Date().toISOString() });
+        return;
+      }
+      setValidation({ valid: true, message: "All configured steps passed the current draft checks. Nothing was saved or executed.", checkedAt: new Date().toISOString(), counts: result.counts });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not validate this draft.");
+    } finally {
+      setValidating(false);
+    }
+  }
+
   async function saveDefinition() {
     if (saving) return;
     setSaving(true);
@@ -163,13 +189,14 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back">← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><span className="builder-draft"><i /> {workflow?.status ?? "Draft"}</span><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
+        <div className="builder-top-actions"><span className="builder-draft"><i /> {workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
       </header>
 
       <div className="builder-layout">
         <section className="builder-workspace">
           <div className="builder-heading"><div><div className="builder-eyebrow">WORKFLOW DESIGNER</div><h1>{workflow?.name ?? "Workflow builder"}</h1><p>{workflow?.description || "Connect steps into a clear, repeatable process."}</p></div><span className="builder-mode"><i /> Draft mode</span></div>
           {notice && <div className="builder-notice" role="status">{notice}</div>}
+          {validation && <div className={`builder-validation ${validation.valid ? "validation-pass" : "validation-fail"}`} role="status"><span className="validation-mark">{validation.valid ? "✓" : "!"}</span><div><strong>{validation.valid ? "Draft checks passed" : "Draft needs attention"}</strong><p>{validation.message}</p>{validation.counts && <small>{validation.counts.triggers} trigger · {validation.counts.actions} actions · {validation.counts.conditions} conditions</small>}<small>Checked {new Date(validation.checkedAt).toLocaleTimeString()}</small></div></div>}
           {error && <div className="builder-error-banner" role="alert">{error}</div>}
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
