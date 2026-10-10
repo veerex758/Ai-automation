@@ -1,46 +1,72 @@
 # Aivanta product roadmap
 
-Aivanta is being built as a staged business automation platform: conventional workflows first, AI-assisted steps next, and more advanced agents only when the controls and use cases justify them.
+Aivanta is being built as a staged business automation platform: dependable conventional workflows first, carefully bounded live integrations next, and AI-assisted automation only when the safety controls are ready.
 
-## Stage 1 — Product foundation
-- [x] Establish a Next.js + TypeScript application shell.
-- [x] Create the initial responsive marketing experience.
-- [x] Add automated linting, type-checking, and build verification.
-- [x] Add a dashboard shell and workspace navigation.
-- [x] Define the initial workflow definition shape and reusable validation rules in `lib/workflows/validation.ts`.
+## Delivery levels
 
-## Stage 2 — Workflow workspace
+### Level 1 — Application foundation: complete
+- [x] Next.js + TypeScript application shell.
+- [x] Responsive marketing experience and authenticated dashboard shell.
+- [x] CI checks for tests, lint, type-check, and production build.
 
-Database foundation in progress: PostgreSQL connection pooling and an initial schema for workspaces, workflows, workflow versions, and audit events are committed. Authenticated CRUD and migration execution remain outstanding.
+### Level 2 — Workspace and visual workflow builder: complete
+- [x] Supabase Auth with server-side session validation.
+- [x] Workspace-scoped workflow persistence and visual builder.
+- [x] Workflow validation and version history foundation.
+- [x] Premium responsive design system.
 
-Current foundation: the visual builder and dashboard store prototype drafts in browser storage only. Shared validation rules exist, but are not yet connected to an API route or persistent database.
-- [ ] Create, edit, save, and version workflow definitions through authenticated server APIs.
-- [ ] Build a visual workflow editor with explicit triggers, actions, and conditions.
-- [ ] Add a safe test/dry-run mode and useful execution history.
-- [ ] Keep credentials out of workflow JSON, logs, and client-side code.
+### Level 3 — Database security: complete
+- [x] Dedicated Aivanta Supabase project and schema migrations.
+- [x] Row Level Security for workspace, workflow, and run-history data.
+- [x] Security hardening and advisor checks.
 
-## Stage 3 — Real integrations
-- [ ] Introduce a provider adapter interface and integration registry.
-- [ ] Start with a small number of well-defined integrations.
-- [ ] Implement OAuth/state validation, scoped permissions, token encryption, revocation, and audit events.
-- [ ] Add retries, rate-limit handling, idempotency, and operational monitoring.
+### Level 4 — Automated workflow tests: complete
+- [x] Workflow definition validation tests.
+- [x] Dry-run execution tests and safe condition evaluation.
+- [x] Automated CI verification.
 
-## Stage 4 — AI-assisted workflow creation
-- [ ] Convert user requests into a structured, validated workflow proposal.
-- [ ] Require users to inspect and approve generated actions before activation.
-- [ ] Treat connected services, external documents, and tool output as untrusted input.
-- [ ] Add configurable human approval gates for consequential actions.
+### Level 5 — Workflow execution engine: complete for MVP scope
+- [x] Persisted dry-run results and workflow run history.
+- [x] Step-by-step outcomes without performing external side effects.
+- [x] Version and status metadata for workflow runs.
 
-## Stage 5 — Teams and commercial foundations
-- [ ] Add authentication, organization membership, and tenant isolation.
-- [ ] Add usage metering, plan limits, and billing integration.
-- [ ] Define retention, deletion, export, and incident-response procedures.
-- [ ] Run security reviews and end-to-end tests before inviting production customers.
+### Level 6 — First live integration: implementation complete
+- [x] Server-only Resend adapter and guarded live-run endpoint.
+- [x] Explicit activation flag, approved-recipient allowlist, and per-user rate limit.
+- [x] Idempotency, sanitized provider errors, and run/step persistence.
+- [ ] Verify a real email in staging using a verified sender and an inbox controlled by the project owner.
+
+### Level 7 — Security and end-to-end verification: automated checks complete
+- [x] Scope idempotency lookups to the authenticated user and requested workflow.
+- [x] Enforce run-step ownership and mode/status restrictions in RLS.
+- [x] Allow in-progress runs to have a null completion timestamp.
+- [x] Expand dry-run, provider redirect, and security migration tests.
+- [x] Supabase security advisor returned no lints.
+- [x] Main-branch CI passed tests, lint, type-check, and production build.
+- [ ] Complete the documented staging end-to-end checks, including auth, cross-workspace access, and one approved test email.
+
+### Level 8 — Deployment and MVP launch: in progress
+- [x] Add a minimal health endpoint at `/api/health`.
+- [x] Document hosting environment variables, Auth redirect setup, staging smoke tests, and launch gates.
+- [ ] Choose/configure the hosting provider and deployment project.
+- [ ] Configure the production URL and Supabase Auth redirect allow-list.
+- [ ] Run staging smoke tests and verify run history.
+- [ ] Review operational monitoring, backup/recovery expectations, and production safety settings.
+- [ ] Obtain explicit launch approval before enabling live email in production.
+
+## Current operating limits
+
+- Live execution is disabled unless the server environment explicitly sets `AIVANTA_LIVE_EXECUTION_ENABLED=true`.
+- The first live path supports manual-trigger workflows with exactly one Resend email action.
+- The recipient must be present in the server-side `AIVANTA_LIVE_EMAIL_RECIPIENTS` allowlist.
+- Slack, webhooks, scheduled triggers, and other action types remain dry-run only.
+- A successful CI build does not prove production deployment or real email delivery.
 
 ## Engineering principles
+
 - Security and tenant isolation are architectural requirements, not marketing claims.
 - Never store secrets in source control or return provider tokens to the browser.
-- Validate every workflow definition and authorize every execution server-side.
+- Validate workflow definitions and authorize every execution server-side.
+- Treat external service output as untrusted input.
 - Prefer transparent, bounded workflows before open-ended autonomous behavior.
-- Clearly label mock data and prototypes; never imply an integration is live until it has been implemented and tested.
-- Keep the first release small enough to test thoroughly.
+- Clearly distinguish implemented features from staging-verified and production-launched features.
