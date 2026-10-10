@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sendResendEmail, validateEmailMessage } from "../lib/integrations/resend.cjs";
+import { sendResendEmail, validateEmailMessage, getAllowedRecipients, isLiveEmailRecipientAllowed } from "../lib/integrations/resend.cjs";
 
 const message = { to: "owner@example.com", subject: "Aivanta test", text: "This is a test." };
 
@@ -66,4 +66,11 @@ test("maps provider rate limits to a safe retry message", async () => {
 test("validates email subject and body length", () => {
   assert.throws(() => validateEmailMessage({ ...message, subject: "" }), /subjects/);
   assert.throws(() => validateEmailMessage({ ...message, text: "x".repeat(10001) }), /10,000/);
+});
+
+test("recipient allowlist normalizes case, trims entries, and ignores invalid addresses", () => {
+  assert.deepEqual(getAllowedRecipients(" Owner@example.com, invalid, owner@example.com, second@example.org "), ["owner@example.com", "second@example.org"]);
+  assert.equal(isLiveEmailRecipientAllowed("OWNER@example.com", "owner@example.com"), true);
+  assert.equal(isLiveEmailRecipientAllowed("other@example.com", "owner@example.com"), false);
+  assert.equal(isLiveEmailRecipientAllowed("owner@example.com", ""), false);
 });
