@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type RunStep = {
   stepId: string;
@@ -12,6 +12,8 @@ type RunStep = {
   conditionMatched?: boolean;
 };
 type RunResult = { mode: "dry_run"; status: "succeeded"; sideEffectsPerformed: false; steps: RunStep[] };
+type IntegrationStatus = { provider: string; configured: boolean; liveExecutionEnabled: boolean; ready: boolean; missing: string[] };
+type LiveRunResult = { run: { id: string; status: string; workflow_version: number; duration_ms: number }; steps: Array<{ step_id: string; position: number; step_type: RunStep["type"]; title: string; status: "simulated" | "skipped" | "executed" | "failed"; result: Record<string, unknown> }>; sideEffectsPerformed: boolean; providerMessageId?: string };
 type RunHistoryItem = {
   id: string;
   workflow_version: number;
@@ -21,7 +23,7 @@ type RunHistoryItem = {
   steps: Array<{ id: string; status: string; title: string; position: number }>;
 };
 
-export default function RunTestPanel({ workflowId, hasUnsavedChanges }: { workflowId: string; hasUnsavedChanges: boolean }) {
+export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string }) {
   const [input, setInput] = useState(`{
   "status": "ready",
   "order": { "total": 125 }
@@ -31,6 +33,11 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges }: { workfl
   const [result, setResult] = useState<RunResult | null>(null);
   const [version, setVersion] = useState<number | null>(null);
   const [history, setHistory] = useState<RunHistoryItem[]>([]);
+  const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
+  const [sendingLive, setSendingLive] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [liveResult, setLiveResult] = useState<LiveRunResult | null>(null);
+  const idempotencyKey = useRef<string | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -44,6 +51,15 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges }: { workfl
   }, [workflowId]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/integrations/resend/status", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => { if (!cancelled && data) setIntegration(data as IntegrationStatus); })
+      .catch(() => { if (!cancelled) setIntegration(null); });
+    return () => { cancelled = true; };
+  }, []);
 
   async function runTest() {
     if (running || hasUnsavedChanges) return;
@@ -80,6 +96,47 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges }: { workfl
     }
   }
 
+  async function runLive() {
+    if (sendingLive || hasUnsavedChanges || workflowStatus !== "active" || !integration?.ready) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(input);
+    } catch {
+      setLiveError("Sample input must be valid JSON.");
+      return;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      setLiveError("Sample input must be a JSON object.");
+      return;
+    }
+
+    if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
+    setSendingLive(true);
+    setLiveError("");
+    setLiveResult(null);
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/live-run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey.current },
+        body: JSON.stringify({ input: parsed }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not execute this live run.");
+      idempotencyKey.current = null;
+      if (data.duplicate) {
+        setLiveError("This request was already processed. Check run history before starting another live run.");
+      } else {
+        setLiveResult(data as LiveRunResult);
+      }
+      await loadHistory();
+    } catch (caught) {
+      setLiveError(caught instanceof Error ? caught.message : "Could not execute this live run.");
+      // Keep the same idempotency key after a network error to avoid sending a duplicate.
+    } finally {
+      setSendingLive(false);
+    }
+  }
+
   return (
     <section className="dry-run-panel" aria-labelledby="dry-run-title">
       <div className="dry-run-heading">
@@ -95,6 +152,21 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges }: { workfl
       <button className="builder-run dry-run-submit" type="button" onClick={() => void runTest()} disabled={running || hasUnsavedChanges}>
         {running ? "Testing…" : "▶ Run safe test"}
       </button>
+      <div className="live-integration-card">
+        <div className="live-integration-top"><strong>Live email integration</strong><span className={integration?.ready ? "integration-ready" : "integration-pending"}>{integration?.ready ? "READY" : "SETUP REQUIRED"}</span></div>
+        <p>{workflowStatus !== "active"
+          ? "Activate this workflow before a live email can be sent."
+          : hasUnsavedChanges
+            ? "Save your workflow changes before live execution."
+            : integration?.ready
+              ? "Resend is configured. Live runs can send one real email from this workflow."
+              : `Configure the server environment: ${integration?.missing?.join(", ") || "email integration status unavailable"}.`}</p>
+        <button className="builder-run live-run-button" type="button" onClick={() => void runLive()} disabled={sendingLive || hasUnsavedChanges || workflowStatus !== "active" || !integration?.ready}>
+          {sendingLive ? "Sending…" : "✉ Run live email"}
+        </button>
+        {liveError && <p className="dry-run-error" role="alert">{liveError}</p>}
+        {liveResult && <div className="live-run-success" role="status"><strong>Live run {liveResult.run.status}</strong><span>Version {liveResult.run.workflow_version} · {liveResult.run.duration_ms} ms</span><p>{liveResult.sideEffectsPerformed ? "Resend accepted the email. A real message was sent to the configured recipient." : "No email was sent because the workflow condition skipped the action."}</p></div>}
+      </div>
       {result && <div className="dry-run-results" role="status">
         <div className="dry-run-results-heading"><strong>Run passed</strong><span>{version ? `Version ${version} · ` : ""}{result.steps.length} steps</span></div>
         <ol>{result.steps.map((step) => <li key={step.stepId} className={`run-step-${step.status}`}>
