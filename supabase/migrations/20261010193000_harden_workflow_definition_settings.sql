@@ -131,7 +131,7 @@ begin
         raise exception 'Enter a Slack channel or recipient' using errcode = '22023';
       end if;
       if action_operation = 'http_request'
-         and coalesce(node_settings ->> 'url', '') !~ '^https://[^[:space:]]+$' then
+         and coalesce(node_settings ->> 'url', '') !~ '^https://[[:alnum:]][^[:space:]]*$' then
         raise exception 'Enter a valid HTTPS request URL' using errcode = '22023';
       end if;
     elsif node_type = 'condition' then
