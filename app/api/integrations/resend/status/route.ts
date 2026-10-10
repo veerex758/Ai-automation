@@ -9,15 +9,18 @@ export async function GET() {
     if (error || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
     const configured = isResendConfigured();
+    const recipientAllowlistConfigured = getAllowedRecipients().length > 0;
     const liveExecutionEnabled = process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true";
     return NextResponse.json({
       provider: "resend",
       configured,
+      recipientAllowlistConfigured,
       liveExecutionEnabled,
-      ready: configured && liveExecutionEnabled,
+      ready: configured && recipientAllowlistConfigured && liveExecutionEnabled,
       missing: [
         ...(!process.env.RESEND_API_KEY?.trim() ? ["RESEND_API_KEY"] : []),
         ...(!process.env.RESEND_FROM_EMAIL?.trim() ? ["RESEND_FROM_EMAIL"] : []),
+        ...(!recipientAllowlistConfigured ? ["AIVANTA_LIVE_EMAIL_RECIPIENTS"] : []),
         ...(!liveExecutionEnabled ? ["AIVANTA_LIVE_EXECUTION_ENABLED"] : []),
       ],
     }, { headers: { "Cache-Control": "no-store" } });
