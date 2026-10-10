@@ -215,7 +215,7 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <header className="builder-topbar">
-        <Link href="/dashboard" className="builder-back">← <span>Dashboard</span></Link>
+        <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
         <div className="builder-top-actions"><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
       </header>
