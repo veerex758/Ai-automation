@@ -27,3 +27,13 @@ test("allows live step statuses only while the owned live run is running", () =>
   assert.match(migration, /r\.mode = 'live' and r\.status = 'running'/);
   assert.match(migration, /workflow_run_steps\.status in \('simulated', 'skipped', 'executed', 'failed'\)/);
 });
+
+
+const timestampMigration = readFileSync(
+  new URL("../supabase/migrations/20261010210500_allow_incomplete_workflow_run_timestamps.sql", import.meta.url),
+  "utf8",
+);
+
+test("allows in-progress live runs to have a null completion timestamp", () => {
+  assert.match(timestampMigration, /alter column completed_at drop not null/i);
+});
