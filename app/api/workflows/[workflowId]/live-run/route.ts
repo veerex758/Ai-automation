@@ -15,13 +15,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { workflowId } = await context.params;
     if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
 
-    if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-      return NextResponse.json({ error: "Live execution is disabled by the server. Configure AIVANTA_LIVE_EXECUTION_ENABLED=true only when you are ready to send real email." }, { status: 503 });
-    }
-    if (!isResendConfigured()) {
-      return NextResponse.json({ error: "Email integration is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the server environment." }, { status: 503 });
-    }
-
     const contentLength = Number(request.headers.get("content-length") ?? "0");
     if (contentLength > maxInputBytes) return NextResponse.json({ error: "Run input must be 10 KB or smaller." }, { status: 413 });
 
@@ -33,6 +26,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
+    if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
+      return NextResponse.json({ error: "Live execution is disabled by the server. Configure AIVANTA_LIVE_EXECUTION_ENABLED=true only when you are ready to send real email." }, { status: 503 });
+    }
+    if (!isResendConfigured()) {
+      return NextResponse.json({ error: "Email integration is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the server environment." }, { status: 503 });
+    }
 
     const { data: priorRun, error: priorRunError } = await supabase.from("workflow_runs")
       .select("id, status, workflow_version, mode, created_at")
