@@ -20,6 +20,10 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [workflowDescription, setWorkflowDescription] = useState("");
+  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deletingWorkflowId, setDeletingWorkflowId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [runningId, setRunningId] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("Your workspace");
@@ -54,31 +58,79 @@ export default function DashboardPage() {
     return matchesSearch && matchesFilter;
   }), [workflows, search, filter]);
 
-  async function createWorkflow(event: React.FormEvent<HTMLFormElement>) {
+  function openCreateModal() {
+    setEditingWorkflow(null);
+    setNewName("");
+    setWorkflowDescription("");
+    setShowCreate(true);
+    setOpenMenuId(null);
+  }
+
+  function openEditModal(workflow: Workflow) {
+    setEditingWorkflow(workflow);
+    setNewName(workflow.name);
+    setWorkflowDescription(workflow.description || "");
+    setShowCreate(true);
+    setOpenMenuId(null);
+  }
+
+  async function saveWorkflow(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = newName.trim();
+    const description = workflowDescription.trim();
     if (!name || savingWorkflow) return;
 
     setSavingWorkflow(true);
     setNotice("");
     try {
-      const response = await fetch("/api/workflows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
+      const response = await fetch(
+        editingWorkflow ? `/api/workflows/${editingWorkflow.id}` : "/api/workflows",
+        {
+          method: editingWorkflow ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, description }),
+        },
+      );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save this workflow.");
-      setWorkflows((current) => [result.workflow as Workflow, ...current]);
+
+      if (editingWorkflow) {
+        setWorkflows((current) => current.map((item) => item.id === editingWorkflow.id ? result.workflow as Workflow : item));
+        setNotice("Workflow changes saved.");
+      } else {
+        setWorkflows((current) => [result.workflow as Workflow, ...current]);
+        setNotice("Draft saved to your Aivanta workspace.");
+      }
       setNewName("");
+      setWorkflowDescription("");
+      setEditingWorkflow(null);
       setShowCreate(false);
       setFilter("All workflows");
       setSearch("");
-      setNotice("Draft saved to your Aivanta workspace.");
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "Could not save this workflow.");
     } finally {
       setSavingWorkflow(false);
+    }
+  }
+
+  async function deleteWorkflow(workflow: Workflow) {
+    const confirmed = window.confirm(`Delete "${workflow.name}"? This cannot be undone.`);
+    if (!confirmed || deletingWorkflowId) return;
+
+    setDeletingWorkflowId(workflow.id);
+    setOpenMenuId(null);
+    setNotice("");
+    try {
+      const response = await fetch(`/api/workflows/${workflow.id}`, { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not delete this workflow.");
+      setWorkflows((current) => current.filter((item) => item.id !== workflow.id));
+      setNotice("Workflow deleted.");
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "Could not delete this workflow.");
+    } finally {
+      setDeletingWorkflowId(null);
     }
   }
 
@@ -98,14 +150,14 @@ export default function DashboardPage() {
           {navItems.map((item) => <button key={item.label} className={activeNav === item.label ? "side-link selected" : "side-link"} onClick={() => { setActiveNav(item.label); if (item.label !== "Overview" && item.label !== "Workflows") setNotice(item.label + " is part of the upcoming workspace release."); }}><span className="side-icon">{item.icon}</span>{item.label}{item.label === "Integrations" && <span className="soon-tag">SOON</span>}</button>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
-        <button type="button" className="side-link" onClick={() => setShowCreate(true)}><span className="side-icon">＋</span>Create workflow</button>
+        <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
         <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
       </aside>
 
       <section className="dashboard-main">
         <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>{activeNav}</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
         <div className="dashboard-content">
-          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={() => setShowCreate(true)}><span>＋</span> New workflow</button></div>
+          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={openCreateModal}><span>＋</span> New workflow</button></div>
 
           {notice && <div className="notice-bar" role="status"><span>ⓘ</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
 
@@ -121,14 +173,14 @@ export default function DashboardPage() {
 
           <div className="workflow-table"><div className="table-header"><span>WORKFLOW</span><span>STATUS</span><span>RUNS</span><span>LAST UPDATED</span><span /></div>
             {loadingWorkflows && <div className="empty-state"><span>◷</span><strong>Loading your workflows…</strong><p>Connecting to your Aivanta workspace.</p></div>}
-            {!loadingWorkflows && visibleWorkflows.map((workflow) => <article className="workflow-row" key={workflow.id}><div className="workflow-name-cell"><span className={"workflow-app-icon " + workflow.tone}>{workflow.icon}</span><span className="workflow-name-copy"><strong>{workflow.name}</strong><small>{workflow.description}</small></span></div><div><span className={"workflow-status status-" + workflow.status.toLowerCase()}><i />{workflow.status}</span></div><span className="run-count">{workflow.runs}</span><span className="updated-time">{workflow.updated}</span><button className="row-menu" aria-label={"Workflow actions for " + workflow.name} onClick={() => runDemo(workflow.id)}>{runningId === workflow.id ? "…" : "•••"}</button></article>)}
+            {!loadingWorkflows && visibleWorkflows.map((workflow) => <article className="workflow-row" key={workflow.id}><div className="workflow-name-cell"><span className={"workflow-app-icon " + workflow.tone}>{workflow.icon}</span><span className="workflow-name-copy"><strong>{workflow.name}</strong><small>{workflow.description || "No description yet"}</small></span></div><div><span className={"workflow-status status-" + workflow.status.toLowerCase()}><i />{workflow.status}</span></div><span className="run-count">{workflow.runs}</span><span className="updated-time">{workflow.updated}</span><div className="workflow-actions"><button className="row-menu" aria-label={"Workflow actions for " + workflow.name} aria-expanded={openMenuId === workflow.id} onClick={() => setOpenMenuId((current) => current === workflow.id ? null : workflow.id)}>{deletingWorkflowId === workflow.id ? "…" : "•••"}</button>{openMenuId === workflow.id && <div className="workflow-action-menu"><button type="button" onClick={() => openEditModal(workflow)}>Edit details</button><button type="button" className="danger-action" onClick={() => void deleteWorkflow(workflow)}>Delete workflow</button></div>}</div></article>)}
             {!loadingWorkflows && visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
           </div>
           <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Aivanta database. Live workflow execution and connected services are still in development.</p></div>
         </div>
       </section>
 
-      {showCreate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><button className="modal-close" aria-label="Close dialog" onClick={() => setShowCreate(false)}>×</button><div className="modal-icon">✳</div><div className="dash-eyebrow">START WITH A CLEAR OUTCOME</div><h2 id="create-title">Create a workflow</h2><p>Give your workflow a name. You can configure its steps in a future release.</p><form onSubmit={createWorkflow}><label htmlFor="workflow-name">Workflow name</label><input id="workflow-name" autoFocus maxLength={80} placeholder="e.g. Welcome new customers" value={newName} onChange={(event) => setNewName(event.target.value)} required /><div className="modal-actions"><button type="button" className="cancel-button" onClick={() => setShowCreate(false)}>Cancel</button><button type="submit" className="create-button" disabled={savingWorkflow}>{savingWorkflow ? "Saving…" : "Create draft"} <span>↗</span></button></div></form><small className="modal-disclaimer">Drafts are saved to your Aivanta workspace. Live execution is not connected yet.</small></section></div>}
+      {showCreate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingWorkflow) { setShowCreate(false); setEditingWorkflow(null); } }}><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><button className="modal-close" aria-label="Close dialog" onClick={() => { if (!savingWorkflow) { setShowCreate(false); setEditingWorkflow(null); } }}>×</button><div className="modal-icon">✳</div><div className="dash-eyebrow">{editingWorkflow ? "REFINE YOUR AUTOMATION" : "START WITH A CLEAR OUTCOME"}</div><h2 id="create-title">{editingWorkflow ? "Edit workflow" : "Create a workflow"}</h2><p>{editingWorkflow ? "Update the name and description for this workflow." : "Give your workflow a name and a clear description. You can configure its steps in a future release."}</p><form onSubmit={saveWorkflow}><label htmlFor="workflow-name">Workflow name</label><input id="workflow-name" autoFocus maxLength={80} placeholder="e.g. Welcome new customers" value={newName} onChange={(event) => setNewName(event.target.value)} required /><label htmlFor="workflow-description" className="description-label">Description <span>Optional</span></label><textarea id="workflow-description" maxLength={500} rows={3} placeholder="What should this workflow help you accomplish?" value={workflowDescription} onChange={(event) => setWorkflowDescription(event.target.value)} /><div className="modal-actions"><button type="button" className="cancel-button" onClick={() => { setShowCreate(false); setEditingWorkflow(null); }}>Cancel</button><button type="submit" className="create-button" disabled={savingWorkflow}>{savingWorkflow ? "Saving…" : editingWorkflow ? "Save changes" : "Create draft"} <span>↗</span></button></div></form><small className="modal-disclaimer">Changes are saved to your Aivanta workspace. Live execution is not connected yet.</small></section></div>}
     </main>
   );
 }
