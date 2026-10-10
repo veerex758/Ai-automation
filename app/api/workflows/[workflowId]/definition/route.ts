@@ -11,6 +11,7 @@ type WorkflowNode = {
   type: "trigger" | "action" | "condition";
   title: string;
   description: string;
+  settings: Record<string, string>;
 };
 
 function validateDefinition(value: unknown): { definition?: { version: 1; nodes: WorkflowNode[] }; error?: string } {
@@ -29,8 +30,30 @@ function validateDefinition(value: unknown): { definition?: { version: 1; nodes:
     if (typeof node.type !== "string" || !nodeTypes.has(node.type)) return { error: "Each step must be a trigger, action, or condition." };
     if (typeof node.title !== "string" || node.title.trim().length < 1 || node.title.trim().length > 80) return { error: "Step titles must be between 1 and 80 characters." };
     if (typeof node.description !== "string" || node.description.trim().length > 240) return { error: "Step descriptions cannot exceed 240 characters." };
+    const type = node.type as WorkflowNode["type"];
+    const rawSettings = node.settings === undefined ? {} : node.settings;
+    if (!rawSettings || typeof rawSettings !== "object" || Array.isArray(rawSettings)) return { error: "Step settings must be an object." };
+    const allowedSettings = type === "action"
+      ? ["provider", "operation", "recipient", "message", "url"]
+      : type === "condition"
+        ? ["field", "operator", "value"]
+        : ["event"];
+    const settings: Record<string, string> = {};
+    for (const [key, settingValue] of Object.entries(rawSettings as Record<string, unknown>)) {
+      if (!allowedSettings.includes(key) || typeof settingValue !== "string" || settingValue.length > 500) {
+        return { error: "Step settings contain an unsupported field or an invalid value." };
+      }
+      settings[key] = settingValue.trim();
+    }
+    if (type === "action") {
+      if (settings.provider && !["email", "slack", "webhook", "internal"].includes(settings.provider)) return { error: "Choose a supported action provider." };
+      if (settings.operation && !["send_email", "send_message", "http_request", "create_task"].includes(settings.operation)) return { error: "Choose a supported action operation." };
+    }
+    if (type === "condition" && settings.operator && !["equals", "contains", "greater_than", "less_than", "is_set"].includes(settings.operator)) {
+      return { error: "Choose a supported condition operator." };
+    }
     ids.add(node.id);
-    nodes.push({ id: node.id, type: node.type as WorkflowNode["type"], title: node.title.trim(), description: node.description.trim() });
+    nodes.push({ id: node.id, type, title: node.title.trim(), description: node.description.trim(), settings });
   }
   if (nodes.length > 0 && nodes[0].type !== "trigger") return { error: "The first step must be a trigger." };
   if (nodes.filter((node) => node.type === "trigger").length > 1) return { error: "A workflow can only have one trigger." };
