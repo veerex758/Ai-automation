@@ -47,3 +47,5 @@
 @media(max-width:600px){.builder-topbar{gap:10px;padding:0 12px}.builder-top-actions{gap:6px}.builder-validate{padding:9px 8px;font-size:10px}.builder-save{padding:9px 8px;gap:5px;font-size:10px}.builder-draft{display:none}.builder-breadcrumb{font-size:10px}}
 .builder-draft-dirty{color:#80512b;background:#fff6e8;border-color:#efd9b7}.builder-draft-dirty i{background:#d58a31}
 @media(max-width:760px){.builder-draft-dirty{display:flex;font-size:9px;padding:6px 7px;white-space:nowrap}.builder-draft-dirty i{flex-shrink:0}}
+/* Keep keyboard focus visible across the workflow builder controls. */
+.builder-node:focus-visible,.builder-save:focus-visible,.builder-validate:focus-visible,.panel-add>button:focus-visible,.step-order button:focus-visible,.remove-step:focus-visible,.version-history .version-restore:focus-visible,.builder-empty button:focus-visible,.builder-back:focus-visible{outline:3px solid #9bc86b;outline-offset:3px}
