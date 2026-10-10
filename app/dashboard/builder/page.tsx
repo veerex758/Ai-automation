@@ -63,7 +63,20 @@ export default function WorkflowBuilderPage() {
     }
   }
 
-  const currentStep = steps.find(step => step.id === selected) ?? steps[0];\n  const validationIssues = [\n    !name.trim() ? "Give this workflow a name." : "",\n    !steps.some(step => step.kind === "Trigger") ? "Add at least one trigger." : "",\n    steps.some(step => !step.title.trim()) ? "Every step needs a name." : "",\n  ].filter(Boolean);\n\n  function reviewWorkflow() {\n    if (validationIssues.length) {\n      setNotice("Review needed: " + validationIssues.join(" "));\n      return;\n    }\n    setNotice("Basic checks passed. Activation is still disabled because live integrations, server-side validation, and execution safeguards are not connected.");\n  }
+  const currentStep = steps.find(step => step.id === selected) ?? steps[0];
+  const validationIssues = [
+    !name.trim() ? "Give this workflow a name." : "",
+    !steps.some(step => step.kind === "Trigger") ? "Add at least one trigger." : "",
+    steps.some(step => !step.title.trim()) ? "Every step needs a name." : "",
+  ].filter(Boolean);
+
+  function reviewWorkflow() {
+    if (validationIssues.length) {
+      setNotice("Review needed: " + validationIssues.join(" "));
+      return;
+    }
+    setNotice("Basic checks passed. Activation is still disabled because live integrations, server-side validation, and execution safeguards are not connected.");
+  }
 
   return (
     <main className="builder-shell">
