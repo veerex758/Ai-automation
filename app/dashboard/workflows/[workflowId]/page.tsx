@@ -237,7 +237,7 @@ export default function WorkflowBuilderPage() {
                 </button>
                 {index === definition.nodes.length - 1 && <div className="node-endpoint"><span>＋</span> Add the next step from the panel</div>}
               </div>)}
-              {definition.nodes.length === 0 && <div className="builder-empty"><span>✳</span><strong>Start with a trigger</strong><p>A trigger defines what starts your workflow.</p><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}`, settings: { event: "manual" } }; setDefinition({ version: 1, nodes: [trigger] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
+              {definition.nodes.length === 0 && <div className="builder-empty"><span>✳</span><strong>Start with a trigger</strong><p>A trigger defines what starts your workflow.</p><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}`, settings: { event: "manual" } }; draftRevision.current += 1; setValidation(null); setDefinition({ version: 1, nodes: [trigger] }); setSelectedId(trigger.id); setNotice("Trigger added. Save your changes when you’re ready."); }}>Add trigger</button></div>}
             </div>
             <div className="canvas-footnote">This is a workflow draft. Steps are saved, but they do not execute yet.</div>
           </div>
