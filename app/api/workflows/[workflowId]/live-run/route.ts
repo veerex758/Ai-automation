@@ -157,10 +157,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
 
     return NextResponse.json({
       run: finalized,
-      steps: stepRows.map(({ run_id: _runId, workspace_id: _workspaceId, ...step }) => step),
+      steps: stepRows.map((step) => ({ step_id: step.step_id, position: step.position, step_type: step.step_type, title: step.title, status: step.status, result: step.result })),
       sideEffectsPerformed: emailSent,
       ...(providerMessageId ? { providerMessageId } : {}),
-    }, { status: failureMessage ? 502 : 201 });
+    }, { status: 201 });
   } catch (error) {
     console.error("Failed to execute Aivanta live workflow:", error);
     return NextResponse.json({ error: "Could not complete this live workflow run. Check run history before retrying; an external email may already have been accepted." }, { status: 500 });
