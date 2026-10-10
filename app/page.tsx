@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const capabilities = [
   { number: "01", title: "Workflow automation", description: "Connect the tools your team already uses and turn repetitive work into reliable, observable workflows.", icon: "↗" },
   { number: "02", title: "AI-assisted operations", description: "Bring language models into carefully defined steps, with clear inputs, outputs, and human review when it matters.", icon: "✳" },
@@ -14,14 +16,14 @@ export default function Home() {
   return (
     <main>
       <nav className="nav shell">
-        <a className="brand" href="#" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></a>
+        <Link className="brand" href="/" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></Link>
         <div className="nav-links"><a href="#platform">Platform</a><a href="#how-it-works">How it works</a><a href="#security">Security</a></div>
         <a className="nav-cta" href="/dashboard">Open workspace <span>↗</span></a>
       </nav>
 
       <section className="hero shell">
         <div className="hero-copy">
-          <div className="eyebrow"><span className="pulse" /> THE AUTOMATION PLATFORM FOR WHAT'S NEXT</div>
+          <div className="eyebrow"><span className="pulse" /> THE AUTOMATION PLATFORM FOR WHAT&apos;S NEXT</div>
           <h1>Less busywork.<br /><span>More business.</span></h1>
           <p className="hero-description">Bring your tools, teams, and AI together in workflows that move work forward — without adding complexity.</p>
           <div className="hero-actions"><a className="button button-dark" href="/dashboard">Explore the workspace <span>↗</span></a><a className="text-link" href="#platform">Explore the platform <span>↓</span></a></div>
@@ -53,7 +55,7 @@ export default function Home() {
 
       <section className="security-section shell" id="security"><div className="security-mark">⌑</div><div><div className="eyebrow">TRUST IS PART OF THE PRODUCT</div><h2>Security isn't a feature<br />you bolt on later.</h2><p>We are building around least-privilege access, careful handling of connected credentials, and clear boundaries between customer workspaces from the start.</p></div><div className="security-badge"><span>✓</span><div><strong>Security-minded by design</strong><small>Foundational principles, built in stages</small></div></div></section>
 
-      <section className="cta-section shell" id="get-started"><div className="cta-card"><div className="eyebrow eyebrow-light">THE NEXT STEP STARTS HERE</div><h2>Give good work<br />room to happen.</h2><p>We're building a more thoughtful way to automate business. Join the early-access list as the platform takes shape.</p><a className="button button-light" href="mailto:hello@aivanta.example?subject=Aivanta%20early%20access">Request early access <span>↗</span></a><span className="cta-decoration">a.</span></div></section>
+      <section className="cta-section shell" id="get-started"><div className="cta-card"><div className="eyebrow eyebrow-light">THE NEXT STEP STARTS HERE</div><h2>Give good work<br />room to happen.</h2><p>We&apos;re building a more thoughtful way to automate business. Join the early-access list as the platform takes shape.</p><a className="button button-light" href="mailto:hello@aivanta.example?subject=Aivanta%20early%20access">Request early access <span>↗</span></a><span className="cta-decoration">a.</span></div></section>
 
       <footer className="footer shell"><a className="brand" href="#"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></a><span>Thoughtful automation. Real work.</span><span>© {new Date().getFullYear()} Aivanta. In active development.</span></footer>
     </main>
