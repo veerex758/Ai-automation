@@ -57,38 +57,41 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }
 
     const result = runDryRun(validated.definition, input as Record<string, unknown>);
-    const completedAt = new Date().toISOString();
-    const { data: run, error: runError } = await supabase.from("workflow_runs").insert({
-      workspace_id: workflow.workspace_id,
-      workflow_id: workflow.id,
-      workflow_version: workflow.version,
-      mode: "dry_run",
-      status: "succeeded",
-      created_by: user.id,
-      started_at: new Date(startedAt).toISOString(),
-      completed_at: completedAt,
-      duration_ms: Math.max(0, Date.now() - startedAt),
-    }).select("id, mode, status, workflow_version, started_at, completed_at, duration_ms").single();
-    if (runError) throw runError;
-
-    const stepRows = result.steps.map((step) => ({
-      run_id: run.id,
-      workspace_id: workflow.workspace_id,
-      step_id: step.stepId,
-      position: step.position,
-      step_type: step.type,
-      title: step.title,
-      status: step.status,
-      result: {
-        message: step.message,
-        ...(step.conditionMatched === undefined ? {} : { conditionMatched: step.conditionMatched }),
-      },
-    }));
-    const { error: stepsError } = await supabase.from("workflow_run_steps").insert(stepRows);
-    if (stepsError) throw stepsError;
+    const durationMs = Math.max(0, Date.now() - startedAt);
+    const { data, error: runError } = await supabase.rpc("record_workflow_dry_run", {
+      p_workflow_id: workflow.id,
+      p_expected_version: workflow.version,
+      p_status: result.status,
+      p_duration_ms: durationMs,
+      p_error_message: null,
+      p_steps: result.steps.map((step) => ({
+        step_id: step.stepId,
+        step_type: step.type,
+        title: step.title,
+        status: step.status,
+        result: {
+          message: step.message,
+          ...(step.conditionMatched === undefined ? {} : { conditionMatched: step.conditionMatched }),
+        },
+      })),
+    });
+    if (runError) {
+      if (runError.code === "P0002") return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      if (runError.code === "40001") return NextResponse.json({ error: "This workflow changed during the test. Reload it and try again." }, { status: 409 });
+      if (runError.code === "22023") return NextResponse.json({ error: "This workflow could not be recorded safely." }, { status: 422 });
+      throw runError;
+    }
+    const saved = Array.isArray(data) ? data[0] : data;
+    if (!saved) throw new Error("The dry-run was not recorded.");
 
     return NextResponse.json({
-      run,
+      run: {
+        id: saved.run_id,
+        mode: "dry_run",
+        status: result.status,
+        workflow_version: saved.workflow_version,
+        duration_ms: durationMs,
+      },
       result,
       persisted: true,
       sideEffectsPerformed: false,
