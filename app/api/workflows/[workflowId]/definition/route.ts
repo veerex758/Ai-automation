@@ -57,7 +57,7 @@ function validateDefinition(value: unknown): { definition?: { version: 1; nodes:
       const compatibleOperations: Record<string, string> = { internal: "create_task", email: "send_email", slack: "send_message", webhook: "http_request" };
       if (compatibleOperations[provider] !== operation) return { error: "Choose an operation that matches the selected service." };
       if (operation === "send_email") {
-        if (!settings.recipient || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(settings.recipient)) return { error: "Enter a valid recipient email address." };
+        if (!settings.recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.recipient)) return { error: "Enter a valid recipient email address." };
       }
       if (operation === "send_message" && !settings.recipient) return { error: "Enter a Slack channel or recipient." };
       if (operation === "http_request") {
