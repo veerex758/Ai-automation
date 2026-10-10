@@ -31,6 +31,7 @@ export default function WorkflowBuilderPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [versions, setVersions] = useState<WorkflowVersion[]>([]);
+  const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
 
@@ -89,6 +90,30 @@ export default function WorkflowBuilderPage() {
     });
   }
 
+  async function restoreVersion(version: number) {
+    if (saving || restoringVersion !== null) return;
+    const confirmed = window.confirm(`Restore version ${version}? Your current draft will be saved as a new version first, so this can be undone from version history.`);
+    if (!confirmed) return;
+    setRestoringVersion(version);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/versions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not restore this version.");
+      await loadWorkflow();
+      setNotice(`Restored version ${result.restored_from} as new version ${result.version}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not restore this version.");
+    } finally {
+      setRestoringVersion(null);
+    }
+  }
+
   async function saveDefinition() {
     if (saving) return;
     setSaving(true);
@@ -123,7 +148,7 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back">← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><span className="builder-draft"><i /> {workflow?.status ?? "Draft"}</span><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving}>{saving ? "Saving…" : "Save workflow"} <span>↗</span></button></div>
+        <div className="builder-top-actions"><span className="builder-draft"><i /> {workflow?.status ?? "Draft"}</span><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
       </header>
 
       <div className="builder-layout">
@@ -161,8 +186,8 @@ export default function WorkflowBuilderPage() {
           <div className="panel-add"><div className="panel-add-heading"><strong>Add a step</strong><span>Choose what happens next</span></div><button onClick={() => addNode("action")} disabled={definition.nodes.length >= 30}><span className="add-icon action-add">↗</span><span><strong>Action</strong><small>Perform a task</small></span><b>＋</b></button><button onClick={() => addNode("condition")} disabled={definition.nodes.length >= 30}><span className="add-icon condition-add">◇</span><span><strong>Condition</strong><small>Check a rule</small></span><b>＋</b></button><p>Triggers, integrations and live execution will be connected in a later release.</p></div>
           <section className="version-history" aria-labelledby="version-history-title">
             <div className="panel-add-heading"><strong id="version-history-title">Version history</strong><span>Last 10 saved versions</span></div>
-            {versions.length ? <ol>{versions.map((item, index) => <li key={item.version} className={index === 0 ? "version-latest" : ""}><span><strong>Version {item.version}</strong>{index === 0 && <small>Latest</small>}</span><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></li>)}</ol> : <p className="version-empty">Your saved versions will appear here after the first save.</p>}
-            <p className="version-footnote">Restore and compare are coming later.</p>
+            {versions.length ? <ol>{versions.map((item, index) => <li key={item.version} className={index === 0 ? "version-latest" : ""}><span><strong>Version {item.version}</strong>{index === 0 && <small>Latest</small>}<time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></span><button type="button" className="version-restore" onClick={() => void restoreVersion(item.version)} disabled={saving || restoringVersion !== null || index === 0} aria-label={`Restore version ${item.version}`}>{restoringVersion === item.version ? "Restoring…" : index === 0 ? "Current" : "Restore"}</button></li>)}</ol> : <p className="version-empty">Your saved versions will appear here after the first save.</p>}
+            <p className="version-footnote">Restoring creates a new version, so your history stays intact.</p>
           </section>
         </aside>
       </div>
