@@ -45,12 +45,30 @@ function validateDefinition(value: unknown): { definition?: { version: 1; nodes:
       }
       settings[key] = settingValue.trim();
     }
+    if (type === "trigger") {
+      if (settings.event && !["manual", "schedule", "webhook", "record_created"].includes(settings.event)) return { error: "Choose a supported trigger event." };
+      if (!settings.event) return { error: "Choose what starts this workflow." };
+    }
     if (type === "action") {
       if (settings.provider && !["email", "slack", "webhook", "internal"].includes(settings.provider)) return { error: "Choose a supported action provider." };
       if (settings.operation && !["send_email", "send_message", "http_request", "create_task"].includes(settings.operation)) return { error: "Choose a supported action operation." };
+      const provider = settings.provider ?? "internal";
+      const operation = settings.operation ?? "create_task";
+      const compatibleOperations: Record<string, string> = { internal: "create_task", email: "send_email", slack: "send_message", webhook: "http_request" };
+      if (compatibleOperations[provider] !== operation) return { error: "Choose an operation that matches the selected service." };
+      if (operation === "send_email") {
+        if (!settings.recipient || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(settings.recipient)) return { error: "Enter a valid recipient email address." };
+      }
+      if (operation === "send_message" && !settings.recipient) return { error: "Enter a Slack channel or recipient." };
+      if (operation === "http_request") {
+        if (!settings.url) return { error: "Enter a request URL." };
+        try { const url = new URL(settings.url); if (url.protocol !== "https:") return { error: "Request URLs must use HTTPS." }; } catch { return { error: "Enter a valid HTTPS request URL." }; }
+      }
     }
-    if (type === "condition" && settings.operator && !["equals", "contains", "greater_than", "less_than", "is_set"].includes(settings.operator)) {
-      return { error: "Choose a supported condition operator." };
+    if (type === "condition") {
+      if (settings.operator && !["equals", "contains", "greater_than", "less_than", "is_set"].includes(settings.operator)) return { error: "Choose a supported condition operator." };
+      if (!settings.field) return { error: "Enter the field this condition should check." };
+      if ((settings.operator ?? "equals") !== "is_set" && !settings.value) return { error: "Enter an expected value for this condition." };
     }
     ids.add(node.id);
     nodes.push({ id: node.id, type, title: node.title.trim(), description: node.description.trim(), settings });
