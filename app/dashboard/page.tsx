@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./dashboard.css";
 
 type Workflow = { id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string };
@@ -20,7 +20,30 @@ const navItems = [
 ];
 
 export default function DashboardPage() {
-  const [workflows, setWorkflows] = useState(initialWorkflows);
+  const [workflows, setWorkflows] = useState<Workflow[]>(initialWorkflows);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("aivanta-workflows");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Workflow[];
+        if (Array.isArray(parsed)) setWorkflows(parsed);
+      }
+    } catch {
+      // Keep the in-memory starter data if browser storage is unavailable.
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem("aivanta-workflows", JSON.stringify(workflows));
+    } catch {
+      setNotice("Browser storage is unavailable. Changes will last for this session only.");
+    }
+  }, [workflows, hydrated]);
   const [activeNav, setActiveNav] = useState("Overview");
   const [filter, setFilter] = useState("All workflows");
   const [search, setSearch] = useState("");
@@ -45,7 +68,7 @@ export default function DashboardPage() {
     setShowCreate(false);
     setFilter("All workflows");
     setSearch("");
-    setNotice("Draft created. Execution is not connected yet.");
+    setNotice("Draft created and saved in this browser. Server sync and execution are not connected yet.");
   }
 
   function runDemo(id: number) {
@@ -93,7 +116,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {showCreate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><button className="modal-close" aria-label="Close dialog" onClick={() => setShowCreate(false)}>×</button><div className="modal-icon">✳</div><div className="dash-eyebrow">START WITH A CLEAR OUTCOME</div><h2 id="create-title">Create a workflow</h2><p>Give your workflow a name. You can configure its steps in a future release.</p><form onSubmit={createWorkflow}><label htmlFor="workflow-name">Workflow name</label><input id="workflow-name" autoFocus maxLength={80} placeholder="e.g. Welcome new customers" value={newName} onChange={(event) => setNewName(event.target.value)} required /><div className="modal-actions"><button type="button" className="cancel-button" onClick={() => setShowCreate(false)}>Cancel</button><button type="submit" className="create-button">Create draft <span>↗</span></button></div></form><small className="modal-disclaimer">Creates a local draft in this demo. It is not saved to a server yet.</small></section></div>}
+      {showCreate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><button className="modal-close" aria-label="Close dialog" onClick={() => setShowCreate(false)}>×</button><div className="modal-icon">✳</div><div className="dash-eyebrow">START WITH A CLEAR OUTCOME</div><h2 id="create-title">Create a workflow</h2><p>Give your workflow a name. You can configure its steps in a future release.</p><form onSubmit={createWorkflow}><label htmlFor="workflow-name">Workflow name</label><input id="workflow-name" autoFocus maxLength={80} placeholder="e.g. Welcome new customers" value={newName} onChange={(event) => setNewName(event.target.value)} required /><div className="modal-actions"><button type="button" className="cancel-button" onClick={() => setShowCreate(false)}>Cancel</button><button type="submit" className="create-button">Create draft <span>↗</span></button></div></form><small className="modal-disclaimer">Drafts are saved in this browser only. Server sync and live execution are not connected yet.</small></section></div>}
     </main>
   );
 }
