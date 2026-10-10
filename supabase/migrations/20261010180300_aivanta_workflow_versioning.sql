@@ -26,8 +26,8 @@ begin
 
   if p_definition is null
      or pg_catalog.jsonb_typeof(p_definition) <> 'object'
-     or p_definition ->> 'version' <> '1'
-     or pg_catalog.jsonb_typeof(p_definition -> 'nodes') <> 'array' then
+     or p_definition ->> 'version' is distinct from '1'
+     or pg_catalog.jsonb_typeof(p_definition -> 'nodes') is distinct from 'array' then
     raise exception 'Use workflow definition version 1 with a nodes array' using errcode = '22023';
   end if;
 
