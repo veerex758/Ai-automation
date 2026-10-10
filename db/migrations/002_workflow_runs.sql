@@ -58,6 +58,12 @@ create policy "members can create dry-run records"
     private.is_workspace_member(workspace_id)
     and created_by = (select auth.uid())
     and mode = 'dry_run'
+    and exists (
+      select 1
+      from public.workflows w
+      where w.id = workflow_id
+        and w.workspace_id = workflow_runs.workspace_id
+    )
   );
 
 drop policy if exists "members can read workflow run steps" on public.workflow_run_steps;
