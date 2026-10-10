@@ -4,7 +4,7 @@ AI-powered business automation for teams that want clear, dependable workflows a
 
 ## Current status
 
-This repository contains the application foundation, authenticated workflow storage, a visual builder, automated validation tests, and a persisted dry-run execution path. Dry-runs simulate steps and record history without sending emails, posting messages, creating external tasks, or making HTTP requests. Live execution, third-party integrations, billing, and production hardening remain in progress; see [the roadmap](docs/ROADMAP.md) for the staged plan.
+This repository contains the application foundation, authenticated workflow storage, a visual builder, automated validation tests, and a persisted dry-run execution path. The first live integration is Resend email, guarded by server-only configuration, active workflows, manual triggers, a single email action per run, and idempotency keys. Live execution remains disabled unless `AIVANTA_LIVE_EXECUTION_ENABLED=true` is explicitly configured on the server. See [the integration setup guide](docs/integrations/resend.md) and [the roadmap](docs/ROADMAP.md).
 
 ## Stack
 
