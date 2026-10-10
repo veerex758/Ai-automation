@@ -92,7 +92,7 @@ export default function WorkflowBuilderPage() {
 
   async function restoreVersion(version: number) {
     if (saving || restoringVersion !== null) return;
-    const confirmed = window.confirm(`Restore version ${version}? Your current draft will be saved as a new version first, so this can be undone from version history.`);
+    const confirmed = window.confirm(`Restore version ${version}? This will replace any unsaved edits. The restored snapshot will be saved as a new version, and your existing saved versions will remain in history.`);
     if (!confirmed) return;
     setRestoringVersion(version);
     setError("");
