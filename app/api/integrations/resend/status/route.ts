@@ -11,16 +11,21 @@ export async function GET(request: NextRequest) {
     const configured = isResendConfigured();
     const recipientAllowlistConfigured = getAllowedRecipients().length > 0;
     const liveExecutionEnabled = process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true";
+    const recipient = request.nextUrl.searchParams.get("recipient") ?? "";
+    const recipientAllowed = isLiveEmailRecipientAllowed(recipient);
     return NextResponse.json({
       provider: "resend",
       configured,
       recipientAllowlistConfigured,
+      recipientAllowed,
       liveExecutionEnabled,
-      ready: configured && recipientAllowlistConfigured && liveExecutionEnabled,
+      ready: configured && recipientAllowlistConfigured && recipientAllowed && liveExecutionEnabled,
       missing: [
         ...(!process.env.RESEND_API_KEY?.trim() ? ["RESEND_API_KEY"] : []),
         ...(!process.env.RESEND_FROM_EMAIL?.trim() ? ["RESEND_FROM_EMAIL"] : []),
         ...(!recipientAllowlistConfigured ? ["AIVANTA_LIVE_EMAIL_RECIPIENTS"] : []),
+        ...(recipient && recipientAllowlistConfigured && !recipientAllowed ? ["RECIPIENT_NOT_ALLOWLISTED"] : []),
+        ...(!recipient ? ["WORKFLOW_EMAIL_RECIPIENT"] : []),
         ...(!liveExecutionEnabled ? ["AIVANTA_LIVE_EXECUTION_ENABLED"] : []),
       ],
     }, { headers: { "Cache-Control": "no-store" } });
