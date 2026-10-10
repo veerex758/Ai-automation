@@ -9,6 +9,7 @@ type NodeType = "trigger" | "action" | "condition";
 type WorkflowNode = { id: string; type: NodeType; title: string; description: string };
 type Definition = { version: 1; nodes: WorkflowNode[] };
 type Workflow = { id: string; name: string; description: string; status: string };
+type WorkflowVersion = { version: number; created_at: string };
 
 const starterDefinition: Definition = { version: 1, nodes: [
   { id: "trigger-1", type: "trigger", title: "When this happens", description: "Choose an event that starts your workflow." },
@@ -29,6 +30,7 @@ export default function WorkflowBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [versions, setVersions] = useState<WorkflowVersion[]>([]);
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
 
@@ -43,6 +45,11 @@ export default function WorkflowBuilderPage() {
       const nextDefinition = result.definition as Definition;
       setDefinition(nextDefinition);
       setSelectedId(nextDefinition.nodes[0]?.id ?? "");
+      const versionsResponse = await fetch(`/api/workflows/${workflowId}/versions`, { cache: "no-store" });
+      if (versionsResponse.ok) {
+        const versionsResult = await versionsResponse.json();
+        setVersions(Array.isArray(versionsResult.versions) ? versionsResult.versions : []);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load this workflow.");
     } finally {
@@ -95,7 +102,12 @@ export default function WorkflowBuilderPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save workflow steps.");
-      setNotice("Workflow steps saved to your Aivanta workspace.");
+      setNotice(`Workflow saved as version ${result.version}.`);
+      const versionsResponse = await fetch(`/api/workflows/${workflowId}/versions`, { cache: "no-store" });
+      if (versionsResponse.ok) {
+        const versionsResult = await versionsResponse.json();
+        setVersions(Array.isArray(versionsResult.versions) ? versionsResult.versions : []);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save workflow steps.");
     } finally {
@@ -147,6 +159,11 @@ export default function WorkflowBuilderPage() {
             {selectedNode.type !== "trigger" && <button className="remove-step" onClick={removeSelected}>Remove this step</button>}
           </div> : <div className="panel-empty">Select a step on the canvas to edit its settings.</div>}
           <div className="panel-add"><div className="panel-add-heading"><strong>Add a step</strong><span>Choose what happens next</span></div><button onClick={() => addNode("action")} disabled={definition.nodes.length >= 30}><span className="add-icon action-add">↗</span><span><strong>Action</strong><small>Perform a task</small></span><b>＋</b></button><button onClick={() => addNode("condition")} disabled={definition.nodes.length >= 30}><span className="add-icon condition-add">◇</span><span><strong>Condition</strong><small>Check a rule</small></span><b>＋</b></button><p>Triggers, integrations and live execution will be connected in a later release.</p></div>
+          <section className="version-history" aria-labelledby="version-history-title">
+            <div className="panel-add-heading"><strong id="version-history-title">Version history</strong><span>Last 10 saved versions</span></div>
+            {versions.length ? <ol>{versions.map((item, index) => <li key={item.version} className={index === 0 ? "version-latest" : ""}><span><strong>Version {item.version}</strong>{index === 0 && <small>Latest</small>}</span><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></li>)}</ol> : <p className="version-empty">Your saved versions will appear here after the first save.</p>}
+            <p className="version-footnote">Restore and compare are coming later.</p>
+          </section>
         </aside>
       </div>
     </main>
