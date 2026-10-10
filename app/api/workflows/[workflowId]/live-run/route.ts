@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
-import { sendResendEmail, isResendConfigured } from "@/lib/integrations/resend.cjs";
+import { sendResendEmail, isResendConfigured, isLiveEmailRecipientAllowed, getAllowedRecipients } from "@/lib/integrations/resend.cjs";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const maxInputBytes = 10 * 1024;
@@ -34,6 +34,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
+    const { data: priorRun, error: priorRunError } = await supabase.from("workflow_runs")
+      .select("id, status, workflow_version, mode, created_at")
+      .eq("idempotency_key", idempotencyKey).maybeSingle();
+    if (priorRunError) throw priorRunError;
+    if (priorRun) return NextResponse.json({
+      run: priorRun,
+      duplicate: true,
+      message: "This idempotency key has already been processed. No second email was sent.",
+    }, { status: 200 });
+
     let body: unknown;
     try { body = await request.json(); } catch {
       return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
@@ -63,6 +73,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "The first live integration supports one Resend email action. Other providers remain in safe preview mode." }, { status: 422 });
     }
     if (!emailAction.settings.message?.trim()) return NextResponse.json({ error: "Add a message to the email action before running live." }, { status: 422 });
+    if (getAllowedRecipients().length === 0) {
+      return NextResponse.json({ error: "Live email is not configured. Add AIVANTA_LIVE_EMAIL_RECIPIENTS to the server environment." }, { status: 503 });
+    }
+    if (!isLiveEmailRecipientAllowed(emailAction.settings.recipient)) {
+      return NextResponse.json({ error: "This recipient is not on the server-configured live email allowlist." }, { status: 403 });
+    }
+
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentLiveRuns, error: rateLimitError } = await supabase.from("workflow_runs")
+      .select("id", { count: "exact", head: true })
+      .eq("created_by", user.id)
+      .eq("mode", "live")
+      .gte("created_at", hourAgo);
+    if (rateLimitError) throw rateLimitError;
+    if ((recentLiveRuns ?? 0) >= 10) {
+      return NextResponse.json({ error: "Live run limit reached. A maximum of 10 live runs per user per hour is allowed." }, { status: 429 });
+    }
 
     const preview = runDryRun(validated.definition, input);
     const { data: run, error: insertError } = await supabase.from("workflow_runs").insert({
