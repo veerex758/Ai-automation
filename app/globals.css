@@ -105,3 +105,52 @@ h1 span{color:#809e65}
 .footer .brand{color:var(--ink);font-size:18px}.footer .brand-mark{width:27px;height:27px;font-size:19px}
 @media(max-width:900px){.hero{gap:25px}.hero-copy{padding-top:15px}.floating-note.note-top{right:-4px}.note-bottom{left:-10px}.trust-inner{padding:20px 0}.security-section{grid-template-columns:60px 1fr}.security-badge{grid-column:2;justify-self:start}.dark-inner{gap:45px}}
 @media(max-width:680px){.shell{width:calc(100% - 36px)}.nav{height:72px}.nav-links{display:none}.nav-cta{font-size:11px;padding:10px 11px}.brand{font-size:20px}.hero{grid-template-columns:1fr;padding-top:36px;gap:8px}.hero-copy{padding-bottom:10px}h1{font-size:58px;letter-spacing:-3px}.hero-description{font-size:14px}.hero-proof{margin-top:28px}.preview-wrap{min-height:390px;margin:0 -4px}.workflow-card{padding:17px}.note-top{right:0;top:20px}.note-bottom{left:0;bottom:15px}.floating-note{padding:9px 11px}.hero-bottom-line{gap:9px;font-size:7px;letter-spacing:.7px;padding:18px 0}.hero-bottom-line .line{min-width:10px}.trust-inner{justify-content:flex-start;gap:15px 22px}.trust-inner>span{width:100%}.trust-inner strong{font-size:9px}.section{padding-top:75px;padding-bottom:78px}.section-heading{display:block}.section-heading h2{font-size:43px}.section-heading>p{margin-top:22px}.capability-grid{grid-template-columns:1fr}.capability-card{min-height:auto}.capability-card p{min-height:auto}.dark-section{padding:72px 0}.dark-inner{grid-template-columns:1fr;gap:42px}.dark-inner h2{font-size:51px}.security-section{grid-template-columns:1fr;gap:20px;padding-top:70px;padding-bottom:70px}.security-section h2{font-size:31px}.security-badge{grid-column:auto;white-space:normal}.cta-section{padding-bottom:42px}.cta-card{padding:38px 26px}.cta-card h2{font-size:43px}.cta-decoration{right:10px;font-size:200px;bottom:-70px}.footer{padding:22px 0;flex-wrap:wrap;justify-content:space-between}.footer>span:nth-child(2){display:none}.footer>span:last-child{font-size:9px}}
+
+
+/* Final website polish: clearer keyboard focus, refined CTA pairing, and reduced-motion support. */
+::selection{background:#dff4b7;color:#19231f}
+:where(a,button,input,textarea):focus-visible{outline:3px solid #8ab33b;outline-offset:4px}
+.cta-actions{display:flex;align-items:center;gap:22px;flex-wrap:wrap;position:relative;z-index:1}
+.cta-secondary-link{display:inline-flex;align-items:center;gap:10px;color:#edf4e8;font-size:12px;font-weight:700;transition:color .2s,transform .2s}
+.cta-secondary-link:hover{color:var(--green);transform:translateY(-1px)}
+@media(max-width:680px){.cta-actions{align-items:flex-start;gap:17px;flex-direction:column}.cta-secondary-link{padding:4px 0}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+
+/* Responsive finishing pass: restrained motion, sharper interactions, and small-screen safeguards. */
+@keyframes aivanta-rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes aivanta-soft-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-copy { animation: aivanta-rise-in .55s ease-out both; }
+  .preview-wrap { animation: aivanta-rise-in .7s .08s ease-out both; }
+  .floating-note.note-top { animation: aivanta-rise-in .65s .2s ease-out both, aivanta-soft-float 5s 1s ease-in-out infinite; }
+  .floating-note.note-bottom { animation: aivanta-rise-in .65s .3s ease-out both; }
+}
+.capability-card:focus-within { border-color: #a9c58e; box-shadow: 0 8px 24px rgba(40,57,43,.06); }
+.nav-cta:focus-visible, .button:focus-visible, .text-link:focus-visible, .capability-card a:focus-visible { border-radius: 7px; }
+@media (max-width: 680px) {
+  h1 { font-size: clamp(43px, 12vw, 58px); letter-spacing: -2.7px; }
+  .preview-wrap { min-width: 0; }
+  .workflow-card { min-width: 0; }
+  .flow-item { gap: 9px; }
+  .flow-text strong { font-size: 10px; }
+  .flow-state { font-size: 8px; padding: 5px 6px; }
+}
+@media (max-width: 380px) {
+  .shell { width: calc(100% - 28px); }
+  .nav-cta { padding: 9px 8px; font-size: 10px; }
+  .brand { gap: 7px; font-size: 18px; }
+  .brand-mark { width: 29px; height: 29px; }
+  .hero-bottom-line { letter-spacing: .2px; }
+  .workflow-card { padding: 13px; }
+  .workflow-meta { gap: 8px; font-size: 8px; }
+  .floating-note { max-width: 178px; }
+  .floating-note strong { font-size: 9px; }
+  .floating-note small { font-size: 8px; }
+}
