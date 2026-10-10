@@ -78,6 +78,49 @@ function validateDefinition(value: unknown): { definition?: { version: 1; nodes:
   return { definition: { version: 1, nodes } };
 }
 
+export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
+  try {
+    const { workflowId } = await context.params;
+    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
+    const { data: workflow, error: workflowError } = await supabase.from("workflows")
+      .select("id").eq("id", workflowId).maybeSingle();
+    if (workflowError) throw workflowError;
+    if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+
+    let body: unknown;
+    try { body = await request.json(); } catch {
+      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    }
+    if (!body || typeof body !== "object" || !("definition" in body)) {
+      return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
+    }
+
+    const validated = validateDefinition(body.definition);
+    if (!validated.definition) return NextResponse.json({ valid: false, error: validated.error }, { status: 422 });
+
+    const nodes = validated.definition.nodes;
+    return NextResponse.json({
+      valid: true,
+      counts: {
+        triggers: nodes.filter((node) => node.type === "trigger").length,
+        actions: nodes.filter((node) => node.type === "action").length,
+        conditions: nodes.filter((node) => node.type === "condition").length,
+      },
+      checks: ["definition schema", "step IDs and types", "trigger placement", "step limits", "step configuration"],
+      executed: false,
+      saved: false,
+    });
+  } catch (error) {
+    console.error("Failed to validate Aivanta workflow draft:", error);
+    return NextResponse.json({ error: "Could not validate this draft. Try again." }, { status: 500 });
+  }
+}
+
 export async function GET(_request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   try {
     const { workflowId } = await context.params;
