@@ -104,7 +104,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       created_by: user.id,
       idempotency_key: idempotencyKey,
       started_at: new Date(startedAt).toISOString(),
-      completed_at: new Date(startedAt).toISOString(),
+      completed_at: null,
       duration_ms: 0,
     }).select("id, workflow_version, started_at").single();
 
