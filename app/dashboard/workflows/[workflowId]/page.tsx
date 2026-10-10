@@ -194,15 +194,23 @@ export default function WorkflowBuilderPage() {
             <div className={`selected-type type-${selectedNode.type}`}><span>{nodeMeta[selectedNode.type].icon}</span><div><strong>{nodeMeta[selectedNode.type].label}</strong><small>{nodeMeta[selectedNode.type].help}</small></div></div>
             <label htmlFor="step-title">Step name</label><input id="step-title" maxLength={80} value={selectedNode.title} onChange={(event) => updateSelected({ title: event.target.value })} />
             <label htmlFor="step-description">Description <span>Optional</span></label><textarea id="step-description" maxLength={240} rows={4} value={selectedNode.description} onChange={(event) => updateSelected({ description: event.target.value })} placeholder="Describe what this step should do…" />
+            {selectedNode.type === "trigger" && <div className="step-config-fields">
+              <div className="config-section-title">Trigger configuration</div>
+              <label htmlFor="trigger-event">Start when</label>
+              <select id="trigger-event" value={selectedNode.settings.event ?? "manual"} onChange={(event) => updateSetting("event", event.target.value)}>
+                <option value="manual">Started manually</option><option value="schedule">On a schedule</option><option value="webhook">A webhook is received</option><option value="record_created">A new record is created</option>
+              </select>
+              <p className="config-note">This selects the intended start event. Scheduling, inbound webhooks and live triggers are not active yet.</p>
+            </div>}
             {selectedNode.type === "action" && <div className="step-config-fields">
               <div className="config-section-title">Action configuration</div>
               <label htmlFor="action-provider">Service</label>
-              <select id="action-provider" value={selectedNode.settings.provider ?? "internal"} onChange={(event) => updateSetting("provider", event.target.value)}>
+              <select id="action-provider" value={selectedNode.settings.provider ?? "internal"} onChange={(event) => { const provider = event.target.value; updateSetting("provider", provider); updateSetting("operation", provider === "email" ? "send_email" : provider === "slack" ? "send_message" : provider === "webhook" ? "http_request" : "create_task"); }}>
                 <option value="internal">Aivanta task</option><option value="email">Email</option><option value="slack">Slack</option><option value="webhook">Webhook</option>
               </select>
               <label htmlFor="action-operation">Operation</label>
               <select id="action-operation" value={selectedNode.settings.operation ?? "create_task"} onChange={(event) => updateSetting("operation", event.target.value)}>
-                <option value="create_task">Create a task</option><option value="send_email">Send an email</option><option value="send_message">Send a message</option><option value="http_request">Send an HTTP request</option>
+                {(selectedNode.settings.provider === "email" ? [{ value: "send_email", label: "Send an email" }] : selectedNode.settings.provider === "slack" ? [{ value: "send_message", label: "Send a message" }] : selectedNode.settings.provider === "webhook" ? [{ value: "http_request", label: "Send an HTTP request" }] : [{ value: "create_task", label: "Create a task" }]).map((operation) => <option key={operation.value} value={operation.value}>{operation.label}</option>)}
               </select>
               {(selectedNode.settings.operation === "send_email" || selectedNode.settings.operation === "send_message") && <>
                 <label htmlFor="action-recipient">Recipient</label><input id="action-recipient" maxLength={240} value={selectedNode.settings.recipient ?? ""} onChange={(event) => updateSetting("recipient", event.target.value)} placeholder="name@example.com or channel" />
