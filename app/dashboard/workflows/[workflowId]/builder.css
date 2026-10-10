@@ -34,3 +34,11 @@
   cursor: not-allowed;
   opacity: .55;
 }
+
+
+.step-config-fields{margin-top:22px;padding-top:18px;border-top:1px solid #e8ede5;display:flex;flex-direction:column;gap:8px}
+.config-section-title{font:700 11px Manrope,sans-serif;color:#2c4932;margin-bottom:4px}
+.panel-content .step-config-fields label{margin-top:7px}
+.panel-content .step-config-fields input,.panel-content .step-config-fields select,.panel-content .step-config-fields textarea{width:100%;min-width:0;border:1px solid #dfe7dc;border-radius:7px;background:#fff;padding:10px 11px;color:#304335;font:500 11px 'DM Sans',sans-serif;outline:none}
+.panel-content .step-config-fields input:focus,.panel-content .step-config-fields select:focus,.panel-content .step-config-fields textarea:focus{border-color:#86ad6d;box-shadow:0 0 0 3px #edf5e7}
+.config-note{font-size:10px;line-height:1.55;color:#7b897b;background:#f3f7ef;border-radius:7px;padding:10px;margin:6px 0 0}
