@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import "./builder.css";
+import RunTestPanel from "./run-test-panel";
 
 type NodeType = "trigger" | "action" | "condition";
 type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string> };
@@ -226,6 +227,7 @@ export default function WorkflowBuilderPage() {
           {notice && <div className="builder-notice" role="status">{notice}</div>}
           {validation && <div className={`builder-validation ${validation.valid ? "validation-pass" : "validation-fail"}`} role="status"><span className="validation-mark">{validation.valid ? "✓" : "!"}</span><div><strong>{validation.valid ? "Draft checks passed" : "Draft needs attention"}</strong><p>{validation.message}</p>{validation.counts && <small>{validation.counts.triggers} trigger · {validation.counts.actions} actions · {validation.counts.conditions} conditions</small>}<small>Checked {new Date(validation.checkedAt).toLocaleTimeString()}</small></div></div>}
           {error && <div className="builder-error-banner" role="alert">{error}</div>}
+          <RunTestPanel workflowId={workflowId} hasUnsavedChanges={isDirty} />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
             <div className="canvas-label"><span>CANVAS</span><span>{definition.nodes.length} / 30 steps</span></div>
@@ -239,7 +241,7 @@ export default function WorkflowBuilderPage() {
               </div>)}
               {definition.nodes.length === 0 && <div className="builder-empty"><span>✳</span><strong>Start with a trigger</strong><p>A trigger defines what starts your workflow.</p><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}`, settings: { event: "manual" } }; draftRevision.current += 1; setValidation(null); setDefinition({ version: 1, nodes: [trigger] }); setSelectedId(trigger.id); setNotice("Trigger added. Save your changes when you’re ready."); }}>Add trigger</button></div>}
             </div>
-            <div className="canvas-footnote">This is a workflow draft. Steps are saved, but they do not execute yet.</div>
+            <div className="canvas-footnote">Use the safe test panel to evaluate conditions and inspect simulated step results. External actions remain disabled.</div>
           </div>
         </section>
 
