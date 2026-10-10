@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import "./builder.css";
@@ -35,6 +35,7 @@ export default function WorkflowBuilderPage() {
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<{ valid: boolean; message: string; checkedAt: string; counts?: { triggers: number; actions: number; conditions: number } } | null>(null);
+  const draftRevision = useRef(0);
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
   const isDirty = JSON.stringify(definition) !== savedFingerprint;
@@ -77,12 +78,14 @@ export default function WorkflowBuilderPage() {
 
   function updateSelected(updates: Partial<Pick<WorkflowNode, "title" | "description">>) {
     if (!selectedNode) return;
+    draftRevision.current += 1;
     setValidation(null);
     setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === selectedNode.id ? { ...node, ...updates } : node) }));
   }
 
   function updateSetting(key: string, value: string) {
     if (!selectedNode) return;
+    draftRevision.current += 1;
     setValidation(null);
     setDefinition((current) => ({
       ...current,
@@ -93,6 +96,7 @@ export default function WorkflowBuilderPage() {
   }
 
   function addNode(type: Exclude<NodeType, "trigger">) {
+    draftRevision.current += 1;
     setValidation(null);
     const id = `${type}-${Date.now().toString(36)}`;
     const node: WorkflowNode = {
@@ -108,6 +112,7 @@ export default function WorkflowBuilderPage() {
 
   function removeSelected() {
     if (!selectedNode || selectedNode.type === "trigger") return;
+    draftRevision.current += 1;
     setValidation(null);
     setDefinition((current) => ({ ...current, nodes: current.nodes.filter((node) => node.id !== selectedNode.id) }));
     setSelectedId(definition.nodes.find((node) => node.type === "trigger")?.id ?? "");
@@ -115,6 +120,7 @@ export default function WorkflowBuilderPage() {
   }
 
   function moveNode(index: number, direction: -1 | 1) {
+    draftRevision.current += 1;
     setValidation(null);
     const target = index + direction;
     if (target < 1 || target >= definition.nodes.length) return;
@@ -154,6 +160,7 @@ export default function WorkflowBuilderPage() {
     setValidating(true);
     setError("");
     setValidation(null);
+    const revisionAtStart = draftRevision.current;
     try {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "POST",
@@ -161,6 +168,7 @@ export default function WorkflowBuilderPage() {
         body: JSON.stringify({ definition }),
       });
       const result = await response.json();
+      if (revisionAtStart !== draftRevision.current) return;
       if (!response.ok) {
         setValidation({ valid: false, message: result.error || "This draft needs attention before it can pass validation.", checkedAt: new Date().toISOString() });
         return;
