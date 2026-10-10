@@ -22,10 +22,10 @@ type RunHistoryItem = {
 };
 
 export default function RunTestPanel({ workflowId, hasUnsavedChanges }: { workflowId: string; hasUnsavedChanges: boolean }) {
-  const [input, setInput] = useState('{
+  const [input, setInput] = useState(`{
   "status": "ready",
   "order": { "total": 125 }
-}');
+}`);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
