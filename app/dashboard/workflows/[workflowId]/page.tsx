@@ -6,13 +6,13 @@ import { useParams } from "next/navigation";
 import "./builder.css";
 
 type NodeType = "trigger" | "action" | "condition";
-type WorkflowNode = { id: string; type: NodeType; title: string; description: string };
+type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string> };
 type Definition = { version: 1; nodes: WorkflowNode[] };
 type Workflow = { id: string; name: string; description: string; status: string };
 type WorkflowVersion = { version: number; created_at: string };
 
 const starterDefinition: Definition = { version: 1, nodes: [
-  { id: "trigger-1", type: "trigger", title: "When this happens", description: "Choose an event that starts your workflow." },
+  { id: "trigger-1", type: "trigger", title: "When this happens", description: "Choose an event that starts your workflow.", settings: { event: "manual" } },
 ] };
 const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> = {
   trigger: { label: "Trigger", icon: "⚡", help: "The event that starts the workflow." },
@@ -65,9 +65,24 @@ export default function WorkflowBuilderPage() {
     setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === selectedNode.id ? { ...node, ...updates } : node) }));
   }
 
+  function updateSetting(key: string, value: string) {
+    if (!selectedNode) return;
+    setDefinition((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) => node.id === selectedNode.id
+        ? { ...node, settings: { ...node.settings, [key]: value } }
+        : node),
+    }));
+  }
+
   function addNode(type: Exclude<NodeType, "trigger">) {
     const id = `${type}-${Date.now().toString(36)}`;
-    const node: WorkflowNode = { id, type, title: type === "action" ? "New action" : "Check a condition", description: "" };
+    const node: WorkflowNode = {
+      id, type, title: type === "action" ? "New action" : "Check a condition", description: "",
+      settings: type === "action"
+        ? { provider: "internal", operation: "create_task", recipient: "", message: "", url: "" }
+        : { field: "", operator: "equals", value: "" },
+    };
     setDefinition((current) => ({ ...current, nodes: [...current.nodes, node] }));
     setSelectedId(id);
     setNotice("Step added. Save your changes when you're ready.");
@@ -167,7 +182,7 @@ export default function WorkflowBuilderPage() {
                 </button>
                 {index === definition.nodes.length - 1 && <div className="node-endpoint"><span>＋</span> Add the next step from the panel</div>}
               </div>)}
-              {definition.nodes.length === 0 && <div className="builder-empty"><span>✳</span><strong>Start with a trigger</strong><p>A trigger defines what starts your workflow.</p><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
+              {definition.nodes.length === 0 && <div className="builder-empty"><span>✳</span><strong>Start with a trigger</strong><p>A trigger defines what starts your workflow.</p><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}`, settings: { event: "manual" } }; setDefinition({ version: 1, nodes: [trigger] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
             </div>
             <div className="canvas-footnote">This is a workflow draft. Steps are saved, but they do not execute yet.</div>
           </div>
@@ -179,6 +194,38 @@ export default function WorkflowBuilderPage() {
             <div className={`selected-type type-${selectedNode.type}`}><span>{nodeMeta[selectedNode.type].icon}</span><div><strong>{nodeMeta[selectedNode.type].label}</strong><small>{nodeMeta[selectedNode.type].help}</small></div></div>
             <label htmlFor="step-title">Step name</label><input id="step-title" maxLength={80} value={selectedNode.title} onChange={(event) => updateSelected({ title: event.target.value })} />
             <label htmlFor="step-description">Description <span>Optional</span></label><textarea id="step-description" maxLength={240} rows={4} value={selectedNode.description} onChange={(event) => updateSelected({ description: event.target.value })} placeholder="Describe what this step should do…" />
+            {selectedNode.type === "action" && <div className="step-config-fields">
+              <div className="config-section-title">Action configuration</div>
+              <label htmlFor="action-provider">Service</label>
+              <select id="action-provider" value={selectedNode.settings.provider ?? "internal"} onChange={(event) => updateSetting("provider", event.target.value)}>
+                <option value="internal">Aivanta task</option><option value="email">Email</option><option value="slack">Slack</option><option value="webhook">Webhook</option>
+              </select>
+              <label htmlFor="action-operation">Operation</label>
+              <select id="action-operation" value={selectedNode.settings.operation ?? "create_task"} onChange={(event) => updateSetting("operation", event.target.value)}>
+                <option value="create_task">Create a task</option><option value="send_email">Send an email</option><option value="send_message">Send a message</option><option value="http_request">Send an HTTP request</option>
+              </select>
+              {(selectedNode.settings.operation === "send_email" || selectedNode.settings.operation === "send_message") && <>
+                <label htmlFor="action-recipient">Recipient</label><input id="action-recipient" maxLength={240} value={selectedNode.settings.recipient ?? ""} onChange={(event) => updateSetting("recipient", event.target.value)} placeholder="name@example.com or channel" />
+              </>}
+              {selectedNode.settings.operation === "http_request" && <>
+                <label htmlFor="action-url">Request URL</label><input id="action-url" maxLength={500} type="url" value={selectedNode.settings.url ?? ""} onChange={(event) => updateSetting("url", event.target.value)} placeholder="https://api.example.com/…" />
+              </>}
+              <label htmlFor="action-message">Payload / message <span>Optional</span></label>
+              <textarea id="action-message" maxLength={500} rows={3} value={selectedNode.settings.message ?? ""} onChange={(event) => updateSetting("message", event.target.value)} placeholder="Describe the content or payload…" />
+              <p className="config-note">Configuration is saved as a draft only. No service is contacted yet.</p>
+            </div>}
+            {selectedNode.type === "condition" && <div className="step-config-fields">
+              <div className="config-section-title">Condition rules</div>
+              <label htmlFor="condition-field">Field to check</label><input id="condition-field" maxLength={120} value={selectedNode.settings.field ?? ""} onChange={(event) => updateSetting("field", event.target.value)} placeholder="e.g. order.total" />
+              <label htmlFor="condition-operator">Comparison</label>
+              <select id="condition-operator" value={selectedNode.settings.operator ?? "equals"} onChange={(event) => updateSetting("operator", event.target.value)}>
+                <option value="equals">Equals</option><option value="contains">Contains</option><option value="greater_than">Greater than</option><option value="less_than">Less than</option><option value="is_set">Is set</option>
+              </select>
+              {selectedNode.settings.operator !== "is_set" && <>
+                <label htmlFor="condition-value">Expected value</label><input id="condition-value" maxLength={240} value={selectedNode.settings.value ?? ""} onChange={(event) => updateSetting("value", event.target.value)} placeholder="Value to compare against" />
+              </>}
+              <p className="config-note">Rules are stored in your draft. They will not be evaluated until execution is implemented.</p>
+            </div>}
             <div className="panel-divider" />
             <div className="step-order"><span>Step order</span><div><button aria-label="Move step up" disabled={definition.nodes.findIndex((node) => node.id === selectedNode.id) <= 1} onClick={() => moveNode(definition.nodes.findIndex((node) => node.id === selectedNode.id), -1)}>↑</button><button aria-label="Move step down" disabled={definition.nodes.findIndex((node) => node.id === selectedNode.id) >= definition.nodes.length - 1} onClick={() => moveNode(definition.nodes.findIndex((node) => node.id === selectedNode.id), 1)}>↓</button></div></div>
             {selectedNode.type !== "trigger" && <button className="remove-step" onClick={removeSelected}>Remove this step</button>}
