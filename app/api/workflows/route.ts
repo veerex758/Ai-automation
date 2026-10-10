@@ -4,6 +4,18 @@ import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
+function formatUpdatedAt(value: string): string {
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (elapsedSeconds < 60) return "Just now";
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(value).toLocaleDateString();
+}
+
 function presentWorkflow(row: {
   id: string;
   name: string;
@@ -18,7 +30,7 @@ function presentWorkflow(row: {
     category: "Uncategorized",
     status: row.status.charAt(0).toUpperCase() + row.status.slice(1),
     runs: "—",
-    updated: row.updated_at,
+    updated: formatUpdatedAt(row.updated_at),
     icon: "✳",
     tone: "lime",
   };
