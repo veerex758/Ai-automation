@@ -16,6 +16,7 @@ type IntegrationStatus = { provider: string; configured: boolean; liveExecutionE
 type LiveRunResult = { run: { id: string; status: string; workflow_version: number; duration_ms: number }; steps: Array<{ step_id: string; position: number; step_type: RunStep["type"]; title: string; status: "simulated" | "skipped" | "executed" | "failed"; result: Record<string, unknown> }>; sideEffectsPerformed: boolean; providerMessageId?: string };
 type RunHistoryItem = {
   id: string;
+  mode: string;
   workflow_version: number;
   status: string;
   created_at: string;
@@ -23,7 +24,7 @@ type RunHistoryItem = {
   steps: Array<{ id: string; status: string; title: string; position: number }>;
 };
 
-export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string }) {
+export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, liveEmailRecipient }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; liveEmailRecipient: string }) {
   const [input, setInput] = useState(`{
   "status": "ready",
   "order": { "total": 125 }
@@ -110,6 +111,11 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
       return;
     }
 
+    const confirmed = window.confirm(
+      `Send a REAL email to ${liveEmailRecipient || "the configured recipient"} using Resend? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
     if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
     setSendingLive(true);
     setLiveError("");
@@ -176,10 +182,10 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
         <p className="dry-run-hint">No external side effects were performed.</p>
       </div>}
       <div className="run-history">
-        <div className="panel-add-heading"><strong>Test run history</strong><span>Recent dry-runs</span></div>
+        <div className="panel-add-heading"><strong>Run history</strong><span>Dry-runs and live email</span></div>
         {history.length ? <ol>{history.slice(0, 6).map((run) => <li key={run.id}>
           <span className={`run-history-status ${run.status === "succeeded" ? "status-ok" : "status-failed"}`}>{run.status === "succeeded" ? "✓" : "!"}</span>
-          <span className="run-history-copy"><strong>Version {run.workflow_version}</strong><small>{run.steps?.length ?? 0} steps · {run.duration_ms} ms</small><time dateTime={run.created_at}>{new Date(run.created_at).toLocaleString()}</time></span>
+          <span className="run-history-copy"><strong>{run.mode === "live" ? "Live email" : "Dry run"} · Version {run.workflow_version}</strong><small>{run.steps?.length ?? 0} steps · {run.duration_ms} ms</small><time dateTime={run.created_at}>{new Date(run.created_at).toLocaleString()}</time></span>
         </li>)}</ol> : <p className="version-empty">Your dry-run results will appear here.</p>}
       </div>
     </section>
