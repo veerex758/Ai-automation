@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import "./builder.css";
 
@@ -21,6 +21,24 @@ export default function WorkflowBuilderPage() {
   const [selected, setSelected] = useState(1);
   const [notice, setNotice] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("aivanta-builder-draft");
+      if (saved) {
+        const parsed = JSON.parse(saved) as { name?: string; steps?: BuilderStep[] };
+        if (typeof parsed.name === "string") setName(parsed.name);
+        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+          setSteps(parsed.steps);
+          setSelected(parsed.steps[0].id);
+        }
+      }
+    } catch {
+      // Keep the starter workflow when saved browser data is invalid.
+    }
+    setHydrated(true);
+  }, []);
 
   function addStep(kind: StepKind) {
     const id = Date.now();
@@ -45,7 +63,7 @@ export default function WorkflowBuilderPage() {
     }
   }
 
-  const currentStep = steps.find(step => step.id === selected) ?? steps[0];
+  const currentStep = steps.find(step => step.id === selected) ?? steps[0];\n  const validationIssues = [\n    !name.trim() ? "Give this workflow a name." : "",\n    !steps.some(step => step.kind === "Trigger") ? "Add at least one trigger." : "",\n    steps.some(step => !step.title.trim()) ? "Every step needs a name." : "",\n  ].filter(Boolean);\n\n  function reviewWorkflow() {\n    if (validationIssues.length) {\n      setNotice("Review needed: " + validationIssues.join(" "));\n      return;\n    }\n    setNotice("Basic checks passed. Activation is still disabled because live integrations, server-side validation, and execution safeguards are not connected.");\n  }
 
   return (
     <main className="builder-shell">
@@ -60,9 +78,9 @@ export default function WorkflowBuilderPage() {
       </aside>
 
       <section className="builder-main">
-        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft}>Save draft</button><button className="builder-primary-button" onClick={() => setNotice("Activation is disabled until workflow validation and real execution are implemented.")}>Review &amp; activate ↗</button></div></header>
+        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft}>Save draft</button><button className="builder-primary-button" onClick={reviewWorkflow}>Review &amp; activate ↗</button></div></header>
         <div className="builder-content">
-          <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>Not connected</span></div></div>
+          <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
           <div className="builder-workspace-grid">
             <section className="canvas-panel" aria-label="Workflow canvas">
@@ -83,7 +101,7 @@ export default function WorkflowBuilderPage() {
                 </div>
                 <div className="canvas-zoom"><button aria-label="Zoom out" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>−</button><span>100%</span><button aria-label="Zoom in" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>＋</button></div>
               </div>
-              <div className="canvas-foot"><span><i /> All changes are local</span><span>Drag-and-drop connections coming soon</span></div>
+              <div className="canvas-foot"><span><i /> Draft saved locally on Save draft</span><span>Drag-and-drop connections coming soon</span></div>
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
