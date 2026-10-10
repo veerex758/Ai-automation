@@ -16,7 +16,7 @@ export default function Home() {
       <nav className="nav shell">
         <a className="brand" href="#" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></a>
         <div className="nav-links"><a href="#platform">Platform</a><a href="#how-it-works">How it works</a><a href="#security">Security</a></div>
-        <a className="nav-cta" href="#get-started">Get early access <span>↗</span></a>
+        <a className="nav-cta" href="/dashboard">Open workspace <span>↗</span></a>
       </nav>
 
       <section className="hero shell">
@@ -24,7 +24,7 @@ export default function Home() {
           <div className="eyebrow"><span className="pulse" /> THE AUTOMATION PLATFORM FOR WHAT'S NEXT</div>
           <h1>Less busywork.<br /><span>More business.</span></h1>
           <p className="hero-description">Bring your tools, teams, and AI together in workflows that move work forward — without adding complexity.</p>
-          <div className="hero-actions"><a className="button button-dark" href="#get-started">Build your first workflow <span>↗</span></a><a className="text-link" href="#platform">Explore the platform <span>↓</span></a></div>
+          <div className="hero-actions"><a className="button button-dark" href="/dashboard">Explore the workspace <span>↗</span></a><a className="text-link" href="#platform">Explore the platform <span>↓</span></a></div>
           <div className="hero-proof"><div className="avatar-stack"><span>J</span><span>M</span><span>A</span><span>+</span></div><p><strong>Built for real work.</strong><br />Designed for teams that want to scale thoughtfully.</p></div>
         </div>
 
