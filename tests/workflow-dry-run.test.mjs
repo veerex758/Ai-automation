@@ -42,3 +42,21 @@ test("does not echo input values into step messages", () => {
   const result = runDryRun(workflow([trigger, action]), { note: secretLikeValue });
   assert.equal(JSON.stringify(result).includes(secretLikeValue), false);
 });
+
+
+test("email and HTTP actions remain side-effect free in dry-run mode", () => {
+  const email = { ...action, title: "Send email", settings: { provider: "email", operation: "send_email", recipient: "owner@example.com", message: "Hello" } };
+  const webhook = { ...action, title: "HTTP request", settings: { provider: "webhook", operation: "http_request", url: "https://example.com", method: "POST" } };
+  const result = runDryRun(workflow([trigger, email, webhook]));
+  assert.equal(result.sideEffectsPerformed, false);
+  assert.match(result.steps[1].message, /No email was sent/);
+  assert.match(result.steps[2].message, /No network request was made/);
+});
+
+test("condition paths reject prototype-sensitive segments", () => {
+  for (const field of ["__proto__.polluted", "record.prototype", "record.constructor.name"]) {
+    const unsafe = { ...condition, settings: { field, operator: "is_set" } };
+    const result = runDryRun(workflow([trigger, unsafe, action]), { record: { status: "ready" } });
+    assert.equal(result.steps[1].conditionMatched, false, field);
+  }
+});
