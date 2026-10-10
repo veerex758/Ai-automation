@@ -25,7 +25,6 @@ export default function DashboardPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deletingWorkflowId, setDeletingWorkflowId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  const [runningId, setRunningId] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("Your workspace");
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const [savingWorkflow, setSavingWorkflow] = useState(false);
@@ -134,11 +133,6 @@ export default function DashboardPage() {
     }
   }
 
-  function runDemo(id: string) {
-    setRunningId(id);
-    setNotice("Demo only: live workflow execution is not connected yet.");
-    window.setTimeout(() => setRunningId((current) => current === id ? null : current), 1100);
-  }
 
   return (
     <main className="app-shell">
