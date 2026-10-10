@@ -11,6 +11,11 @@ This repository contains the early application foundation and marketing experien
 - Next.js App Router
 - React and TypeScript
 - CSS design system with responsive layouts
+- PostgreSQL connection foundation (`pg`)
+
+## Database foundation
+
+The initial PostgreSQL schema and setup notes are in [`db/`](db/README.md). Configure `DATABASE_URL` only in your local environment or deployment secrets. The database is not connected to authenticated workflow CRUD yet; see [the roadmap](docs/ROADMAP.md).
 
 ## Local development
 
