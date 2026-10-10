@@ -83,14 +83,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     const validated = validateDefinition(body.definition);
     if (!validated.definition) return NextResponse.json({ error: validated.error }, { status: 400 });
 
-    const { data, error } = await supabase.from("workflows")
-      .update({ definition: validated.definition })
-      .eq("id", workflowId)
-      .select("id")
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    return NextResponse.json({ success: true, definition: validated.definition });
+    const { data, error } = await supabase.rpc("save_workflow_definition", {
+      p_workflow_id: workflowId,
+      p_definition: validated.definition,
+    });
+    if (error) {
+      if (error.code === "P0002") {
+        return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      }
+      throw error;
+    }
+    const saved = Array.isArray(data) ? data[0] : data;
+    if (!saved) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    return NextResponse.json({ success: true, version: saved.saved_version, definition: validated.definition });
   } catch (error) {
     console.error("Failed to save Aivanta workflow definition:", error);
     return NextResponse.json({ error: "Could not save workflow steps. Try again." }, { status: 500 });
