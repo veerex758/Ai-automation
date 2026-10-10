@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import "./dashboard.css";
 
 type Workflow = { id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string };
@@ -80,7 +81,7 @@ export default function DashboardPage() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <a className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></a>
+        <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>Acme workspace</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
@@ -88,7 +89,7 @@ export default function DashboardPage() {
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
         <a className="side-link" href="/dashboard/builder"><span className="side-icon">＋</span>Create workflow</a>
-        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><a href="/#how-it-works">Explore the basics ↗</a></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
+        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
       </aside>
 
       <section className="dashboard-main">
@@ -112,7 +113,7 @@ export default function DashboardPage() {
             {visibleWorkflows.map((workflow) => <article className="workflow-row" key={workflow.id}><div className="workflow-name-cell"><span className={"workflow-app-icon " + workflow.tone}>{workflow.icon}</span><span className="workflow-name-copy"><strong>{workflow.name}</strong><small>{workflow.description}</small></span></div><div><span className={"workflow-status status-" + workflow.status.toLowerCase()}><i />{workflow.status}</span></div><span className="run-count">{workflow.runs}</span><span className="updated-time">{workflow.updated}</span><button className="row-menu" aria-label={"Workflow actions for " + workflow.name} onClick={() => runDemo(workflow.id)}>{runningId === workflow.id ? "…" : "•••"}</button></article>)}
             {visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
           </div>
-          <div className="dashboard-footnote"><span>ⓘ</span><p><strong>You're viewing a prototype workspace.</strong> Workflow data is illustrative. Connected services, persistent storage, and real execution will be added in later stages.</p></div>
+          <div className="dashboard-footnote"><span>ⓘ</span><p><strong>You&apos;re viewing a prototype workspace.</strong> Workflow data is illustrative. Connected services, persistent storage, and real execution will be added in later stages.</p></div>
         </div>
       </section>
 
