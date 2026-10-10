@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import dryRun from "../lib/workflows/dry-run.ts";
+import dryRun from "../lib/workflows/dry-run.cjs";
 
 const { runDryRun } = dryRun;
 
