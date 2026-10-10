@@ -11,8 +11,10 @@ Aivanta is being built as a staged business automation platform: conventional wo
 
 ## Stage 2 — Workflow workspace
 
+Database foundation in progress: PostgreSQL connection pooling and an initial schema for workspaces, workflows, workflow versions, and audit events are committed. Authenticated CRUD and migration execution remain outstanding.
+
 Current foundation: the visual builder and dashboard store prototype drafts in browser storage only. Shared validation rules exist, but are not yet connected to an API route or persistent database.
-- [ ] Create, edit, save, and version workflow definitions.
+- [ ] Create, edit, save, and version workflow definitions through authenticated server APIs.
 - [ ] Build a visual workflow editor with explicit triggers, actions, and conditions.
 - [ ] Add a safe test/dry-run mode and useful execution history.
 - [ ] Keep credentials out of workflow JSON, logs, and client-side code.
