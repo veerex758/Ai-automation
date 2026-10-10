@@ -22,7 +22,7 @@ Coverage includes malformed workflow definitions, safe condition-path evaluation
 - Workspace membership is required for run and step access.
 - Supabase security advisor should report no lints.
 
-The database migration `20261010210000_harden_live_run_step_ownership.sql` enforces the step ownership rule. Performance advisor unused-index notices are informational on this early, low-volume database; do not remove indexes without workload evidence.
+The database migrations `20261010203527_harden_live_run_step_ownership.sql` and `20261010203630_harden_workflow_run_step_inserts.sql` enforce the step ownership and status rules. Performance advisor unused-index notices are informational on this early, low-volume database; do not remove indexes without workload evidence.
 
 ## Manual staging verification before enabling real email
 
