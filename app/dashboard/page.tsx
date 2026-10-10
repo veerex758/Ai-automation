@@ -87,14 +87,14 @@ export default function DashboardPage() {
           {navItems.map((item) => <button key={item.label} className={activeNav === item.label ? "side-link selected" : "side-link"} onClick={() => { setActiveNav(item.label); if (item.label !== "Overview" && item.label !== "Workflows") setNotice(item.label + " is part of the upcoming workspace release."); }}><span className="side-icon">{item.icon}</span>{item.label}{item.label === "Integrations" && <span className="soon-tag">SOON</span>}</button>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
-        <button className="side-link" onClick={() => setShowCreate(true)}><span className="side-icon">＋</span>Create workflow</button>
+        <a className="side-link" href="/dashboard/builder"><span className="side-icon">＋</span>Create workflow</a>
         <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><a href="/#how-it-works">Explore the basics ↗</a></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
       </aside>
 
       <section className="dashboard-main">
         <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>{activeNav}</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
         <div className="dashboard-content">
-          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button className="create-button" onClick={() => setShowCreate(true)}><span>＋</span> New workflow</button></div>
+          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><a className="create-button" href="/dashboard/builder"><span>＋</span> New workflow</a></div>
 
           {notice && <div className="notice-bar" role="status"><span>ⓘ</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
 
