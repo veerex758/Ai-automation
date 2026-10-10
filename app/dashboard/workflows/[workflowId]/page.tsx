@@ -25,6 +25,7 @@ export default function WorkflowBuilderPage() {
   const workflowId = params.workflowId;
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [definition, setDefinition] = useState<Definition>(starterDefinition);
+  const [savedFingerprint, setSavedFingerprint] = useState(JSON.stringify(starterDefinition));
   const [selectedId, setSelectedId] = useState("trigger-1");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,6 +37,17 @@ export default function WorkflowBuilderPage() {
   const [validation, setValidation] = useState<{ valid: boolean; message: string; checkedAt: string; counts?: { triggers: number; actions: number; conditions: number } } | null>(null);
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
+  const isDirty = JSON.stringify(definition) !== savedFingerprint;
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [isDirty]);
 
   const loadWorkflow = useCallback(async () => {
     setLoading(true);
@@ -47,6 +59,7 @@ export default function WorkflowBuilderPage() {
       setWorkflow(result.workflow);
       const nextDefinition = result.definition as Definition;
       setDefinition(nextDefinition);
+      setSavedFingerprint(JSON.stringify(nextDefinition));
       setSelectedId(nextDefinition.nodes[0]?.id ?? "");
       const versionsResponse = await fetch(`/api/workflows/${workflowId}/versions`, { cache: "no-store" });
       if (versionsResponse.ok) {
@@ -174,6 +187,7 @@ export default function WorkflowBuilderPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save workflow steps.");
+      setSavedFingerprint(JSON.stringify(definition));
       setNotice(`Workflow saved as version ${result.version}.`);
       const versionsResponse = await fetch(`/api/workflows/${workflowId}/versions`, { cache: "no-store" });
       if (versionsResponse.ok) {
@@ -195,7 +209,7 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back">← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><span className="builder-draft"><i /> {workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
+        <div className="builder-top-actions"><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
       </header>
 
       <div className="builder-layout">
