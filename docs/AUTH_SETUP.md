@@ -26,12 +26,15 @@ Replace the deployment placeholder with the actual host before adding it. The si
 - Session refresh and protected `/dashboard` routes in Next.js middleware.
 - Premium responsive sign-in / sign-up page at `/login`.
 - PKCE confirmation callback and POST-only sign-out route.
+- Default workspace provisioning for new Auth users via a restricted database trigger, with a server-side fallback for existing accounts.
+- Authenticated `GET` and `POST /api/workflows` endpoints backed by RLS-protected Supabase tables.
+- Dashboard workflow loading and draft creation now persist in the dedicated Aivanta database.
 - Publishable-key-only environment template.
 
-## Not yet complete
+## Still to complete
 
-- Creating a default workspace on first sign-in.
-- Loading workflows from Supabase instead of the dashboard's clearly labelled prototype/browser storage.
-- Workspace CRUD APIs, authorization tests, password reset, and production deployment configuration.
+- Workflow editing/deletion UI and end-to-end authorization tests.
+- Password reset, production deployment configuration, and end-to-end sign-up testing with the real redirect allow-list.
+- Workflow execution and connected-service integrations.
 
-Those are separate implementation and verification steps; this branch does not claim that database-backed workflow CRUD is already live.
+Workflow listing and draft creation are now database-backed. Execution and integrations are not implemented by these changes.
