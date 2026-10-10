@@ -17,6 +17,7 @@ function validateDefinition(value: unknown): { definition?: { version: 1; nodes:
   if (!value || typeof value !== "object" || Array.isArray(value)) return { error: "Workflow definition must be an object." };
   const input = value as Record<string, unknown>;
   if (input.version !== 1 || !Array.isArray(input.nodes)) return { error: "Use workflow definition version 1 with a nodes array." };
+  if (input.nodes.length === 0) return { error: "Add a trigger before saving this workflow." };
   if (input.nodes.length > maxNodes) return { error: `A workflow can contain at most ${maxNodes} steps.` };
 
   const ids = new Set<string>();
