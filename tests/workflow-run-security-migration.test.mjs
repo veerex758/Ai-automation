@@ -31,7 +31,7 @@ test("allows live step statuses only while the owned live run is running", () =>
 
 
 const timestampMigration = readFileSync(
-  new URL("../supabase/migrations/20261010210500_allow_incomplete_workflow_run_timestamps.sql", import.meta.url),
+  new URL("../supabase/migrations/20261010204255_allow_incomplete_workflow_run_timestamps.sql", import.meta.url),
   "utf8",
 );
 
