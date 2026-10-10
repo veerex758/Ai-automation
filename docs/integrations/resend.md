@@ -12,7 +12,7 @@ Add these variables to the **server/runtime environment** (for example, the host
 
 Restart/redeploy after setting environment variables. Never use a `NEXT_PUBLIC_` prefix for these values, and never commit the key to Git.
 
-Live execution stays disabled if any required setting is missing.
+Live execution stays disabled if any required setting is missing. Keep the recipient allowlist as narrow as possible. The API also limits each authenticated user to 10 live runs per hour.
 
 ## Run a live email workflow
 
@@ -29,7 +29,7 @@ The request must be authenticated and includes an idempotency key. A repeated re
 
 - Live execution is disabled by default.
 - Only manual-trigger workflows are supported for live runs.
-- Only one action is allowed per live run, and that action must be a Resend email.
+- Only one action is allowed per live run, and that action must be a Resend email.\n- The recipient must be included in `AIVANTA_LIVE_EMAIL_RECIPIENTS`.
 - Slack, webhook, internal task actions, schedules, and event triggers remain dry-run only.
 - Email is a real external side effect. Verify the recipient and message before selecting **Run live email**.
 - A provider timeout or database error can leave a run needing review. Check run history before retrying; never assume a timeout means no email was accepted.
