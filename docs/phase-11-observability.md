@@ -40,11 +40,12 @@ The operational recovery runbook is in [`docs/phase-11-recovery-runbook.md`](./p
 
 Phase 11 is not fully operationally complete until the following evidence is recorded. Code checks alone do not satisfy these gates.
 
-- [x] Previous code head (`33a7712f27a6ea4bda66dd2e812083ca0920e565`) passed CI and its preview health endpoint returned HTTP 200 with `x-request-id` and `Cache-Control: no-store`.
-- [ ] Latest PR head has a ready preview deployment and a successful live health smoke test. The latest docs-only commit's deployment is ready, but its preview health fetch was blocked by Vercel SSO protection; do not weaken deployment protection to bypass this.
-- [ ] Authenticated staging checks cover workspace isolation, AI workflow generation, scheduler authentication, and run history.
+- [x] CI passed for the current PR head before this evidence-only documentation refresh: workflow validation, lint, type-check, and production build all succeeded.
+- [x] Preview deployment was ready and the health endpoint was smoke-tested successfully on 2026-10-11: HTTP 200, body `{"status":"ok","service":"aivanta"}`, UUID `x-request-id`, and `Cache-Control: no-store`.
+- [x] Unauthenticated scheduler safety gate was tested on the preview: HTTP 503 with `SCHEDULER_AUTH_NOT_CONFIGURED`-equivalent response text ("Scheduler authentication is not configured."), UUID `x-request-id`, and `Cache-Control: no-store`. No scheduler work was claimed or executed by this unauthenticated request.
+- [ ] Authenticated staging checks cover workspace isolation, AI workflow generation, scheduler authentication with an authorized secret, and run history.
 - [ ] Scheduler remains dry-run; verify no email delivery or external workflow side effects occur in the deployed staging environment.
-- [ ] Hosting alerting and log retention are configured and ownership is assigned.
+- [ ] Hosting alerting and log retention are configured and ownership is assigned. The project has no configured Vercel Drains; webhook inspection is blocked by a Vercel API 403, so alerting configuration remains unverified.
 - [ ] Supabase leaked-password protection is reviewed and enabled by an authorized operator.
 - [ ] Security/performance advisor findings are reviewed; any index changes go through a separate reviewed migration.
 - [ ] Backup retention is confirmed and a non-production restore drill has passed.
@@ -52,17 +53,17 @@ Phase 11 is not fully operationally complete until the following evidence is rec
 
 ### Verification snapshot — 2026-10-11
 
-- Current PR head: `6e3337b7348997f50c19debac5cd83ea9064f73b` (documentation-only update to record verification evidence).
-- GitHub Actions run [`38126990903`](https://github.com/veerex758/Ai-automation/actions/runs/38126990903) was still in progress at the last check; workflow validation, lint, type-check, and production build results for this head are not yet confirmed.
-- Vercel preview deployment [`96h649oS9Pbq11Co76pKx5wZTDDi`](https://vercel.com/veerex-org/ai-automation/96h649oS9Pbq11Co76pKx5wZTDDi) is `READY` for this head. A direct health fetch of this preview was blocked by Vercel Authentication/SSO protection. The prior code head's preview health smoke test succeeded with HTTP 200, `Cache-Control: no-store`, and a UUID `x-request-id`; the latest docs-only deployment's response headers are not yet independently verified.
-- A read-only Vercel Drains query returned no configured drains for the project. A webhook-list query returned 403, so webhook/alerting configuration is not fully verified.
-- Supabase Security Advisor still reports leaked-password protection disabled and two unindexed foreign keys. These findings were read-only; no production Auth setting or database schema was changed.
+- Verified PR head at the time of checks: `001e3bac0c437362a18d68d5b813f8eaf3219e60`; its GitHub Actions run [`38127073319`](https://github.com/veerex758/Ai-automation/actions/runs/38127073319) completed successfully, including workflow validation, lint, type-check, and production build. This document update creates a new documentation-only commit; re-check CI and the deployment for that new head before treating the refreshed PR head as code-green.
+- Vercel preview deployment [`CV4ggC2FN4oiHMSZBw5krDV2hJj6`](https://vercel.com/veerex-org/ai-automation/CV4ggC2FN4oiHMSZBw5krDV2hJj6) was `READY` for that head. Authorized preview fetch returned HTTP 200 with `Cache-Control: no-store` and UUID `x-request-id`.
+- An unauthenticated request to `/api/internal/scheduler` returned HTTP 503, `Cache-Control: no-store`, and UUID `x-request-id`; scheduler authentication is not configured in that preview environment. This is a safe rejection, not evidence that authenticated scheduler processing works.
+- A read-only Vercel Drains query returned no configured drains. A webhook-list query returned 403, so webhook/alerting configuration is not fully verified. No runtime logs were returned for the last 30 minutes; this is not evidence that logging or retention is configured.
+- Supabase project status is `ACTIVE_HEALTHY`. Security Advisor reports leaked-password protection disabled, two unindexed foreign keys, and 11 indexes marked unused. No production Auth setting or database schema was changed; unused indexes should not be removed without workload review.
 - Authenticated staging checks, alerting/log-retention review, and backup restore drill have not been performed or verified.
 
 ### Operational checks still required
 
-- Obtain an authorized way to smoke-test the latest preview through its SSO protection, or record a verified authorized browser test; do not weaken deployment protection just for automated access.
-- Run authenticated staging checks for workspace isolation, AI generation, scheduler authentication, and run history.
+- Obtain an authorized staging identity and credentials, then run workspace-isolation, AI-generation, scheduler-authentication, and run-history checks without exposing secrets.
+- Configure and verify scheduler authentication in the intended non-production environment before testing authorized dry-run processing.
 - Verify the scheduler remains dry-run in the deployed staging environment and that no email or other external workflow side effects occur.
 - Review and configure hosting alerting/log retention as appropriate; the read-only Drains query returned no configured drains, and webhook access could not be verified.
 - Have an authorized operator enable Supabase leaked-password protection after reviewing the intended password policy.
