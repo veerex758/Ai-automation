@@ -75,3 +75,32 @@ test("recipient allowlist normalizes case, trims entries, and ignores invalid ad
   assert.equal(isLiveEmailRecipientAllowed("other@example.com", "owner@example.com"), false);
   assert.equal(isLiveEmailRecipientAllowed("owner@example.com", ""), false);
 });
+
+test("sanitizes low-level network errors before they can reach run history", async () => {
+  await assert.rejects(
+    sendResendEmail(message, {
+      apiKey: "re_test", from: "Aivanta <hello@example.com>",
+      fetchImpl: async () => { throw new TypeError("socket ECONNRESET at internal-host:443"); },
+    }),
+    (error) => {
+      assert.equal(error.code, "PROVIDER_NETWORK_ERROR");
+      assert.equal(error.message, "The email provider request failed before a response was received.");
+      assert.doesNotMatch(error.message, /internal-host|ECONNRESET/);
+      return true;
+    },
+  );
+});
+
+test("preserves the safe timeout error for aborted provider requests", async () => {
+  await assert.rejects(
+    sendResendEmail(message, {
+      apiKey: "re_test", from: "Aivanta <hello@example.com>",
+      fetchImpl: async (_url, init) => {
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        throw error;
+      },
+    }),
+    (error) => error.code === "PROVIDER_TIMEOUT" && error.message === "The email provider request timed out.",
+  );
+});
