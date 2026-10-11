@@ -151,7 +151,19 @@ export default function WorkflowBuilderPage() {
               <div className="ai-workflow-form-footer"><small>{aiPrompt.length}/2000 · Generated steps need review</small><button className="builder-primary-button" type="submit" disabled={aiGenerating || !aiPrompt.trim()}>{aiGenerating ? "Generating draft…" : "Generate workflow ✳"}</button></div>
             </form>
             {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
-              const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => ({ id: Date.now() + index, kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action", title: node.title, detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ") }));
+              const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => {
+                const action = node.type === "action"
+                  ? actionCatalog.find(item => item.provider === node.settings.provider && item.operation === node.settings.operation)
+                  : undefined;
+                return {
+                  id: Date.now() + index,
+                  kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action",
+                  title: node.title,
+                  detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · "),
+                  ...(action ? { actionId: action.id } : {}),
+                  ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
+                };
+              });
               setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
             }}>Apply draft to canvas ↗</button></div>}
           </section>
