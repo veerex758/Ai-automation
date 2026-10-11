@@ -64,23 +64,32 @@ begin
     raise exception using errcode = '22023', message = 'Invalid scheduled run steps';
   end if;
 
-  select s, w.version, w.definition
-    into current_schedule, current_workflow_version, current_definition
+  select s.*
+    into current_schedule
     from public.workflow_schedules as s
-    join public.workflows as w
-      on w.id = s.workflow_id and w.workspace_id = s.workspace_id
    where s.id = p_schedule_id
      and s.lease_token = p_lease_token
      and s.lease_until > now()
      and s.enabled = true
+   for update;
+
+  if not found then
+    raise exception using errcode = 'P0002', message = 'Schedule claim is no longer valid';
+  end if;
+
+  select w.version, w.definition
+    into current_workflow_version, current_definition
+    from public.workflows as w
+   where w.id = current_schedule.workflow_id
+     and w.workspace_id = current_schedule.workspace_id
      and w.status = 'active'
      and w.version = p_expected_version
      and pg_catalog.jsonb_typeof(w.definition->'nodes') = 'array'
      and w.definition->'nodes'->0->'settings'->>'event' = 'schedule'
-   for update of s;
+   for share;
 
   if not found then
-    raise exception using errcode = 'P0002', message = 'Schedule claim is no longer valid';
+    raise exception using errcode = 'P0002', message = 'Workflow changed or is no longer schedulable';
   end if;
 
   if pg_catalog.jsonb_array_length(current_definition->'nodes') <> pg_catalog.jsonb_array_length(p_steps) then
