@@ -143,9 +143,12 @@ async function dispatchTick(request: NextRequest) {
       }
       succeeded += 1;
     } catch {
-      const finalized = await finishClaim(supabase, claim, false, failureCode);
-      if (finalized) failed += 1;
-      else failed += 1;
+      try {
+        await finishClaim(supabase, claim, false, failureCode);
+      } catch {
+        // The lease expires and can be retried if the database is temporarily unavailable.
+      }
+      failed += 1;
       console.error("Aivanta scheduled workflow failed.", {
         scheduleId: claim.schedule_id,
         errorCode: failureCode,
