@@ -10,7 +10,7 @@ const fakeFetch = (payload, status = 200) => async (_url, options) => {
 test("extracts JSON and optional markdown fences safely", () => {
   const fence = String.fromCharCode(96).repeat(3);
   assert.deepEqual(extractJson(JSON.stringify(validDefinition)), validDefinition);
-  assert.deepEqual(extractJson(fence + "json\n" + JSON.stringify(validDefinition) + "\n" + fence), validDefinition);
+  assert.deepEqual(extractJson(fence + "json\\n" + JSON.stringify(validDefinition) + "\\n" + fence), validDefinition);
   assert.throws(() => extractJson("not json"), /AI_INVALID_JSON/);
 });
 test("rejects empty and oversized prompts before calling provider", async () => {
@@ -31,9 +31,20 @@ test("rejects invalid workflow structures returned by the model", async () => {
 });
 test("classifies provider authorization, throttling, and generic errors safely", async () => {
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 401) }), /AI_PROVIDER_AUTH_ERROR/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 403) }), /AI_PROVIDER_AUTH_ERROR/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 429) }), /AI_RATE_LIMITED/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 500) }), /AI_PROVIDER_ERROR/);
 });
-test("rejects non-HTTPS provider endpoints in production", async () => {
+test("rejects malformed provider payloads and empty model output", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new Error("invalid JSON"); } }) }), /AI_INVALID_RESPONSE/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({ choices: [] }) }), /AI_EMPTY_RESPONSE/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({ choices: [{ message: { content: "not JSON" } }] }) }), /AI_INVALID_JSON/);
+});
+test("classifies provider transport failures and timeouts", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => { throw new Error("offline"); } }), /AI_PROVIDER_UNAVAILABLE/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => { const error = new Error("timeout"); error.name = "AbortError"; throw error; } }), /AI_TIMEOUT/);
+});
+test("rejects invalid model names and non-HTTPS provider endpoints in production", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_MODEL: "invalid model!" } }), /AI_CONFIGURATION_ERROR/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_BASE_URL: "http://ai.example.test", NODE_ENV: "production" } }), /AI_CONFIGURATION_ERROR/);
 });
