@@ -38,7 +38,8 @@ test("requires the active lease token before finishing and sanitizes failure cod
 
 test("advances successful schedules without rapid catch-up bursts", () => {
   assert.match(migration, /greatest\(/i);
-  assert.match(migration, /now() + make_interval(mins => current_schedule.interval_minutes)/i);
+  assert.ok(migration.includes("current_schedule.next_run_at + make_interval(mins => current_schedule.interval_minutes)"));
+  assert.ok(migration.includes("now() + make_interval(mins => current_schedule.interval_minutes)"));
 });
 
 test("prevents authenticated users from modifying worker lease state", () => {
