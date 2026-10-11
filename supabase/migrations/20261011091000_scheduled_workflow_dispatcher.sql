@@ -38,6 +38,8 @@ declare
   current_definition jsonb;
   schedule_idempotency_key text;
   existing_run_id uuid;
+  existing_run_workflow_id uuid;
+  existing_run_workspace_id uuid;
   existing_workflow_version integer;
   existing_status text;
   existing_mode text;
@@ -98,14 +100,17 @@ begin
 
   schedule_idempotency_key := current_schedule.id::text || ':' || pg_catalog.to_char(current_schedule.next_run_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
 
-  select r.id, r.workflow_version, r.status, r.mode
-    into existing_run_id, existing_workflow_version, existing_status, existing_mode
+  select r.id, r.workflow_id, r.workspace_id, r.workflow_version, r.status, r.mode
+    into existing_run_id, existing_run_workflow_id, existing_run_workspace_id,
+         existing_workflow_version, existing_status, existing_mode
     from public.workflow_runs as r
    where r.idempotency_key = schedule_idempotency_key;
 
   if found then
-    if existing_status <> 'succeeded' or existing_mode <> 'dry_run'
-       or existing_workflow_version <> current_workflow_version then
+    if existing_run_workflow_id <> current_schedule.workflow_id
+       or existing_run_workspace_id <> current_schedule.workspace_id
+       or existing_status <> 'succeeded'
+       or existing_mode <> 'dry_run' then
       raise exception using errcode = '23505', message = 'Scheduled run idempotency conflict';
     end if;
     return query select existing_run_id, existing_workflow_version;
