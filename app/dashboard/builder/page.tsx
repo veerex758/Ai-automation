@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { validateWorkflowDefinition } from "@/lib/workflows/validation";
+import actionFieldValidation from "@/lib/workflows/action-field-validation.cjs";
+
+const { isValidEmail, isHttpsUrl } = actionFieldValidation;
 import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
@@ -104,15 +107,11 @@ export default function WorkflowBuilderPage() {
         const value = (step.settings?.[field.name] ?? "").trim();
         if (field.required && !value) return [`Fill in ${field.label} for "${step.title}".`];
         if (value.length > field.maxLength) return [`${field.label} for "${step.title}" must be ${field.maxLength} characters or fewer.`];
-        if (field.type === "email" && value && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value)) {
+        if (field.type === "email" && value && !isValidEmail(value)) {
           return [`Enter a valid ${field.label.toLowerCase()} for "${step.title}".`];
         }
-        if (field.type === "url" && value) {
-          try {
-            if (new URL(value).protocol !== "https:") return [`${field.label} for "${step.title}" must use HTTPS.`];
-          } catch {
-            return [`Enter a valid HTTPS URL for "${step.title}".`];
-          }
+        if (field.type === "url" && value && !isHttpsUrl(value)) {
+          return [`Enter a valid HTTPS URL for "${step.title}".`];
         }
         return [];
       });
