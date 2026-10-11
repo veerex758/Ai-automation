@@ -23,9 +23,9 @@ test("claims due active schedule-trigger workflows with row locks and leases", (
 });
 
 test("restricts scheduler RPCs to service role", () => {
-  assert.match(migration, /revoke all on function public.claim_due_workflow_schedules(integer, integer) from public, anon, authenticated/i);
-  assert.match(migration, /grant execute on function public.claim_due_workflow_schedules(integer, integer) to service_role/i);
-  assert.match(migration, /grant execute on function public.finish_workflow_schedule_claim(uuid, uuid, boolean, text) to service_role/i);
+  assert.match(migration, /revoke all on function public.claim_due_workflow_schedules\\(integer, integer\\) from public, anon, authenticated/i);
+  assert.match(migration, /grant execute on function public.claim_due_workflow_schedules\\(integer, integer\\) to service_role/i);
+  assert.match(migration, /grant execute on function public.finish_workflow_schedule_claim\\(uuid, uuid, boolean, text\\) to service_role/i);
 });
 
 test("requires the active lease token before finishing and sanitizes failure codes", () => {
