@@ -50,15 +50,7 @@ test("persists scheduled runs atomically and idempotently for the active lease",
   assert.ok(migration.includes("grant execute on function public.record_scheduled_workflow_run(uuid, uuid, integer, integer, jsonb)"));
   assert.ok(migration.includes("to service_role"));
   assert.ok(migration.includes("from public, anon, authenticated"));
-  assert.ok(migration.includes("when p_error_code ~ '^[A-Z0-9_]{1,64}});
-
-test("rejects malformed or reordered step results before writing history", () => {
-  assert.ok(migration.includes("workflow_node.ordinality = step_position"));
-  assert.ok(migration.includes("workflow_node.value->>'id' = step_id_value"));
-  assert.ok(migration.includes("step_status_value is null or step_status_value not in ('simulated', 'skipped')"));
-  assert.ok(migration.includes("pg_catalog.octet_length(step_result_value::text) > 8000"));
-});
- then p_error_code"));
+  assert.ok(migration.includes("when p_error_code ~ '^[A-Z0-9_]{1,64}$' then p_error_code"));
   assert.ok(migration.includes("effective_succeeded := true"));
 });
 
