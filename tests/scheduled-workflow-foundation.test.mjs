@@ -40,3 +40,9 @@ test("advances successful schedules without rapid catch-up bursts", () => {
   assert.match(migration, /greatest(/i);
   assert.match(migration, /now() + make_interval(mins => current_schedule.interval_minutes)/i);
 });
+
+test("prevents authenticated users from modifying worker lease state", () => {
+  assert.match(migration, /revoke insert, update on public\.workflow_schedules from authenticated/i);
+  assert.match(migration, /grant update \(interval_minutes, enabled, next_run_at\)/i);
+  assert.doesNotMatch(migration, /grant update on public\.workflow_schedules to authenticated/i);
+});
