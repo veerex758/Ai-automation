@@ -192,6 +192,14 @@ async function dispatchTick(request: NextRequest) {
         // The durable run record is idempotent. If this lease expired, a later
         // worker can safely observe the existing record and finish the schedule.
         failed += 1;
+        logOperationalEvent({
+          event: "scheduled_workflow",
+          requestId,
+          route: "/api/internal/scheduler",
+          outcome: "failure",
+          errorCode: "SCHEDULED_RUN_FINALIZATION_FAILED",
+          durationMs: Math.min(600000, Math.max(0, Date.now() - workflowStartedAt)),
+        }, console.error);
         continue;
       }
       succeeded += 1;
