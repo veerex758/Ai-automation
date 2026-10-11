@@ -33,7 +33,7 @@ test("requires the active lease token before finishing and sanitizes failure cod
   assert.match(migration, /lease_until > now()/i);
   assert.match(migration, /safe_error_code/i);
   assert.match(migration, /SCHEDULED_RUN_FAILED/i);
-  assert.match(migration, /least\(60, 5 \\* power\(2, least\(failure_count, 4\)\)::integer\)/i);
+  assert.match(migration, /least\(60, 5 \* power\(2, least\(failure_count, 4\)\)::integer\)/i);
 });
 
 test("advances successful schedules without rapid catch-up bursts", () => {
