@@ -14,7 +14,7 @@ const fakeFetch = (payload, status = 200) => async (_url, options) => {
 
 test("extracts JSON and optional markdown fences safely", () => {
   assert.deepEqual(extractJson(JSON.stringify(validDefinition)), validDefinition);
-  assert.deepEqual(extractJson("```json\n" + JSON.stringify(validDefinition) + "\n```"), validDefinition);
+  assert.deepEqual(extractJson("```json\\n" + JSON.stringify(validDefinition) + "\\n```"), validDefinition);
   assert.throws(() => extractJson("not json"), /AI_INVALID_JSON/);
 });
 
