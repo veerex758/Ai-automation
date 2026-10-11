@@ -66,7 +66,7 @@ begin
     raise exception using errcode = '22023', message = 'Scheduled run step count does not match workflow';
   end if;
 
-  schedule_idempotency_key := current_schedule.id::text || ':' || pg_catalog.to_char(current_schedule.next_run_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"');
+  schedule_idempotency_key := current_schedule.id::text || ':' || pg_catalog.to_char(current_schedule.next_run_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
 
   select r.id, r.workflow_version, r.status, r.mode
     into existing_run_id, existing_workflow_version, existing_status, existing_mode
