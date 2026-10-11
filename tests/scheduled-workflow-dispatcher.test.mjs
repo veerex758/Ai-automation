@@ -41,6 +41,8 @@ test("persists scheduled runs atomically and idempotently for the active lease",
   assert.ok(migration.includes("for update of s"));
   assert.ok(migration.includes("s.lease_token = p_lease_token"));
   assert.ok(migration.includes("s.lease_until > now()"));
+  assert.ok(migration.includes('drop policy if exists "workspace members can update workflow schedules"'));
+  assert.ok(migration.includes("and lease_token is null"));
   assert.ok(migration.includes("schedule_idempotency_key"));
   assert.ok(migration.includes("insert into public.workflow_runs"));
   assert.ok(migration.includes("insert into public.workflow_run_steps"));
