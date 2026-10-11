@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { getRequestId, logOperationalEvent } from "../lib/observability/safe-log.cjs";
 
-test("reuses only bounded, safe request IDs and generates one for invalid values", () => {
-  assert.equal(getRequestId("trace_123-ABC"), "trace_123-ABC");
+const validRequestId = "123e4567-e89b-42d3-a456-426614174000";
+
+test("accepts only UUID-shaped request IDs and generates one for arbitrary input", () => {
+  assert.equal(getRequestId(validRequestId), validRequestId);
+  assert.match(getRequestId("trace_123-ABC"), /^[0-9a-f-]{36}$/i);
   assert.match(getRequestId("bad id with spaces"), /^[0-9a-f-]{36}$/i);
   assert.match(getRequestId(null), /^[0-9a-f-]{36}$/i);
 });
@@ -13,7 +16,7 @@ test("writes structured operational fields and drops arbitrary sensitive fields"
   let output = "";
   logOperationalEvent({
     event: "workflow_generation",
-    requestId: "trace_123",
+    requestId: validRequestId,
     route: "/api/ai/generate-workflow",
     outcome: "failure",
     statusCode: 502,
@@ -27,7 +30,7 @@ test("writes structured operational fields and drops arbitrary sensitive fields"
 
   const record = JSON.parse(output);
   assert.equal(record.service, "aivanta");
-  assert.equal(record.requestId, "trace_123");
+  assert.equal(record.requestId, validRequestId);
   assert.equal(record.errorCode, "AI_PROVIDER_ERROR");
   assert.equal(record.statusCode, 502);
   assert.equal("prompt" in record, false);
