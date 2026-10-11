@@ -41,7 +41,7 @@ The operational recovery runbook is in [`docs/phase-11-recovery-runbook.md`](./p
 Phase 11 is not fully operationally complete until the following evidence is recorded. Code checks alone do not satisfy these gates.
 
 - [x] Latest PR head passes workflow validation tests, lint, type-check, and production build.
-- [ ] Vercel preview for the exact PR head is ready and smoke-tested for health, request-ID headers, and no-store response headers.
+- [x] Vercel preview for the exact PR head is ready; live health smoke test returned HTTP 200 with `x-request-id` and `Cache-Control: no-store`.
 - [ ] Authenticated staging checks cover workspace isolation, AI workflow generation, scheduler authentication, and run history.
 - [ ] Scheduler remains dry-run; verify no email delivery or external workflow side effects occur in the deployed staging environment.
 - [ ] Hosting alerting and log retention are configured and ownership is assigned.
@@ -52,19 +52,19 @@ Phase 11 is not fully operationally complete until the following evidence is rec
 
 ### Verification snapshot — 2026-10-11
 
-- Current PR head: `fcbc6e36f9324f157d6cd976348f8b2f243cb45c`.
-- GitHub Actions run [`38124862322`](https://github.com/veerex758/Ai-automation/actions/runs/38124862322) completed successfully: workflow validation tests, lint, type-check, and production build all passed.
-- Vercel's GitHub check reported success for the exact head. However, a live preview smoke test could not be completed through the connected Vercel tools because the connection returned a 403 scope-authorization error. Do not treat the check as proof that response headers were manually verified.
+- Current PR head: `33a7712f27a6ea4bda66dd2e812083ca0920e565`.
+- GitHub Actions run [`38125303520`](https://github.com/veerex758/Ai-automation/actions/runs/38125303520) completed successfully: workflow validation tests, lint, type-check, and production build all passed.
+- Vercel preview deployment [`3e59zMS4m6hfm9xSoK7KW9d3w11f`](https://vercel.com/veerex-org/ai-automation/3e59zMS4m6hfm9xSoK7KW9d3w11f) is `READY` for the exact PR head. Live `/api/health` smoke test returned HTTP 200, `Cache-Control: no-store`, and a UUID `x-request-id`. The Vercel project/deployment tools are currently accessible.
 - Supabase Security Advisor still reports leaked-password protection disabled and two unindexed foreign keys. These findings were read-only; no production Auth setting or database schema was changed.
 - Authenticated staging checks, alerting/retention review, and backup restore drill have not been performed or verified.
 
 ### Operational checks still required
 
-- Re-authorize the Vercel connection for the project/team that owns the PR deployment, then verify the health endpoint returns `x-request-id` and `Cache-Control: no-store`.
 - Run authenticated staging checks for workspace isolation, AI generation, scheduler authentication, and run history.
-- Configure and verify hosting alerting and log retention.
+- Verify the scheduler remains dry-run in the deployed staging environment and that no email or other external workflow side effects occur.
+- Configure and verify hosting alerting and log retention; assign an owner.
 - Have an authorized operator enable Supabase leaked-password protection after reviewing the intended password policy.
 - Review the advisor index findings and use a reviewed migration if query plans justify changes.
 - Confirm backup retention and complete a non-production restore drill.
 
-A successful CI run validates code paths and regression tests; it does not replace production configuration review, staging verification, or launch approval. Do not enable scheduled side effects or promote to production based on CI alone.
+A successful CI run and health smoke test validate code and basic deployment availability; they do not replace authenticated staging verification, production configuration review, or launch approval. Do not enable scheduled side effects or promote to production based on CI alone.
