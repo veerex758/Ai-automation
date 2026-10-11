@@ -7,6 +7,8 @@ import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
 type BuilderStep = { id: number; kind: StepKind; title: string; detail: string };
+type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
+type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
 
 const starterSteps: BuilderStep[] = [
   { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted" },
@@ -23,6 +25,9 @@ export default function WorkflowBuilderPage() {
   const [notice, setNotice] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
 
   useEffect(() => {
     try {
@@ -92,6 +97,30 @@ export default function WorkflowBuilderPage() {
         <div className="builder-content">
           <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
+          <section className="ai-workflow-panel" aria-labelledby="ai-workflow-heading">
+            <div className="ai-workflow-copy"><span className="builder-ai-badge">✳ AI ASSISTANT</span><h2 id="ai-workflow-heading">Describe it. We’ll draft it.</h2><p>Explain the workflow in plain English. Review the draft before applying it; nothing executes automatically.</p></div>
+            <form className="ai-workflow-form" onSubmit={async event => {
+              event.preventDefault();
+              if (!aiPrompt.trim() || aiGenerating) return;
+              setAiGenerating(true); setAiPreview(null); setNotice("");
+              try {
+                const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: aiPrompt.trim() }) });
+                const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow };
+                if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes)) throw new Error(payload.error || "Could not generate a workflow draft.");
+                setAiPreview(payload.definition);
+                setNotice("AI draft ready. Review the generated steps before applying them to your canvas.");
+              } catch (error) { setNotice(error instanceof Error ? error.message : "AI generation failed. Please try again."); }
+              finally { setAiGenerating(false); }
+            }}>
+              <label htmlFor="ai-workflow-prompt">What should this workflow do?</label>
+              <textarea id="ai-workflow-prompt" value={aiPrompt} maxLength={2000} onChange={event => setAiPrompt(event.target.value)} placeholder="When a new lead arrives, create a task and send a follow-up email…" rows={3} />
+              <div className="ai-workflow-form-footer"><small>{aiPrompt.length}/2000 · Generated steps need review</small><button className="builder-primary-button" type="submit" disabled={aiGenerating || !aiPrompt.trim()}>{aiGenerating ? "Generating draft…" : "Generate workflow ✳"}</button></div>
+            </form>
+            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
+              const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => ({ id: Date.now() + index, kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action", title: node.title, detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ") }));
+              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
+            }}>Apply draft to canvas ↗</button></div>}
+          </section>
           <div className="builder-workspace-grid">
             <section className="canvas-panel" aria-label="Workflow canvas">
               <div className="canvas-toolbar"><div><strong>Workflow canvas</strong><small>TRIGGER → ACTIONS → OUTCOME</small></div><button onClick={() => setShowAdd(value => !value)}>＋ Add step</button></div>
