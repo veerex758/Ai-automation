@@ -100,8 +100,22 @@ export default function WorkflowBuilderPage() {
       if (!step.actionId) return [`Choose an action type for "${step.title}".`];
       const action = actionCatalog.find(item => item.id === step.actionId);
       if (!action) return [`The action configured for "${step.title}" is no longer available.`];
-      return action.fields.filter(field => field.required && !(step.settings?.[field.name] ?? "").trim())
-        .map(field => `Fill in ${field.label} for "${step.title}".`);
+      return action.fields.flatMap(field => {
+        const value = (step.settings?.[field.name] ?? "").trim();
+        if (field.required && !value) return [`Fill in ${field.label} for "${step.title}".`];
+        if (value.length > field.maxLength) return [`${field.label} for "${step.title}" must be ${field.maxLength} characters or fewer.`];
+        if (field.type === "email" && value && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value)) {
+          return [`Enter a valid ${field.label.toLowerCase()} for "${step.title}".`];
+        }
+        if (field.type === "url" && value) {
+          try {
+            if (new URL(value).protocol !== "https:") return [`${field.label} for "${step.title}" must use HTTPS.`];
+          } catch {
+            return [`Enter a valid HTTPS URL for "${step.title}".`];
+          }
+        }
+        return [];
+      });
     });
     if (actionIssues.length) {
       setNotice("Action configuration needs attention: " + actionIssues.join(" "));
