@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         outcome: "failure",
         statusCode: mapped.status,
         durationMs: Math.max(0, Date.now() - startedAt),
-        errorCode: /^[A-Z0-9_]{1,64}$/.test(code) ? code : "AI_PROVIDER_ERROR",
+        errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
       }, console.error);
     }
     return jsonResponse({ error: mapped.message }, { status: mapped.status });
