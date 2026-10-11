@@ -96,6 +96,17 @@ export default function WorkflowBuilderPage() {
   const validationResult = validateWorkflowDefinition({ name, steps });
 
   function reviewWorkflow() {
+    const actionIssues = steps.filter(step => step.kind === "Action").flatMap(step => {
+      if (!step.actionId) return [`Choose an action type for "${step.title}".`];
+      const action = actionCatalog.find(item => item.id === step.actionId);
+      if (!action) return [`The action configured for "${step.title}" is no longer available.`];
+      return action.fields.filter(field => field.required && !(step.settings?.[field.name] ?? "").trim())
+        .map(field => `Fill in ${field.label} for "${step.title}".`);
+    });
+    if (actionIssues.length) {
+      setNotice("Action configuration needs attention: " + actionIssues.join(" "));
+      return;
+    }
     if (!validationResult.valid) {
       setNotice("Review needed: " + validationResult.issues.map(issue => issue.message).join(" "));
       return;
