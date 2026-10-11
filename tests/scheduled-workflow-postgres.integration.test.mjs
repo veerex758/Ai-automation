@@ -232,6 +232,11 @@ test("PostgreSQL executes scheduled claim, persistence, lease, retry, and idempo
       [newClaim.schedule_id, oldClaim.lease_token],
     );
     assert.equal(staleRenewal.rows[0].renewed, false);
+    const staleFinishAfterReclaim = await client.query(
+      "select public.finish_workflow_schedule_claim($1, $2, true, null) as finished",
+      [newClaim.schedule_id, oldClaim.lease_token],
+    );
+    assert.equal(staleFinishAfterReclaim.rows[0].finished, false);
     const currentRenewal = await client.query(
       "select public.renew_workflow_schedule_claim($1, $2, 300) as renewed",
       [newClaim.schedule_id, newClaim.lease_token],
