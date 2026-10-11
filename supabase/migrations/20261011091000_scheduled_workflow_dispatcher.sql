@@ -236,15 +236,8 @@ begin
         raise exception using errcode = '23505', message = 'Scheduled run idempotency conflict';
       end if;
 
-      if not exists (
-        select 1 from public.workflows as w
-        where w.id = current_schedule.workflow_id
-          and w.workspace_id = current_schedule.workspace_id
-          and w.version = existing_run.workflow_version
-      ) then
-        raise exception using errcode = '23505', message = 'Scheduled run version conflict';
-      end if;
-
+      -- The durable run captures the version that actually executed. A later
+      -- workflow edit must not turn a committed run into a retry of that occurrence.
       effective_succeeded := true;
     end if;
   end if;
