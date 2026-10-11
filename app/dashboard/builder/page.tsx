@@ -33,11 +33,27 @@ export default function WorkflowBuilderPage() {
     try {
       const saved = window.localStorage.getItem("aivanta-builder-draft");
       if (saved) {
-        const parsed = JSON.parse(saved) as { name?: string; steps?: BuilderStep[] };
-        if (typeof parsed.name === "string") setName(parsed.name);
-        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-          setSteps(parsed.steps);
-          setSelected(parsed.steps[0].id);
+        const parsed = JSON.parse(saved) as { name?: unknown; steps?: unknown };
+        if (typeof parsed.name === "string" && parsed.name.trim()) setName(parsed.name.slice(0, 80));
+        if (Array.isArray(parsed.steps) && parsed.steps.length > 0 && parsed.steps.length <= 100) {
+          const ids = new Set<string>();
+          const validSteps = parsed.steps.every((step): step is BuilderStep => {
+            if (!step || typeof step !== "object") return false;
+            const candidate = step as Partial<BuilderStep>;
+            const validId = (typeof candidate.id === "number" && Number.isFinite(candidate.id)) ||
+              (typeof candidate.id === "string" && candidate.id.trim().length > 0);
+            if (!validId || !["Trigger", "Action", "Condition"].includes(String(candidate.kind)) ||
+                typeof candidate.title !== "string" || candidate.title.trim().length === 0 ||
+                (candidate.detail !== undefined && typeof candidate.detail !== "string")) return false;
+            const key = String(candidate.id);
+            if (ids.has(key)) return false;
+            ids.add(key);
+            return true;
+          });
+          if (validSteps) {
+            setSteps(parsed.steps);
+            setSelected(parsed.steps[0].id);
+          }
         }
       }
     } catch {
@@ -58,12 +74,15 @@ export default function WorkflowBuilderPage() {
 
   function saveDraft() {
     try {
+      const draftName = name.trim().slice(0, 80) || "Untitled workflow";
       const raw = window.localStorage.getItem("aivanta-workflows");
       const existing = raw ? JSON.parse(raw) as Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
-      const next = existing.filter(item => item.name !== name.trim());
-      next.unshift({ id: Date.now(), name: name.trim() || "Untitled workflow", description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
+      const next = existing.filter(item => item.name !== draftName);
+      next.unshift({ id: Date.now(), name: draftName, description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
+      // Keep the workflow list entry and the actual canvas draft in sync.
       window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
-      setNotice("Draft saved in this browser. Live integrations and execution are not connected yet.");
+      window.localStorage.setItem("aivanta-builder-draft", JSON.stringify({ name: draftName, steps }));
+      setNotice("Draft and canvas steps saved in this browser. Live integrations and execution are not connected yet.");
     } catch {
       setNotice("Unable to save to this browser. Check storage settings and try again.");
     }
