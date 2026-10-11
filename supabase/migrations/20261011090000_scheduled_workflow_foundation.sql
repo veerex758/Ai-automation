@@ -126,6 +126,33 @@ begin
 end;
 $$;
 
+-- Long-running workers may renew only their own unexpired lease. Once expired,
+-- a worker must not resurrect its lease or finalize the claim.
+create or replace function public.renew_workflow_schedule_claim(
+  p_schedule_id uuid,
+  p_lease_token uuid,
+  p_lease_seconds integer default 300
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  if p_lease_seconds < 30 or p_lease_seconds > 900 then
+    raise exception using errcode = '22023', message = 'Invalid lease duration';
+  end if;
+
+  update public.workflow_schedules
+  set lease_until = now() + make_interval(secs => p_lease_seconds)
+  where id = p_schedule_id
+    and lease_token = p_lease_token
+    and lease_until > now();
+
+  return found;
+end;
+$;
+
 -- Workers must present the current lease token. Success advances the schedule;
 -- failure applies bounded exponential backoff and records only a safe error code.
 create or replace function public.finish_workflow_schedule_claim(
@@ -187,5 +214,7 @@ $$;
 
 revoke all on function public.claim_due_workflow_schedules(integer, integer) from public, anon, authenticated;
 revoke all on function public.finish_workflow_schedule_claim(uuid, uuid, boolean, text) from public, anon, authenticated;
+revoke all on function public.renew_workflow_schedule_claim(uuid, uuid, integer) from public, anon, authenticated;
 grant execute on function public.claim_due_workflow_schedules(integer, integer) to service_role;
 grant execute on function public.finish_workflow_schedule_claim(uuid, uuid, boolean, text) to service_role;
+grant execute on function public.renew_workflow_schedule_claim(uuid, uuid, integer) to service_role;
