@@ -60,7 +60,7 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [x] Automated provider-mocked validation, error handling, and safety tests.
 - [ ] Verify live AI provider configuration and authenticated end-to-end behavior.
 
-### Phase 10 — Integrations and reusable actions: in progress
+### Phase 10 — Integrations and reusable actions: implementation code-green; browser acceptance pending
 - [x] Establish a server-owned reusable action catalog for internal tasks, email, Slack, and HTTPS webhooks.
 - [x] Add an authenticated, private/no-store action-catalog endpoint with clear execution capability labels.
 - [x] Drive action provider/operation compatibility validation from the shared catalog.
@@ -70,6 +70,23 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [ ] Verify the authenticated preview flow in a browser, including unauthenticated catalog rejection and required-field validation.
 - [ ] Implement and verify additional live connectors one at a time, with least-privilege credentials, validation, timeouts, rate-limit handling, and sanitized run logs.
 - [ ] Keep non-email providers dry-run only until their individual live-path safety checks pass.
+
+### Phase 11 — Reliability, security, and observability: in progress
+- [ ] Review and merge the safe request-observability baseline proposed in PR #27.
+- [ ] Verify authenticated scheduler behavior and keep scheduled processing dry-run only.
+- [ ] Review hosting alerting/log retention and confirm an owner.
+- [ ] Review Supabase Auth hardening findings and approve any configuration changes.
+- [ ] Confirm backup retention and complete a non-production recovery drill.
+- [ ] Complete authenticated staging checks and operational release review.
+
+### Phase 12 — Staging end-to-end verification: in progress
+- [x] Add a non-destructive unauthenticated staging smoke-test script with production-host guardrails.
+- [x] Document the authenticated browser acceptance matrix and release gates.
+- [ ] Run the smoke script against a dedicated staging or Vercel preview deployment.
+- [ ] Verify signed-in builder behavior, action validation, AI draft review, and run history.
+- [ ] Verify workspace isolation with authorized staging test identities.
+- [ ] Record sanitized evidence and resolve failures before calling staging acceptance complete.
+- [ ] Keep real email delivery as a separate explicitly approved staging test; no live side effects in the smoke script.
 
 ## Current operating limits
 
