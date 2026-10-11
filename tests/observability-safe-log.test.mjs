@@ -70,6 +70,7 @@ test("health, AI generation, and scheduler responses expose request IDs without 
     assert.ok(route.includes("getRequestId"), "route should create or validate a request ID");
     assert.ok(route.includes('response.headers.set("x-request-id", requestId)'), "route should return the request ID");
   }
+  assert.ok(healthRoute.includes('"Cache-Control": "no-store"'), "health response should not be cached");
   assert.ok(aiRoute.includes("logOperationalEvent"));
   assert.ok(schedulerRoute.includes("logOperationalEvent"));
   assert.ok(aiRoute.includes('response.headers.set("Cache-Control", "no-store")'));
