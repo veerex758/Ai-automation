@@ -88,4 +88,12 @@ test("scheduler contains claim and finalization transport failures", () => {
   assert.ok(finishClaim.includes("return false;"), "failed finalization should report an unfinalized lease");
   assert.ok(schedulerRoute.includes("claimFailed = true;"), "claim RPC exceptions should be treated as failures");
   assert.ok(schedulerRoute.includes("workflowStartedAt"), "scheduled workflow failures should be timed");
+
+  const finalizationFailureBranch = schedulerRoute.slice(
+    schedulerRoute.indexOf("if (!finalized)"),
+    schedulerRoute.indexOf("succeeded += 1;", schedulerRoute.indexOf("if (!finalized)")),
+  );
+  assert.ok(finalizationFailureBranch.includes('"SCHEDULED_RUN_FINALIZATION_FAILED"'));
+  assert.ok(finalizationFailureBranch.includes('event: "scheduled_workflow"'));
+  assert.ok(finalizationFailureBranch.includes("logOperationalEvent"));
 });
