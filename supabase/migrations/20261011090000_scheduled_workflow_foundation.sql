@@ -137,7 +137,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $renew_workflow_schedule_claim$
 begin
   if p_lease_seconds < 30 or p_lease_seconds > 900 then
     raise exception using errcode = '22023', message = 'Invalid lease duration';
@@ -151,7 +151,7 @@ begin
 
   return found;
 end;
-$$;
+$renew_workflow_schedule_claim$;
 
 -- Workers must present the current lease token. Success advances the schedule;
 -- failure applies bounded exponential backoff and records only a safe error code.
