@@ -71,3 +71,12 @@ Phase 11 is not fully operationally complete until the following evidence is rec
 - Confirm backup retention and complete a non-production restore drill.
 
 A successful CI run and health smoke test validate code and basic deployment availability; they do not replace authenticated staging verification, production configuration review, or launch approval. Do not enable scheduled side effects or promote to production based on CI alone.
+
+### Follow-up verification — 2026-10-11
+
+- Re-ran the current Phase 11 preview health check at `https://ai-automation-git-phase-11-observability-baseline-veerex-org.vercel.app/api/health`: HTTP 200, expected JSON health body, `Cache-Control: no-store`, and UUID `x-request-id`.
+- Re-ran the preview scheduler guard without credentials: HTTP 503 with `Scheduler authentication is not configured.`, `Cache-Control: no-store`, and UUID `x-request-id`. This safely rejects the request; it does not verify authenticated scheduler processing.
+- The latest selected 24-hour Vercel runtime-error query returned two `/api/workflows/actions` failures on the Phase 12 preview: Supabase is not configured because the required public Supabase URL and publishable key are missing. This is an environment-configuration failure, not proof of a database outage. Do not copy production credentials/data into staging to silence it.
+- The latest deployment CI run for Phase 11 head `e26b6077403dc70f3fb4fb9c2984cbdb228562dc` completed successfully (workflow run `38127630348`). The Vercel deployment for that head is Ready. This does not close the separate staging, security-configuration, monitoring, or recovery gates.
+- The Vercel Drains query still returns no configured drains. Runtime-error visibility exists for the selected query window, but alert delivery, log retention policy, and an accountable owner remain unverified.
+- The connected Supabase account exposes two healthy projects. Their intended production/staging roles have not been established from available metadata. Do not select either project as staging or wire its credentials into Vercel until the owner confirms the intended isolated staging project.
