@@ -42,25 +42,25 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [x] Allow in-progress runs to have a null completion timestamp.
 - [x] Expand dry-run, provider redirect, and security migration tests.
 - [x] Supabase security advisor returned no lints.
-- [x] Main-branch CI passed tests, lint, type-check, and production build.
+- [x] Main-branch CI previously passed tests, lint, type-check, and production build.
 - [ ] Complete the documented staging end-to-end checks, including auth, cross-workspace access, and one approved test email.
 
 ### Level 8 — Deployment and MVP launch: in progress
 - [x] Add a minimal health endpoint at `/api/health`.
 - [x] Document hosting environment variables, Auth redirect setup, staging smoke tests, and launch gates.
-- [ ] Choose/configure the hosting provider and deployment project.
-- [ ] Configure the production URL and Supabase Auth redirect allow-list.
-- [ ] Run staging smoke tests and verify run history.
+- [x] Configure the Vercel project and confirm a production deployment is READY.
+- [ ] Verify the canonical production URL and configure/confirm the Supabase Auth redirect allow-list.
+- [ ] Run staging smoke tests and verify workflow run history.
 - [ ] Review operational monitoring, backup/recovery expectations, and production safety settings.
 - [ ] Obtain explicit launch approval before enabling live email in production.
 
 ## Current operating limits
 
 - Live execution is disabled unless the server environment explicitly sets `AIVANTA_LIVE_EXECUTION_ENABLED=true`.
-- The first live path supports manual-trigger workflows with exactly one Resend email action.
+- The first live path supports manual-trigger workflows with exactly one email action.
 - The recipient must be present in the server-side `AIVANTA_LIVE_EMAIL_RECIPIENTS` allowlist.
 - Slack, webhooks, scheduled triggers, and other action types remain dry-run only.
-- A successful CI build does not prove production deployment or real email delivery.
+- A successful deployment does not prove production authentication, staging behavior, or real email delivery.
 
 ## Engineering principles
 
