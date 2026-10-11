@@ -58,9 +58,14 @@ create policy "workspace members can update workflow schedules"
     )
   );
 
-revoke all on public.workflow_schedules from anon;
-grant select, insert, update on public.workflow_schedules to authenticated;
-revoke all on public.workflow_schedules from public;
+revoke all on public.workflow_schedules from anon, public;
+revoke insert, update on public.workflow_schedules from authenticated;
+grant select on public.workflow_schedules to authenticated;
+-- Authenticated users may edit only schedule configuration, never worker lease state.
+grant insert (workflow_id, workspace_id, interval_minutes, enabled, next_run_at)
+  on public.workflow_schedules to authenticated;
+grant update (interval_minutes, enabled, next_run_at)
+  on public.workflow_schedules to authenticated;
 
 -- Claims a small batch atomically. The schedule remains due until the worker
 -- acknowledges completion; a crashed worker's lease becomes claimable again.
