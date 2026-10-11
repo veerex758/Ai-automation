@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { getRequestId, logOperationalEvent } from "../lib/observability/safe-log.cjs";
 
 test("reuses only bounded, safe request IDs and generates one for invalid values", () => {
@@ -55,4 +56,19 @@ test("rejects invalid event names and omits invalid field values", () => {
   assert.equal("outcome" in record, false);
   assert.equal("durationMs" in record, false);
   assert.equal("errorCode" in record, false);
+});
+
+test("health, AI generation, and scheduler responses expose request IDs without caching", () => {
+  const healthRoute = readFileSync(new URL("../app/api/health/route.ts", import.meta.url), "utf8");
+  const aiRoute = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
+  const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+
+  for (const route of [healthRoute, aiRoute, schedulerRoute]) {
+    assert.ok(route.includes("getRequestId"), "route should create or validate a request ID");
+    assert.ok(route.includes('response.headers.set("x-request-id", requestId)'), "route should return the request ID");
+  }
+  assert.ok(aiRoute.includes("logOperationalEvent"));
+  assert.ok(schedulerRoute.includes("logOperationalEvent"));
+  assert.ok(aiRoute.includes('response.headers.set("Cache-Control", "no-store")'));
+  assert.ok(schedulerRoute.includes('response.headers.set("Cache-Control", "no-store")'));
 });
