@@ -104,3 +104,18 @@ test("preserves the safe timeout error for aborted provider requests", async () 
     (error) => error.code === "PROVIDER_TIMEOUT" && error.message === "The email provider request timed out.",
   );
 });
+
+test("classifies malformed successful provider responses separately from network failures", async () => {
+  await assert.rejects(
+    sendResendEmail(message, {
+      apiKey: "re_test", from: "Aivanta <hello@example.com>",
+      fetchImpl: async () => new Response(JSON.stringify({ unexpected: "payload" }), { status: 200 }),
+    }),
+    (error) => {
+      assert.equal(error.code, "PROVIDER_INVALID_RESPONSE");
+      assert.equal(error.message, "The email provider returned an unexpected response.");
+      assert.doesNotMatch(error.message, /payload|unexpected: /);
+      return true;
+    },
+  );
+});
