@@ -75,3 +75,17 @@ test("health, AI generation, and scheduler responses expose request IDs without 
   assert.ok(aiRoute.includes('response.headers.set("Cache-Control", "no-store")'));
   assert.ok(schedulerRoute.includes('response.headers.set("Cache-Control", "no-store")'));
 });
+
+test("scheduler contains claim and finalization transport failures", () => {
+  const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+  const finishClaim = schedulerRoute.slice(
+    schedulerRoute.indexOf("async function finishClaim"),
+    schedulerRoute.indexOf("async function dispatchTick"),
+  );
+
+  assert.ok(finishClaim.includes("try {"), "claim finalization should guard transport exceptions");
+  assert.ok(finishClaim.includes("catch {"), "claim finalization should handle thrown RPC errors");
+  assert.ok(finishClaim.includes("return false;"), "failed finalization should report an unfinalized lease");
+  assert.ok(schedulerRoute.includes("claimFailed = true;"), "claim RPC exceptions should be treated as failures");
+  assert.ok(schedulerRoute.includes("workflowStartedAt"), "scheduled workflow failures should be timed");
+});
