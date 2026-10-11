@@ -52,14 +52,20 @@ async function finishClaim(
   succeeded: boolean,
   errorCode: string | null,
 ): Promise<boolean> {
-  const { data, error } = await supabase.rpc("finish_workflow_schedule_claim", {
-    p_schedule_id: claim.schedule_id,
-    p_lease_token: claim.lease_token,
-    p_succeeded: succeeded,
-    p_error_code: errorCode,
-  });
-  if (error) return false;
-  return data === true;
+  try {
+    const { data, error } = await supabase.rpc("finish_workflow_schedule_claim", {
+      p_schedule_id: claim.schedule_id,
+      p_lease_token: claim.lease_token,
+      p_succeeded: succeeded,
+      p_error_code: errorCode,
+    });
+    if (error) return false;
+    return data === true;
+  } catch {
+    // A transient transport failure must not escape the scheduler tick.
+    // The lease expiry remains the recovery path for an unfinalized claim.
+    return false;
+  }
 }
 
 async function dispatchTick(request: NextRequest) {
@@ -137,6 +143,7 @@ async function dispatchTick(request: NextRequest) {
   let failed = 0;
 
   for (const claim of claims) {
+    const workflowStartedAt = Date.now();
     let failureCode = "SCHEDULED_RUN_FAILED";
     try {
       const validated = validateDefinition(claim.definition);
@@ -201,6 +208,7 @@ async function dispatchTick(request: NextRequest) {
         route: "/api/internal/scheduler",
         outcome: "failure",
         errorCode: failureCode,
+        durationMs: Math.min(600000, Math.max(0, Date.now() - workflowStartedAt)),
       }, console.error);
     }
   }
