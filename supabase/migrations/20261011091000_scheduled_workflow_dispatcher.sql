@@ -37,8 +37,10 @@ begin
   if p_duration_ms is null or p_duration_ms < 0 or p_duration_ms > 600000 then
     raise exception using errcode = '22023', message = 'Invalid run duration';
   end if;
-  if p_steps is null or pg_catalog.jsonb_typeof(p_steps) <> 'array'
-     or pg_catalog.jsonb_array_length(p_steps) < 1
+  if p_steps is null or pg_catalog.jsonb_typeof(p_steps) <> 'array' then
+    raise exception using errcode = '22023', message = 'Invalid scheduled run steps';
+  end if;
+  if pg_catalog.jsonb_array_length(p_steps) < 1
      or pg_catalog.jsonb_array_length(p_steps) > 30 then
     raise exception using errcode = '22023', message = 'Invalid scheduled run steps';
   end if;
