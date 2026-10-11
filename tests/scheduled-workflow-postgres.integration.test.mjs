@@ -218,6 +218,14 @@ test("PostgreSQL executes scheduled claim, persistence, lease, retry, and idempo
       "update public.workflows set version = version + 1 where id = $1",
       [ambiguous.workflowId],
     );
+    const ambiguousRetry = await client.query(recordSql, [
+      ambiguousClaim.schedule_id,
+      ambiguousClaim.lease_token,
+      ambiguousClaim.workflow_version,
+      7,
+      JSON.stringify(stepResults),
+    ]);
+    assert.equal(ambiguousRetry.rows[0].run_id, ambiguousRecorded.rows[0].run_id);
     const ambiguousFinish = await client.query(
       "select public.finish_workflow_schedule_claim($1, $2, false, $3) as finished",
       [ambiguousClaim.schedule_id, ambiguousClaim.lease_token, "SCHEDULED_RUN_PERSISTENCE_FAILED"],
