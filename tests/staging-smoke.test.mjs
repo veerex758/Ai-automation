@@ -29,14 +29,32 @@ test("staging smoke script refuses known production aliases", () => {
   assert.match(result.stderr, /Refusing to run smoke tests/);
 });
 
+test("staging smoke script refuses the main-branch Vercel alias", () => {
+  const result = runSmoke("https://ai-automation-git-main-veerex-org.vercel.app");
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Refusing to run smoke tests/);
+});
+
 test("staging smoke script refuses non-HTTPS targets", () => {
-  const result = runSmoke("http://ai-automation-git-phase-12-preview-veerex-org.vercel.app");
+  const result = runSmoke("http://ai-automation-git-phase-12-veerex-org.vercel.app");
   assert.equal(result.status, 2);
   assert.match(result.stderr, /non-HTTPS/);
 });
 
-test("staging smoke script requires a hostname that identifies staging or preview", () => {
+test("staging smoke script refuses arbitrary domains containing preview or git markers", () => {
+  for (const url of [
+    "https://preview.example.com",
+    "https://evil-git-preview.com",
+    "https://ai-automation-git-phase-12.attacker.example",
+  ]) {
+    const result = runSmoke(url);
+    assert.equal(result.status, 2, url);
+    assert.match(result.stderr, /this project's Vercel Git preview hostname/, url);
+  }
+});
+
+test("staging smoke script refuses hostnames that do not match this project's preview pattern", () => {
   const result = runSmoke("https://example.com");
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /hostname must clearly identify a staging or preview/);
+  assert.match(result.stderr, /this project's Vercel Git preview hostname/);
 });
