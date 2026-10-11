@@ -54,6 +54,23 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [ ] Review operational monitoring, backup/recovery expectations, and production safety settings.
 - [ ] Obtain explicit launch approval before enabling live email in production.
 
+### Phase 9 — AI-assisted workflow drafting: implementation merged
+- [x] Authenticated AI workflow draft generation API with strict schema validation.
+- [x] Builder preview/review flow; generated drafts are not saved or executed automatically.
+- [x] Automated provider-mocked validation, error handling, and safety tests.
+- [ ] Verify live AI provider configuration and authenticated end-to-end behavior.
+
+### Phase 10 — Integrations and reusable actions: in progress
+- [x] Establish a server-owned reusable action catalog for internal tasks, email, Slack, and HTTPS webhooks.
+- [x] Add an authenticated, private/no-store action-catalog endpoint with clear execution capability labels.
+- [x] Drive action provider/operation compatibility validation from the shared catalog.
+- [x] Connect catalog metadata to builder action selection and configuration UI.
+- [x] Preserve generated action provider, operation, and settings when applying AI drafts to the visual builder.
+- [x] Validate action field required values, maximum lengths, email formats, and HTTPS URLs before review.
+- [ ] Verify the authenticated preview flow in a browser, including unauthenticated catalog rejection and required-field validation.
+- [ ] Implement and verify additional live connectors one at a time, with least-privilege credentials, validation, timeouts, rate-limit handling, and sanitized run logs.
+- [ ] Keep non-email providers dry-run only until their individual live-path safety checks pass.
+
 ## Current operating limits
 
 - Live execution is disabled unless the server environment explicitly sets `AIVANTA_LIVE_EXECUTION_ENABLED=true`.
