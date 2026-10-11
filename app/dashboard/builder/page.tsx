@@ -6,7 +6,9 @@ import { validateWorkflowDefinition } from "@/lib/workflows/validation";
 import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
-type BuilderStep = { id: number; kind: StepKind; title: string; detail: string };
+type ActionField = { name: string; label: string; type: "text" | "email" | "url"; required: boolean; maxLength: number };
+type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
+type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string> };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
 type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
 
@@ -28,6 +30,9 @@ export default function WorkflowBuilderPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
+  const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
 
   useEffect(() => {
     try {
@@ -44,6 +49,24 @@ export default function WorkflowBuilderPage() {
       // Keep the starter workflow when saved browser data is invalid.
     }
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadActionCatalog() {
+      try {
+        const response = await fetch("/api/workflows/actions", { headers: { Accept: "application/json" }, cache: "no-store" });
+        const payload = await response.json() as { actions?: CatalogAction[]; error?: string };
+        if (!response.ok || !Array.isArray(payload.actions)) throw new Error(payload.error || "Action catalog could not be loaded.");
+        if (active) setActionCatalog(payload.actions);
+      } catch (error) {
+        if (active) setCatalogError(error instanceof Error ? error.message : "Action catalog could not be loaded.");
+      } finally {
+        if (active) setCatalogLoading(false);
+      }
+    }
+    void loadActionCatalog();
+    return () => { active = false; };
   }, []);
 
   function addStep(kind: StepKind) {
@@ -144,7 +167,37 @@ export default function WorkflowBuilderPage() {
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
-              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div><label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></> : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
+              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div>{currentStep.kind === "Action" && <section className="action-config-panel" aria-label="Action configuration">
+                <label htmlFor="action-catalog-select">Action type</label>
+                {catalogLoading ? <p className="action-catalog-status">Loading supported actions…</p> : catalogError ? <p className="action-catalog-status" role="alert">{catalogError} Refresh the page to retry.</p> : <>
+                  <select id="action-catalog-select" className="settings-input" value={currentStep.actionId ?? ""} onChange={event => {
+                    const action = actionCatalog.find(item => item.id === event.target.value);
+                    if (!action) return;
+                    setSteps(current => current.map(step => step.id === currentStep.id ? {
+                      ...step,
+                      actionId: action.id,
+                      title: action.label,
+                      detail: action.description,
+                      settings: Object.fromEntries(action.fields.map(field => [field.name, step.settings?.[field.name] ?? ""])),
+                    } : step));
+                  }}>
+                    <option value="">Choose an action…</option>
+                    {actionCatalog.map(action => <option key={action.id} value={action.id}>{action.label}</option>)}
+                  </select>
+                  {(() => {
+                    const action = actionCatalog.find(item => item.id === currentStep.actionId);
+                    if (!action) return <p className="action-catalog-status">Choose an action to see its configuration fields.</p>;
+                    return <div className="action-fields">
+                      <div className="action-capability"><span className={action.execution === "live_guarded" ? "action-capability-live" : ""}>{action.execution === "live_guarded" ? "Guarded live path" : "Dry-run only"}</span><p>{action.description}</p></div>
+                      {action.fields.map(field => <label className="action-field" key={field.name} htmlFor={"action-field-" + currentStep.id + "-" + field.name}>{field.label}{field.required ? " *" : ""}
+                        {field.type === "text" && field.maxLength > 200 ? <textarea id={"action-field-" + currentStep.id + "-" + field.name} maxLength={field.maxLength} rows={2} value={currentStep.settings?.[field.name] ?? ""} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, settings: { ...step.settings, [field.name]: event.target.value } } : step))} /> : <input id={"action-field-" + currentStep.id + "-" + field.name} className="settings-input" type={field.type} maxLength={field.maxLength} required={field.required} value={currentStep.settings?.[field.name] ?? ""} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, settings: { ...step.settings, [field.name]: event.target.value } } : step))} />}
+                      </label>)}
+                      {action.requirements?.length ? <p className="action-catalog-status">Requirements: {action.requirements.join(", ").replaceAll("_", " ")}.</p> : null}
+                    </div>;
+                  })()}
+                </>}
+              </section>}
+              <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></> : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
             </aside>
           </div>
           <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> This is an interactive builder prototype. Saving stores a draft in this browser only. No external services run, and activation remains disabled until validation and execution safeguards are available.</p></div>
