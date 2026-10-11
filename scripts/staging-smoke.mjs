@@ -25,12 +25,15 @@ const knownProductionHosts = new Set([
   "ai-automation-veerex-org.vercel.app",
   "ai-automation-git-main-veerex-org.vercel.app",
 ]);
-const identifiesNonProduction = host.includes("staging")
-  || host.includes("preview")
-  || host.includes("-git-");
+// Only accept this project's immutable Git-preview hostname pattern. Generic
+// words such as "preview" or "-git-" in an unrelated domain are not proof
+// that a target is non-production.
+const isProjectGitPreview = host.startsWith("ai-automation-git-")
+  && host.endsWith("-veerex-org.vercel.app")
+  && host.endsWith(".vercel.app");
 
-if (knownProductionHosts.has(host) || !identifiesNonProduction) {
-  console.error("Refusing to run smoke tests: hostname must clearly identify a staging or preview deployment.");
+if (knownProductionHosts.has(host) || !isProjectGitPreview) {
+  console.error("Refusing to run smoke tests: target must be this project's Vercel Git preview hostname.");
   process.exit(2);
 }
 
