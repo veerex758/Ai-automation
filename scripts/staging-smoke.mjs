@@ -39,6 +39,7 @@ baseUrl.search = "";
 baseUrl.hash = "";
 
 const timeoutMs = 10_000;
+const isJson = (response) => (response.headers.get("content-type") || "").includes("application/json");
 const checks = [
   {
     name: "health endpoint",
@@ -46,6 +47,7 @@ const checks = [
     init: { method: "GET" },
     expected: [200],
     validate: async (response) => {
+      if (!isJson(response)) return false;
       const body = await response.json();
       return body?.status === "ok";
     },
@@ -55,6 +57,11 @@ const checks = [
     path: "/api/workflows/actions",
     init: { method: "GET" },
     expected: [401],
+    validate: async (response) => {
+      if (!isJson(response)) return false;
+      const body = await response.json();
+      return body?.error === "Authentication required.";
+    },
   },
   {
     name: "unauthenticated AI generation",
@@ -65,12 +72,22 @@ const checks = [
       body: "{}",
     },
     expected: [401],
+    validate: async (response) => {
+      if (!isJson(response)) return false;
+      const body = await response.json();
+      return body?.error === "Authentication required.";
+    },
   },
   {
     name: "unauthenticated scheduler rejection",
     path: "/api/internal/scheduler",
     init: { method: "POST" },
     expected: [401, 503],
+    validate: async (response) => {
+      if (!isJson(response)) return false;
+      const body = await response.json();
+      return typeof body?.error === "string";
+    },
   },
 ];
 
@@ -98,7 +115,7 @@ for (const check of checks) {
     }
 
     if (check.validate && !(await check.validate(response))) {
-      console.error(`FAIL ${check.name}: response body did not match the expected contract`);
+      console.error(`FAIL ${check.name}: response did not match the application JSON contract`);
       failed += 1;
       continue;
     }
