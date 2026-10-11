@@ -112,25 +112,28 @@ begin
        or pg_catalog.char_length(step_id_value) > 64 then
       raise exception using errcode = '22023', message = 'Invalid scheduled step ID';
     end if;
-    if step_type_value not in ('trigger', 'action', 'condition') then
+    if step_type_value is null or step_type_value not in ('trigger', 'action', 'condition') then
       raise exception using errcode = '22023', message = 'Invalid scheduled step type';
     end if;
     if step_title_value is null or pg_catalog.char_length(step_title_value) < 1
        or pg_catalog.char_length(step_title_value) > 80 then
       raise exception using errcode = '22023', message = 'Invalid scheduled step title';
     end if;
-    if step_status_value not in ('simulated', 'skipped') then
+    if step_status_value is null or step_status_value not in ('simulated', 'skipped') then
       raise exception using errcode = '22023', message = 'Scheduled dispatcher only records side-effect-free dry-runs';
     end if;
-    if pg_catalog.jsonb_typeof(step_result_value) <> 'object'
+    if step_result_value is null
+       or pg_catalog.jsonb_typeof(step_result_value) <> 'object'
        or pg_catalog.octet_length(step_result_value::text) > 8000 then
       raise exception using errcode = '22023', message = 'Invalid scheduled step result';
     end if;
     if not exists (
       select 1
-        from pg_catalog.jsonb_array_elements(current_definition->'nodes') as workflow_node(value)
-       where workflow_node.value->>'id' = step_id_value
+        from pg_catalog.jsonb_array_elements(current_definition->'nodes') with ordinality as workflow_node(value, ordinality)
+       where workflow_node.ordinality = step_position
+         and workflow_node.value->>'id' = step_id_value
          and workflow_node.value->>'type' = step_type_value
+         and pg_catalog.btrim(workflow_node.value->>'title') = step_title_value
     ) then
       raise exception using errcode = '22023', message = 'Scheduled step does not belong to the current workflow';
     end if;
