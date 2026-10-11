@@ -1,6 +1,25 @@
 -- Persist scheduled executions as safe dry-runs until live scheduled side effects
 -- have passed dedicated staging gates. The lease and run history write are
 -- checked in one transaction so a retry cannot create duplicate run records.
+-- Do not let workspace members alter schedule configuration while a worker
+-- owns a lease; this keeps the claimed occurrence and idempotency key stable.
+drop policy if exists "workspace members can update workflow schedules" on public.workflow_schedules;
+create policy "workspace members can update unclaimed workflow schedules"
+  on public.workflow_schedules for update to authenticated
+  using (
+    private.is_workspace_member(workspace_id)
+    and lease_token is null
+  )
+  with check (
+    private.is_workspace_member(workspace_id)
+    and lease_token is null
+    and exists (
+      select 1 from public.workflows w
+      where w.id = workflow_schedules.workflow_id
+        and w.workspace_id = workflow_schedules.workspace_id
+    )
+  );
+
 create or replace function public.record_scheduled_workflow_run(
   p_schedule_id uuid,
   p_lease_token uuid,
