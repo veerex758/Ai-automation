@@ -48,10 +48,12 @@ test("keeps security-definer scheduler RPCs isolated and service-role-only", () 
 });
 
 test("renews only a current unexpired lease and keeps renewal worker-only", () => {
-  const renewalFunction = migration
-    .split("create or replace function public.renew_workflow_schedule_claim(")[1]
-    ?.split("$$;")[0];
-  assert.ok(renewalFunction, "lease renewal RPC exists");
+  const renewalStart = migration.indexOf("create or replace function public.renew_workflow_schedule_claim(");
+  const renewalEnd = migration.indexOf("$;", renewalStart);
+  assert.ok(renewalStart >= 0, "lease renewal RPC exists");
+  assert.ok(renewalEnd > renewalStart, "lease renewal RPC has a valid dollar-quoted body");
+  const renewalFunction = migration.slice(renewalStart, renewalEnd);
+  assert.ok(renewalFunction.includes("as $"), "lease renewal body uses valid dollar quoting");
   assert.ok(renewalFunction.includes("security definer"));
   assert.ok(renewalFunction.includes("set search_path = ''"));
   assert.ok(renewalFunction.includes("p_lease_seconds < 30 or p_lease_seconds > 900"));
