@@ -174,19 +174,43 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
 
     const status = failureMessage ? "failed" : "succeeded";
     const durationMs = Math.min(600000, Math.max(0, Date.now() - startedAt));
-    const { error: stepsError } = await supabase.from("workflow_run_steps").insert(stepRows);
-    if (stepsError) throw stepsError;
-    const { data: finalized, error: finalizeError } = await supabase.from("workflow_runs")
-      .update({
-        status,
-        completed_at: new Date().toISOString(),
-        duration_ms: durationMs,
-        error_message: failureMessage,
-      })
-      .eq("id", run.id).eq("status", "running")
-      .select("id, mode, status, workflow_version, started_at, completed_at, duration_ms, error_message")
-      .single();
-    if (finalizeError) throw finalizeError;
+    let finalized;
+    try {
+      const { error: stepsError } = await supabase.from("workflow_run_steps").insert(stepRows);
+      if (stepsError) throw stepsError;
+      const { data, error: finalizeError } = await supabase.from("workflow_runs")
+        .update({
+          status,
+          completed_at: new Date().toISOString(),
+          duration_ms: durationMs,
+          error_message: failureMessage,
+        })
+        .eq("id", run.id).eq("status", "running")
+        .select("id, mode, status, workflow_version, started_at, completed_at, duration_ms, error_message")
+        .single();
+      if (finalizeError) throw finalizeError;
+      finalized = data;
+    } catch (persistenceError) {
+      // Never leave a live run looking perpetually in progress after a persistence
+      // failure. Do not retry the provider call: the external side effect may exist.
+      console.error("Failed to persist Aivanta live run results:", persistenceError);
+      const recoveryMessage = "Run results could not be fully saved. An external email may already have been accepted; verify provider delivery before retrying.";
+      const { error: recoveryError } = await supabase.from("workflow_runs")
+        .update({
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          duration_ms: Math.min(600000, Math.max(0, Date.now() - startedAt)),
+          error_message: recoveryMessage,
+        })
+        .eq("id", run.id).eq("status", "running");
+      if (recoveryError) console.error("Failed to recover Aivanta live run status:", recoveryError);
+      return NextResponse.json({
+        error: recoveryMessage,
+        runId: run.id,
+        sideEffectsMayHaveOccurred: emailSent,
+        retrySafe: false,
+      }, { status: 500 });
+    }
 
     return NextResponse.json({
       run: finalized,
