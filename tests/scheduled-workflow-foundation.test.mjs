@@ -47,6 +47,18 @@ test("keeps security-definer scheduler RPCs isolated and service-role-only", () 
   assert.ok(migration.includes("grant execute on function public.finish_workflow_schedule_claim(uuid, uuid, boolean, text) to service_role"));
 });
 
+test("renews only a current unexpired lease and keeps renewal worker-only", () => {
+  const renewalFunction = migration.split("create or replace function public.renew_workflow_schedule_claim(")[1]?.split("$;")[0];
+  assert.ok(renewalFunction, "lease renewal RPC exists");
+  assert.match(renewalFunction, /security definer\\s+set search_path = ''/i);
+  assert.match(renewalFunction, /p_lease_seconds < 30 or p_lease_seconds > 900/i);
+  assert.match(renewalFunction, /lease_token = p_lease_token/i);
+  assert.match(renewalFunction, /lease_until > now\\(\\)/i);
+  assert.match(renewalFunction, /return found/i);
+  assert.ok(migration.includes("revoke all on function public.renew_workflow_schedule_claim(uuid, uuid, integer) from public, anon, authenticated"));
+  assert.ok(migration.includes("grant execute on function public.renew_workflow_schedule_claim(uuid, uuid, integer) to service_role"));
+});
+
 test("requires the current unexpired lease token before finishing a claim", () => {
   assert.match(migration, /lease_token = p_lease_token/i);
   assert.match(migration, /lease_until > now\(\)/i);
