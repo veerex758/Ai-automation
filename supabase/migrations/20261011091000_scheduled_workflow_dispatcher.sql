@@ -79,25 +79,6 @@ begin
     raise exception using errcode = 'P0002', message = 'Schedule claim is no longer valid';
   end if;
 
-  select w.version, w.definition
-    into current_workflow_version, current_definition
-    from public.workflows as w
-   where w.id = current_schedule.workflow_id
-     and w.workspace_id = current_schedule.workspace_id
-     and w.status = 'active'
-     and w.version = p_expected_version
-     and pg_catalog.jsonb_typeof(w.definition->'nodes') = 'array'
-     and w.definition->'nodes'->0->'settings'->>'event' = 'schedule'
-   for share;
-
-  if not found then
-    raise exception using errcode = 'P0002', message = 'Workflow changed or is no longer schedulable';
-  end if;
-
-  if pg_catalog.jsonb_array_length(current_definition->'nodes') <> pg_catalog.jsonb_array_length(p_steps) then
-    raise exception using errcode = '22023', message = 'Scheduled run step count does not match workflow';
-  end if;
-
   schedule_idempotency_key := current_schedule.id::text || ':' || pg_catalog.to_char(current_schedule.next_run_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
 
   select r.id, r.workflow_id, r.workspace_id, r.workflow_version, r.status, r.mode
@@ -115,6 +96,25 @@ begin
     end if;
     return query select existing_run_id, existing_workflow_version;
     return;
+  end if;
+
+  select w.version, w.definition
+    into current_workflow_version, current_definition
+    from public.workflows as w
+   where w.id = current_schedule.workflow_id
+     and w.workspace_id = current_schedule.workspace_id
+     and w.status = 'active'
+     and w.version = p_expected_version
+     and pg_catalog.jsonb_typeof(w.definition->'nodes') = 'array'
+     and w.definition->'nodes'->0->'settings'->>'event' = 'schedule'
+   for share;
+
+  if not found then
+    raise exception using errcode = 'P0002', message = 'Workflow changed or is no longer schedulable';
+  end if;
+
+  if pg_catalog.jsonb_array_length(current_definition->'nodes') <> pg_catalog.jsonb_array_length(p_steps) then
+    raise exception using errcode = '22023', message = 'Scheduled run step count does not match workflow';
   end if;
 
   insert into public.workflow_runs (
