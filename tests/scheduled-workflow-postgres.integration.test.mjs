@@ -186,6 +186,37 @@ test("PostgreSQL executes scheduled claim, persistence, lease, retry, and idempo
     );
     assert.equal(staleFinish.rows[0].finished, false);
 
+    // Simulate a committed history write whose RPC response was lost. The
+    // worker reports failure, but finalization must recognize the durable run
+    // and advance the original occurrence instead of creating a retry key.
+    const ambiguous = await insertWorkflowAndSchedule(client, workspaceId, userId);
+    const ambiguousClaims = await client.query(
+      "select * from public.claim_due_workflow_schedules(10, 300)",
+    );
+    const ambiguousClaim = ambiguousClaims.rows.find((claim) => claim.schedule_id === ambiguous.scheduleId);
+    assert.ok(ambiguousClaim);
+    const ambiguousRecorded = await client.query(recordSql, [
+      ambiguousClaim.schedule_id,
+      ambiguousClaim.lease_token,
+      ambiguousClaim.workflow_version,
+      7,
+      JSON.stringify(stepResults),
+    ]);
+    assert.ok(ambiguousRecorded.rows[0].run_id);
+    const ambiguousFinish = await client.query(
+      "select public.finish_workflow_schedule_claim($1, $2, false, $3) as finished",
+      [ambiguousClaim.schedule_id, ambiguousClaim.lease_token, "SCHEDULED_RUN_PERSISTENCE_FAILED"],
+    );
+    assert.equal(ambiguousFinish.rows[0].finished, true);
+    const ambiguousState = await client.query(
+      "select failure_count, last_error_code, lease_token, last_run_at is not null as recorded_success from public.workflow_schedules where id = $1",
+      [ambiguous.scheduleId],
+    );
+    assert.equal(ambiguousState.rows[0].failure_count, 0);
+    assert.equal(ambiguousState.rows[0].last_error_code, null);
+    assert.equal(ambiguousState.rows[0].lease_token, null);
+    assert.equal(ambiguousState.rows[0].recorded_success, true);
+
     await insertWorkflowAndSchedule(client, workspaceId, userId);
     await insertWorkflowAndSchedule(client, workspaceId, userId);
     const [leftClaims, rightClaims] = await Promise.all([
