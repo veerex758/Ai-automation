@@ -184,3 +184,99 @@ revoke all on function public.record_scheduled_workflow_run(uuid, uuid, integer,
   from public, anon, authenticated;
 grant execute on function public.record_scheduled_workflow_run(uuid, uuid, integer, integer, jsonb)
   to service_role;
+
+-- If a run-history write committed but its RPC response was lost, do not
+-- back off and accidentally turn that same occurrence into a new idempotency
+-- key. A successful durable run record is authoritative for finalization.
+create or replace function public.finish_workflow_schedule_claim(
+  p_schedule_id uuid,
+  p_lease_token uuid,
+  p_succeeded boolean,
+  p_error_code text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $finish_workflow_schedule_claim$
+declare
+  current_schedule public.workflow_schedules%rowtype;
+  safe_error_code text;
+  effective_succeeded boolean := coalesce(p_succeeded, false);
+  existing_run record;
+  expected_idempotency_key text;
+begin
+  select * into current_schedule
+  from public.workflow_schedules
+  where id = p_schedule_id
+    and lease_token = p_lease_token
+    and lease_until > now()
+  for update;
+
+  if not found then
+    return false;
+  end if;
+
+  expected_idempotency_key := current_schedule.id::text || ':' ||
+    pg_catalog.to_char(
+      current_schedule.next_run_at at time zone 'UTC',
+      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    );
+
+  if not effective_succeeded then
+    select r.id, r.workflow_id, r.workflow_version, r.mode, r.status
+      into existing_run
+      from public.workflow_runs as r
+     where r.idempotency_key = expected_idempotency_key;
+
+    if found then
+      if existing_run.workflow_id <> current_schedule.workflow_id
+         or existing_run.mode <> 'dry_run'
+         or existing_run.status <> 'succeeded' then
+        raise exception using errcode = '23505', message = 'Scheduled run idempotency conflict';
+      end if;
+
+      if not exists (
+        select 1 from public.workflows as w
+        where w.id = current_schedule.workflow_id
+          and w.workspace_id = current_schedule.workspace_id
+          and w.version = existing_run.workflow_version
+      ) then
+        raise exception using errcode = '23505', message = 'Scheduled run version conflict';
+      end if;
+
+      effective_succeeded := true;
+    end if;
+  end if;
+
+  safe_error_code := case
+    when p_error_code ~ '^[A-Z0-9_]{1,64} then p_error_code
+    else 'SCHEDULED_RUN_FAILED'
+  end;
+
+  if effective_succeeded then
+    update public.workflow_schedules
+    set last_run_at = current_schedule.next_run_at,
+        next_run_at = greatest(
+          current_schedule.next_run_at + make_interval(mins => current_schedule.interval_minutes),
+          now() + make_interval(mins => current_schedule.interval_minutes)
+        ),
+        failure_count = 0,
+        last_error_code = null,
+        lease_token = null,
+        lease_until = null
+    where id = p_schedule_id;
+  else
+    update public.workflow_schedules
+    set failure_count = failure_count + 1,
+        last_error_code = safe_error_code,
+        next_run_at = now() + make_interval(mins => least(60, 5 * power(2, least(failure_count, 4))::integer)),
+        lease_token = null,
+        lease_until = null
+    where id = p_schedule_id;
+  end if;
+
+  return true;
+end;
+$finish_workflow_schedule_claim$;
+
