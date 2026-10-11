@@ -154,3 +154,48 @@ h1 span{color:#809e65}
   .floating-note strong { font-size: 9px; }
   .floating-note small { font-size: 8px; }
 }
+
+
+/* Mobile landing-page spacing refinement — preserve the approved desktop design. */
+@media (max-width: 680px) {
+  .hero { padding-top: 30px; gap: 4px; }
+  .hero-copy { min-width: 0; }
+  .eyebrow { font-size: 9px; letter-spacing: 1.05px; line-height: 1.6; }
+  .hero-actions { align-items: flex-start; gap: 16px; }
+  .button { max-width: 100%; }
+  .hero-proof { align-items: flex-start; gap: 11px; }
+  .hero-proof p { max-width: 250px; }
+  .preview-wrap { margin: 0; min-height: 360px; }
+  .preview-glow { width: min(100%, 360px); height: 360px; right: 0; }
+  .workflow-card { width: 100%; }
+  .workflow-meta { flex-wrap: wrap; row-gap: 8px; }
+  .flow-item { min-width: 0; }
+  .flow-text { min-width: 0; }
+  .flow-text strong { overflow-wrap: anywhere; }
+  .flow-state { flex-shrink: 0; }
+  .floating-note.note-top { right: 4px; top: 8px; }
+  .floating-note.note-bottom { left: 4px; bottom: 5px; }
+  .hero-bottom-line { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: start; }
+  .hero-bottom-line .line { display: none; }
+  .trust-inner { padding: 22px 0; }
+  .section-heading { margin-bottom: 30px; }
+  .section-heading h2 { letter-spacing: -2px; }
+  .capability-card { padding: 22px; }
+  .dark-inner h2 { letter-spacing: -2.4px; }
+  .security-section h2 { line-height: 1.15; }
+  .cta-card { padding: 32px 22px; }
+  .cta-card h2 { letter-spacing: -2px; line-height: 1.1; }
+  .footer { gap: 14px; }
+}
+@media (max-width: 380px) {
+  .hero { padding-top: 24px; }
+  .hero-actions { gap: 14px; }
+  .hero-proof p { font-size: 10px; }
+  .preview-wrap { min-height: 340px; }
+  .workflow-top h3 { font-size: 15px; }
+  .flow-item { gap: 7px; }
+  .flow-icon { width: 30px; height: 30px; }
+  .flow-state { max-width: 76px; white-space: normal; text-align: center; }
+  .section-heading h2 { font-size: 39px; }
+  .cta-card { padding: 28px 18px; }
+}
