@@ -66,6 +66,7 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [x] Drive action provider/operation compatibility validation from the shared catalog.
 - [x] Connect catalog metadata to builder action selection and configuration UI.
 - [x] Preserve generated action provider, operation, and settings when applying AI drafts to the visual builder.
+- [x] Validate action field required values, maximum lengths, email formats, and HTTPS URLs before review.
 - [ ] Verify the authenticated preview flow in a browser, including unauthenticated catalog rejection and required-field validation.
 - [ ] Implement and verify additional live connectors one at a time, with least-privilege credentials, validation, timeouts, rate-limit handling, and sanitized run logs.
 - [ ] Keep non-email providers dry-run only until their individual live-path safety checks pass.
