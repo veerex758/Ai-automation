@@ -64,7 +64,9 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [x] Establish a server-owned reusable action catalog for internal tasks, email, Slack, and HTTPS webhooks.
 - [x] Add an authenticated, private/no-store action-catalog endpoint with clear execution capability labels.
 - [x] Drive action provider/operation compatibility validation from the shared catalog.
-- [ ] Connect catalog metadata to builder action selection and configuration UI.
+- [x] Connect catalog metadata to builder action selection and configuration UI.
+- [x] Preserve generated action provider, operation, and settings when applying AI drafts to the visual builder.
+- [ ] Verify the authenticated preview flow in a browser, including unauthenticated catalog rejection and required-field validation.
 - [ ] Implement and verify additional live connectors one at a time, with least-privilege credentials, validation, timeouts, rate-limit handling, and sanitized run logs.
 - [ ] Keep non-email providers dry-run only until their individual live-path safety checks pass.
 
