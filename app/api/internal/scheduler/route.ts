@@ -105,11 +105,21 @@ async function dispatchTick(request: NextRequest) {
     return jsonResponse({ error: "Scheduler database access is not configured." }, 503);
   }
 
-  const { data, error } = await supabase.rpc("claim_due_workflow_schedules", {
-    p_limit: claimLimit,
-    p_lease_seconds: leaseSeconds,
-  });
-  if (error || !Array.isArray(data)) {
+  let claimData: unknown;
+  let claimFailed = false;
+  try {
+    const { data, error } = await supabase.rpc("claim_due_workflow_schedules", {
+      p_limit: claimLimit,
+      p_lease_seconds: leaseSeconds,
+    });
+    claimData = data;
+    claimFailed = Boolean(error);
+  } catch {
+    // Network/client exceptions are handled the same way as returned RPC errors.
+    claimFailed = true;
+  }
+
+  if (claimFailed || !Array.isArray(claimData)) {
     logOperationalEvent({
       event: "scheduler_tick",
       requestId,
@@ -122,7 +132,7 @@ async function dispatchTick(request: NextRequest) {
     return jsonResponse({ error: "Could not claim scheduled workflows." }, 500);
   }
 
-  const claims = data as ScheduleClaim[];
+  const claims = claimData as ScheduleClaim[];
   let succeeded = 0;
   let failed = 0;
 
