@@ -144,6 +144,17 @@ test("PostgreSQL executes scheduled claim, persistence, lease, retry, and idempo
       },
     ];
     const recordSql = "select * from public.record_scheduled_workflow_run($1, $2, $3, $4, $5::jsonb)";
+    const unsafeStepResults = stepResults.map((step) => ({ ...step, status: "executed" }));
+    await assert.rejects(
+      client.query(recordSql, [
+        firstClaim.schedule_id,
+        firstClaim.lease_token,
+        firstClaim.workflow_version,
+        12,
+        JSON.stringify(unsafeStepResults),
+      ]),
+      /side-effect-free dry-runs/,
+    );
     const recordArgs = [
       firstClaim.schedule_id,
       firstClaim.lease_token,
