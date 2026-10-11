@@ -248,7 +248,7 @@ begin
   end if;
 
   safe_error_code := case
-    when p_error_code ~ '^[A-Z0-9_]{1,64}
+    when p_error_code ~ '^[A-Z0-9_]{1,64}$' then p_error_code
     else 'SCHEDULED_RUN_FAILED'
   end;
 
@@ -277,34 +277,3 @@ begin
   return true;
 end;
 $finish_workflow_schedule_claim$;
-
- then p_error_code
-    else 'SCHEDULED_RUN_FAILED'
-  end;
-
-  if effective_succeeded then
-    update public.workflow_schedules
-    set last_run_at = current_schedule.next_run_at,
-        next_run_at = greatest(
-          current_schedule.next_run_at + make_interval(mins => current_schedule.interval_minutes),
-          now() + make_interval(mins => current_schedule.interval_minutes)
-        ),
-        failure_count = 0,
-        last_error_code = null,
-        lease_token = null,
-        lease_until = null
-    where id = p_schedule_id;
-  else
-    update public.workflow_schedules
-    set failure_count = failure_count + 1,
-        last_error_code = safe_error_code,
-        next_run_at = now() + make_interval(mins => least(60, 5 * power(2, least(failure_count, 4))::integer)),
-        lease_token = null,
-        lease_until = null
-    where id = p_schedule_id;
-  end if;
-
-  return true;
-end;
-$finish_workflow_schedule_claim$;
-
