@@ -17,7 +17,7 @@ The dispatcher currently performs **dry-runs only**. It does not send email, mak
 
 The route requires `CRON_SECRET` (or `AIVANTA_SCHEDULER_SECRET`) and a server-only `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`). Never expose these values through `NEXT_PUBLIC_*` variables.
 
-The migration files are not applied to the connected Supabase project. Its recorded migration versions also need to be reconciled with the repository before attempting any database push. Do not enable a production cron trigger until the migrations and worker are verified in a non-production environment.
+The scheduling migrations have now been applied to the connected Supabase project and verified: the schedule table exists with RLS enabled, scheduler RPCs are restricted to `service_role`, and there are currently zero schedule rows and zero enabled schedules. The project has no separate Supabase development branch available, so end-to-end staging verification is still outstanding. Do not enable a production cron trigger until the protected worker has been verified and its required server-only environment variables are confirmed.
 
 ## Verification gates
 
