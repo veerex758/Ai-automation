@@ -9,7 +9,7 @@ export async function GET() {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: "Authentication required." }, { status: 401 },);
+      return NextResponse.json({ error: "Authentication required." }, { status: 401, headers: { "Cache-Control": "private, no-store, max-age=0" } });
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase, user);
