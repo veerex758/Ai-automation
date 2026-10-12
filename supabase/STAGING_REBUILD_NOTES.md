@@ -14,12 +14,12 @@
 - Anonymous table privileges are revoked; authenticated table privileges are explicitly granted by the least-privilege grants migration.
 - Workspace membership policies and ownership/admin restrictions are present.
 - Scheduler security-definer RPCs are not executable by `anon` or `authenticated`; they remain service-role-only.
-- The latest deployment for this branch is READY and `/api/health` returns HTTP 200.
+- A recently completed Preview deployment for this branch is READY and `/api/health` returns HTTP 200; newer commits are still queued for deployment.
 - The scheduler endpoint intentionally remains disabled until staging gates pass. It currently fails closed with HTTP 503 because scheduler authentication is not configured in Preview.
 
 ## Migration history reconciliation — do not skip
 
-The repository currently contains 25 SQL migration files, while the staging database ledger contains 19 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
+The repository currently contains 25 SQL migration files, while the staging database ledger contains 20 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
 
 **Until a migration diff or an explicit, reviewed baseline mapping is completed, do not run `supabase db push` against this staging project.** A naïve push may attempt to replay old source migrations because their version IDs are absent from the remote ledger. Do not manually insert ledger rows merely to make counts match, and do not rerun migrations with destructive DDL.
 
@@ -55,5 +55,5 @@ Safe next steps:
 - The canonical tracked migration is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, matching the 20261012232845 remote ledger record. A second, later-dated duplicate migration was briefly added during concurrent work and has now been removed from source history (commit `fbde0fbf1ab5b03fe4f17cfdd605c1f4a044359e`). The live staging fix was applied to the isolated project.
 - Verified afterward: `workflow_runs.completed_at` is nullable; its completion-order constraint correctly allows NULL or a timestamp at/after `started_at`; `workflow_run_steps.completed_at` remains non-null as intended.
 - A follow-up catalog check found the workflow-run-step INSERT policy had drifted back to dry-run-only behavior. The canonical parity migration `20261013002000_aivanta_run_step_insert_policy_parity.sql` is now tracked and the live policy has been verified to permit only member-owned dry-run steps or owned live-run steps while the parent run is running. The remote ledger now contains 20 records; authenticated end-to-end tests are still required.
-- The remote migration ledger now has 19 records. The source/ledger mapping is still not a one-to-one match, so keep the broad history reconciliation gate open and do not use blind `db push`.
+- The remote migration ledger now has 20 records. The source/ledger mapping is still not a one-to-one match, so keep the broad history reconciliation gate open and do not use blind `db push`.
 - Security advisor was rerun after the DDL and returned no findings.
