@@ -74,7 +74,7 @@ export default function ActivityPage() {
           <Link className="side-link" href="/dashboard"><span className="side-icon">↗</span>Workflows</Link>
           <Link className="side-link selected" href="/dashboard/activity" aria-current="page"><span className="side-icon">◷</span>Activity logs</Link>
         </nav>
-        <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✳</div><strong>Need a hand?</strong><p>Review each run's mode, status, and workflow version to understand what happened.</p><Link href="/dashboard">Back to dashboard ↗</Link></div></div>
+        <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✳</div><strong>Need a hand?</strong><p>Review each run&apos;s mode, status, and workflow version to understand what happened.</p><Link href="/dashboard">Back to dashboard ↗</Link></div></div>
       </aside>
       <section className="dashboard-main">
         <header className="dashboard-topbar"><div className="breadcrumbs"><Link href="/dashboard">Workspace</Link><span>›</span><strong>Activity logs</strong></div><div className="topbar-right"><span className="environment-badge"><i />Workspace scoped</span><button type="button" className="subtle-button" onClick={() => void loadActivity()} disabled={loading}>{loading ? "Refreshing…" : "Refresh ↻"}</button></div></header>
