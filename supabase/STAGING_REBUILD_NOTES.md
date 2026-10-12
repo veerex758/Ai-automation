@@ -19,13 +19,13 @@
 
 ## Migration history reconciliation — do not skip
 
-The repository currently contains 27 SQL migration files, while the staging database ledger contains 22 migration records after the two RPC write-path hardening forward migrations. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
+The repository currently contains 29 SQL migration files, while the staging database ledger contains 24 migration records after the RPC write-path hardening and index-parity forward migrations. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
 
 **Until a migration diff or an explicit, reviewed baseline mapping is completed, do not run `supabase db push` against this staging project.** A naïve push may attempt to replay old source migrations because their version IDs are absent from the remote ledger. Do not manually insert ledger rows merely to make counts match, and do not rerun migrations with destructive DDL.
 
 Safe next steps:
 
-1. Generate a schema diff between the checked-out migration source and the isolated staging database.
+1. Generate a schema diff between the checked-out migration source and the isolated staging database. A manual-only workflow is in `.github/workflows/supabase-staging-schema-diff.yml`; its first run failed closed because repository secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` are not configured. Add these staging-only secrets before dispatching it; do not place either value in source or logs.
 2. Map each local migration to an already-applied baseline/parity change or identify the genuinely missing SQL.
 3. If history repair is needed, use the Supabase CLI migration-repair workflow against staging only, with the exact reviewed version list.
 4. Re-run schema, RLS, grants, and advisor checks after reconciliation.
@@ -64,4 +64,12 @@ Safe next steps:
 - The complete 27-file tracked migration chain passed isolated CI replay: GitHub Actions run `38323682448`, commit `aa02621d45addfb6a038d38acd05df70d4e23a47`. Local Supabase start, database reset/replay, status, and teardown all succeeded.
 - The latest Supabase security advisor returned zero findings. Current catalog: 8/8 public tables have RLS, 23 policies span those tables, and `anon` has zero public-table grants. The current 11 unused-index notices are informational on an empty staging database.
 - Migration ledger reconciliation remains a hard gate: 22 remote records versus 27 tracked source migrations. The source/live catalog is aligned for the reviewed objects and security paths, but the first ten consolidated remote entries have not yet been reconciled line-by-line against the complete tracked DDL. No `supabase db push`, remote reset, manual ledger insert, or ledger repair was run.
+- Browser/API smoke tests and Auth redirect allow-list verification remain blocked by the protected Preview access/configuration boundary; do not disable Vercel SSO. Use an approved Vercel authenticated browser/HTTP path and an authorized staging test identity before marking those checks passed.
+
+
+## Current clean replay and write-path acceptance — 2026-10-13
+
+- The complete 29-file tracked migration chain passed isolated CI replay: GitHub Actions run `38324304643`, commit `8b4b4248b2f937e510e8c6cbab0a96592fe42c77`. Local Supabase start, database reset/replay, status, and teardown all succeeded.
+- Latest Supabase security advisor returned zero findings. Current catalog: 8/8 public tables have RLS, 23 policies span those tables, and `anon` has zero public-table grants. Current unused-index notices are informational on the empty staging database.
+- Migration ledger reconciliation remains a hard gate: 24 remote records versus 29 tracked source migrations. The current schema-diff workflow cannot run until the repository's staging-only `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` secrets are configured. No `supabase db push`, remote reset, manual ledger insert, or ledger repair was run.
 - Browser/API smoke tests and Auth redirect allow-list verification remain blocked by the protected Preview access/configuration boundary; do not disable Vercel SSO. Use an approved Vercel authenticated browser/HTTP path and an authorized staging test identity before marking those checks passed.
