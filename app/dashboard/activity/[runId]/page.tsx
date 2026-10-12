@@ -47,6 +47,7 @@ export default function RunDetailPage() {
   const [steps, setSteps] = useState<RunStep[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -69,7 +70,7 @@ export default function RunDetailPage() {
     }
     if (runId) void load();
     return () => { active = false; };
-  }, [runId]);
+  }, [runId, reloadKey]);
 
   return (
     <main className="run-detail-shell">
@@ -79,7 +80,7 @@ export default function RunDetailPage() {
         <h1>Run <span>details.</span></h1>
         <p className="run-detail-intro">A read-only summary of this workflow run and its recorded steps.</p>
         {loading && <div className="run-detail-message">Loading run details…</div>}
-        {!loading && error && <div className="run-detail-error" role="alert"><strong>Run details unavailable</strong><p>{error}</p><Link href="/dashboard/activity">Return to activity logs</Link></div>}
+        {!loading && error && <div className="run-detail-error" role="alert"><strong>Run details unavailable</strong><p>{error}</p><div className="run-detail-error-actions"><button type="button" onClick={() => setReloadKey((value) => value + 1)}>Try again</button><Link href="/dashboard/activity">Return to activity logs</Link></div></div>}
         {!loading && !error && run && <>
           <section className="run-summary-card">
             <div className="run-summary-title"><div><span className="run-detail-eyebrow">WORKFLOW</span><h2>{run.workflowName}</h2><code>{run.id}</code></div><span className={"run-detail-status " + statusTone(run.status)}>{run.status}</span></div>
