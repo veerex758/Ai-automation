@@ -36,6 +36,8 @@ test("run detail page shows summary, recorded steps, and safe empty/error states
   assert.match(detailPage, /Recorded steps/);
   assert.match(detailPage, /No step-level records were saved/);
   assert.match(detailPage, /Run details unavailable/);
+  assert.match(detailPage, /Try again/);
+  assert.match(detailPage, /reloadKey/);
   assert.match(detailPage, /Inputs, outputs, and secret values are intentionally excluded/);
 });
 
