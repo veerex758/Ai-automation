@@ -12,8 +12,8 @@ type RunDetail = {
   mode: string;
   status: string;
   workflowVersion: number;
-  startedAt: string;
-  completedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
   durationMs: number | null;
 };
@@ -24,13 +24,20 @@ type RunStep = {
   type: string;
   title: string;
   status: string;
-  startedAt: string;
-  completedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
 };
 
-function dateLabel(value: string) {
+function dateLabel(value: string | null) {
+  if (!value) return "In progress";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Unknown" : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function statusTone(status: string) {
+  if (status === "succeeded" || status === "executed" || status === "simulated") return "success";
+  if (status === "failed") return "failure";
+  return "neutral";
 }
 
 export default function RunDetailPage() {
@@ -75,7 +82,7 @@ export default function RunDetailPage() {
         {!loading && error && <div className="run-detail-error" role="alert"><strong>Run details unavailable</strong><p>{error}</p><Link href="/dashboard/activity">Return to activity logs</Link></div>}
         {!loading && !error && run && <>
           <section className="run-summary-card">
-            <div className="run-summary-title"><div><span className="run-detail-eyebrow">WORKFLOW</span><h2>{run.workflowName}</h2><code>{run.id}</code></div><span className={"run-detail-status " + (run.status === "succeeded" ? "success" : "failure")}>{run.status}</span></div>
+            <div className="run-summary-title"><div><span className="run-detail-eyebrow">WORKFLOW</span><h2>{run.workflowName}</h2><code>{run.id}</code></div><span className={"run-detail-status " + statusTone(run.status)}>{run.status}</span></div>
             <div className="run-summary-grid">
               <div><span>Mode</span><strong>{run.mode === "dry_run" ? "Dry run" : run.mode}</strong></div>
               <div><span>Workflow version</span><strong>v{run.workflowVersion}</strong></div>
@@ -87,7 +94,7 @@ export default function RunDetailPage() {
           </section>
           <div className="run-steps-heading"><div><h2>Recorded steps</h2><p>Step metadata only. Inputs, outputs, and secret values are intentionally excluded.</p></div><span>{steps.length} {steps.length === 1 ? "step" : "steps"}</span></div>
           <section className="run-steps-list">
-            {steps.map((step) => <article className="run-step-row" key={step.id}><span className="run-step-number">{step.position.toString().padStart(2, "0")}</span><div className="run-step-copy"><strong>{step.title}</strong><small>{step.type} · {step.stepId}</small><small>{dateLabel(step.startedAt)} — {dateLabel(step.completedAt)}</small></div><span className={"run-step-status " + (step.status === "failed" ? "failure" : "success")}>{step.status}</span></article>)}
+            {steps.map((step) => <article className="run-step-row" key={step.id}><span className="run-step-number">{step.position.toString().padStart(2, "0")}</span><div className="run-step-copy"><strong>{step.title}</strong><small>{step.type} · {step.stepId}</small><small>{dateLabel(step.startedAt)} — {dateLabel(step.completedAt)}</small></div><span className={"run-step-status " + statusTone(step.status)}>{step.status}</span></article>)}
             {steps.length === 0 && <div className="run-detail-message">No step-level records were saved for this run.</div>}
           </section>
           <div className="run-detail-actions"><Link href="/dashboard/workflows">Open workflows</Link><Link href="/dashboard/activity">Back to all activity</Link></div>
