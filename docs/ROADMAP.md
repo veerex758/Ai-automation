@@ -88,6 +88,14 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [ ] Record sanitized evidence and resolve failures before calling staging acceptance complete.
 - [ ] Keep real email delivery as a separate explicitly approved staging test; no live side effects in the smoke script.
 
+### Phase 13 — Workspace activity center: implementation in progress
+- [x] Add an authenticated, private/no-store activity endpoint scoped to the signed-in user's default workspace.
+- [x] Show recent workflow run metadata, status filters, duration, workflow version, and links back to each builder.
+- [x] Keep activity views read-only and omit execution inputs, secrets, and provider payloads.
+- [ ] Add automated endpoint/response tests and run CI checks.
+- [ ] Verify activity behavior against the newly reconnected Supabase project in isolated staging.
+- [ ] Confirm empty, error, and cross-workspace cases using authorized staging identities.
+
 ## Current operating limits
 
 - Live execution is disabled unless the server environment explicitly sets `AIVANTA_LIVE_EXECUTION_ENABLED=true`.
