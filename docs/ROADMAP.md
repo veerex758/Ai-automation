@@ -94,6 +94,8 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [x] Return the active workspace name and let users search recent runs by workflow name or run ID.
 - [x] Render unknown duration values safely and keep non-terminal statuses visually neutral.
 - [x] Keep activity views read-only and omit execution inputs, secrets, and provider payloads.
+- [x] Add workspace-scoped run detail API and a read-only step timeline, excluding raw step results and untrusted error strings.
+- [x] Link recent activity rows to their run detail view and add run-detail security contract tests.
 - [x] Add automated endpoint/response contract tests; CI execution remains pending.
 - [ ] Verify activity behavior against the newly reconnected Supabase project in isolated staging.
 - [ ] Confirm empty, error, and cross-workspace cases using authorized staging identities.
