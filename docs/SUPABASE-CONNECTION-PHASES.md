@@ -15,8 +15,11 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 - [x] Enable RLS on all eight public tables.
 - [x] Add workspace membership helpers and owner/admin policies.
 - [x] Add atomic dry-run persistence and scheduler claim/renew/finalize RPCs.
+- [x] Add source-tracked schema-parity migration for missing canonical constraints, indexes, and workflow-version creator attribution.
+- [x] Tighten workflow-version inserts so `created_by` must match the authenticated user.
 - [x] Restrict scheduler RPC execution to `service_role`.
-- [x] Run Supabase security advisor: zero findings.
+- [x] Run Supabase security advisor after the latest migrations: zero findings.
+- [x] Re-run performance advisor: only informational unused-index notices remain on the empty staging database.
 - [x] Add indexes for the scheduler foreign keys flagged by the performance advisor.
 - [ ] Reconcile the live migration history with the repository's canonical `supabase/migrations` sequence and test a clean replay before treating the schema as fully reproducible.
 
@@ -59,4 +62,4 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 
 ## Current status
 
-Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked, but migration-history/source reconciliation is still an open gate. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
+Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked. Additive schema parity and workflow-version attribution are now source-tracked on the staging branch. Full canonical migration-history reconciliation and a clean replay are still open gates. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
