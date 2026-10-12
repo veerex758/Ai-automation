@@ -19,7 +19,7 @@
 
 ## Migration history reconciliation — do not skip
 
-The repository currently contains 23 SQL migration files, while the staging database ledger contains 18 migration records. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
+The repository currently contains 24 SQL migration files, while the staging database ledger contains 19 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
 
 **Until a migration diff or an explicit, reviewed baseline mapping is completed, do not run `supabase db push` against this staging project.** A naïve push may attempt to replay old source migrations because their version IDs are absent from the remote ledger. Do not manually insert ledger rows merely to make counts match, and do not rerun migrations with destructive DDL.
 
@@ -47,3 +47,12 @@ Safe next steps:
 - Rechecked function execution: scheduler claim/renew/finish/record RPCs remain unavailable to both `anon` and `authenticated`; workspace helper functions are not executable by `anon`. Security advisor returned no findings.
 - The source migration `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql` exists in the branch, but its exact timestamp/version is not present in the remote migration ledger. The resulting grants are present in the live catalog. This is additional evidence that the ledger is not a one-to-one record of the source files; it is **not** permission to fabricate a ledger entry. Keep reconciliation open until a reviewed diff/baseline map is available.
 - Authenticated cross-workspace and application write-path tests remain unverified. Keep scheduler disabled and do not change Production environment variables.
+
+
+## Forward schema-parity fix — 2026-10-13
+
+- Catalog inspection found a real mismatch: `public.workflow_runs.completed_at` was still `NOT NULL`, even though the canonical source migration explicitly allows NULL while a live run is in progress.
+- Added repository migration `20261013001000_aivanta_workflow_run_completion_timestamp_parity.sql` (commit `cbc23b889e6851afdefd7cf2fbfbe2d05302f4e6`) and applied the equivalent idempotent DDL to the isolated staging project under migration name `aivanta_workflow_run_completion_timestamp_parity`.
+- Verified afterward: `workflow_runs.completed_at` is nullable; its completion-order constraint correctly allows NULL or a timestamp at/after `started_at`; `workflow_run_steps.completed_at` remains non-null as intended.
+- The remote migration ledger now has 19 records. The source/ledger mapping is still not a one-to-one match, so keep the broad history reconciliation gate open and do not use blind `db push`.
+- Security advisor was rerun after the DDL and returned no findings.
