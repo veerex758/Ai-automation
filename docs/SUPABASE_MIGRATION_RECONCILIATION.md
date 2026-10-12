@@ -6,7 +6,7 @@ Branch under review: `staging/aivanta-supabase-rebuild`
 
 ## Purpose and safety boundary
 
-The remote Supabase migration ledger contains 18 entries. The staging branch currently tracks 23 SQL files under `supabase/migrations/`. The version/name pairs do not match one-for-one. This is evidence of migration-history drift, not by itself evidence of a missing database object.
+The remote Supabase migration ledger contains 19 entries. The staging branch currently tracks 24 SQL files under `supabase/migrations/`. The version/name pairs do not match one-for-one. This is evidence of migration-history drift, not by itself evidence of a missing database object.
 
 Do not run `supabase migration repair`, reset the remote database, or apply a migration remotely solely to make the ledger resemble the repository. Reconcile by comparing migration contents and the live catalog first. Production is out of scope.
 
@@ -31,13 +31,13 @@ Do not run `supabase migration repair`, reset the remote database, or apply a mi
 | 20261012230528 | aivanta_phase2_updated_at_trigger_parity | Candidate semantic counterpart: `20261012235000_aivanta_updated_at_trigger_parity.sql`. |
 | 20261012230613 | aivanta_phase2_workspace_helper_parity | Candidate semantic counterpart: `20261012235500_aivanta_workspace_helper_parity.sql`. |
 | 20261012230649 | aivanta_phase2_workspace_owner_update_policy | Candidate semantic counterpart: `20261012235900_aivanta_workspace_owner_update_policy.sql`. |
-| 20261012230922 | aivanta_staging_authenticated_least_privilege_grants | Candidate semantic counterpart: `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`. |
+| 20261012230922 | aivanta_staging_authenticated_least_privilege_grants | Candidate semantic counterpart: `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`. |\n| 20261012232845 | aivanta_workflow_run_completion_timestamp_parity | Matched to live nullable `completed_at` and NULL-safe `workflow_runs_completion_order`; tracked counterpart added as `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`. Replay verification still required. |
 
 The notes above are candidate mappings only. A candidate is not considered reconciled until its SQL effects are compared with the tracked migration and live catalog.
 
 ## Repository migration inventory
 
-The branch currently tracks these 23 SQL migrations, in order:
+The branch currently tracks these 24 SQL migrations, in order:
 
 1. `20261010180000_aivanta_workspace_workflow_foundation.sql`
 2. `20261010180100_aivanta_security_performance_hardening.sql`
@@ -68,7 +68,7 @@ The branch currently tracks these 23 SQL migrations, in order:
 - Eight public application tables are present; RLS is enabled on all eight.
 - 23 policies were observed across those tables; policy names and expressions should be compared against the tracked SQL, not only counted.
 - No `anon` table grants were observed in `public`.
-- Expected application constraints and foreign keys were present and validated.
+- Expected application constraints and foreign keys were present and validated. The live `workflow_runs_completion_order` check explicitly allows `completed_at IS NULL`, matching in-progress run semantics; the missing tracked parity migration has now been added to the staging branch.
 - Scheduler `SECURITY DEFINER` functions had empty `search_path` and execution ACLs limited to `service_role` and `postgres`.
 - Workspace helper functions exist with empty `search_path`; the membership/owner helpers are executable by `authenticated`, consistent with their use in RLS policies.
 - Staging tables currently have zero rows, so this audit does not replace realistic authenticated tenant-isolation tests.
@@ -76,7 +76,7 @@ The branch currently tracks these 23 SQL migrations, in order:
 
 ## Remaining work before any remote history repair
 
-- [ ] Compare every candidate mapping against the complete tracked SQL and actual object definitions.
+- [ ] Replay the newly added completion-timestamp parity migration in the isolated CI database and confirm the run-history constraint matches live staging.\n- [ ] Compare every remaining candidate mapping against the complete tracked SQL and actual object definitions.
 - [ ] Check table/column defaults, constraints, indexes, triggers, policies, function bodies, and function/table ACLs.
 - [ ] Distinguish equivalent consolidated migrations from genuine missing or extra DDL.
 - [ ] Have the final mapping reviewed before any ledger repair; prefer no remote write if the live schema is correct and the ledger discrepancy is only historical.
