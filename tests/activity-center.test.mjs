@@ -37,3 +37,20 @@ test("activity UI supports status filtering and links runs to their builder", ()
   assert.match(page, /\/dashboard\/workflows\/\$\{run\.workflowId\}/);
   assert.match(page, /No workflow runs yet/);
 });
+
+test("activity response includes workspace context without exposing run payloads", () => {
+  assert.match(endpoint, /workspace:\s*\{\s*id: workspace\.id, name: workspace\.name\s*\}/);
+  assert.match(page, /setWorkspaceName\(result\.workspace\.name\.trim\(\)\)/);
+});
+
+test("activity UI searches workflow names and run identifiers", () => {
+  assert.match(page, /type="search"/);
+  assert.match(page, /run\.workflowName \$\{run\.id\} \$\{run\.workflowId\}/);
+  assert.match(page, /matchesStatus && matchesSearch/);
+});
+
+test("activity duration rendering tolerates missing or invalid values", () => {
+  assert.match(page, /function formatDuration\(value: number \| null\)/);
+  assert.match(page, /typeof value !== "number" \|\| !Number\.isFinite\(value\)/);
+  assert.match(page, /formatDuration\(run\.durationMs\)/);
+});
