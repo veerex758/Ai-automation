@@ -123,7 +123,7 @@ The source migrations are now grouped against the 24 live ledger entries by the 
 
 - [x] Clean-replay the prior 25-file chain in isolated local Supabase; database reset and final Supabase status passed on commit `71fe8e74e5189b565e06cc20eb1360c0abbe04a9`.
 - [x] Clean-replay the 27-file chain, including write-path hardening, in isolated local Supabase; `supabase db reset --local` and `supabase status` passed in Actions run `38323682448` at commit `aa02621d45addfb6a038d38acd05df70d4e23a47`.
-- [x] Track/apply FK index parity for the three extra live indexes and restore the missing workflow-version history index; catalog names/definitions now align with all 19 explicit source indexes.
+- [x] Track/apply FK index parity for the three extra live indexes and restore the missing workflow-version history index; catalog names/definitions now align with all 18 explicit source indexes.
 - [ ] Clean-replay the current 29-file chain; Actions run `38324304643` is queued.
 - [ ] Finish line-by-line mapping of all 20 remote ledger entries to the 25 source migrations; the initial baseline and index ledger rows are grouped candidates, not final approvals.
 - [x] Capture and inspect live table/column inventory, constraints/FKs, indexes, triggers, RLS policies, function definitions/search paths, and table/function ACLs. Security advisor returns zero findings; scheduler ACLs are service-role-only.
