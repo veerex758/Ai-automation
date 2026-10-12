@@ -42,3 +42,12 @@ test("run detail page shows summary, recorded steps, and safe empty/error states
 test("activity rows link to the detail page", () => {
   assert.match(listPage, /\/dashboard\/activity\/\$\{run\.id\}/);
 });
+
+
+test("run detail renders in-progress and skipped states neutrally", () => {
+  assert.match(detailPage, /function statusTone\(status: string\)/);
+  assert.match(detailPage, /return "neutral"/);
+  assert.match(detailPage, /startedAt: string \| null/);
+  assert.match(detailPage, /if \(!value\) return "In progress"/);
+  assert.match(await readFile(fileURLToPath(new URL("../app/dashboard/activity/[runId]/run-detail.css", import.meta.url)), "utf8"), /run-detail-status\.neutral/);
+});
