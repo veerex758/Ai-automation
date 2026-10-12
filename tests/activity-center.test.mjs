@@ -47,7 +47,7 @@ test("activity response includes workspace context without exposing run payloads
 
 test("activity UI searches workflow names and run identifiers", () => {
   assert.match(page, /type="search"/);
-  assert.match(page, /run\.workflowName \$\{run\.id\} \$\{run\.workflowId\}\}\.toLowerCase\(\)\.includes/);
+  assert.match(page, /run\.workflowName\} \$\{run\.id\} \$\{run\.workflowId\}\}\.toLowerCase\(\)\.includes/);
   assert.match(page, /matchesStatus && matchesSearch/);
 });
 
