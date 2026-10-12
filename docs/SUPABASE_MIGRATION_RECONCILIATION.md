@@ -31,8 +31,9 @@ Do not run `supabase migration repair`, reset the remote database, or apply a mi
 | 20261012230528 | aivanta_phase2_updated_at_trigger_parity | Candidate semantic counterpart: `20261012235000_aivanta_updated_at_trigger_parity.sql`. |
 | 20261012230613 | aivanta_phase2_workspace_helper_parity | Candidate semantic counterpart: `20261012235500_aivanta_workspace_helper_parity.sql`. |
 | 20261012230649 | aivanta_phase2_workspace_owner_update_policy | Candidate semantic counterpart: `20261012235900_aivanta_workspace_owner_update_policy.sql`. |
-| 20261012230922 | aivanta_staging_authenticated_least_privilege_grants | Candidate semantic counterpart: `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`. |\n| 20261012232845 | aivanta_workflow_run_completion_timestamp_parity | Matched to live nullable `completed_at` and NULL-safe `workflow_runs_completion_order`; tracked counterpart is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`. |\n| 20261012233319 | aivanta_run_step_insert_policy_parity | Forward-fix applied to staging after catalog comparison found the live INSERT policy had regressed to dry-run-only. Tracked counterpart: `20261013002000_aivanta_run_step_insert_policy_parity.sql`. Replay verification still required. |
-| 20261012233319 | aivanta_run_step_insert_policy_parity | Matched to tracked migration `20261013002000_aivanta_run_step_insert_policy_parity.sql`; live INSERT policy was verified against the tracked lifecycle conditions. |
+| 20261012230922 | aivanta_staging_authenticated_least_privilege_grants | Candidate semantic counterpart: `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`. |
+| 20261012232845 | aivanta_workflow_run_completion_timestamp_parity | Matched to live nullable `completed_at` and NULL-safe `workflow_runs_completion_order`; tracked counterpart is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`. |
+| 20261012233319 | aivanta_run_step_insert_policy_parity | Forward-fix applied to staging after catalog comparison found the live INSERT policy had regressed to dry-run-only. Matched to tracked migration `20261013002000_aivanta_run_step_insert_policy_parity.sql`; live INSERT policy was re-queried and verified against the tracked lifecycle conditions. Clean replay is still pending. |
 
 The notes above are candidate mappings only. A candidate is not considered reconciled until its SQL effects are compared with the tracked migration and live catalog.
 
@@ -63,7 +64,7 @@ The branch currently tracks these 25 SQL migrations, in order:
 21. `20261012235000_aivanta_updated_at_trigger_parity.sql`
 22. `20261012235500_aivanta_workspace_helper_parity.sql`
 23. `20261012235900_aivanta_workspace_owner_update_policy.sql`
-24. `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`\n25. `20261013002000_aivanta_run_step_insert_policy_parity.sql`
+24. `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`
 25. `20261013002000_aivanta_run_step_insert_policy_parity.sql`
 
 ## Live catalog evidence captured
@@ -74,21 +75,22 @@ The branch currently tracks these 25 SQL migrations, in order:
 - Expected application constraints and foreign keys were present and validated. The live `workflow_runs_completion_order` check explicitly allows `completed_at IS NULL`, matching in-progress run semantics; the missing tracked parity migration has now been added to the staging branch.
 - Scheduler `SECURITY DEFINER` functions had empty `search_path` and execution ACLs limited to `service_role` and `postgres`.
 - Workspace helper functions exist with empty `search_path`; the membership/owner helpers are executable by `authenticated`, consistent with their use in RLS policies.
-- Staging tables currently have zero rows, so this audit does not replace realistic authenticated tenant-isolation tests.
-- A clean isolated replay previously passed at commit `665a77df361188a22904c86647294d84c05460ba`; this predates the tracked completion-timestamp parity migration, so replay of the current 25-file inventory still needs confirmation.
+- Staging tables are normally empty. Ran a rollback-only SQL acceptance test using two temporary Auth users and separate workspaces: workspace B could not read workspace A's workflow or run step, could not insert into workspace A, and workspace A's owner could insert an authorized step into its own running live run. The transaction was rolled back, and a follow-up query confirmed zero leftover test users, workflows, runs, or steps. This validates PostgreSQL RLS behavior but does not replace end-to-end browser/API authentication tests.
+- A clean isolated replay previously passed at commit `665a77df361188a22904c86647294d84c05460ba`; it predates the current forward parity migrations. Current clean replay run `38322852271` was cancelled by concurrent branch pushes. A replacement replay run `38322852271` is not current; check the latest Actions run before marking replay green.
 - The live `workflow_runs_completion_order` constraint matches `CHECK (completed_at IS NULL OR completed_at >= started_at)`; `completed_at` is nullable. This confirms live schema parity, not clean-replay success.
 - The run-step INSERT policy now matches the tracked lifecycle logic: dry-run steps require a finished dry-run parent owned by the caller; live-run steps require a running live parent owned by the caller. This catalog check is not a substitute for authenticated end-to-end tests.
-- The redundant second completion-timestamp migration is not present in the current branch tree. The canonical tracked file is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, matching the remote ledger name. No duplicate ledger entry was created.\n- Rechecked scheduler RPC ACLs after the policy forward-fix: scheduler claim/renew/finish/record functions are not executable by `anon` or `authenticated` and are executable by `service_role`; dry-run and save-definition RPCs are executable by `authenticated` and not by `anon`. Security advisor returned no findings after the policy fix.
-- The latest verified Vercel preview deployment for commit `eeff55682d07a0d043c3d4783a87f1513b8c2390` is `READY`; its `/api/health` endpoint returned HTTP 200.
+- The redundant second completion-timestamp migration is not present in the current branch tree. The canonical tracked file is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, matching the remote ledger name. No duplicate ledger entry was created.
+- Rechecked scheduler RPC ACLs after the policy forward-fix: scheduler claim/renew/finish/record functions are not executable by `anon` or `authenticated` and are executable by `service_role`; dry-run and save-definition RPCs are executable by `authenticated` and not by `anon`. Security advisor returned no findings after the policy fix.
+- The last confirmed READY Vercel preview deployment for commit `eeff55682d07a0d043c3d4783a87f1513b8c2390` returned HTTP 200 from `/api/health`. Newer deployments for the active branch were queued/building at the last check; verify the latest one before calling preview deployment green.
 
 ## Remaining work before any remote history repair
 
-- [ ] Replay all 25 tracked migrations in the isolated CI database; confirm the completion-timestamp migration replays cleanly and the final run-history constraint matches live staging.
+- [ ] Obtain a completed green clean replay for all 25 tracked migrations on the latest staging branch commit. Current workflow concurrency was cancelling runs during rapid commits; the workflow was updated to trigger only for migration/config changes, so docs-only commits no longer cancel replay.
 - [ ] Compare every remaining candidate mapping against the complete tracked SQL and actual object definitions, including the newly recorded run-step policy parity migration.
 - [ ] Check table/column defaults, constraints, indexes, triggers, policies, function bodies, and function/table ACLs.
 - [ ] Distinguish equivalent consolidated migrations from genuine missing or extra DDL.
 - [ ] Have the final mapping reviewed before any ledger repair; prefer no remote write if the live schema is correct and the ledger discrepancy is only historical.
-- [ ] Run authenticated staging tests using separate authorized users/workspaces to verify cross-workspace reads and writes are denied.
+- [x] Run rollback-only PostgreSQL RLS acceptance tests using two separate test users/workspaces; cross-workspace reads and writes denied, authorized live-run step insert allowed, and all test fixtures rolled back.\n- [ ] Run full authenticated staging API/browser tests with actual sign-in sessions.
 - [ ] Verify Supabase Auth redirect allow-list and protected-preview smoke tests using approved access. Do not weaken Vercel SSO protection.
 
 No remote database mutation is authorized by this reconciliation document. Production remains untouched.
