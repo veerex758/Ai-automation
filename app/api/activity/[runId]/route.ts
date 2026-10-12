@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const workspace = await getOrCreateDefaultWorkspace(supabase, user);
     const { data: run, error: runError } = await supabase
       .from("workflow_runs")
-      .select("id, workflow_id, mode, status, workflow_version, started_at, completed_at, created_at, duration_ms, error_message")
+      .select("id, workflow_id, mode, status, workflow_version, started_at, completed_at, created_at, duration_ms")
       .eq("id", runId)
       .eq("workspace_id", workspace.id)
       .maybeSingle();
@@ -53,7 +53,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         completedAt: run.completed_at,
         createdAt: run.created_at,
         durationMs: run.duration_ms,
-        errorMessage: run.error_message,
       },
       steps: (steps ?? []).map((step) => ({
         id: step.id,
