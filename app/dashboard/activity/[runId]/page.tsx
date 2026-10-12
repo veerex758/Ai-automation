@@ -16,7 +16,6 @@ type RunDetail = {
   completedAt: string;
   createdAt: string;
   durationMs: number | null;
-  errorMessage: string | null;
 };
 type RunStep = {
   id: string;
@@ -85,7 +84,6 @@ export default function RunDetailPage() {
               <div><span>Completed</span><strong>{dateLabel(run.completedAt)}</strong></div>
               <div><span>Recorded</span><strong>{dateLabel(run.createdAt)}</strong></div>
             </div>
-            {run.errorMessage && <div className="run-detail-error run-recorded-error"><strong>Recorded error</strong><p>{run.errorMessage}</p></div>}
           </section>
           <div className="run-steps-heading"><div><h2>Recorded steps</h2><p>Step metadata only. Inputs, outputs, and secret values are intentionally excluded.</p></div><span>{steps.length} {steps.length === 1 ? "step" : "steps"}</span></div>
           <section className="run-steps-list">
