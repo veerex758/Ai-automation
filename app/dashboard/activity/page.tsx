@@ -95,7 +95,7 @@ export default function ActivityPage() {
               <span className="activity-mode">{run.mode === "dry_run" ? "Dry run" : run.mode}</span>
               <span className={"activity-status " + (run.status === "succeeded" ? "success" : run.status === "failed" ? "failure" : "neutral")}><i />{run.status}</span>
               <span>v{run.workflowVersion}</span><span>{formatDuration(run.durationMs)}</span><time dateTime={run.createdAt}>{formatDate(run.createdAt)}</time>
-              <Link className="activity-open" href={`/dashboard/workflows/${run.workflowId}`} aria-label={`Open ${run.workflowName} builder`}>Open ↗</Link>
+              <Link className="activity-open" href={`/dashboard/activity/${run.id}`} aria-label={`View ${run.workflowName} run details`}>Details ↗</Link>
             </article>)}
             {!loading && !error && visibleRuns.length === 0 && <div className="activity-empty"><strong>{runs.length ? "No runs match this filter" : "No workflow runs yet"}</strong><p>{runs.length ? "Choose another status to see more activity." : "Run a workflow test from the builder and its result will appear here."}</p>{!runs.length && <Link className="create-button" href="/dashboard">Open dashboard <span>↗</span></Link>}</div>}
           </div>
