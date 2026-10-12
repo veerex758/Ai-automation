@@ -72,7 +72,7 @@ The branch currently tracks these 24 SQL migrations, in order:
 - Scheduler `SECURITY DEFINER` functions had empty `search_path` and execution ACLs limited to `service_role` and `postgres`.
 - Workspace helper functions exist with empty `search_path`; the membership/owner helpers are executable by `authenticated`, consistent with their use in RLS policies.
 - Staging tables currently have zero rows, so this audit does not replace realistic authenticated tenant-isolation tests.
-- A clean isolated replay previously passed at commit `665a77df361188a22904c86647294d84c05460ba`.
+- A clean isolated replay previously passed at commit `665a77df361188a22904c86647294d84c05460ba`; this predates the newly added completion-timestamp migration, so the new migration still needs its own replay confirmation.\n- The live `workflow_runs_completion_order` constraint was re-queried after adding the tracked parity migration and matches `CHECK (completed_at IS NULL OR completed_at >= started_at)`; `completed_at` is nullable. This confirms live schema parity, not clean-replay success.\n- The latest Vercel preview deployment for commit `170e2339f7e1718c25c7fad6a2bcbdcddcbc3080` is `READY` and its combined Vercel status is `success`.
 
 ## Remaining work before any remote history repair
 
