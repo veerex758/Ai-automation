@@ -31,7 +31,7 @@ Do not run `supabase migration repair`, reset the remote database, or apply a mi
 | 20261012230528 | aivanta_phase2_updated_at_trigger_parity | Candidate semantic counterpart: `20261012235000_aivanta_updated_at_trigger_parity.sql`. |
 | 20261012230613 | aivanta_phase2_workspace_helper_parity | Candidate semantic counterpart: `20261012235500_aivanta_workspace_helper_parity.sql`. |
 | 20261012230649 | aivanta_phase2_workspace_owner_update_policy | Candidate semantic counterpart: `20261012235900_aivanta_workspace_owner_update_policy.sql`. |
-| 20261012230922 | aivanta_staging_authenticated_least_privilege_grants | Candidate semantic counterpart: `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`. |\n| 20261012232845 | aivanta_workflow_run_completion_timestamp_parity | Matched to live nullable `completed_at` and NULL-safe `workflow_runs_completion_order`; tracked counterpart added as `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`. Replay verification still required. |
+| 20261012230922 | aivanta_staging_authenticated_least_privilege_grants | Candidate semantic counterpart: `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`. |\n| 20261012232845 | aivanta_workflow_run_completion_timestamp_parity | Matched to live nullable `completed_at` and NULL-safe `workflow_runs_completion_order`; tracked counterpart is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`. |\n| 20261012233319 | aivanta_run_step_insert_policy_parity | Forward-fix applied to staging after catalog comparison found the live INSERT policy had regressed to dry-run-only. Tracked counterpart: `20261013002000_aivanta_run_step_insert_policy_parity.sql`. Replay verification still required. |
 | 20261012233319 | aivanta_run_step_insert_policy_parity | Matched to tracked migration `20261013002000_aivanta_run_step_insert_policy_parity.sql`; live INSERT policy was verified against the tracked lifecycle conditions. |
 
 The notes above are candidate mappings only. A candidate is not considered reconciled until its SQL effects are compared with the tracked migration and live catalog.
@@ -63,13 +63,13 @@ The branch currently tracks these 25 SQL migrations, in order:
 21. `20261012235000_aivanta_updated_at_trigger_parity.sql`
 22. `20261012235500_aivanta_workspace_helper_parity.sql`
 23. `20261012235900_aivanta_workspace_owner_update_policy.sql`
-24. `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`
+24. `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`\n25. `20261013002000_aivanta_run_step_insert_policy_parity.sql`
 25. `20261013002000_aivanta_run_step_insert_policy_parity.sql`
 
 ## Live catalog evidence captured
 
 - Eight public application tables are present; RLS is enabled on all eight.
-- 23 policies were observed across those tables; policy names and expressions should be compared against the tracked SQL, not only counted.
+- 23 policies are present across the eight tables. A comparison caught a substantive mismatch in `workflow_run_steps`: the live INSERT policy was dry-run-only despite tracked hardening migrations allowing authenticated creators to insert steps for their own running live runs. Applied a forward-only staging migration and re-queried the catalog; the policy now checks workspace membership, parent run/workspace identity, creator identity, and mode/status-specific step states.
 - No `anon` table grants were observed in `public`.
 - Expected application constraints and foreign keys were present and validated. The live `workflow_runs_completion_order` check explicitly allows `completed_at IS NULL`, matching in-progress run semantics; the missing tracked parity migration has now been added to the staging branch.
 - Scheduler `SECURITY DEFINER` functions had empty `search_path` and execution ACLs limited to `service_role` and `postgres`.
@@ -78,13 +78,13 @@ The branch currently tracks these 25 SQL migrations, in order:
 - A clean isolated replay previously passed at commit `665a77df361188a22904c86647294d84c05460ba`; this predates the tracked completion-timestamp parity migration, so replay of the current 25-file inventory still needs confirmation.
 - The live `workflow_runs_completion_order` constraint matches `CHECK (completed_at IS NULL OR completed_at >= started_at)`; `completed_at` is nullable. This confirms live schema parity, not clean-replay success.
 - The run-step INSERT policy now matches the tracked lifecycle logic: dry-run steps require a finished dry-run parent owned by the caller; live-run steps require a running live parent owned by the caller. This catalog check is not a substitute for authenticated end-to-end tests.
-- A redundant second completion-timestamp migration was removed from source history; the canonical tracked file is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, which matches the remote ledger version. No duplicate ledger entry was created.
+- The redundant second completion-timestamp migration is not present in the current branch tree. The canonical tracked file is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, matching the remote ledger name. No duplicate ledger entry was created.\n- Rechecked scheduler RPC ACLs after the policy forward-fix: scheduler claim/renew/finish/record functions are not executable by `anon` or `authenticated` and are executable by `service_role`; dry-run and save-definition RPCs are executable by `authenticated` and not by `anon`. Security advisor returned no findings after the policy fix.
 - The latest verified Vercel preview deployment for commit `eeff55682d07a0d043c3d4783a87f1513b8c2390` is `READY`; its `/api/health` endpoint returned HTTP 200.
 
 ## Remaining work before any remote history repair
 
 - [ ] Replay all 25 tracked migrations in the isolated CI database; confirm the completion-timestamp migration replays cleanly and the final run-history constraint matches live staging.
-- [ ] Compare every remaining candidate mapping against the complete tracked SQL and actual object definitions.
+- [ ] Compare every remaining candidate mapping against the complete tracked SQL and actual object definitions, including the newly recorded run-step policy parity migration.
 - [ ] Check table/column defaults, constraints, indexes, triggers, policies, function bodies, and function/table ACLs.
 - [ ] Distinguish equivalent consolidated migrations from genuine missing or extra DDL.
 - [ ] Have the final mapping reviewed before any ledger repair; prefer no remote write if the live schema is correct and the ledger discrepancy is only historical.
