@@ -88,6 +88,20 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [ ] Record sanitized evidence and resolve failures before calling staging acceptance complete.
 - [ ] Keep real email delivery as a separate explicitly approved staging test; no live side effects in the smoke script.
 
+## Supabase staging connection checkpoint — 2026-10-13
+
+- [x] Confirm the dedicated `aivanta-staging` Supabase project is active and healthy (`eu-west-1`).
+- [x] Confirm the remote project contains the eight expected public application tables and that Row Level Security is enabled on each.
+- [x] Inspect remote policies: access is limited to the `authenticated` role; no table grants to `anon` were found in the public schema.
+- [x] Run Supabase security advisors: no security lints were reported.
+- [x] Confirm the Vercel project has the staging Supabase URL and publishable key scoped to Preview, while the existing production environment variables remain scoped to Production.
+- [x] Confirm a Vercel deployment for `staging/aivanta-supabase-rebuild` is READY.
+- [ ] Run the HTTP staging smoke suite and authenticated browser acceptance tests. The Vercel project has SSO protection enabled for non-custom domains, so tests must use an approved protected-preview access method rather than weaken deployment protection.
+- [ ] Reconcile remote Supabase migration history before relying on future remote migration automation: the remote migration ledger currently lists 18 entries, while the staging branch tracks 22 SQL migration files with different version/name pairs. Do not use migration repair, reset, or destructive changes until each remote migration has been mapped to its tracked equivalent and reviewed.
+- [ ] Verify Supabase Auth redirect URLs and complete workspace-isolation tests with dedicated staging identities.
+
+These checks target staging only. No production project, production environment variables, or live execution settings were changed during this checkpoint.
+ 
 ## Current operating limits
 
 - Live execution is disabled unless the server environment explicitly sets `AIVANTA_LIVE_EXECUTION_ENABLED=true`.
