@@ -2,12 +2,6 @@ name: Supabase staging schema diff
 
 on:
   workflow_dispatch:
-  push:
-    branches: [staging/aivanta-supabase-rebuild]
-    paths:
-      - ".github/workflows/supabase-staging-schema-diff.yml"
-      - "supabase/migrations/**"
-      - "supabase/config.toml"
 
 permissions:
   contents: read
