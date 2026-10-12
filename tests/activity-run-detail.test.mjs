@@ -46,7 +46,7 @@ test("activity rows link to the detail page", () => {
 });
 
 
-test("run detail renders in-progress and skipped states neutrally", () => {
+test("run detail renders in-progress and skipped states neutrally", async () => {
   assert.match(detailPage, /function statusTone\(status: string\)/);
   assert.match(detailPage, /return "neutral"/);
   assert.match(detailPage, /startedAt: string \| null/);
