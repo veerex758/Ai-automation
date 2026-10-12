@@ -37,3 +37,13 @@ Safe next steps:
 - Prove a user from workspace A cannot read or mutate workspace B data.
 - Verify workflow save/version persistence and run-history writes through the application.
 - Test the authenticated scheduler path only after the other staging gates pass.
+
+
+## Follow-up verification — 2026-10-13
+
+- Rechecked the newest Preview deployment for commit `47d79a54dd5f93ee76151b42be57af06c5a4ce92`: deployment state is `READY`; `/api/health` returned HTTP 200 with `{"status":"ok","service":"aivanta"}`.
+- Rechecked core-table RLS: 8 of 8 expected tables have RLS enabled.
+- Rechecked table grants: `anon` has no SELECT or INSERT privileges on any of the eight core tables. Authenticated grants match the intended least-privilege pattern (no UPDATE/DELETE on immutable workflow versions or audit events; no DELETE on runs, run steps, schedules, or workspaces).
+- Rechecked function execution: scheduler claim/renew/finish/record RPCs remain unavailable to both `anon` and `authenticated`; workspace helper functions are not executable by `anon`. Security advisor returned no findings.
+- The source migration `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql` exists in the branch, but its exact timestamp/version is not present in the remote migration ledger. The resulting grants are present in the live catalog. This is additional evidence that the ledger is not a one-to-one record of the source files; it is **not** permission to fabricate a ledger entry. Keep reconciliation open until a reviewed diff/baseline map is available.
+- Authenticated cross-workspace and application write-path tests remain unverified. Keep scheduler disabled and do not change Production environment variables.
