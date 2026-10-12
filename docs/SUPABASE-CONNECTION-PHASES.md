@@ -21,7 +21,9 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 - [x] Run Supabase security advisor after the latest migrations: zero findings.
 - [x] Re-run performance advisor: only informational unused-index notices remain on the empty staging database.
 - [x] Add indexes for the scheduler foreign keys flagged by the performance advisor.
-- [ ] Reconcile the live migration history with the repository's canonical `supabase/migrations` sequence and test a clean replay before treating the schema as fully reproducible.
+- [x] Add `supabase/config.toml` for an isolated local Supabase environment and a CI workflow that resets a fresh local database and replays every tracked migration.
+- [ ] Obtain a green run of the clean-replay workflow; the workflow has been added but has not yet been observed passing.
+- [ ] Reconcile the remote connector-applied migration ledger with the canonical repository sequence. The current remote ledger contains connector-generated migration versions, not the repository's canonical timestamps; do not blindly replay canonical migrations over the populated staging database or manually rewrite migration history before a schema diff and reviewed repair plan.
 
 ## Phase 3 — Supabase Auth configuration
 
@@ -62,4 +64,4 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 
 ## Current status
 
-Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked. Additive schema parity and workflow-version attribution are now source-tracked on the staging branch. Full canonical migration-history reconciliation and a clean replay are still open gates. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
+Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked. Additive schema parity and workflow-version attribution are source-tracked on the staging branch. A local Supabase clean-replay CI workflow and config have been added, but a passing run is not yet confirmed. The live staging migration ledger still differs from the repository's canonical migration timestamps, so a reviewed schema comparison and history-reconciliation plan remain required. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
