@@ -6,7 +6,7 @@ Branch under review: `staging/aivanta-supabase-rebuild`
 
 ## Purpose and safety boundary
 
-The remote Supabase migration ledger contains 19 entries. The staging branch currently tracks 24 SQL files under `supabase/migrations/`. The version/name pairs do not match one-for-one. This is evidence of migration-history drift, not by itself evidence of a missing database object.
+The remote Supabase migration ledger contains 20 entries. The staging branch currently tracks 25 SQL files under `supabase/migrations/`. The version/name pairs do not match one-for-one. This is evidence of migration-history drift, not by itself evidence of a missing database object.
 
 Do not run `supabase migration repair`, reset the remote database, or apply a migration remotely solely to make the ledger resemble the repository. Reconcile by comparing migration contents and the live catalog first. Production is out of scope.
 
@@ -32,12 +32,13 @@ Do not run `supabase migration repair`, reset the remote database, or apply a mi
 | 20261012230613 | aivanta_phase2_workspace_helper_parity | Candidate semantic counterpart: `20261012235500_aivanta_workspace_helper_parity.sql`. |
 | 20261012230649 | aivanta_phase2_workspace_owner_update_policy | Candidate semantic counterpart: `20261012235900_aivanta_workspace_owner_update_policy.sql`. |
 | 20261012230922 | aivanta_staging_authenticated_least_privilege_grants | Candidate semantic counterpart: `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`. |\n| 20261012232845 | aivanta_workflow_run_completion_timestamp_parity | Matched to live nullable `completed_at` and NULL-safe `workflow_runs_completion_order`; tracked counterpart added as `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`. Replay verification still required. |
+| 20261012233319 | aivanta_run_step_insert_policy_parity | Matched to tracked migration `20261013002000_aivanta_run_step_insert_policy_parity.sql`; live INSERT policy was verified against the tracked lifecycle conditions. |
 
 The notes above are candidate mappings only. A candidate is not considered reconciled until its SQL effects are compared with the tracked migration and live catalog.
 
 ## Repository migration inventory
 
-The branch currently tracks these 24 SQL migrations, in order:
+The branch currently tracks these 25 SQL migrations, in order:
 
 1. `20261010180000_aivanta_workspace_workflow_foundation.sql`
 2. `20261010180100_aivanta_security_performance_hardening.sql`
@@ -63,6 +64,7 @@ The branch currently tracks these 24 SQL migrations, in order:
 22. `20261012235500_aivanta_workspace_helper_parity.sql`
 23. `20261012235900_aivanta_workspace_owner_update_policy.sql`
 24. `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`
+25. `20261013002000_aivanta_run_step_insert_policy_parity.sql`
 
 ## Live catalog evidence captured
 
@@ -73,14 +75,15 @@ The branch currently tracks these 24 SQL migrations, in order:
 - Scheduler `SECURITY DEFINER` functions had empty `search_path` and execution ACLs limited to `service_role` and `postgres`.
 - Workspace helper functions exist with empty `search_path`; the membership/owner helpers are executable by `authenticated`, consistent with their use in RLS policies.
 - Staging tables currently have zero rows, so this audit does not replace realistic authenticated tenant-isolation tests.
-- A clean isolated replay previously passed at commit `665a77df361188a22904c86647294d84c05460ba`; this predates the tracked completion-timestamp parity migration, so replay of the current 24-file inventory still needs confirmation.
+- A clean isolated replay previously passed at commit `665a77df361188a22904c86647294d84c05460ba`; this predates the tracked completion-timestamp parity migration, so replay of the current 25-file inventory still needs confirmation.
 - The live `workflow_runs_completion_order` constraint matches `CHECK (completed_at IS NULL OR completed_at >= started_at)`; `completed_at` is nullable. This confirms live schema parity, not clean-replay success.
+- The run-step INSERT policy now matches the tracked lifecycle logic: dry-run steps require a finished dry-run parent owned by the caller; live-run steps require a running live parent owned by the caller. This catalog check is not a substitute for authenticated end-to-end tests.
 - A redundant second completion-timestamp migration was removed from source history; the canonical tracked file is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, which matches the remote ledger version. No duplicate ledger entry was created.
 - The latest verified Vercel preview deployment for commit `eeff55682d07a0d043c3d4783a87f1513b8c2390` is `READY`; its `/api/health` endpoint returned HTTP 200.
 
 ## Remaining work before any remote history repair
 
-- [ ] Replay all 24 tracked migrations in the isolated CI database; confirm the completion-timestamp migration replays cleanly and the final run-history constraint matches live staging.
+- [ ] Replay all 25 tracked migrations in the isolated CI database; confirm the completion-timestamp migration replays cleanly and the final run-history constraint matches live staging.
 - [ ] Compare every remaining candidate mapping against the complete tracked SQL and actual object definitions.
 - [ ] Check table/column defaults, constraints, indexes, triggers, policies, function bodies, and function/table ACLs.
 - [ ] Distinguish equivalent consolidated migrations from genuine missing or extra DDL.
