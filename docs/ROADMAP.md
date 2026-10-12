@@ -91,6 +91,8 @@ Aivanta is being built as a staged business automation platform: dependable conv
 ### Phase 13 — Workspace activity center: implementation in progress
 - [x] Add an authenticated, private/no-store activity endpoint scoped to the signed-in user's default workspace.
 - [x] Show recent workflow run metadata, status filters, duration, workflow version, and links back to each builder.
+- [x] Return the active workspace name and let users search recent runs by workflow name or run ID.
+- [x] Render unknown duration values safely and keep non-terminal statuses visually neutral.
 - [x] Keep activity views read-only and omit execution inputs, secrets, and provider payloads.
 - [x] Add automated endpoint/response contract tests; CI execution remains pending.
 - [ ] Verify activity behavior against the newly reconnected Supabase project in isolated staging.
