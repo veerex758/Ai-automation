@@ -18,6 +18,7 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 - [x] Add source-tracked schema-parity migration for missing canonical constraints, indexes, and workflow-version creator attribution.
 - [x] Tighten workflow-version inserts so `created_by` must match the authenticated user.
 - [x] Restrict scheduler RPC execution to `service_role`.
+- [x] Verify live function grants: scheduler RPCs are not executable by `anon` or `authenticated`; dry-run RPC is executable by `authenticated` and not `anon`.
 - [x] Run Supabase security advisor after the latest migrations: zero findings.
 - [x] Re-run performance advisor: only informational unused-index notices remain on the empty staging database.
 - [x] Add indexes for the scheduler foreign keys flagged by the performance advisor.
