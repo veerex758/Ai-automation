@@ -16,6 +16,7 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 - [x] Add workspace membership helpers and owner/admin policies.
 - [x] Add atomic dry-run persistence and scheduler claim/renew/finalize RPCs.
 - [x] Add source-tracked schema-parity migration for missing canonical constraints, indexes, and workflow-version creator attribution.
+- [x] Restore the missing default-workspace trigger on `auth.users`, the canonical `save_workflow_definition` RPC, and `updated_at` triggers for workspaces/workflows; verify the trigger/RPC definitions and grants in staging.
 - [x] Tighten workflow-version inserts so `created_by` must match the authenticated user.
 - [x] Restrict scheduler RPC execution to `service_role`.
 - [x] Verify live function grants: scheduler RPCs are not executable by `anon` or `authenticated`; dry-run RPC is executable by `authenticated` and not `anon`.
@@ -23,7 +24,8 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 - [x] Re-run performance advisor: only informational unused-index notices remain on the empty staging database.
 - [x] Add indexes for the scheduler foreign keys flagged by the performance advisor.
 - [x] Add `supabase/config.toml` for an isolated local Supabase environment and a CI workflow that resets a fresh local database and replays every tracked migration.
-- [x] Pass the full clean-replay GitHub Actions workflow: isolated local database reset, replay of all tracked migrations, local status check, and cleanup all succeeded.
+- [x] Pass the full clean-replay GitHub Actions workflow for the initial tracked migration set: isolated local database reset, replay, local status check, and cleanup all succeeded.
+- [ ] Confirm the latest replay after adding the missing trigger/RPC parity migrations is green.
 - [ ] Reconcile the remote connector-applied migration ledger with the canonical repository sequence. The current remote ledger contains connector-generated migration versions, not the repository's canonical timestamps; do not blindly replay canonical migrations over the populated staging database or manually rewrite migration history before a schema diff and reviewed repair plan.
 
 ## Phase 3 — Supabase Auth configuration
@@ -65,4 +67,4 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 
 ## Current status
 
-Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked. Additive schema parity and workflow-version attribution are source-tracked on the staging branch. The isolated clean-replay CI completed successfully: fresh local database reset, all tracked migrations replayed, local status check passed, and cleanup succeeded. The live staging migration ledger still differs from the repository's canonical migration timestamps, so a reviewed schema comparison and history-reconciliation plan remain required. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
+Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked. Additive schema parity, workflow-version attribution, default-workspace creation, workflow-save RPC, and updated-at trigger corrections are source-tracked on the staging branch. The isolated clean-replay CI completed successfully: fresh local database reset, all tracked migrations replayed, local status check passed, and cleanup succeeded. The live staging migration ledger still differs from the repository's canonical migration timestamps, so a reviewed schema comparison and history-reconciliation plan remain required. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
