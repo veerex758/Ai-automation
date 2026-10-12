@@ -19,7 +19,7 @@
 
 ## Migration history reconciliation — do not skip
 
-The repository currently contains 25 SQL migration files, while the staging database ledger contains 20 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
+The repository currently contains 27 SQL migration files, while the staging database ledger contains 22 migration records after the two RPC write-path hardening forward migrations. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
 
 **Until a migration diff or an explicit, reviewed baseline mapping is completed, do not run `supabase db push` against this staging project.** A naïve push may attempt to replay old source migrations because their version IDs are absent from the remote ledger. Do not manually insert ledger rows merely to make counts match, and do not rerun migrations with destructive DDL.
 
@@ -41,12 +41,12 @@ Safe next steps:
 
 ## Follow-up verification — 2026-10-13
 
-- Rechecked the newest Preview deployment for commit `47d79a54dd5f93ee76151b42be57af06c5a4ce92`: deployment state is `READY`; `/api/health` returned HTTP 200 with `{"status":"ok","service":"aivanta"}`.
+- Rechecked the app-code Preview deployment for commit `aa02621d45addfb6a038d38acd05df70d4e23a47`: deployment state is `READY`; the protected `/api/health` endpoint returned HTTP 200 with `{"status":"ok","service":"aivanta"}` through Vercel's approved protected-URL fetch. A separate unauthenticated GET to application routes could not be verified through the same fetch because the middleware redirect requires a browser-compatible protected access method.
 - Rechecked core-table RLS: 8 of 8 expected tables have RLS enabled.
 - Rechecked table grants: `anon` has no SELECT or INSERT privileges on any of the eight core tables. Authenticated grants match the intended least-privilege pattern (no UPDATE/DELETE on immutable workflow versions or audit events; no DELETE on runs, run steps, schedules, or workspaces).
 - Rechecked function execution: scheduler claim/renew/finish/record RPCs remain unavailable to both `anon` and `authenticated`; workspace helper functions are not executable by `anon`. Security advisor returned no findings.
 - The source migration `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql` exists in the branch, but its exact timestamp/version is not present in the remote migration ledger. The resulting grants are present in the live catalog. This is additional evidence that the ledger is not a one-to-one record of the source files; it is **not** permission to fabricate a ledger entry. Keep reconciliation open until a reviewed diff/baseline map is available.
-- Authenticated cross-workspace and application write-path tests remain unverified. Keep scheduler disabled and do not change Production environment variables.
+- Rollback-only PostgreSQL tests now verify cross-workspace reads and saves are denied; authorized live-run step inserts work; scheduler claim/dry-run/idempotency/recovery/stale-lease checks pass; workflow save creates versions 1→2 plus immutable history/audit rows; invalid definitions and direct definition/version/audit writes are rejected; metadata-only edits work; anonymous save RPC access is denied. A cleanup query confirmed zero leftover test fixtures. Keep scheduler disabled and do not change Production environment variables.
 
 
 ## Forward schema-parity fix — 2026-10-13
@@ -57,3 +57,11 @@ Safe next steps:
 - A follow-up catalog check found the workflow-run-step INSERT policy had drifted back to dry-run-only behavior. The canonical parity migration `20261013002000_aivanta_run_step_insert_policy_parity.sql` is now tracked and the live policy has been verified to permit only member-owned dry-run steps or owned live-run steps while the parent run is running. The remote ledger now contains 20 records; authenticated end-to-end tests are still required.
 - The remote migration ledger now has 20 records. The source/ledger mapping is still not a one-to-one match, so keep the broad history reconciliation gate open and do not use blind `db push`.
 - Security advisor was rerun after the DDL and returned no findings.
+
+
+## Current clean replay and write-path acceptance — 2026-10-13
+
+- The complete 27-file tracked migration chain passed isolated CI replay: GitHub Actions run `38323682448`, commit `aa02621d45addfb6a038d38acd05df70d4e23a47`. Local Supabase start, database reset/replay, status, and teardown all succeeded.
+- The latest Supabase security advisor returned zero findings. Current catalog: 8/8 public tables have RLS, 23 policies span those tables, and `anon` has zero public-table grants. The current 11 unused-index notices are informational on an empty staging database.
+- Migration ledger reconciliation remains a hard gate: 22 remote records versus 27 tracked source migrations. The source/live catalog is aligned for the reviewed objects and security paths, but the first ten consolidated remote entries have not yet been reconciled line-by-line against the complete tracked DDL. No `supabase db push`, remote reset, manual ledger insert, or ledger repair was run.
+- Browser/API smoke tests and Auth redirect allow-list verification remain blocked by the protected Preview access/configuration boundary; do not disable Vercel SSO. Use an approved Vercel authenticated browser/HTTP path and an authorized staging test identity before marking those checks passed.
