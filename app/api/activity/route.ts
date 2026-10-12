@@ -46,6 +46,7 @@ export async function GET() {
         createdAt: run.created_at,
         durationMs: run.duration_ms,
       })),
+      workspace: { id: workspace.id, name: workspace.name },
       limit,
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
