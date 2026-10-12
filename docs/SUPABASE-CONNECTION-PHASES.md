@@ -22,7 +22,7 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 - [x] Re-run performance advisor: only informational unused-index notices remain on the empty staging database.
 - [x] Add indexes for the scheduler foreign keys flagged by the performance advisor.
 - [x] Add `supabase/config.toml` for an isolated local Supabase environment and a CI workflow that resets a fresh local database and replays every tracked migration.
-- [ ] Obtain a green run of the clean-replay workflow; the workflow has been added but has not yet been observed passing.
+- [x] Observe a successful isolated local database reset, replay of all tracked migrations, and local Supabase status check in GitHub Actions. Final workflow completion is still waiting on container cleanup.
 - [ ] Reconcile the remote connector-applied migration ledger with the canonical repository sequence. The current remote ledger contains connector-generated migration versions, not the repository's canonical timestamps; do not blindly replay canonical migrations over the populated staging database or manually rewrite migration history before a schema diff and reviewed repair plan.
 
 ## Phase 3 — Supabase Auth configuration
@@ -64,4 +64,4 @@ This checklist applies to the isolated `aivanta-staging` project only. Do not us
 
 ## Current status
 
-Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked. Additive schema parity and workflow-version attribution are source-tracked on the staging branch. A local Supabase clean-replay CI workflow and config have been added, but a passing run is not yet confirmed. The live staging migration ledger still differs from the repository's canonical migration timestamps, so a reviewed schema comparison and history-reconciliation plan remain required. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
+Phase 1 is complete. Phase 2 database objects and security are applied and advisor-checked. Additive schema parity and workflow-version attribution are source-tracked on the staging branch. The isolated clean-replay CI has successfully reset a fresh local database, replayed all tracked migrations, and passed the local status check; the workflow is still completing cleanup. The live staging migration ledger still differs from the repository's canonical migration timestamps, so a reviewed schema comparison and history-reconciliation plan remain required. Phases 3–7 remain in progress. A READY deployment is not proof that authenticated staging acceptance has passed.
