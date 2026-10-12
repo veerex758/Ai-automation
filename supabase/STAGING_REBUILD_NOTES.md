@@ -19,7 +19,7 @@
 
 ## Migration history reconciliation — do not skip
 
-The repository currently contains 24 SQL migration files, while the staging database ledger contains 19 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
+The repository currently contains 25 SQL migration files, while the staging database ledger contains 19 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
 
 **Until a migration diff or an explicit, reviewed baseline mapping is completed, do not run `supabase db push` against this staging project.** A naïve push may attempt to replay old source migrations because their version IDs are absent from the remote ledger. Do not manually insert ledger rows merely to make counts match, and do not rerun migrations with destructive DDL.
 
@@ -54,5 +54,6 @@ Safe next steps:
 - Catalog inspection found a real mismatch: `public.workflow_runs.completed_at` was still `NOT NULL`, even though the canonical source migration explicitly allows NULL while a live run is in progress.
 - The canonical tracked migration is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, matching the 20261012232845 remote ledger record. A second, later-dated duplicate migration was briefly added during concurrent work and has now been removed from source history (commit `fbde0fbf1ab5b03fe4f17cfdd605c1f4a044359e`). The live staging fix was applied to the isolated project.
 - Verified afterward: `workflow_runs.completed_at` is nullable; its completion-order constraint correctly allows NULL or a timestamp at/after `started_at`; `workflow_run_steps.completed_at` remains non-null as intended.
+- A follow-up catalog check found the workflow-run-step INSERT policy had drifted back to dry-run-only behavior. The canonical parity migration `20261013002000_aivanta_run_step_insert_policy_parity.sql` is now tracked and the live policy has been verified to permit only member-owned dry-run steps or owned live-run steps while the parent run is running. The remote ledger now contains 20 records; authenticated end-to-end tests are still required.
 - The remote migration ledger now has 19 records. The source/ledger mapping is still not a one-to-one match, so keep the broad history reconciliation gate open and do not use blind `db push`.
 - Security advisor was rerun after the DDL and returned no findings.
