@@ -72,6 +72,32 @@ The branch currently tracks these 27 SQL migrations, in order:
 26. `20261013003000_aivanta_rpc_write_path_hardening.sql`
 27. `20261013004000_aivanta_invoker_rpc_write_guards.sql`
 
+## Source-to-ledger coverage map (semantic grouping, not repair approval)
+
+The source migrations are now grouped against the 22 live ledger entries by the objects and behaviors they establish. This records a reviewable coverage hypothesis; because the remote ledger stores version/name metadata rather than the original SQL bodies, it does not prove which exact DDL was in each remote migration.
+
+- **Remote baseline `20261012224509`** groups the initial workspace/workflow foundation (`20261010180000`), initial security/index hardening (`20261010180100`), default workspace trigger (`20261010180200`), versioning and versioning fixes (`20261010180300`, `20261010180400`), definition validation (`20261010193000`), and run-history foundation (`20261010194010`). The corresponding tables, base constraints, workspace helpers, and RLS objects exist in the live catalog.
+- **Remote FK indexes `20261012224541`** groups FK/lookup indexes from the foundation, run-history, created-by, and scheduler migrations (`20261010180000`, `20261010194010`, `20261010201538`, `20261011090000`). The live index inventory has been captured; final index-by-index source diff remains part of review.
+- **Remote dry-run RPC `20261012224946`** maps to `20261010194730_aivanta_workflow_dry_run_engine.sql`; its validated RPC and write path were exercised in rollback-only tests.
+- **Remote live-email schema `20261012224955`** maps to `20261010201327_aivanta_live_email_runs.sql`; live mode/idempotency columns and lifecycle constraints exist, while actual delivery remains a separate approval gate.
+- **Remote run-history indexes `20261012224957`** groups `20261010194010` and `20261010201538`.
+- **Remote updated-at helper `20261012224959`** maps to `public.set_updated_at()` and the workflow/workspace/schedule update triggers.
+- **Remote scheduler foundation `20261012225002`** maps to `20261011090000_scheduled_workflow_foundation.sql`; **dispatcher `20261012225005`** maps to `20261011091000_scheduled_workflow_dispatcher.sql`; **scheduler FK indexes `20261012225024`** groups its schedule/workspace/run FK indexes. Claim/record/finalize and stale-lease behavior passed rollback-only tests; scheduler RPCs remain service-role-only.
+- **Remote revoke-helper execution `20261012225038`** groups initial security hardening (`20261010180100`) and workspace-helper ACL parity (`20261012235500`).
+- **Remote canonical schema parity `20261012225729`** maps to `20261012230000_aivanta_staging_schema_parity.sql`.
+- **Remote version attribution `20261012225813`** maps to `20261012231000_aivanta_workflow_version_attribution.sql`.
+- **Remote default-workspace trigger parity `20261012230426`** groups `20261010180200` and `20261012233000_aivanta_default_workspace_trigger_parity.sql`.
+- **Remote save-definition parity `20261012230503`** groups `20261010193000` and `20261012234000_aivanta_save_workflow_definition_parity.sql`; current public RPC delegates to private validated implementation with invoker permissions and write guards.
+- **Remote updated-at parity `20261012230528`** maps to `20261012235000_aivanta_updated_at_trigger_parity.sql`.
+- **Remote workspace-helper parity `20261012230613`** maps to `20261012235500_aivanta_workspace_helper_parity.sql`.
+- **Remote workspace-owner policy `20261012230649`** maps to `20261012235900_aivanta_workspace_owner_update_policy.sql`.
+- **Remote least-privilege grants `20261012230922`** maps to `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`.
+- **Remote completion timestamp `20261012232845`** groups `20261010204255_allow_incomplete_workflow_run_timestamps.sql` and `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`.
+- **Remote run-step policy `20261012233319`** groups the duplicate historical hardening files `20261010203527_harden_live_run_step_ownership.sql` and `20261010203630_harden_workflow_run_step_inserts.sql`, with final parity in `20261013002000_aivanta_run_step_insert_policy_parity.sql`.
+- **Remote write-path hardening `20261012234256`** maps to `20261013003000_aivanta_rpc_write_path_hardening.sql`; **remote invoker guards `20261012234426`** maps to `20261013004000_aivanta_invoker_rpc_write_guards.sql`.
+
+**Repair rule:** do not mark source versions applied until the mapping is reviewed against the complete source SQL and the live catalog. Do not use blind `db push`, manual ledger inserts, or remote reset. The available Supabase connector does not expose the CLI migration-repair action; the final ledger repair therefore still requires an approved staging-only CLI session.
+
 ## Live catalog evidence captured
 
 - Eight public application tables are present; RLS is enabled on all eight.
