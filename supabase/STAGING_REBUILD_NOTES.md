@@ -19,7 +19,7 @@
 
 ## Migration history reconciliation — do not skip
 
-The repository currently contains 24 SQL migration files, while the staging database ledger contains 19 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
+The repository currently contains 25 SQL migration files, while the staging database ledger contains 19 migration records after the focused forward-fix below. The ledger uses replay/baseline names and timestamps that do not match the repository filenames one-for-one. The live schema and policies show that key features are present, but this alone does not prove that every local migration is represented identically in the ledger.
 
 **Until a migration diff or an explicit, reviewed baseline mapping is completed, do not run `supabase db push` against this staging project.** A naïve push may attempt to replay old source migrations because their version IDs are absent from the remote ledger. Do not manually insert ledger rows merely to make counts match, and do not rerun migrations with destructive DDL.
 
