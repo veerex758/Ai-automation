@@ -33,10 +33,10 @@ test("activity response exposes metadata only and disables caching", () => {
   assert.doesNotMatch(endpoint, /run\.input|run\.payload|run\.error_message/);
 });
 
-test("activity UI supports status filtering and links runs to their builder", () => {
+test("activity UI supports status filtering and links runs to secure detail pages", () => {
   assert.match(page, /\["succeeded","Succeeded"\]/);
   assert.match(page, /\["failed","Failed"\]/);
-  assert.match(page, /\/dashboard\/workflows\/\$\{run\.workflowId\}/);
+  assert.match(page, /\/dashboard\/activity\/\$\{run\.id\}/);
   assert.match(page, /No workflow runs yet/);
 });
 
