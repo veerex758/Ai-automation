@@ -92,7 +92,7 @@ Aivanta is being built as a staged business automation platform: dependable conv
 - [x] Add an authenticated, private/no-store activity endpoint scoped to the signed-in user's default workspace.
 - [x] Show recent workflow run metadata, status filters, duration, workflow version, and links back to each builder.
 - [x] Keep activity views read-only and omit execution inputs, secrets, and provider payloads.
-- [ ] Add automated endpoint/response tests and run CI checks.
+- [x] Add automated endpoint/response contract tests; CI execution remains pending.
 - [ ] Verify activity behavior against the newly reconnected Supabase project in isolated staging.
 - [ ] Confirm empty, error, and cross-workspace cases using authorized staging identities.
 
