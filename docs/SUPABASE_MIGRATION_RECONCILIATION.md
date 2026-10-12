@@ -36,7 +36,8 @@ Do not run `supabase migration repair`, reset the remote database, or apply a mi
 | 20261012233319 | aivanta_run_step_insert_policy_parity | Forward-fix applied to staging after catalog comparison found the live INSERT policy had regressed to dry-run-only. Matched to tracked migration `20261013002000_aivanta_run_step_insert_policy_parity.sql`; live INSERT policy was re-queried and verified against the tracked lifecycle conditions. The prior 25-file replay passed in run `38322852271`; the current 27-file replay including write-path hardening passed its migration-reset and status steps in run `38323682448` on commit `aa02621d45addfb6a038d38acd05df70d4e23a47`. |
 
 | 20261012234256 | aivanta_rpc_write_path_hardening | First-stage forward hardening restricted direct version/audit inserts and definition updates; followed by the invoker-safe guard migration below. Source: `20261013003000_aivanta_rpc_write_path_hardening.sql`. |
-| 20261012234426 | aivanta_invoker_rpc_write_guards | Final staging write path uses SECURITY INVOKER public RPCs, private legacy implementations, transaction-local guard triggers, and explicit workspace checks. Source: `20261013004000_aivanta_invoker_rpc_write_guards.sql`. Security advisor returned zero findings after this correction. The 27-file replay passed in run `38323682448`; current 28-file replay is running in `38324218149`. |\n| 20261012235026 | aivanta_staging_fk_index_parity | Tracks three indexes already present in remote staging but absent from earlier source migrations: `workflow_schedules_created_by_idx`, `workflow_schedules_workspace_id_idx`, and `workspace_members_user_idx`. Source: `20261013005000_aivanta_staging_fk_index_parity.sql`. Current 28-file replay is running in `38324218149`. |
+| 20261012234426 | aivanta_invoker_rpc_write_guards | Final staging write path uses SECURITY INVOKER public RPCs, private legacy implementations, transaction-local guard triggers, and explicit workspace checks. Source: `20261013004000_aivanta_invoker_rpc_write_guards.sql`. Security advisor returned zero findings after this correction. The 27-file replay passed in run `38323682448`; current 28-file replay is running in `38324218149`. |
+| 20261012235026 | aivanta_staging_fk_index_parity | Tracks three indexes already present in remote staging but absent from earlier source migrations: `workflow_schedules_created_by_idx`, `workflow_schedules_workspace_id_idx`, and `workspace_members_user_idx`. Source: `20261013005000_aivanta_staging_fk_index_parity.sql`. Current 28-file replay is running in `38324218149`. |
 
 The notes above are candidate mappings only. A candidate is not considered reconciled until its SQL effects are compared with the tracked migration and live catalog.
 
@@ -70,7 +71,8 @@ The branch currently tracks these 28 SQL migrations, in order:
 24. `20261013000000_aivanta_staging_authenticated_least_privilege_grants.sql`
 25. `20261013002000_aivanta_run_step_insert_policy_parity.sql`
 26. `20261013003000_aivanta_rpc_write_path_hardening.sql`
-27. `20261013004000_aivanta_invoker_rpc_write_guards.sql`\n28. `20261013005000_aivanta_staging_fk_index_parity.sql`
+27. `20261013004000_aivanta_invoker_rpc_write_guards.sql`
+28. `20261013005000_aivanta_staging_fk_index_parity.sql`
 
 ## Source-to-ledger coverage map (semantic grouping, not repair approval)
 
@@ -118,7 +120,8 @@ The source migrations are now grouped against the 23 live ledger entries by the 
 ## Remaining work before any remote history repair
 
 - [x] Clean-replay the prior 25-file chain in isolated local Supabase; database reset and final Supabase status passed on commit `71fe8e74e5189b565e06cc20eb1360c0abbe04a9`.
-- [x] Clean-replay the 27-file chain, including write-path hardening, in isolated local Supabase; `supabase db reset --local` and `supabase status` passed in Actions run `38323682448` at commit `aa02621d45addfb6a038d38acd05df70d4e23a47`.\n- [ ] Clean-replay the current 28-file chain after adding FK index parity; Actions run `38324218149` is in progress.
+- [x] Clean-replay the 27-file chain, including write-path hardening, in isolated local Supabase; `supabase db reset --local` and `supabase status` passed in Actions run `38323682448` at commit `aa02621d45addfb6a038d38acd05df70d4e23a47`.
+- [ ] Clean-replay the current 28-file chain after adding FK index parity; Actions run `38324218149` is in progress.
 - [ ] Finish line-by-line mapping of all 20 remote ledger entries to the 25 source migrations; the initial baseline and index ledger rows are grouped candidates, not final approvals.
 - [x] Capture and inspect live table/column inventory, constraints/FKs, indexes, triggers, RLS policies, function definitions/search paths, and table/function ACLs. Security advisor returns zero findings; scheduler ACLs are service-role-only.
 - [ ] Compare remaining source DDL bodies against the live catalog, including the consolidated baseline, index groups, and every scheduler RPC body.
