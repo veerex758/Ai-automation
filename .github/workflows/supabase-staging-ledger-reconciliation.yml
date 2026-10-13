@@ -1,0 +1,214 @@
+name: Supabase staging ledger reconciliation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_ledger_repair:
+        description: "Explicitly authorize metadata-only migration ledger normalization on aivanta-staging"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-staging-ledger-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Verify schema, normalize staging ledger, verify alignment
+    if: ${{ inputs.confirm_ledger_repair == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: aivanta-staging
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ygclofqxtztnynkljipj
+    steps:
+      - name: Check out the migration source
+        uses: actions/checkout@v4
+        with:
+          ref: staging/aivanta-supabase-rebuild
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+
+      - name: Fail closed unless this is the approved staging target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "Missing staging access token"; exit 2; }
+          test -n "$SUPABASE_DB_PASSWORD" || { echo "Missing staging database password"; exit 2; }
+          test "$SUPABASE_PROJECT_REF" = "ygclofqxtztnynkljipj" || { echo "Refusing non-staging project"; exit 2; }
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Replay every tracked migration in isolated local Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase start
+          supabase db reset --local
+          supabase status
+
+      - name: Capture the current staging ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase migration list | tee staging-ledger-before.txt
+
+      - name: Verify the approved source and remote migration inventories
+        id: inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob, os, re, sys
+
+          expected_local = set("""
+          20261010180000 20261010180100 20261010180200 20261010180300
+          20261010180400 20261010193000 20261010194010 20261010194730
+          20261010201327 20261010201538 20261010203527 20261010203630
+          20261010204255 20261011090000 20261011091000 20261012230000
+          20261012231000 20261012232845 20261012233000 20261012234000
+          20261012235000 20261012235500 20261012235900 20261013000000
+          20261013002000 20261013003000 20261013004000 20261013005000
+          20261013006000 20261013007000 20261013008000
+          """.split())
+
+          expected_remote = set("""
+          20261012224509 20261012224541 20261012224946 20261012224955
+          20261012224957 20261012224959 20261012225002 20261012225005
+          20261012225024 20261012225038 20261012225729 20261012225813
+          20261012230426 20261012230503 20261012230528 20261012230613
+          20261012230649 20261012230922 20261012232845 20261012233319
+          20261012234256 20261012234426 20261012235026 20261012235126
+          """.split())
+
+          actual_local = set()
+          for path in glob.glob("supabase/migrations/*.sql"):
+              match = re.match(r"(\d{14})_", os.path.basename(path))
+              if match:
+                  actual_local.add(match.group(1))
+
+          actual_remote = set()
+          for line in open("staging-ledger-before.txt", encoding="utf-8-sig"):
+              if "|" not in line:
+                  continue
+              cells = [cell.strip().strip("`").strip() for cell in line.split("|")]
+              if len(cells) < 2:
+                  continue
+              local, remote = cells[0], cells[1]
+              if re.fullmatch(r"\d{14}", remote):
+                  actual_remote.add(remote)
+
+          if actual_local != expected_local:
+              print("Local migration inventory changed; refusing automatic repair.")
+              print("Unexpected local:", sorted(actual_local - expected_local))
+              print("Missing local:", sorted(expected_local - actual_local))
+              sys.exit(2)
+          if actual_remote != expected_remote:
+              print("Remote migration ledger changed since review; refusing automatic repair.")
+              print("Unexpected remote:", sorted(actual_remote - expected_remote))
+              print("Missing remote:", sorted(expected_remote - actual_remote))
+              sys.exit(2)
+
+          local_only = sorted(actual_local - actual_remote)
+          remote_only = sorted(actual_remote - actual_local)
+          if "20261012232845" not in actual_local & actual_remote:
+              print("The known common migration 20261012232845 is not aligned; refusing repair.")
+              sys.exit(2)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write("local_only=" + " ".join(local_only) + "\n")
+              out.write("remote_only=" + " ".join(remote_only) + "\n")
+          print(f"Approved inventories confirmed: {len(actual_local)} local, {len(actual_remote)} remote.")
+          print(f"Planned metadata-only repair: register {len(local_only)} tracked versions; revert {len(remote_only)} legacy ledger versions.")
+          PY
+
+      - name: Require exact public/private schema parity before touching history
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > staging-schema-diff.log
+          set +e
+          supabase db diff --linked --schema public,private > staging-schema-diff.log 2>&1
+          status=$?
+          set -e
+          cat staging-schema-diff.log
+          if [ "$status" -ne 0 ]; then
+            echo "Schema diff failed; migration history was not changed."
+            exit "$status"
+          fi
+          if ! grep -qi "No schema changes found" staging-schema-diff.log; then
+            echo "Schema differences exist; migration history was not changed."
+            exit 3
+          fi
+
+      - name: Normalize only migration-history metadata
+        shell: bash
+        env:
+          LOCAL_ONLY: ${{ steps.inventory.outputs.local_only }}
+          REMOTE_ONLY: ${{ steps.inventory.outputs.remote_only }}
+        run: |
+          set -euo pipefail
+          read -r -a local_only <<< "$LOCAL_ONLY"
+          read -r -a remote_only <<< "$REMOTE_ONLY"
+
+          if [ "${#remote_only[@]}" -gt 0 ]; then
+            supabase migration repair --status reverted "${remote_only[@]}"
+          fi
+          if [ "${#local_only[@]}" -gt 0 ]; then
+            supabase migration repair --status applied "${local_only[@]}"
+          fi
+
+      - name: Verify every tracked version matches remote
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase migration list | tee staging-ledger-after.txt
+          python3 - <<'PY'
+          import re, sys
+          local_versions, remote_versions = set(), set()
+          for line in open("staging-ledger-after.txt", encoding="utf-8-sig"):
+              if "|" not in line:
+                  continue
+              cells = [cell.strip().strip("`").strip() for cell in line.split("|")]
+              if len(cells) < 2:
+                  continue
+              local, remote = cells[0], cells[1]
+              if re.fullmatch(r"\d{14}", local):
+                  local_versions.add(local)
+              if re.fullmatch(r"\d{14}", remote):
+                  remote_versions.add(remote)
+              if re.fullmatch(r"\d{14}", local) or re.fullmatch(r"\d{14}", remote):
+                  if local != remote:
+                      print("Unmatched migration row remains:", line.rstrip())
+                      sys.exit(4)
+          if local_versions != remote_versions:
+              print("Local/remote migration sets differ after repair.")
+              print("Local only:", sorted(local_versions - remote_versions))
+              print("Remote only:", sorted(remote_versions - local_versions))
+              sys.exit(5)
+          print(f"Ledger reconciled: {len(local_versions)} local/remote versions match.")
+          PY
+
+      - name: Upload before/after evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aivanta-staging-ledger-reconciliation
+          path: |
+            staging-ledger-before.txt
+            staging-ledger-after.txt
+            staging-schema-diff.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop isolated local Supabase
+        if: always()
+        run: supabase stop --no-backup
