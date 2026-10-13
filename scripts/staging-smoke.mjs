@@ -44,12 +44,25 @@ if (!bypassSecret) {
   process.exit(2);
 }
 
-baseUrl.pathname = baseUrl.pathname.replace(/\/$/, "");
+baseUrl.pathname = baseUrl.pathname.replace(/\\/$/, "");
 baseUrl.search = "";
 baseUrl.hash = "";
 
 const timeoutMs = 10_000;
 const isJson = (response) => (response.headers.get("content-type") || "").includes("application/json");
+const describeError = (error) => {
+  const details = [];
+  let current = error;
+  for (let depth = 0; current && depth < 3; depth += 1) {
+    const name = typeof current.name === "string" ? current.name : "Error";
+    const message = typeof current.message === "string" ? current.message : "request failed";
+    const code = typeof current.code === "string" ? ` [${current.code}]` : "";
+    details.push(`${name}${code}: ${message}`);
+    current = current.cause;
+  }
+  return details.join(" <- ");
+};
+
 const checks = [
   {
     name: "health endpoint",
@@ -135,7 +148,7 @@ for (const check of checks) {
 
     console.log(`PASS ${check.name}: HTTP ${response.status}`);
   } catch (error) {
-    console.error(`FAIL ${check.name}: ${error instanceof Error ? error.message : "request failed"}`);
+    console.error(`FAIL ${check.name}: ${describeError(error)}`);
     failed += 1;
   }
 }
