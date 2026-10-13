@@ -22,8 +22,15 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedNext = params.get("next");
-    if (requestedNext && requestedNext.startsWith("/") && !requestedNext.startsWith("//")) {
-      setNextPath(requestedNext);
+    if (requestedNext) {
+      try {
+        const target = new URL(requestedNext, window.location.origin);
+        if (target.origin === window.location.origin) {
+          setNextPath(`${target.pathname}${target.search}${target.hash}`);
+        }
+      } catch {
+        // Ignore invalid or external redirect targets and keep the dashboard default.
+      }
     }
     setReason(params.get("reason") ?? "");
     setConfirmationError(params.get("error") === "confirmation");
