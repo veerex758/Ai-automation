@@ -10,6 +10,12 @@ export const dynamic = "force-dynamic";
 const claimLimit = 10;
 const leaseSeconds = 300;
 
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("Cache-Control", "no-store");
+  return NextResponse.json(body, { ...init, headers });
+}
+
 type ScheduleClaim = {
   schedule_id: string;
   workflow_id: string;
@@ -64,7 +70,7 @@ async function finishClaim(
 async function dispatchTick(request: NextRequest) {
   if (!isAuthorized(request)) {
     const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_SCHEDULER_SECRET;
-    return NextResponse.json(
+    return jsonNoStore(
       { error: secret ? "Unauthorized." : "Scheduler authentication is not configured." },
       { status: secret ? 401 : 503 },
     );
@@ -74,7 +80,7 @@ async function dispatchTick(request: NextRequest) {
   try {
     supabase = createSchedulerClient();
   } catch {
-    return NextResponse.json({ error: "Scheduler database access is not configured." }, { status: 503 });
+    return jsonNoStore({ error: "Scheduler database access is not configured." }, { status: 503 });
   }
 
   const { data, error } = await supabase.rpc("claim_due_workflow_schedules", {
@@ -83,7 +89,7 @@ async function dispatchTick(request: NextRequest) {
   });
   if (error || !Array.isArray(data)) {
     console.error("Aivanta scheduler could not claim due schedules.");
-    return NextResponse.json({ error: "Could not claim scheduled workflows." }, { status: 500 });
+    return jsonNoStore({ error: "Could not claim scheduled workflows." }, { status: 500 });
   }
 
   const claims = data as ScheduleClaim[];
@@ -156,7 +162,7 @@ async function dispatchTick(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ claimed: claims.length, succeeded, failed });
+  return jsonNoStore({ claimed: claims.length, succeeded, failed });
 }
 
 export async function GET(request: NextRequest) {
