@@ -38,7 +38,7 @@ alter table public.audit_events alter column actor_user_id drop default;
 alter table public.workflow_versions alter column created_by drop default;
 alter table public.workflows alter column created_by drop default;
 alter table public.workflows alter column status set default 'draft';
-alter table public.workflows alter column status drop constraint if exists workflows_status_check;
+alter table public.workflows drop constraint if exists workflows_status_check;
 alter table public.workflows alter column status type varchar(16) using status::varchar(16);
 alter table public.workflows
   add constraint workflows_status_check
