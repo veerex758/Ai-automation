@@ -200,3 +200,16 @@ A further read-only pass against staging project `ygclofqxtztnynkljipj` confirme
 ### Decision
 
 No remote DDL or migration-ledger changes were made. The next safe gate is still a source-to-catalog review detailed enough to approve or reject each grouped legacy ledger mapping, followed by staging-linked CLI history normalization. Authenticated browser/API acceptance and scheduler secret configuration also remain open. Production remains untouched.
+
+## CI blocker diagnosis — 2026-10-13
+
+Inspected GitHub Actions run `38324670662` for the new read-only staging schema-diff workflow. The run did **not** discover a schema difference: it stopped before linking or running the diff because both environment variables were empty in the runner:
+
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_DB_PASSWORD`
+
+The workflow correctly failed closed at its credential preflight; the migration list and remote schema diff steps were skipped. This means there is still no CI-generated remote-vs-replay diff artifact. The isolated 29-file local replay remains green in run `38324304643`.
+
+The Vercel commit status for the docs-only commit `b5208c3f5ee9804c03c3008b118ddd0970f7e591` reports deployment rate limiting and asks to retry in 24 hours. This is a hosting/build quota status, not a Supabase schema failure. No production deployment or remote database mutation was attempted.
+
+**Action required to unblock the next gate:** populate the two staging-only GitHub environment secrets in the repository's `aivanta-staging` environment, then rerun the manually dispatched schema-diff workflow. Do not put either secret in source control, logs, or chat. Only after the resulting migration list and schema diff are reviewed should any migration-history repair be considered.
