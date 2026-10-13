@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getSafeInternalPath } from "@/lib/supabase/safe-internal-path.mjs";
 import "./login.css";
 
 export default function LoginPage() {
@@ -23,14 +24,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const requestedNext = params.get("next");
     if (requestedNext) {
-      try {
-        const target = new URL(requestedNext, window.location.origin);
-        if (target.origin === window.location.origin) {
-          setNextPath(`${target.pathname}${target.search}${target.hash}`);
-        }
-      } catch {
-        // Ignore invalid or external redirect targets and keep the dashboard default.
-      }
+      setNextPath(getSafeInternalPath(requestedNext, window.location.origin));
     }
     setReason(params.get("reason") ?? "");
     setConfirmationError(params.get("error") === "confirmation");
