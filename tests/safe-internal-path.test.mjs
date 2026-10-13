@@ -17,7 +17,7 @@ test("safe redirect preserves same-origin path, query, and fragment", () => {
 });
 
 test("safe redirect rejects protocol-relative and external URLs", () => {
-  assert.equal(getSafeInternalPath("//attacker.example/path", origin), "/dashboard");
+  assert.equal(getSafeInternalPath("/\\\\attacker.example/path", origin), "/dashboard");
   assert.equal(getSafeInternalPath("https://attacker.example/path", origin), "/dashboard");
   assert.equal(getSafeInternalPath("javascript:alert(1)", origin), "/dashboard");
 });
