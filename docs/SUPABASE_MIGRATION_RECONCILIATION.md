@@ -213,3 +213,19 @@ The workflow correctly failed closed at its credential preflight; the migration 
 The Vercel commit status for the docs-only commit `b5208c3f5ee9804c03c3008b118ddd0970f7e591` reports deployment rate limiting and asks to retry in 24 hours. This is a hosting/build quota status, not a Supabase schema failure. No production deployment or remote database mutation was attempted.
 
 **Action required to unblock the next gate:** populate the two staging-only GitHub environment secrets in the repository's `aivanta-staging` environment, then rerun the manually dispatched schema-diff workflow. Do not put either secret in source control, logs, or chat. Only after the resulting migration list and schema diff are reviewed should any migration-history repair be considered.
+
+
+## Ledger repair workflow prepared — 2026-10-13 02:02 UTC
+
+The branch now includes `.github/workflows/supabase-staging-ledger-reconciliation.yml` (commit `966cd1d50247f788c17291f3f4eb80087c73bed4`). It is **manual-dispatch only** and requires the boolean `confirm_ledger_repair=true`. It is scoped to the fixed staging project ref `ygclofqxtztnynkljipj`, uses only the `aivanta-staging` GitHub environment secrets, and will fail closed unless the exact reviewed local/remote migration inventories match.
+
+Current reviewed inventories from the latest `supabase migration list` output:
+- 31 tracked source migrations.
+- 24 remote ledger versions.
+- One version shared by both sides: `20261012232845`.
+- 30 tracked versions absent from the remote ledger.
+- 23 legacy remote ledger versions absent from the tracked source chain.
+
+Before making ledger changes, the workflow starts isolated local Supabase, clean-replays all tracked migrations, confirms the exact source and remote version sets, and requires `supabase db diff --linked --schema public,private` to report no schema changes. It then uses the Supabase CLI's metadata-only `migration repair` command to mark the 23 legacy remote versions reverted and register the 30 missing tracked versions as applied. It finally requires every local and remote migration row to match and uploads before/after evidence.
+
+**Important:** committing the workflow did not execute the repair. The available GitHub connector can inspect runs and create commits, but cannot dispatch a workflow or run the Supabase CLI repair command directly. The ledger remains unreconciled until the manual workflow is run with its confirmation input set to true and its post-repair verification passes. Do not claim Phase 2 closed before that run and the authenticated staging/browser acceptance gates are complete. Production remains untouched.
