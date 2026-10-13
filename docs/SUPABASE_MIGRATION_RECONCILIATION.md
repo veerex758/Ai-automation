@@ -248,3 +248,13 @@ A direct post-run Supabase connector query independently confirmed the remote le
 **Ledger reconciliation is now CLOSED/GREEN.** This was metadata-only normalization after schema equivalence was proven; no remote schema reset or production operation occurred.
 
 **Phase 2 overall is not yet fully closed.** The remaining acceptance gates are authenticated staging API/browser smoke tests and verification of Supabase Auth redirect allow-list/protected-preview behavior. The scheduler remains intentionally disabled and fail-closed until its authentication configuration and authorized end-to-end tests pass. Do not weaken Vercel SSO protection to force the smoke test.
+
+
+## Post-reconciliation acceptance check — 2026-10-13
+
+- The next schema-diff workflow run `38335233131` completed successfully after the documentation update; no schema-diff gate failure was reported.
+- A fresh live ACL query confirms all four scheduler worker functions remain `SECURITY DEFINER`, have an empty `search_path`, and are executable by `service_role` but not `anon` or `authenticated`. The public save/dry-run RPCs remain `SECURITY INVOKER`, executable by `authenticated` and `service_role`, not `anon`. `set_updated_at` is not executable by `anon` or `authenticated`.
+- A fresh RLS/catalog check reconfirmed all eight public tables have RLS enabled, the policy count is 23, anonymous table grants are zero, and the required workflow defaults/timestamp nullability are correct.
+- Tried to access the current READY staging preview's health and action-catalog endpoints through the authenticated Vercel connector. The connector still returned `deployment_authentication_required` after its temporary share-link retry, so no application-level HTTP result was obtained. Deployment Protection/SSO was not disabled or changed. This remains a **blocked** smoke gate, not a pass.
+
+The migration-ledger reconciliation itself is complete and independently verified. Phase 2 is not marked fully closed until the authenticated preview/API/browser acceptance and Auth redirect allow-list checks can run through an authorized access path. Scheduler stays disabled and fail-closed.
