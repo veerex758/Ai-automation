@@ -1,0 +1,32 @@
+name: Aivanta staging runtime smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aivanta-staging-runtime-smoke
+  cancel-in-progress: false
+
+jobs:
+  staging-smoke:
+    name: Protected preview endpoint contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: staging
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: staging/aivanta-supabase-rebuild
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run staging-only unauthenticated smoke checks
+        env:
+          AIVANTA_STAGING_URL: https://ai-automation-52awb5lpz-veerex-org.vercel.app
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/staging-smoke.mjs
