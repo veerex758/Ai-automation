@@ -1,22 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-function getSafeNextPath(requestedNext: string | null, origin: string): string {
-  if (!requestedNext) return "/dashboard";
-
-  try {
-    const target = new URL(requestedNext, origin);
-    if (target.origin !== origin) return "/dashboard";
-    return `${target.pathname}${target.search}${target.hash}`;
-  } catch {
-    return "/dashboard";
-  }
-}
+import { getSafeInternalPath } from "@/lib/supabase/safe-internal-path.mjs";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = getSafeNextPath(requestUrl.searchParams.get("next"), requestUrl.origin);
+  const next = getSafeInternalPath(requestUrl.searchParams.get("next"), requestUrl.origin);
 
   if (code) {
     const supabase = await createClient();
