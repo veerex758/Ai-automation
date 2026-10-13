@@ -84,6 +84,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Workflow names must be between 1 and 80 characters." }, { status: 400 });
     }
 
+    if ("description" in body && typeof body.description !== "string") {
+      return NextResponse.json({ error: "Workflow descriptions must be text." }, { status: 400 });
+    }
     const description = "description" in body && typeof body.description === "string"
       ? body.description.trim()
       : "";
