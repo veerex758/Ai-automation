@@ -35,7 +35,7 @@ const identifiesNonProduction = host.includes("staging")
   || explicitlyApprovedPreviewHosts.has(host);
 
 if (knownProductionHosts.has(host) || !identifiesNonProduction) {
-  console.error("Refusing to test: hostname must identify an approved staging or preview deployment.");
+  console.error("Refusing to run smoke tests: hostname must clearly identify a staging or preview deployment.");
   process.exit(2);
 }
 
