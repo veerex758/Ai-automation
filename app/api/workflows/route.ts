@@ -93,9 +93,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Workflow descriptions cannot exceed 500 characters." }, { status: 400 });
     }
 
-    const status = "status" in body && typeof body.status === "string" && allowedStatuses.has(body.status)
-      ? body.status
-      : "draft";
 
     const workspace = await getOrCreateDefaultWorkspace(supabase, user);
     const { data, error } = await supabase
@@ -104,7 +101,7 @@ export async function POST(request: NextRequest) {
         workspace_id: workspace.id,
         name,
         description,
-        status,
+        status: "draft",
         definition: {
           version: 1,
           nodes: [{
