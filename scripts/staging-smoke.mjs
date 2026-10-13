@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const rawBaseUrl = process.env.AIVANTA_STAGING_URL;
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 if (!rawBaseUrl) {
   console.error("Set AIVANTA_STAGING_URL to a dedicated staging or preview deployment.");
@@ -25,12 +26,21 @@ const knownProductionHosts = new Set([
   "ai-automation-veerex-org.vercel.app",
   "ai-automation-git-main-veerex-org.vercel.app",
 ]);
+const explicitlyApprovedPreviewHosts = new Set([
+  "ai-automation-52awb5lpz-veerex-org.vercel.app",
+]);
 const identifiesNonProduction = host.includes("staging")
   || host.includes("preview")
-  || host.includes("-git-");
+  || host.includes("-git-")
+  || explicitlyApprovedPreviewHosts.has(host);
 
 if (knownProductionHosts.has(host) || !identifiesNonProduction) {
-  console.error("Refusing to run smoke tests: hostname must clearly identify a staging or preview deployment.");
+  console.error("Refusing to test: hostname must identify an approved staging or preview deployment.");
+  process.exit(2);
+}
+
+if (!bypassSecret) {
+  console.error("Set VERCEL_AUTOMATION_BYPASS_SECRET in the runner's secret environment.");
   process.exit(2);
 }
 
@@ -96,8 +106,11 @@ console.log(`Aivanta staging smoke test: ${baseUrl.origin}`);
 
 for (const check of checks) {
   try {
+    const headers = new Headers(check.init.headers || {});
+    headers.set("x-vercel-protection-bypass", bypassSecret);
     const response = await fetch(new URL(`${baseUrl.pathname}${check.path}`, baseUrl.origin), {
       ...check.init,
+      headers,
       redirect: "manual",
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
