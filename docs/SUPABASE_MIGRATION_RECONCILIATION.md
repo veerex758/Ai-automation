@@ -217,7 +217,7 @@ The Vercel commit status for the docs-only commit `b5208c3f5ee9804c03c3008b118dd
 
 ## Ledger repair workflow prepared — 2026-10-13 02:02 UTC
 
-The branch now includes `.github/workflows/supabase-staging-ledger-reconciliation.yml` (commit `966cd1d50247f788c17291f3f4eb80087c73bed4`). It is **manual-dispatch only** and requires the boolean `confirm_ledger_repair=true`. It is scoped to the fixed staging project ref `ygclofqxtztnynkljipj`, uses only the `aivanta-staging` GitHub environment secrets, and will fail closed unless the exact reviewed local/remote migration inventories match.
+The branch now includes `.github/workflows/supabase-staging-ledger-reconciliation.yml` (initial commit `966cd1d50247f788c17291f3f4eb80087c73bed4`, guarded trigger commit `ff51edce7579b23fce802a042246745634fc8d0d`). It is scoped to the fixed staging project ref `ygclofqxtztnynkljipj`, uses only the `aivanta-staging` GitHub environment secrets, and fails closed unless the exact reviewed local/remote migration inventories match. A narrowly scoped push to this workflow file starts the guarded one-time attempt; manual dispatch separately requires `confirm_ledger_repair=true`.
 
 Current reviewed inventories from the latest `supabase migration list` output:
 - 31 tracked source migrations.
