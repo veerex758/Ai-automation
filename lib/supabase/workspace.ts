@@ -30,7 +30,10 @@ export async function getOrCreateDefaultWorkspace(
     if (!membership) {
       const { error: membershipInsertError } = await supabase
         .from("workspace_members")
-        .insert({ workspace_id: existing.id, user_id: user.id, role: "owner" });
+        .upsert(
+          { workspace_id: existing.id, user_id: user.id, role: "owner" },
+          { onConflict: "workspace_id,user_id", ignoreDuplicates: true },
+        );
       if (membershipInsertError) throw membershipInsertError;
     }
 
