@@ -1,6 +1,9 @@
 name: Supabase staging schema diff
 
 on:
+  push:
+    branches:
+      - staging/aivanta-supabase-rebuild
   workflow_dispatch:
 
 permissions:
