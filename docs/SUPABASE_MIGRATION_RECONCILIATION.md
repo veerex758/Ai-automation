@@ -173,3 +173,15 @@ Read-only checks were rerun directly against staging project `ygclofqxtztnynklji
 **Core database schema/security checks: GREEN.** The isolated 29-migration replay is green; live RLS coverage and grants are green; the security advisor is green; prior rollback-only isolation/RPC/scheduler acceptance tests remain recorded above.
 
 **Phase 2 overall: NOT YET CORE-CODE GREEN / NOT CLOSED.** Remaining hard gates are (1) line-by-line confirmation of remote DDL equivalence before any metadata-only migration-history repair, and (2) authenticated staging API/browser smoke tests plus Auth redirect/protected-preview verification. The current connected tools can query staging and inspect GitHub, but do not expose the Supabase CLI migration-repair operation or an authenticated browser session. No remote migration-history mutation has been made in this refresh. Production remains untouched.
+
+
+## Preview smoke refresh — 2026-10-13 00:19 UTC
+
+The latest Vercel preview for branch commit `12d85b595cb1b0679616570f0e95d23c3b51ce42` is `READY` at `ai-automation-cnju9wvxy-veerex-org.vercel.app`. Read-only/request-safe checks:
+
+- `GET /api/health`: **PASS**, HTTP 200, JSON `{"status":"ok","service":"aivanta"}`.
+- `GET /api/internal/scheduler`: **FAIL-CLOSED as expected**, HTTP 503 with `Scheduler authentication is not configured.`. Scheduler remains safely disabled; do not enable it until secret configuration and authorized verification are complete.
+- `GET /api/workflows/actions`: blocked by Vercel deployment authentication after bypass retry; no application-level status could be observed.
+- `GET /api/ai/generate-workflow`: HTTP 405 because this endpoint requires POST; the connected Vercel fetch action cannot issue a custom POST, so this is not counted as an application smoke pass.
+
+This proves preview deployment health but **does not pass the full smoke suite**. Authenticated API/browser checks remain blocked by preview access and the available fetch action's method limitation. No secrets were read or changed, and production was not touched.
