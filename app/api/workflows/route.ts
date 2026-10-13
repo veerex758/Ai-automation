@@ -2,8 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 
-const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
-
 function formatUpdatedAt(value: string): string {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
   if (elapsedSeconds < 60) return "Just now";
