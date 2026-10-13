@@ -99,6 +99,8 @@ The source migrations are now grouped against the 24 live ledger entries by the 
 - **Remote completion timestamp `20261012232845`** groups `20261010204255_allow_incomplete_workflow_run_timestamps.sql` and `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`.
 - **Remote run-step policy `20261012233319`** groups the duplicate historical hardening files `20261010203527_harden_live_run_step_ownership.sql` and `20261010203630_harden_workflow_run_step_inserts.sql`, with final parity in `20261013002000_aivanta_run_step_insert_policy_parity.sql`.
 - **Remote write-path hardening `20261012234256`** maps to `20261013003000_aivanta_rpc_write_path_hardening.sql`; **remote invoker guards `20261012234426`** maps to `20261013004000_aivanta_invoker_rpc_write_guards.sql`.
+- **Remote FK-index parity `20261012235026`** maps to `20261013005000_aivanta_staging_fk_index_parity.sql` for `workflow_schedules_created_by_idx`, `workflow_schedules_workspace_id_idx`, and `workspace_members_user_idx`.
+- **Remote workflow-version history index parity `20261012235126`** maps to `20261013006000_aivanta_workflow_version_history_index_parity.sql` for `workflow_versions_workflow_created_idx`.
 
 **Repair rule:** do not mark source versions applied until the mapping is reviewed against the complete source SQL and the live catalog. Do not use blind `db push`, manual ledger inserts, or remote reset. The available Supabase connector does not expose the CLI migration-repair action; the final ledger repair therefore still requires an approved staging-only CLI session.
 
@@ -118,6 +120,20 @@ The source migrations are now grouped against the 24 live ledger entries by the 
 - The redundant second completion-timestamp migration is not present in the current branch tree. The canonical tracked file is `20261012232845_aivanta_workflow_run_completion_timestamp_parity.sql`, matching the remote ledger name. No duplicate ledger entry was created.
 - Rechecked scheduler RPC ACLs after the policy forward-fix: scheduler claim/renew/finish/record functions are not executable by `anon` or `authenticated` and are executable by `service_role`; dry-run and save-definition RPCs are executable by `authenticated` and not by `anon`. Security advisor returned no findings after the policy fix.
 - The preview deployment for branch commit `71fe8e74e5189b565e06cc20eb1360c0abbe04a9` is `READY`. Newer docs-only deployment status should be checked independently; it does not alter the app migration replay. Earlier READY deployment health check returned HTTP 200 from `/api/health`.
+
+## Staging-only repair execution plan (not yet executed)
+
+The current remote ledger has been re-queried and still contains exactly these 24 legacy versions: `20261012224509`, `20261012224541`, `20261012224946`, `20261012224955`, `20261012224957`, `20261012224959`, `20261012225002`, `20261012225005`, `20261012225024`, `20261012225038`, `20261012225729`, `20261012225813`, `20261012230426`, `20261012230503`, `20261012230528`, `20261012230613`, `20261012230649`, `20261012230922`, `20261012232845`, `20261012233319`, `20261012234256`, `20261012234426`, `20261012235026`, and `20261012235126`.
+
+The canonical local source versions are the 29 filenames in the inventory above. Once a staging-linked CLI session is available, the safe metadata-only normalization is:
+
+1. Confirm `supabase link --project-ref ygclofqxtztnynkljipj` targets **staging**, then run `supabase migration list` and capture the output. Do not proceed if the linked ref is anything else.
+2. Run a linked schema diff and review it against the tracked migration chain. Any unexplained schema delta blocks repair; do not blindly apply a generated diff.
+3. After the mapping/schema comparison is signed off, remove the 24 legacy ledger rows with `supabase migration repair <all-24-legacy-versions> --status reverted`.
+4. Register the 29 canonical source versions with `supabase migration repair <all-29-source-versions> --status applied`.
+5. Run `supabase migration list` again and require every local source version to match remote, with no unmatched legacy remote versions. Then rerun the clean replay workflow and read-only catalog/security checks.
+
+`migration repair` changes migration-history metadata; it does not apply or reverse the SQL schema. The repair must therefore happen only after schema equivalence is established. This sequence has **not** been executed because the available connected tools do not expose the Supabase CLI repair command or a staging-linked CLI session. Do not substitute direct writes to `supabase_migrations.schema_migrations`, a remote reset, or blind `db push`.
 
 ## Remaining work before any remote history repair
 
