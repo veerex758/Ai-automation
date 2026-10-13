@@ -44,7 +44,7 @@ if (!bypassSecret) {
   process.exit(2);
 }
 
-baseUrl.pathname = baseUrl.pathname.replace(/\\/$/, "");
+baseUrl.pathname = baseUrl.pathname.replace(/\/$/, "");
 baseUrl.search = "";
 baseUrl.hash = "";
 
