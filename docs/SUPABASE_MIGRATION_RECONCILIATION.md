@@ -229,3 +229,22 @@ Current reviewed inventories from the latest `supabase migration list` output:
 Before making ledger changes, the workflow starts isolated local Supabase, clean-replays all tracked migrations, confirms the exact source and remote version sets, and requires `supabase db diff --linked --schema public,private` to report no schema changes. It then uses the Supabase CLI's metadata-only `migration repair` command to mark the 23 legacy remote versions reverted and register the 30 missing tracked versions as applied. It finally requires every local and remote migration row to match and uploads before/after evidence.
 
 **Important:** committing the workflow did not execute the repair. The available GitHub connector can inspect runs and create commits, but cannot dispatch a workflow or run the Supabase CLI repair command directly. The ledger remains unreconciled until the manual workflow is run with its confirmation input set to true and its post-repair verification passes. Do not claim Phase 2 closed before that run and the authenticated staging/browser acceptance gates are complete. Production remains untouched.
+
+
+## Execution result — ledger reconciliation completed — 2026-10-13 02:07 UTC
+
+GitHub Actions run [`38335048220`](https://github.com/veerex758/Ai-automation/actions/runs/38335048220) completed successfully on staging branch commit `ff51edce7579b23fce802a042246745634fc8d0d`.
+
+Verified sequence:
+- [x] Isolated local Supabase started and clean-replayed all 31 tracked migration files successfully.
+- [x] The remote ledger exactly matched the reviewed set of 24 legacy versions before repair; the source inventory exactly matched the reviewed 31 versions.
+- [x] The linked `public,private` schema diff returned no changes before the ledger mutation.
+- [x] Supabase CLI `migration repair` marked the 23 legacy remote-only ledger versions reverted and registered the 30 source-only versions as applied. The shared version `20261012232845` was left in place.
+- [x] Post-repair `supabase migration list` showed all 31 local versions matched to remote versions, with no unmatched rows.
+- [x] Local Supabase teardown succeeded. The run uploaded before/after ledger and schema-diff evidence as artifact `aivanta-staging-ledger-reconciliation` (artifact ID `11784264261`).
+
+A direct post-run Supabase connector query independently confirmed the remote ledger now has exactly 31 entries with the canonical source version numbers. The security advisor still reports zero findings; a fresh catalog query still reports 8/8 public tables with RLS, 23 policies, zero `anon` public-table privileges, `workflows.status` defaulting to `draft`, and nullable `workflow_runs.completed_at`.
+
+**Ledger reconciliation is now CLOSED/GREEN.** This was metadata-only normalization after schema equivalence was proven; no remote schema reset or production operation occurred.
+
+**Phase 2 overall is not yet fully closed.** The remaining acceptance gates are authenticated staging API/browser smoke tests and verification of Supabase Auth redirect allow-list/protected-preview behavior. The scheduler remains intentionally disabled and fail-closed until its authentication configuration and authorized end-to-end tests pass. Do not weaken Vercel SSO protection to force the smoke test.
