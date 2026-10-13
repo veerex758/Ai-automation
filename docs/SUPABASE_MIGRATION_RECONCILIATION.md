@@ -153,3 +153,23 @@ The canonical local source versions are the 29 filenames in the inventory above.
 - [ ] Verify Supabase Auth redirect allow-list and protected-preview smoke tests using approved access. Do not weaken Vercel SSO protection.
 
 No remote database mutation is authorized by this reconciliation document. Production remains untouched.
+
+
+## Live audit refresh — 2026-10-13
+
+Read-only checks were rerun directly against staging project `ygclofqxtztnynkljipj` after the 29-file clean replay. These results refresh the live evidence above; they do not reconcile migration history.
+
+- Remote project reports `ACTIVE_HEALTHY` on PostgreSQL 17.
+- Remote migration ledger still has exactly 24 entries; canonical branch still has 29 tracked migration files. **History reconciliation remains open.**
+- Live catalog summary: 8 public tables; RLS enabled on 8/8; 23 public RLS policies; 0 table grants to `anon`; 23 table grants to `authenticated`; 30 public indexes; 6 non-internal public triggers; 7 public functions.
+- Four public functions are `SECURITY DEFINER`: `claim_due_workflow_schedules`, `finish_workflow_schedule_claim`, `record_scheduled_workflow_run`, and `renew_workflow_schedule_claim`. Each has an empty `search_path` and an ACL restricted to `postgres` and `service_role`. The public save and dry-run RPCs are `SECURITY INVOKER`; their execute ACL includes `authenticated` and `service_role`, not `anon`. The trigger helper `set_updated_at` is not executable by `anon` or `authenticated`.
+- All 23 live RLS policies were read and reviewed. The workflow-step INSERT policy checks workspace membership, the parent run/workspace relationship, creator ownership, and allowed mode/status lifecycle combinations. Workflow, version, audit, schedule, workspace, and membership policies are present.
+- Security advisor remains clear: **0 findings**.
+- Performance advisor reports 12 informational `unused_index` notices only. The staging tables have no representative workload yet; do not remove those indexes just to clear an informational notice.
+- GitHub Actions run `38324304643` was rechecked: the clean local Supabase replay job completed successfully, including migration reset/replay, local status confirmation, and teardown.
+
+## Updated Phase 2 gate status
+
+**Core database schema/security checks: GREEN.** The isolated 29-migration replay is green; live RLS coverage and grants are green; the security advisor is green; prior rollback-only isolation/RPC/scheduler acceptance tests remain recorded above.
+
+**Phase 2 overall: NOT YET CORE-CODE GREEN / NOT CLOSED.** Remaining hard gates are (1) line-by-line confirmation of remote DDL equivalence before any metadata-only migration-history repair, and (2) authenticated staging API/browser smoke tests plus Auth redirect/protected-preview verification. The current connected tools can query staging and inspect GitHub, but do not expose the Supabase CLI migration-repair operation or an authenticated browser session. No remote migration-history mutation has been made in this refresh. Production remains untouched.
