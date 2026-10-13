@@ -185,3 +185,18 @@ The latest Vercel preview for branch commit `12d85b595cb1b0679616570f0e95d23c3b5
 - `GET /api/ai/generate-workflow`: HTTP 405 because this endpoint requires POST; the connected Vercel fetch action cannot issue a custom POST, so this is not counted as an application smoke pass.
 
 This proves preview deployment health but **does not pass the full smoke suite**. Authenticated API/browser checks remain blocked by preview access and the available fetch action's method limitation. No secrets were read or changed, and production was not touched.
+
+## Follow-up read-only verification — 2026-10-13
+
+A further read-only pass against staging project `ygclofqxtztnynkljipj` confirmed:
+
+- Security advisor still reports **zero findings**.
+- The live migration ledger remains at **24 entries**; this is not evidence of reconciliation with the 29-file source chain.
+- The eight public application tables remain RLS-enabled. Verbose table metadata reconfirmed the workspace, workflow, version, run, run-step, schedule, and audit foreign-key relationships and the expected validation constraints. Staging currently has no application rows.
+- The four scheduler worker functions remain `SECURITY DEFINER` with an explicitly empty `search_path`; the public save-definition and dry-run RPCs remain `SECURITY INVOKER` with an empty `search_path`. The scheduler functions are still treated as service-role-only based on the prior full ACL inspection; this pass queried function definitions/configuration but did not re-run the complete ACL matrix.
+- The index catalog confirms the expected schedule due/creator/workspace indexes and the workflow-version history index exist. It also shows both `workspace_members_user_id_idx` and `workspace_members_user_idx`; do not drop either until their origin and workload value are established.
+- The current branch head docs commit `396d10a455685e4403768c52a9121d988cb411a0` does not yet appear in the Vercel deployment list for this branch. The latest matching READY deployment still points to `12d85b595cb1b0679616570f0e95d23c3b51ce42`. This is a docs-only delta, not a schema or application-code change; no deployment was forced.
+
+### Decision
+
+No remote DDL or migration-ledger changes were made. The next safe gate is still a source-to-catalog review detailed enough to approve or reject each grouped legacy ledger mapping, followed by staging-linked CLI history normalization. Authenticated browser/API acceptance and scheduler secret configuration also remain open. Production remains untouched.
