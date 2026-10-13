@@ -105,7 +105,16 @@ export async function POST(request: NextRequest) {
         name,
         description,
         status,
-        definition: {},
+        definition: {
+          version: 1,
+          nodes: [{
+            id: "trigger-1",
+            type: "trigger",
+            title: "When this happens",
+            description: "Choose an event that starts your workflow.",
+            settings: { event: "manual" },
+          }],
+        },
         created_by: user.id,
       })
       .select("id, name, description, status, updated_at")
