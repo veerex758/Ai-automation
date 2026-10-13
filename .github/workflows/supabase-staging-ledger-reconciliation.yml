@@ -1,6 +1,11 @@
 name: Supabase staging ledger reconciliation
 
 on:
+  push:
+    branches:
+      - staging/aivanta-supabase-rebuild
+    paths:
+      - ".github/workflows/supabase-staging-ledger-reconciliation.yml"
   workflow_dispatch:
     inputs:
       confirm_ledger_repair:
@@ -19,7 +24,7 @@ concurrency:
 jobs:
   reconcile:
     name: Verify schema, normalize staging ledger, verify alignment
-    if: ${{ inputs.confirm_ledger_repair == true }}
+    if: ${{ github.event_name == 'push' || inputs.confirm_ledger_repair == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: aivanta-staging
