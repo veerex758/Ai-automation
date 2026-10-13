@@ -25,7 +25,6 @@ export async function GET() {
         liveExecutionEnabledByDefault: false,
         note: "Catalog entries describe available workflow action types, not a guarantee that external services are connected.",
       },
-    }, {
     });
   } catch (error) {
     console.error("Failed to load Aivanta action catalog:", error);
