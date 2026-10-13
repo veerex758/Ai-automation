@@ -9,7 +9,9 @@ const smokeScript = resolve(here, "staging-smoke.mjs");
 const approvedPreview = "https://ai-automation-52awb5lpz-veerex-org.vercel.app";
 const fakeBypassSecret = "test-only-not-a-real-secret";
 
-function runGuardCheck({ url, secret = fakeBypassSecret }) {
+function runGuardCheck(options) {
+  const { url } = options;
+  const secret = Object.hasOwn(options, "secret") ? options.secret : fakeBypassSecret;
   const env = { ...process.env };
   if (url === undefined) delete env.AIVANTA_STAGING_URL;
   else env.AIVANTA_STAGING_URL = url;
