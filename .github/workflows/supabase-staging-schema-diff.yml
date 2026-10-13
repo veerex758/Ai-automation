@@ -53,49 +53,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # db diff starts a local shadow Postgres container; avoid collisions with
-          # preinstalled runner services on Supabase's default shadow port (54320).
+          # Avoid collisions with preinstalled runner services on Supabase's default shadow port.
           sed -i 's/^shadow_port = 54320$/shadow_port = 55432/' supabase/config.toml
-          grep -Eq '^shadow_port = 55432        id: schema_diff
-        shell: bash
-        run: |
-          set -euo pipefail
-          : > staging-schema-diff.log
-          set +e
-          supabase db diff --linked --schema public,private > staging-schema-diff.log 2>&1
-          status=$?
-          set -e
-          if grep -qi "No schema changes found" staging-schema-diff.log; then
-            : > staging-schema-diff.sql
-            echo "has_diff=false" >> "$GITHUB_OUTPUT"
-            echo "No public/private schema diff reported."
-          elif [ "$status" -ne 0 ]; then
-            echo "Schema diff command failed; inspect the uploaded diagnostic log."
-            exit "$status"
-          else
-            cp staging-schema-diff.log staging-schema-diff.sql
-            echo "has_diff=true" >> "$GITHUB_OUTPUT"
-            echo "Schema differences detected. They must be reviewed before any migration-history repair."
-          fi
-
-      - name: Upload schema diff evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: aivanta-staging-schema-diff
-          path: |
-            staging-schema-diff.log
-            staging-schema-diff.sql
-          if-no-files-found: warn
-          retention-days: 3
-
-      - name: Fail closed when schema differences need review
-        if: steps.schema_diff.outputs.has_diff == 'true'
-        shell: bash
-        run: |
-          echo "Staging schema differs from the tracked migration replay. Do not repair migration history until the artifact is reviewed."
-          exit 1
- supabase/config.toml
+          grep -Fqx 'shadow_port = 55432' <(grep '^shadow_port = ' supabase/config.toml)
 
       - name: Diff remote public/private schema against tracked migration replay
         id: schema_diff
