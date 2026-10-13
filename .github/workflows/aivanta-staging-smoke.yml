@@ -23,6 +23,41 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Diagnose runner DNS and proxy configuration safely
+        env:
+          AIVANTA_STAGING_URL: https://ai-automation-52awb5lpz-veerex-org.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import dns from "node:dns/promises";
+
+          const target = new URL(process.env.AIVANTA_STAGING_URL);
+          console.log(`Node runtime: ${process.version}`);
+          for (const [label, hostname] of [["staging", target.hostname]]) {
+            try {
+              const records = await dns.lookup(hostname, { all: true });
+              console.log(`DNS ${label}: resolved (${records.length} address record(s))`);
+            } catch (error) {
+              console.log(`DNS ${label}: ${error.code || error.name}`);
+            }
+          }
+
+          for (const key of ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"]) {
+            const value = process.env[key];
+            if (!value) continue;
+            try {
+              const proxy = new URL(value);
+              console.log(`Proxy ${key}: configured host=${proxy.hostname} port=${proxy.port || "(default)"}`);
+              try {
+                await dns.lookup(proxy.hostname);
+                console.log(`DNS proxy host for ${key}: resolved`);
+              } catch (error) {
+                console.log(`DNS proxy host for ${key}: ${error.code || error.name}`);
+              }
+            } catch {
+              console.log(`Proxy ${key}: configured but not parseable as a URL (value hidden)`);
+            }
+          }
+          NODE
       - name: Run staging-only unauthenticated smoke checks
         env:
           AIVANTA_STAGING_URL: https://ai-automation-52awb5lpz-veerex-org.vercel.app
