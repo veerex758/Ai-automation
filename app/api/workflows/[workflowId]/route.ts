@@ -81,6 +81,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       if (typeof body.status !== "string" || !allowedStatuses.has(body.status)) {
         return NextResponse.json({ error: "Choose a valid workflow status." }, { status: 400 });
       }
+      if (body.status === "active") {
+        return NextResponse.json({ error: "Workflow activation is disabled until execution safeguards are enabled." }, { status: 409 });
+      }
       updates.status = body.status;
     }
     if (Object.keys(updates).length === 0) {
