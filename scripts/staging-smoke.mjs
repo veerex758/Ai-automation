@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const rawBaseUrl = process.env.AIVANTA_STAGING_URL;
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 if (!rawBaseUrl) {
   console.error("Set AIVANTA_STAGING_URL to a dedicated staging or preview deployment.");
@@ -25,12 +26,25 @@ const knownProductionHosts = new Set([
   "ai-automation-veerex-org.vercel.app",
   "ai-automation-git-main-veerex-org.vercel.app",
 ]);
-const identifiesNonProduction = host.includes("staging")
-  || host.includes("preview")
-  || host.includes("-git-");
+const explicitlyApprovedPreviewHosts = new Set([
+  "ai-automation-52awb5lpz-veerex-org.vercel.app",
+]);
 
-if (knownProductionHosts.has(host) || !identifiesNonProduction) {
-  console.error("Refusing to run smoke tests: hostname must clearly identify a staging or preview deployment.");
+// Generic words such as "preview" or "-git-" in an unrelated domain are not
+// proof that a target is non-production. Accept only this project's Vercel Git
+// preview hostname pattern or an exact, explicitly approved deployment host.
+const isProjectGitPreview = host.startsWith("ai-automation-git-")
+  && host.endsWith("-veerex-org.vercel.app")
+  && host.endsWith(".vercel.app");
+const isExplicitlyApprovedPreview = explicitlyApprovedPreviewHosts.has(host);
+
+if (knownProductionHosts.has(host) || !(isProjectGitPreview || isExplicitlyApprovedPreview)) {
+  console.error("Refusing to run smoke tests: target must be this project's Vercel Git preview hostname or an explicitly approved preview deployment.");
+  process.exit(2);
+}
+
+if (!bypassSecret) {
+  console.error("Set VERCEL_AUTOMATION_BYPASS_SECRET in the runner's secret environment.");
   process.exit(2);
 }
 
@@ -96,8 +110,11 @@ console.log(`Aivanta staging smoke test: ${baseUrl.origin}`);
 
 for (const check of checks) {
   try {
+    const headers = new Headers(check.init.headers || {});
+    headers.set("x-vercel-protection-bypass", bypassSecret);
     const response = await fetch(new URL(`${baseUrl.pathname}${check.path}`, baseUrl.origin), {
       ...check.init,
+      headers,
       redirect: "manual",
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
