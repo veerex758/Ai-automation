@@ -23,7 +23,7 @@ function mockSupabase(plans) {
         order(column, options) { calls.push({ table, method: "order", column, options }); return builder; },
         limit(value) { calls.push({ table, method: "limit", value }); return builder; },
         insert(values) { calls.push({ table, method: "insert", values }); return builder; },
-        maybeSingle() { return Promise.resolve(next(table, "maybeSingle")); },
+        maybeSingle() { calls.push({ table, method: "maybeSingle" }); return Promise.resolve(next(table, "maybeSingle")); },
         single() { return Promise.resolve(next(table, "single")); },
         then(resolve, reject) { return Promise.resolve(next(table, "then")).then(resolve, reject); },
       };
