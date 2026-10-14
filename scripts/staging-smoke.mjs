@@ -121,7 +121,11 @@ for (const check of checks) {
   try {
     const headers = new Headers(check.init.headers || {});
     headers.set("x-vercel-protection-bypass", bypassSecret);
-    const response = await fetch(new URL(`${baseUrl.pathname}${check.path}`, baseUrl.origin), {
+    const requestUrl = new URL(`${baseUrl.pathname}${check.path}`, baseUrl.origin);
+    // Print only the URL components needed to diagnose malformed URL construction.
+    // No request headers, cookies, credentials, or response bodies are logged.
+    console.log(`Request target ${check.name}: origin=${requestUrl.origin} hostname=${requestUrl.hostname} path=${requestUrl.pathname}`);
+    const response = await fetch(requestUrl, {
       ...check.init,
       headers,
       redirect: "manual",
@@ -148,7 +152,14 @@ for (const check of checks) {
 
     console.log(`PASS ${check.name}: HTTP ${response.status}`);
   } catch (error) {
-    console.error(`FAIL ${check.name}: ${describeError(error)}`);
+    const details = describeError(error);
+    // A bounded stack can identify which fetch/dispatcher path threw without exposing
+    // request headers or secrets. Error messages are bounded to avoid log flooding.
+    const stack = typeof error?.stack === "string"
+      ? error.stack.split("\n").slice(0, 6).join("\n").slice(0, 1200)
+      : "";
+    console.error(`FAIL ${check.name}: ${details}`);
+    if (stack) console.error(`Request error stack (bounded):\n${stack}`);
     failed += 1;
   }
 }
