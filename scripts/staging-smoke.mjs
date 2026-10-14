@@ -104,6 +104,21 @@ const checks = [
     },
   },
   {
+    name: "unauthenticated workflow validation",
+    path: "/api/workflows/validate",
+    init: {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    },
+    expected: [401],
+    validate: async (response) => {
+      if (!isJson(response)) return false;
+      const body = await response.json();
+      return body?.error === "Authentication required.";
+    },
+  },
+  {
     name: "unauthenticated scheduler rejection",
     path: "/api/internal/scheduler",
     init: { method: "POST" },
