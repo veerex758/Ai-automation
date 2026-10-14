@@ -72,7 +72,12 @@ export default function WorkflowBuilderPage() {
   function saveDraft() {
     try {
       const draftName = name.trim().slice(0, 80) || "Untitled workflow";
-      const raw = window.localStorage.getItem("aivanta-workflows");
+      let raw: string | null = null;
+      try {
+        raw = window.localStorage.getItem("aivanta-workflows");
+      } catch {
+        // The dashboard summary cache is optional; still attempt canonical draft persistence.
+      }
       let existing: Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> = [];
       // Corrupt or unexpected workflow-list data must not prevent saving the builder canvas.
       try {
