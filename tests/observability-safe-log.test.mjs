@@ -42,7 +42,7 @@ test("writes structured operational fields and drops arbitrary sensitive fields"
 });
 
 test("rejects invalid event names and omits invalid field values", () => {
-  assert.throws(() => logOperationalEvent({ event: "bad event" }, () => {}), /event name is invalid/);
+  assert.throws(() => logOperationalEvent({ event: "unreviewed_event" }, () => {}), /event name is invalid/);
 
   let output = "";
   logOperationalEvent({
@@ -51,7 +51,7 @@ test("rejects invalid event names and omits invalid field values", () => {
     route: "https://example.test",
     outcome: "maybe",
     durationMs: -1,
-    errorCode: "raw provider error with secrets",
+    errorCode: "SECRET_VALUE",
   }, (line) => { output = line; });
   const record = JSON.parse(output);
   assert.equal("requestId" in record, false);
