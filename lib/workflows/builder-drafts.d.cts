@@ -5,5 +5,6 @@ declare const builderDrafts: {
   isValidDraftSteps(value: unknown): value is BuilderDraftStep[];
   allocateStepIds(existingSteps: readonly { id: number }[], count?: number, now?: number): number[];
   loadBuilderDrafts(currentRaw: string | null, legacyRaw: string | null): Record<string, BuilderDraft>;
+  persistBuilderDraft(storage: { getItem(key: string): string | null; setItem(key: string, value: string): void }, currentDrafts: Record<string, BuilderDraft>, name: string, steps: BuilderDraftStep[]): { draftName: string; drafts: Record<string, BuilderDraft>; summaryUpdated: boolean };
 };
 export = builderDrafts;
