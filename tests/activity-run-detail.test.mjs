@@ -47,6 +47,11 @@ test("activity rows link to the detail page", () => {
   assert.match(listPage, /\/dashboard\/activity\/\$\{run\.id\}/);
 });
 
+test("activity status filters expose their group and selected state accessibly", () => {
+  assert.match(listPage, /className="activity-filters" role="group" aria-label="Filter activity"/);
+  assert.match(listPage, /aria-pressed=\{filter === value\}/);
+});
+
 
 test("run detail renders in-progress and skipped states neutrally", async () => {
   assert.match(detailPage, /function statusTone\(status: string\)/);
