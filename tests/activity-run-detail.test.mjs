@@ -62,7 +62,7 @@ test("run detail scopes workflow metadata to the same workspace and keeps every 
   assert.match(endpoint, /status: 400, headers/);
   assert.match(endpoint, /status: 404, headers/);
   assert.match(endpoint, /\}, \{ headers \}\);/); // Successful detail responses are also private/no-store.
-  assert.match(endpoint, /error: "Could not load run details\.[\s\S]*?"\s*\}, \{ status: 500, headers: \{ "Cache-Control": "private, no-store, max-age=0" \} \}\)/);
+  assert.match(endpoint, /error: "Could not load run details\. Please try again\."\s*\}, \{ status: 500, headers: \{ "Cache-Control": "private, no-store, max-age=0" \} \}\)/);
   assert.doesNotMatch(endpoint, /NextResponse\.json\(\{[^}]*error_message|NextResponse\.json\(\{[^}]*provider_payload/i);
   assert.doesNotMatch(endpoint, /run\.error_message|step\.result|step\.input|provider_payload|secret_value/i);
 });
