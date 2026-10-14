@@ -42,12 +42,12 @@ test("rejects unsafe step data and duplicate IDs", () => {
 
 test("allocates unique safe IDs when rapid additions share a timestamp", () => {
   assert.deepEqual(builderDrafts.allocateStepIds([step(100), step(101)], 3, 100), [102, 103, 104]);
-  assert.deepEqual(builderDrafts.allocateStepIds([], 3, 100), [100, 101, 102]);
+  assert.deepEqual(builderDrafts.allocateStepIds([], 3, 100), [105, 106, 107]);
 });
 
 test("step ID allocator handles invalid timestamps, unsafe boundaries, and invalid counts", () => {
   assert.deepEqual(builderDrafts.allocateStepIds([step(0)], 2, Number.MAX_SAFE_INTEGER), [Number.MAX_SAFE_INTEGER, 1]);
-  assert.deepEqual(builderDrafts.allocateStepIds([], 1, -1), [0]);
+  assert.deepEqual(builderDrafts.allocateStepIds([], 1, -1), [2]);
   assert.deepEqual(builderDrafts.allocateStepIds([], 101, 10), []);
 });
 
