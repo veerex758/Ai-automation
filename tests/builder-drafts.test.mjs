@@ -133,3 +133,12 @@ test("updates an existing summary item case-insensitively instead of creating du
   assert.equal(summaries.length, 1);
   assert.equal(summaries[0].name, "Lead capture");
 });
+
+test("rejects invalid canvas data before writing any persistence keys", () => {
+  const storage = createStorage();
+  assert.throws(
+    () => builderDrafts.persistBuilderDraft(storage, {}, "Broken draft", [step(1), step(1)]),
+    /invalid workflow draft/i
+  );
+  assert.deepEqual(storage.writes, []);
+});
