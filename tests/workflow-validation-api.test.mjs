@@ -59,11 +59,18 @@ test("validation API rejects bodies larger than 1 MB", async () => {
 });
 
 test("validation API rejects an oversized declared content length before reading the body", async () => {
-  const request = new Request("https://aivanta.test/api/workflows/validate", {
-    method: "POST",
-    headers: { "content-type": "application/json", "content-length": String(MAX_BODY_BYTES + 1) },
-    body: "{}",
-  });
+  const request = {
+    headers: new Headers({
+      "content-type": "application/json",
+      "content-length": String(MAX_BODY_BYTES + 1),
+    }),
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("{}"));
+        controller.close();
+      },
+    }),
+  };
   const response = await handleWorkflowValidation(request, validator);
   assert.equal(response.status, 413);
 });
