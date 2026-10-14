@@ -20,6 +20,8 @@ test("auth callback validates redirect destinations through the shared same-orig
   assert.match(helper, /candidate\.startsWith\("\/\/"\)/);
   assert.match(helper, /%5c/i);
   assert.match(helper, /\[\\u0000-\\u001f\\u007f\]/);
+  // The source must reject even a single literal backslash, not only a pair.
+  assert.ok(helper.includes('candidate.includes("\\\\")'));
 });
 
 test("login UI does not surface raw Supabase authentication error messages", () => {
