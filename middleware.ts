@@ -28,9 +28,21 @@ export async function middleware(request: NextRequest) {
   });
 
   // getUser validates the session with Supabase; do not trust cookie contents alone.
-  const { data: { user } } = await supabase.auth.getUser();
+  // If auth is unavailable or returns an error, treat the request as signed out.
+  // This keeps protected workspace routes fail-closed during transient auth failures.
+  let user: { id: string } | null = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error) user = data.user;
+  } catch {
+    user = null;
+  }
+
   const isWorkspace = request.nextUrl.pathname.startsWith("/dashboard");
   const isLogin = request.nextUrl.pathname === "/login";
+  if (isWorkspace || isLogin) {
+    response.headers.set("Cache-Control", "private, no-store");
+  }
 
   if (isWorkspace && !user) {
     const loginUrl = new URL("/login", request.url);
