@@ -79,7 +79,6 @@ grant select, insert on public.workspace_members to authenticated;
 
 test("workspace recovery migration replays and is safe under authenticated concurrent calls", { skip: !databaseUrl }, async () => {
   const adminUrl = new URL(databaseUrl);
-  const originalDb = decodeURIComponent(adminUrl.pathname.replace(/^\//, ""));
   const databaseName = `aivanta_workspace_test_${process.pid}_${randomUUID().replaceAll("-", "").slice(0, 10)}`;
   const admin = new Client({ connectionString: databaseUrl });
   let client;
