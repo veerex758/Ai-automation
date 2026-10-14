@@ -47,7 +47,8 @@ export default function WorkflowBuilderPage() {
         });
       };
       const rawDrafts = window.localStorage.getItem("aivanta-builder-drafts");
-      const drafts: Record<string, { name: string; steps: BuilderStep[] }> = {};
+      // Treat localStorage keys as untrusted; a null-prototype map safely handles keys like "__proto__".
+      const drafts = Object.create(null) as Record<string, { name: string; steps: BuilderStep[] }>;
       if (rawDrafts) {
         const parsedDrafts = JSON.parse(rawDrafts) as unknown;
         if (parsedDrafts && typeof parsedDrafts === "object" && !Array.isArray(parsedDrafts)) {
