@@ -23,7 +23,7 @@ begin
   );
 
   select w.id, w.name
-    into workspace_id, workspace_name
+    into resolved_workspace_id, workspace_name
     from public.workspaces as w
    where w.owner_id = current_user_id
    order by w.created_at asc, w.id asc
