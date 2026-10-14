@@ -71,59 +71,11 @@ export default function WorkflowBuilderPage() {
 
   function saveDraft() {
     try {
-      const draftName = name.trim().slice(0, 80) || "Untitled workflow";
-      let raw: string | null = null;
-      try {
-        raw = window.localStorage.getItem("aivanta-workflows");
-      } catch {
-        // The dashboard summary cache is optional; still attempt canonical draft persistence.
-      }
-      let existing: Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> = [];
-      // Corrupt or unexpected workflow-list data must not prevent saving the builder canvas.
-      try {
-        const parsed = raw ? JSON.parse(raw) as unknown : [];
-        if (Array.isArray(parsed)) {
-          existing = parsed.filter((item): item is (typeof existing)[number] => {
-            if (!item || typeof item !== "object") return false;
-            const candidate = item as Record<string, unknown>;
-            return typeof candidate.id === "number" &&
-              typeof candidate.name === "string" &&
-              typeof candidate.description === "string" &&
-              typeof candidate.category === "string" &&
-              ["Active", "Draft", "Paused"].includes(String(candidate.status)) &&
-              typeof candidate.runs === "string" &&
-              typeof candidate.updated === "string" &&
-              typeof candidate.icon === "string" &&
-              typeof candidate.tone === "string";
-          });
-        }
-      } catch {
-        // Recover by replacing only the malformed workflow-list cache.
-      }
-      const next = existing.filter(item => item.name !== draftName);
-      next.unshift({ id: Date.now(), name: draftName, description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
-      // Save the canonical canvas first. A failure updating the dashboard's
-      // summary cache must never leave the user with a success message for a
-      // canvas that was not persisted.
-      const draftKey = draftName.toLocaleLowerCase();
-      const updatedDrafts = { ...localDrafts, [draftKey]: { name: draftName, steps } };
-      window.localStorage.setItem("aivanta-builder-drafts", JSON.stringify(updatedDrafts));
-      setLocalDrafts(updatedDrafts);
-
-      // The legacy key is compatibility-only. It must not turn a successful
-      // current-format save into a reported failure (or block future saves).
-      try {
-        window.localStorage.setItem("aivanta-builder-draft", JSON.stringify({ name: draftName, steps }));
-      } catch {
-        // Older builder versions may not be able to read the compatibility copy.
-      }
-
-      try {
-        window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
-        setNotice("Draft and canvas steps saved in this browser. Live integrations and execution are not connected yet.");
-      } catch {
-        setNotice("Canvas draft saved locally, but the workflow list could not be updated. Check browser storage space.");
-      }
+      const result = builderDrafts.persistBuilderDraft(window.localStorage, localDrafts, name, steps);
+      setLocalDrafts(result.drafts as Record<string, { name: string; steps: BuilderStep[] }>);
+      setNotice(result.summaryUpdated
+        ? "Draft and canvas steps saved in this browser. Live integrations and execution are not connected yet."
+        : "Canvas draft saved locally, but the workflow list could not be updated. Check browser storage space.");
     } catch {
       setNotice("Unable to save to this browser. Check storage settings and try again.");
     }
