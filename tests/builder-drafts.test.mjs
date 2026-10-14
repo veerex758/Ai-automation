@@ -95,12 +95,16 @@ function createStorage({ initial = {}, failGet = [], failSet = [] } = {}) {
   };
 }
 
-test("persists the canonical canvas even when the optional summary cache cannot be read", () => {
-  const storage = createStorage({ failGet: ["aivanta-workflows"] });
+test("persists the canonical canvas without overwriting an unreadable summary cache", () => {
+  const storage = createStorage({
+    initial: { "aivanta-workflows": JSON.stringify([{ id: 9, name: "Existing workflow" }]) },
+    failGet: ["aivanta-workflows"]
+  });
   const result = builderDrafts.persistBuilderDraft(storage, {}, "Lead capture", [step(10)]);
-  assert.equal(result.summaryUpdated, true);
+  assert.equal(result.summaryUpdated, false);
   assert.equal(JSON.parse(storage.values.get("aivanta-builder-drafts"))["lead capture"].steps[0].id, 10);
-  assert.ok(storage.values.has("aivanta-workflows"));
+  assert.equal(storage.writes.includes("aivanta-workflows"), false);
+  assert.equal(storage.values.get("aivanta-workflows"), JSON.stringify([{ id: 9, name: "Existing workflow" }]));
 });
 
 test("legacy and dashboard-summary write failures do not undo a canonical canvas save", () => {
