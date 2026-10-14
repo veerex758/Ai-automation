@@ -121,7 +121,7 @@ for (const check of checks) {
   try {
     const headers = new Headers(check.init.headers || {});
     headers.set("x-vercel-protection-bypass", bypassSecret);
-    const requestUrl = new URL(`${baseUrl.pathname}${check.path}`, baseUrl.origin);
+    const requestUrl = new URL(check.path, `${baseUrl.origin}/`);
     // Print only the URL components needed to diagnose malformed URL construction.
     // No request headers, cookies, credentials, or response bodies are logged.
     console.log(`Request target ${check.name}: origin=${requestUrl.origin} hostname=${requestUrl.hostname} path=${requestUrl.pathname}`);
