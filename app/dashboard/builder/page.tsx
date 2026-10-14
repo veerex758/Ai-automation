@@ -46,20 +46,28 @@ export default function WorkflowBuilderPage() {
           return true;
         });
       };
-      const rawDrafts = window.localStorage.getItem("aivanta-builder-drafts");
       // Treat localStorage keys as untrusted; a null-prototype map safely handles keys like "__proto__".
       const drafts = Object.create(null) as Record<string, { name: string; steps: BuilderStep[] }>;
-      if (rawDrafts) {
-        const parsedDrafts = JSON.parse(rawDrafts) as unknown;
-        if (parsedDrafts && typeof parsedDrafts === "object" && !Array.isArray(parsedDrafts)) {
-          for (const [key, value] of Object.entries(parsedDrafts)) {
-            if (!value || typeof value !== "object") continue;
-            const candidate = value as { name?: unknown; steps?: unknown };
-            if (typeof candidate.name === "string" && candidate.name.trim() && validDraftSteps(candidate.steps)) {
-              drafts[key] = { name: candidate.name.slice(0, 80), steps: candidate.steps };
+      // A corrupt current-format entry must not prevent recovery from the legacy key.
+      try {
+        const rawDrafts = window.localStorage.getItem("aivanta-builder-drafts");
+        if (rawDrafts) {
+          const parsedDrafts = JSON.parse(rawDrafts) as unknown;
+          if (parsedDrafts && typeof parsedDrafts === "object" && !Array.isArray(parsedDrafts)) {
+            for (const value of Object.values(parsedDrafts)) {
+              if (!value || typeof value !== "object") continue;
+              const candidate = value as { name?: unknown; steps?: unknown };
+              if (typeof candidate.name === "string" && candidate.name.trim() && validDraftSteps(candidate.steps)) {
+                const draftName = candidate.name.trim().slice(0, 80);
+                // Derive the key from the validated name rather than trusting the stored object key.
+                const key = draftName.toLocaleLowerCase();
+                if (key) drafts[key] = { name: draftName, steps: candidate.steps };
+              }
             }
           }
         }
+      } catch {
+        // Ignore corrupt current-format data and still attempt legacy recovery.
       }
 
       // Migrate the former single-draft key without letting corrupt legacy data
