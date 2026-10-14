@@ -61,6 +61,38 @@ test("rejects invalid event names and omits invalid field values", () => {
   assert.equal("errorCode" in record, false);
 });
 
+test("preserves only reviewed stable error codes emitted by AI and scheduler paths", () => {
+  const reviewedErrorCodes = [
+    "AI_PROVIDER_ERROR",
+    "AI_NOT_CONFIGURED",
+    "AI_CONFIGURATION_ERROR",
+    "AI_TIMEOUT",
+    "AI_PROVIDER_UNAVAILABLE",
+    "AI_PROVIDER_AUTH_ERROR",
+    "AI_INVALID_RESPONSE",
+    "AI_EMPTY_RESPONSE",
+    "AI_INVALID_JSON",
+    "AI_UNSAFE_WORKFLOW",
+    "SCHEDULER_UNAUTHORIZED",
+    "SCHEDULER_AUTH_NOT_CONFIGURED",
+    "SCHEDULER_DATABASE_NOT_CONFIGURED",
+    "SCHEDULER_CLAIM_FAILED",
+    "SCHEDULED_RUN_FAILED",
+    "INVALID_WORKFLOW_DEFINITION",
+    "SCHEDULED_RUN_PERSISTENCE_FAILED",
+    "SCHEDULED_RUN_FINALIZATION_FAILED",
+  ];
+
+  for (const errorCode of reviewedErrorCodes) {
+    let output = "";
+    logOperationalEvent({
+      event: "scheduler_tick",
+      errorCode,
+    }, (line) => { output = line; });
+    assert.equal(JSON.parse(output).errorCode, errorCode, `reviewed error code should remain available: ${errorCode}`);
+  }
+});
+
 test("health, AI generation, and scheduler responses expose request IDs without caching", () => {
   const healthRoute = readFileSync(new URL("../app/api/health/route.ts", import.meta.url), "utf8");
   const aiRoute = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
