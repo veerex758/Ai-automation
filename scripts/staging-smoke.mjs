@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { buildStagingRequestUrl } from "../lib/staging/request-url.mjs";
+
 const rawBaseUrl = process.env.AIVANTA_STAGING_URL;
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
@@ -121,7 +123,7 @@ for (const check of checks) {
   try {
     const headers = new Headers(check.init.headers || {});
     headers.set("x-vercel-protection-bypass", bypassSecret);
-    const requestUrl = new URL(check.path, `${baseUrl.origin}/`);
+    const requestUrl = buildStagingRequestUrl(check.path, baseUrl);
     // Print only the URL components needed to diagnose malformed URL construction.
     // No request headers, cookies, credentials, or response bodies are logged.
     console.log(`Request target ${check.name}: origin=${requestUrl.origin} hostname=${requestUrl.hostname} path=${requestUrl.pathname}`);
