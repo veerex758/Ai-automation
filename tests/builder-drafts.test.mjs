@@ -75,3 +75,61 @@ test("separate allocator calls stay unique when React state has not refreshed", 
   assert.equal(first[0], 500);
   assert.equal(second[0], 501);
 });
+
+
+function createStorage({ initial = {}, failGet = [], failSet = [] } = {}) {
+  const values = new Map(Object.entries(initial));
+  const writes = [];
+  return {
+    values,
+    writes,
+    getItem(key) {
+      if (failGet.includes(key)) throw new Error("storage read denied");
+      return values.has(key) ? values.get(key) : null;
+    },
+    setItem(key, value) {
+      writes.push(key);
+      if (failSet.includes(key)) throw new Error("storage write denied");
+      values.set(key, value);
+    }
+  };
+}
+
+test("persists the canonical canvas even when the optional summary cache cannot be read", () => {
+  const storage = createStorage({ failGet: ["aivanta-workflows"] });
+  const result = builderDrafts.persistBuilderDraft(storage, {}, "Lead capture", [step(10)]);
+  assert.equal(result.summaryUpdated, true);
+  assert.equal(JSON.parse(storage.values.get("aivanta-builder-drafts"))["lead capture"].steps[0].id, 10);
+  assert.ok(storage.values.has("aivanta-workflows"));
+});
+
+test("legacy and dashboard-summary write failures do not undo a canonical canvas save", () => {
+  const storage = createStorage({
+    failSet: ["aivanta-builder-draft", "aivanta-workflows"]
+  });
+  const result = builderDrafts.persistBuilderDraft(storage, {}, "Lead capture", [step(11)]);
+  assert.equal(result.summaryUpdated, false);
+  assert.equal(JSON.parse(storage.values.get("aivanta-builder-drafts"))["lead capture"].steps[0].id, 11);
+  assert.equal(storage.values.has("aivanta-builder-draft"), false);
+});
+
+test("does not attempt compatibility or summary writes if canonical persistence fails", () => {
+  const storage = createStorage({ failSet: ["aivanta-builder-drafts"] });
+  assert.throws(
+    () => builderDrafts.persistBuilderDraft(storage, {}, "Lead capture", [step(12)]),
+    /storage write denied/
+  );
+  assert.deepEqual(storage.writes, ["aivanta-builder-drafts"]);
+});
+
+test("updates an existing summary item case-insensitively instead of creating duplicates", () => {
+  const existing = [{
+    id: 7, name: "LEAD CAPTURE", description: "Old", category: "Operations",
+    status: "Draft", runs: "—", updated: "Earlier", icon: "✳", tone: "lime"
+  }];
+  const storage = createStorage({ initial: { "aivanta-workflows": JSON.stringify(existing) } });
+  builderDrafts.persistBuilderDraft(storage, {}, "Lead capture", [step(13)]);
+  const summaries = JSON.parse(storage.values.get("aivanta-workflows"));
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].name, "Lead capture");
+});
