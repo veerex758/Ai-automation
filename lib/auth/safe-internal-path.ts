@@ -9,9 +9,9 @@ export function safeInternalPath(candidate: string | null | undefined, origin: s
     return "/dashboard";
   }
 
-  // WHATWG URL parsers normalize backslashes in special-scheme URLs; reject them
-  // before parsing so inputs such as /\\\\attacker.example cannot become external.
-  if (candidate.includes("\\\\") || /%5c/i.test(candidate) || /[\u0000-\u001f\u007f]/.test(candidate)) {
+  // WHATWG URL parsers normalize backslashes in special-scheme URLs; reject any
+  // backslash before parsing so a single slash followed by a backslash cannot escape origin.
+  if (candidate.includes("\\") || /%5c/i.test(candidate) || /[\u0000-\u001f\u007f]/.test(candidate)) {
     return "/dashboard";
   }
 
