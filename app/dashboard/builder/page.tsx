@@ -61,15 +61,20 @@ export default function WorkflowBuilderPage() {
         }
       }
 
-      // Migrate the former single-draft key without discarding the user's saved canvas.
-      const legacyRaw = window.localStorage.getItem("aivanta-builder-draft");
-      if (legacyRaw) {
-        const legacy = JSON.parse(legacyRaw) as { name?: unknown; steps?: unknown };
-        if (typeof legacy.name === "string" && legacy.name.trim() && validDraftSteps(legacy.steps)) {
-          const legacyName = legacy.name.trim().slice(0, 80);
-          const key = legacyName.toLocaleLowerCase();
-          if (!drafts[key]) drafts[key] = { name: legacyName, steps: legacy.steps };
+      // Migrate the former single-draft key without letting corrupt legacy data
+      // prevent valid drafts in the current format from loading.
+      try {
+        const legacyRaw = window.localStorage.getItem("aivanta-builder-draft");
+        if (legacyRaw) {
+          const legacy = JSON.parse(legacyRaw) as { name?: unknown; steps?: unknown };
+          if (typeof legacy.name === "string" && legacy.name.trim() && validDraftSteps(legacy.steps)) {
+            const legacyName = legacy.name.trim().slice(0, 80);
+            const key = legacyName.toLocaleLowerCase();
+            if (!drafts[key]) drafts[key] = { name: legacyName, steps: legacy.steps };
+          }
         }
+      } catch {
+        // Ignore a malformed legacy entry; current-format drafts remain usable.
       }
 
       setLocalDrafts(drafts);
