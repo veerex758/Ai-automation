@@ -53,3 +53,13 @@ test("run detail renders in-progress and skipped states neutrally", async () => 
   assert.match(detailPage, /if \(!value\) return "In progress"/);
   assert.match(await readFile(fileURLToPath(new URL("../app/dashboard/activity/[runId]/run-detail.css", import.meta.url)), "utf8"), /run-detail-status\.neutral/);
 });
+
+
+test("run detail scopes workflow metadata to the same workspace and keeps every response private", () => {
+  assert.match(endpoint, /\.from\("workflows"\)[\s\S]*?\.eq\("id", run\.workflow_id\)\.eq\("workspace_id", workspace\.id\)/);
+  assert.match(endpoint, /const headers = \{ "Cache-Control": "private, no-store, max-age=0" \}/);
+  assert.match(endpoint, /status: 401, headers/);
+  assert.match(endpoint, /status: 400, headers/);
+  assert.match(endpoint, /status: 404, headers/);
+  assert.doesNotMatch(endpoint, /run\.error_message|step\.result|step\.input|provider_payload|secret_value/i);
+});
