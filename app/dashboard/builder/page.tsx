@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { validateWorkflowDefinition } from "@/lib/workflows/validation";
+import builderDrafts from "@/lib/workflows/builder-drafts.cjs";
 import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
@@ -25,29 +26,46 @@ export default function WorkflowBuilderPage() {
   const [notice, setNotice] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [localDrafts, setLocalDrafts] = useState<Record<string, { name: string; steps: BuilderStep[] }>>({});
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
 
   useEffect(() => {
+    let currentRaw: string | null = null;
+    let legacyRaw: string | null = null;
+    // Read the stores independently so a browser storage error on one key does not
+    // prevent recovery from the other key.
     try {
-      const saved = window.localStorage.getItem("aivanta-builder-draft");
-      if (saved) {
-        const parsed = JSON.parse(saved) as { name?: string; steps?: BuilderStep[] };
-        if (typeof parsed.name === "string") setName(parsed.name);
-        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-          setSteps(parsed.steps);
-          setSelected(parsed.steps[0].id);
-        }
-      }
+      currentRaw = window.localStorage.getItem("aivanta-builder-drafts");
     } catch {
-      // Keep the starter workflow when saved browser data is invalid.
+      // Continue with legacy recovery if the current-format key cannot be read.
+    }
+    try {
+      legacyRaw = window.localStorage.getItem("aivanta-builder-draft");
+    } catch {
+      // Current-format drafts remain usable if the legacy key cannot be read.
+    }
+
+    const drafts = builderDrafts.loadBuilderDrafts(currentRaw, legacyRaw) as Record<string, { name: string; steps: BuilderStep[] }>;
+    setLocalDrafts(drafts);
+    const initialKey = "Lead capture & follow-up".toLocaleLowerCase();
+    const initialDraft = drafts[initialKey] ?? Object.values(drafts)[0];
+    if (initialDraft) {
+      setName(initialDraft.name);
+      setSteps(initialDraft.steps);
+      setSelected(initialDraft.steps[0].id);
     }
     setHydrated(true);
   }, []);
 
   function addStep(kind: StepKind) {
-    const id = Date.now();
+    if (steps.length >= 100) {
+      setShowAdd(false);
+      setNotice("This draft has reached the 100-step limit. Remove a step before adding another.");
+      return;
+    }
+    const id = builderDrafts.allocateStepIds(steps, 1)[0];
     const title = kind === "Trigger" ? "New event trigger" : kind === "Condition" ? "Check a condition" : "New workflow action";
     const detail = kind === "Trigger" ? "Choose what starts this workflow" : kind === "Condition" ? "Define a rule before continuing" : "Choose an action to perform";
     setSteps(current => [...current, { id, kind, title, detail }]);
@@ -57,13 +75,17 @@ export default function WorkflowBuilderPage() {
   }
 
   function saveDraft() {
+    if (!hydrated) {
+      setNotice("Drafts are still loading. Please wait a moment before saving.");
+      return;
+    }
     try {
-      const raw = window.localStorage.getItem("aivanta-workflows");
-      const existing = raw ? JSON.parse(raw) as Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
-      const next = existing.filter(item => item.name !== name.trim());
-      next.unshift({ id: Date.now(), name: name.trim() || "Untitled workflow", description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
-      window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
-      setNotice("Draft saved in this browser. Live integrations and execution are not connected yet.");
+      const result = builderDrafts.persistBuilderDraft(window.localStorage, localDrafts, name, steps);
+      setName(result.draftName);
+      setLocalDrafts(result.drafts as Record<string, { name: string; steps: BuilderStep[] }>);
+      setNotice(result.summaryUpdated
+        ? "Draft and canvas steps saved in this browser. Live integrations and execution are not connected yet."
+        : "Canvas draft saved locally, but the workflow list could not be updated. Check browser storage space.");
     } catch {
       setNotice("Unable to save to this browser. Check storage settings and try again.");
     }
@@ -93,9 +115,9 @@ export default function WorkflowBuilderPage() {
       </aside>
 
       <section className="builder-main">
-        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft}>Save draft</button><button className="builder-primary-button" onClick={reviewWorkflow}>Review &amp; activate ↗</button></div></header>
+        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft} disabled={!hydrated}>Save draft</button><button className="builder-primary-button" onClick={reviewWorkflow}>Review &amp; activate ↗</button></div></header>
         <div className="builder-content">
-          <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
+          <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span>{Object.keys(localDrafts).length > 0 && <label className="builder-local-draft-picker">Saved local drafts <select aria-label="Load a saved local draft" value={localDrafts[name.trim().toLocaleLowerCase()] ? name.trim().toLocaleLowerCase() : ""} onChange={event => { const draft = localDrafts[event.target.value]; if (draft) { setName(draft.name); setSteps(draft.steps); setSelected(draft.steps[0]?.id ?? 0); setNotice("Loaded saved browser draft. Save after editing to update it."); } }}><option value="">Choose draft…</option>{Object.entries(localDrafts).map(([key, draft]) => <option key={key} value={key}>{draft.name}</option>)}</select></label>}</div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
           <section className="ai-workflow-panel" aria-labelledby="ai-workflow-heading">
             <div className="ai-workflow-copy"><span className="builder-ai-badge">✳ AI ASSISTANT</span><h2 id="ai-workflow-heading">Describe it. We’ll draft it.</h2><p>Explain the workflow in plain English. Review the draft before applying it; nothing executes automatically.</p></div>
@@ -117,9 +139,10 @@ export default function WorkflowBuilderPage() {
               <div className="ai-workflow-form-footer"><small>{aiPrompt.length}/2000 · Generated steps need review</small><button className="builder-primary-button" type="submit" disabled={aiGenerating || !aiPrompt.trim()}>{aiGenerating ? "Generating draft…" : "Generate workflow ✳"}</button></div>
             </form>
             {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
-              const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => ({ id: Date.now() + index, kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action", title: node.title, detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ") }));
+              const ids = builderDrafts.allocateStepIds(steps, aiPreview.nodes.length);
+              const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => ({ id: ids[index], kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action", title: node.title, detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ") }));
               setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
-            }}>Apply draft to canvas ↗</button></div>}
+            }} disabled={aiPreview.nodes.length < 1 || aiPreview.nodes.length > 100}>Apply draft to canvas ↗</button></div>}
           </section>
           <div className="builder-workspace-grid">
             <section className="canvas-panel" aria-label="Workflow canvas">
