@@ -7,27 +7,22 @@ const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const source = readFileSync(new URL("../lib/supabase/workspace.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const workspaceModule = { exports: {} };
-new Function("exports", "require", "module", compiled)(
-  workspaceModule.exports,
-  require,
-  workspaceModule,
+const { getOrCreateDefaultWorkspace } = await import(
+  `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
 );
-const { getOrCreateDefaultWorkspace } = workspaceModule.exports;
 
 function mockSupabase(plans) {
   const calls = [];
   const client = {
     from(table) {
       const builder = {
-        table,
         select(columns) { calls.push({ table, method: "select", columns }); return builder; },
         eq(column, value) { calls.push({ table, method: "eq", column, value }); return builder; },
         order(column, options) { calls.push({ table, method: "order", column, options }); return builder; },
         limit(value) { calls.push({ table, method: "limit", value }); return builder; },
-        insert(values) { calls.push({ table, method: "insert", values }); builder.inserted = true; return builder; },
+        insert(values) { calls.push({ table, method: "insert", values }); return builder; },
         maybeSingle() { return Promise.resolve(next(table, "maybeSingle")); },
         single() { return Promise.resolve(next(table, "single")); },
         then(resolve, reject) { return Promise.resolve(next(table, "then")).then(resolve, reject); },
