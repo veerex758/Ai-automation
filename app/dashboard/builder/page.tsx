@@ -81,6 +81,7 @@ export default function WorkflowBuilderPage() {
     }
     try {
       const result = builderDrafts.persistBuilderDraft(window.localStorage, localDrafts, name, steps);
+      setName(result.draftName);
       setLocalDrafts(result.drafts as Record<string, { name: string; steps: BuilderStep[] }>);
       setNotice(result.summaryUpdated
         ? "Draft and canvas steps saved in this browser. Live integrations and execution are not connected yet."
