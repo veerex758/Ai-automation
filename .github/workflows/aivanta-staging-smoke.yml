@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Diagnose runner DNS and proxy configuration safely
+      - name: Diagnose runner DNS and fetch environment safely
         env:
           AIVANTA_STAGING_URL: https://ai-automation-52awb5lpz-veerex-org.vercel.app
         run: |
@@ -31,13 +31,17 @@ jobs:
           import dns from "node:dns/promises";
 
           const target = new URL(process.env.AIVANTA_STAGING_URL);
-          console.log(`Node runtime: ${process.version}`);
-          for (const [label, hostname] of [["staging", target.hostname]]) {
+          console.log("Node runtime: " + process.version);
+          console.log("NODE_OPTIONS configured: " + Boolean(process.env.NODE_OPTIONS));
+          console.log("NODE_USE_ENV_PROXY configured: " + Boolean(process.env.NODE_USE_ENV_PROXY));
+          console.log("Relevant environment variable names: " + (Object.keys(process.env).filter((key) => /proxy|agent|fetch|node_options/i.test(key)).sort().join(", ") || "(none)"));
+
+          for (const [label, hostname] of [["staging", target.hostname], ["api-clue", "api"]]) {
             try {
               const records = await dns.lookup(hostname, { all: true });
-              console.log(`DNS ${label}: resolved (${records.length} address record(s))`);
+              console.log("DNS " + label + ": resolved (" + records.length + " address record(s))");
             } catch (error) {
-              console.log(`DNS ${label}: ${error.code || error.name}`);
+              console.log("DNS " + label + ": " + (error.code || error.name));
             }
           }
 
@@ -46,15 +50,27 @@ jobs:
             if (!value) continue;
             try {
               const proxy = new URL(value);
-              console.log(`Proxy ${key}: configured host=${proxy.hostname} port=${proxy.port || "(default)"}`);
+              console.log("Proxy " + key + ": configured host=" + proxy.hostname + " port=" + (proxy.port || "(default)"));
               try {
                 await dns.lookup(proxy.hostname);
-                console.log(`DNS proxy host for ${key}: resolved`);
+                console.log("DNS proxy host for " + key + ": resolved");
               } catch (error) {
-                console.log(`DNS proxy host for ${key}: ${error.code || error.name}`);
+                console.log("DNS proxy host for " + key + ": " + (error.code || error.name));
               }
             } catch {
-              console.log(`Proxy ${key}: configured but not parseable as a URL (value hidden)`);
+              console.log("Proxy " + key + ": configured but not parseable as a URL (value hidden)");
+            }
+          }
+
+          try {
+            const response = await fetch(target.origin, { redirect: "manual", signal: AbortSignal.timeout(5000) });
+            console.log("Native fetch to staging origin: HTTP " + response.status);
+            await response.body?.cancel();
+          } catch (error) {
+            let current = error;
+            for (let depth = 0; current && depth < 3; depth += 1) {
+              console.log(("Native fetch error depth " + (depth + 1) + ": " + (current.name || "Error") + " " + (current.code || "") + " " + (current.message || "")).trim());
+              current = current.cause;
             }
           }
           NODE
