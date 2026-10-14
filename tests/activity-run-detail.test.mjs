@@ -77,3 +77,15 @@ test("activity list is workspace-scoped and returns a generic private error on f
   assert.match(listEndpoint, /error: "Could not load activity\. Please try again\."/);
   assert.doesNotMatch(listEndpoint, /NextResponse\.json\(\{[^}]*error_message|NextResponse\.json\(\{[^}]*provider_payload/i);
 });
+
+test("activity list exposes only safe run metadata and scopes workflow names to the workspace", () => {
+  assert.match(listEndpoint, /\.select\("id, workflow_id, mode, status, workflow_version, created_at, duration_ms"\)/);
+  assert.match(listEndpoint, /\.from\("workflows"\)[\s\S]*?\.select\("id, name"\)[\s\S]*?\.eq\("workspace_id", workspace\.id\)/);
+  assert.doesNotMatch(listEndpoint, /run\.error_message|provider_payload|secret_value|step\.result|step\.input/i);
+});
+
+test("activity list keeps unauthorized, successful, and failed responses private", () => {
+  assert.match(listEndpoint, /status: 401, headers: \{ "Cache-Control": "private, no-store, max-age=0" \}/);
+  assert.match(listEndpoint, /\}, \{ headers: \{ "Cache-Control": "private, no-store, max-age=0" \} \}\);/);
+  assert.match(listEndpoint, /status: 500, headers: \{ "Cache-Control": "private, no-store, max-age=0" \}/);
+});
