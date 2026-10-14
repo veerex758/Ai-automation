@@ -41,10 +41,14 @@ begin
       'My'
     );
 
-    insert into public.workspaces (name, owner_id)
-    values (pg_catalog.left(display_name || '''s workspace', 120), current_user_id)
-    returning workspaces.id, workspaces.name
-      into workspace_id, workspace_name;
+    -- Generate the id before inserting. INSERT ... RETURNING is subject to the
+    -- table's SELECT policy too; a newly created workspace may not be visible
+    -- under membership-only SELECT policies until its owner-membership row exists.
+    workspace_id := pg_catalog.gen_random_uuid();
+    workspace_name := pg_catalog.left(display_name || '''s workspace', 120);
+
+    insert into public.workspaces (id, name, owner_id)
+    values (workspace_id, workspace_name, current_user_id);
   end if;
 
   -- Repair a missing owner-membership row safely if two requests reach this
