@@ -8,7 +8,7 @@ set search_path = ''
 as $$
 declare
   current_user_id uuid := auth.uid();
-  workspace_id uuid;
+  resolved_workspace_id uuid;
   workspace_name varchar(120);
   display_name text;
 begin
@@ -29,7 +29,7 @@ begin
    order by w.created_at asc, w.id asc
    limit 1;
 
-  if workspace_id is null then
+  if resolved_workspace_id is null then
     display_name := coalesce(
       nullif(
         pg_catalog.left(
@@ -44,20 +44,20 @@ begin
     -- Generate the id before inserting. INSERT ... RETURNING is subject to the
     -- table's SELECT policy too; a newly created workspace may not be visible
     -- under membership-only SELECT policies until its owner-membership row exists.
-    workspace_id := pg_catalog.gen_random_uuid();
+    resolved_workspace_id := pg_catalog.gen_random_uuid();
     workspace_name := pg_catalog.left(display_name || '''s workspace', 120);
 
     insert into public.workspaces (id, name, owner_id)
-    values (workspace_id, workspace_name, current_user_id);
+    values (resolved_workspace_id, workspace_name, current_user_id);
   end if;
 
   -- Repair a missing owner-membership row safely if two requests reach this
   -- path after legacy/manual data changes; the composite primary key deduplicates.
   insert into public.workspace_members (workspace_id, user_id, role)
-  values (workspace_id, current_user_id, 'owner')
+  values (resolved_workspace_id, current_user_id, 'owner')
   on conflict (workspace_id, user_id) do nothing;
 
-  return query select workspace_id, workspace_name;
+  return query select resolved_workspace_id, workspace_name;
 end;
 $$;
 
