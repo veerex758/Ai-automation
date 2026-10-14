@@ -119,8 +119,19 @@ export default function WorkflowBuilderPage() {
       try {
         const parsed = raw ? JSON.parse(raw) as unknown : [];
         if (Array.isArray(parsed)) {
-          existing = parsed.filter((item): item is (typeof existing)[number] =>
-            Boolean(item) && typeof item === "object" && typeof item.name === "string");
+          existing = parsed.filter((item): item is (typeof existing)[number] => {
+            if (!item || typeof item !== "object") return false;
+            const candidate = item as Record<string, unknown>;
+            return typeof candidate.id === "number" &&
+              typeof candidate.name === "string" &&
+              typeof candidate.description === "string" &&
+              typeof candidate.category === "string" &&
+              ["Active", "Draft", "Paused"].includes(String(candidate.status)) &&
+              typeof candidate.runs === "string" &&
+              typeof candidate.updated === "string" &&
+              typeof candidate.icon === "string" &&
+              typeof candidate.tone === "string";
+          });
         }
       } catch {
         // Recover by replacing only the malformed workflow-list cache.
