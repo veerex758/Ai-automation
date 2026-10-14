@@ -114,7 +114,17 @@ export default function WorkflowBuilderPage() {
     try {
       const draftName = name.trim().slice(0, 80) || "Untitled workflow";
       const raw = window.localStorage.getItem("aivanta-workflows");
-      const existing = raw ? JSON.parse(raw) as Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
+      let existing: Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> = [];
+      // Corrupt or unexpected workflow-list data must not prevent saving the builder canvas.
+      try {
+        const parsed = raw ? JSON.parse(raw) as unknown : [];
+        if (Array.isArray(parsed)) {
+          existing = parsed.filter((item): item is (typeof existing)[number] =>
+            Boolean(item) && typeof item === "object" && typeof item.name === "string");
+        }
+      } catch {
+        // Recover by replacing only the malformed workflow-list cache.
+      }
       const next = existing.filter(item => item.name !== draftName);
       next.unshift({ id: Date.now(), name: draftName, description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
       // Persist each named canvas independently instead of overwriting one global draft.
