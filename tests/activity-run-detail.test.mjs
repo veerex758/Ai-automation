@@ -4,11 +4,13 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const endpointPath = fileURLToPath(new URL("../app/api/activity/[runId]/route.ts", import.meta.url));
+const listEndpointPath = fileURLToPath(new URL("../app/api/activity/route.ts", import.meta.url));
 const pagePath = fileURLToPath(new URL("../app/dashboard/activity/[runId]/page.tsx", import.meta.url));
 const listPagePath = fileURLToPath(new URL("../app/dashboard/activity/page.tsx", import.meta.url));
 
-const [endpoint, detailPage, listPage] = await Promise.all([
+const [endpoint, listEndpoint, detailPage, listPage] = await Promise.all([
   readFile(endpointPath, "utf8"),
+  readFile(listEndpointPath, "utf8"),
   readFile(pagePath, "utf8"),
   readFile(listPagePath, "utf8"),
 ]);
@@ -65,4 +67,13 @@ test("run detail scopes workflow metadata to the same workspace and keeps every 
   assert.match(endpoint, /error: "Could not load run details\. Please try again\."\s*\}, \{ status: 500, headers: \{ "Cache-Control": "private, no-store, max-age=0" \} \}\)/);
   assert.doesNotMatch(endpoint, /NextResponse\.json\(\{[^}]*error_message|NextResponse\.json\(\{[^}]*provider_payload/i);
   assert.doesNotMatch(endpoint, /run\.error_message|step\.result|step\.input|provider_payload|secret_value/i);
+});
+
+
+test("activity list is workspace-scoped and returns a generic private error on failure", () => {
+  assert.match(listEndpoint, /supabase\.auth\.getUser\(\)/);
+  assert.match(listEndpoint, /\.eq\("workspace_id", workspace\.id\)/);
+  assert.match(listEndpoint, /Cache-Control.*private, no-store, max-age=0/);
+  assert.match(listEndpoint, /error: "Could not load activity\. Please try again\."/);
+  assert.doesNotMatch(listEndpoint, /NextResponse\.json\(\{[^}]*error_message|NextResponse\.json\(\{[^}]*provider_payload/i);
 });
