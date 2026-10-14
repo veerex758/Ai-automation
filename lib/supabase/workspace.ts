@@ -5,6 +5,44 @@ export type WorkspaceSummary = {
   name: string;
 };
 
+async function ensureOwnerMembership(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
+  const { data: membership, error: membershipLookupError } = await supabase
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (membershipLookupError) throw membershipLookupError;
+  if (membership) return;
+
+  const { error: membershipInsertError } = await supabase
+    .from("workspace_members")
+    .insert({ workspace_id: workspaceId, user_id: userId, role: "owner" });
+
+  if (!membershipInsertError) return;
+
+  // Another concurrent request may have repaired/created this membership after
+  // our lookup. Confirm the invariant before treating a duplicate-key error as safe.
+  if (membershipInsertError.code === "23505") {
+    const { data: racedMembership, error: racedLookupError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (racedLookupError) throw racedLookupError;
+    if (racedMembership) return;
+  }
+
+  throw membershipInsertError;
+}
+
 export async function getOrCreateDefaultWorkspace(
   supabase: SupabaseClient,
   user: User,
@@ -19,21 +57,7 @@ export async function getOrCreateDefaultWorkspace(
 
   if (lookupError) throw lookupError;
   if (existing) {
-    const { data: membership, error: membershipLookupError } = await supabase
-      .from("workspace_members")
-      .select("workspace_id")
-      .eq("workspace_id", existing.id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (membershipLookupError) throw membershipLookupError;
-    if (!membership) {
-      const { error: membershipInsertError } = await supabase
-        .from("workspace_members")
-        .insert({ workspace_id: existing.id, user_id: user.id, role: "owner" });
-      if (membershipInsertError) throw membershipInsertError;
-    }
-
+    await ensureOwnerMembership(supabase, existing.id, user.id);
     return existing;
   }
 
@@ -49,10 +73,6 @@ export async function getOrCreateDefaultWorkspace(
 
   if (createError) throw createError;
 
-  const { error: membershipError } = await supabase
-    .from("workspace_members")
-    .insert({ workspace_id: created.id, user_id: user.id, role: "owner" });
-
-  if (membershipError) throw membershipError;
+  await ensureOwnerMembership(supabase, created.id, user.id);
   return created;
 }
