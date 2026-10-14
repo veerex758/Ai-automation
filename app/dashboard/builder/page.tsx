@@ -60,6 +60,11 @@ export default function WorkflowBuilderPage() {
   }, []);
 
   function addStep(kind: StepKind) {
+    if (steps.length >= 100) {
+      setShowAdd(false);
+      setNotice("This draft has reached the 100-step limit. Remove a step before adding another.");
+      return;
+    }
     const id = builderDrafts.allocateStepIds(steps, 1)[0];
     const title = kind === "Trigger" ? "New event trigger" : kind === "Condition" ? "Check a condition" : "New workflow action";
     const detail = kind === "Trigger" ? "Choose what starts this workflow" : kind === "Condition" ? "Define a rule before continuing" : "Choose an action to perform";
@@ -132,7 +137,7 @@ export default function WorkflowBuilderPage() {
               const ids = builderDrafts.allocateStepIds(steps, aiPreview.nodes.length);
               const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => ({ id: ids[index], kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action", title: node.title, detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ") }));
               setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
-            }}>Apply draft to canvas ↗</button></div>}
+            }} disabled={aiPreview.nodes.length < 1 || aiPreview.nodes.length > 100}>Apply draft to canvas ↗</button></div>}
           </section>
           <div className="builder-workspace-grid">
             <section className="canvas-panel" aria-label="Workflow canvas">
