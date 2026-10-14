@@ -29,7 +29,7 @@ const knownProductionHosts = new Set([
   "ai-automation-git-main-veerex-org.vercel.app",
 ]);
 const explicitlyApprovedPreviewHosts = new Set([
-  "ai-automation-52awb5lpz-veerex-org.vercel.app",
+  "ai-automation-3oo2aepz3-veerex-org.vercel.app",
 ]);
 const identifiesNonProduction = host.includes("staging")
   || host.includes("preview")
