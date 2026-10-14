@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { buildStagingRequestUrl } from "../lib/staging/request-url.mjs";
+
 const rawBaseUrl = process.env.AIVANTA_STAGING_URL;
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
@@ -102,6 +104,21 @@ const checks = [
     },
   },
   {
+    name: "unauthenticated workflow validation",
+    path: "/api/workflows/validate",
+    init: {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    },
+    expected: [401],
+    validate: async (response) => {
+      if (!isJson(response)) return false;
+      const body = await response.json();
+      return body?.error === "Authentication required.";
+    },
+  },
+  {
     name: "unauthenticated scheduler rejection",
     path: "/api/internal/scheduler",
     init: { method: "POST" },
@@ -121,7 +138,7 @@ for (const check of checks) {
   try {
     const headers = new Headers(check.init.headers || {});
     headers.set("x-vercel-protection-bypass", bypassSecret);
-    const requestUrl = new URL(check.path, `${baseUrl.origin}/`);
+    const requestUrl = buildStagingRequestUrl(check.path, baseUrl);
     // Print only the URL components needed to diagnose malformed URL construction.
     // No request headers, cookies, credentials, or response bodies are logged.
     console.log(`Request target ${check.name}: origin=${requestUrl.origin} hostname=${requestUrl.hostname} path=${requestUrl.pathname}`);
