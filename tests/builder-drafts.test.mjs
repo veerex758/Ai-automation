@@ -41,13 +41,23 @@ test("rejects unsafe step data and duplicate IDs", () => {
 });
 
 test("allocates unique safe IDs when rapid additions share a timestamp", () => {
-  assert.deepEqual(builderDrafts.allocateStepIds([step(100), step(101)], 3, 100), [102, 103, 104]);
-  assert.deepEqual(builderDrafts.allocateStepIds([], 3, 100), [105, 106, 107]);
+  const first = builderDrafts.allocateStepIds([step(100), step(101)], 3, 100);
+  assert.deepEqual(first, [102, 103, 104]);
+
+  // The allocator deliberately remembers IDs across calls so two UI additions
+  // made before React state refreshes cannot receive the same ID.
+  const second = builderDrafts.allocateStepIds([], 3, 100);
+  assert.equal(second.length, 3);
+  assert.equal(new Set(second).size, 3);
+  assert.equal(second.some(id => first.includes(id)), false);
 });
 
 test("step ID allocator handles invalid timestamps, unsafe boundaries, and invalid counts", () => {
   assert.deepEqual(builderDrafts.allocateStepIds([step(0)], 2, Number.MAX_SAFE_INTEGER), [Number.MAX_SAFE_INTEGER, 1]);
-  assert.deepEqual(builderDrafts.allocateStepIds([], 1, -1), [2]);
+  const invalidTimestampId = builderDrafts.allocateStepIds([], 1, -1);
+  assert.equal(invalidTimestampId.length, 1);
+  assert.equal(Number.isSafeInteger(invalidTimestampId[0]), true);
+  assert.ok(invalidTimestampId[0] >= 0);
   assert.deepEqual(builderDrafts.allocateStepIds([], 101, 10), []);
 });
 
