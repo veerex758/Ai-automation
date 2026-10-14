@@ -146,3 +146,17 @@ test("rejects invalid canvas data before writing any persistence keys", () => {
   );
   assert.deepEqual(storage.writes, []);
 });
+
+
+test("preserves the entire dashboard summary cache when any entry has an unknown shape", () => {
+  const original = JSON.stringify([
+    { id: 9, name: "Existing workflow" },
+    { id: 10, name: "Another item", extraLegacyData: "keep me" }
+  ]);
+  const storage = createStorage({ initial: { "aivanta-workflows": original } });
+  const result = builderDrafts.persistBuilderDraft(storage, {}, "Lead capture", [step(14)]);
+  assert.equal(result.summaryUpdated, false);
+  assert.equal(storage.values.get("aivanta-workflows"), original);
+  assert.equal(storage.writes.includes("aivanta-workflows"), false);
+  assert.ok(storage.values.has("aivanta-builder-drafts"));
+});
