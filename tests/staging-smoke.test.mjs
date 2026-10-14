@@ -4,11 +4,14 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const scriptPath = fileURLToPath(new URL("../scripts/staging-smoke.mjs", import.meta.url));
+const approvedPreview = "https://ai-automation-3oo2aepz3-veerex-org.vercel.app";
 
-function runSmoke(url) {
+function runSmoke(url, { secret } = {}) {
   const env = { ...process.env };
   delete env.AIVANTA_STAGING_URL;
+  delete env.VERCEL_AUTOMATION_BYPASS_SECRET;
   if (url !== undefined) env.AIVANTA_STAGING_URL = url;
+  if (secret !== undefined) env.VERCEL_AUTOMATION_BYPASS_SECRET = secret;
 
   return spawnSync(process.execPath, [scriptPath], {
     env,
@@ -24,19 +27,49 @@ test("staging smoke script requires an explicit target URL", () => {
 });
 
 test("staging smoke script refuses known production aliases", () => {
-  const result = runSmoke("https://ai-automation-veerex-org.vercel.app");
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /Refusing to run smoke tests/);
+  for (const url of [
+    "https://ai-automation-veerex-org.vercel.app",
+    "https://ai-automation-git-main-veerex-org.vercel.app",
+  ]) {
+    const result = runSmoke(url);
+    assert.equal(result.status, 2, url);
+    assert.match(result.stderr, /explicitly approved Aivanta preview hostname/, url);
+  }
 });
 
-test("staging smoke script refuses non-HTTPS targets", () => {
-  const result = runSmoke("http://ai-automation-git-phase-12-preview-veerex-org.vercel.app");
+test("staging smoke script refuses arbitrary domains with preview or git markers", () => {
+  for (const url of [
+    "https://example.com",
+    "https://preview.example.com",
+    "https://evil-git-preview.com",
+    "https://ai-automation-git-phase-12.attacker.example",
+  ]) {
+    const result = runSmoke(url);
+    assert.equal(result.status, 2, url);
+    assert.match(result.stderr, /explicitly approved Aivanta preview hostname/, url);
+  }
+});
+
+test("staging smoke script refuses non-HTTPS targets before any request", () => {
+  const result = runSmoke("http://ai-automation-3oo2aepz3-veerex-org.vercel.app");
   assert.equal(result.status, 2);
   assert.match(result.stderr, /non-HTTPS/);
 });
 
-test("staging smoke script requires a hostname that identifies staging or preview", () => {
-  const result = runSmoke("https://example.com");
+test("staging smoke script refuses URL credentials and non-default ports", () => {
+  for (const url of [
+    "https://user:password@ai-automation-3oo2aepz3-veerex-org.vercel.app",
+    "https://ai-automation-3oo2aepz3-veerex-org.vercel.app:8443",
+  ]) {
+    const result = runSmoke(url);
+    assert.equal(result.status, 2, url);
+    assert.match(result.stderr, /explicitly approved Aivanta preview hostname/, url);
+  }
+});
+
+test("approved preview hostname still requires the Vercel protection secret before requests", () => {
+  const result = runSmoke(approvedPreview);
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /hostname must clearly identify a staging or preview/);
+  assert.match(result.stderr, /Set VERCEL_AUTOMATION_BYPASS_SECRET/);
+  assert.doesNotMatch(result.stdout, /Aivanta staging smoke test:/);
 });
