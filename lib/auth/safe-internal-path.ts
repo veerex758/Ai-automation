@@ -11,7 +11,7 @@ export function safeInternalPath(candidate: string | null | undefined, origin: s
 
   // WHATWG URL parsers normalize backslashes in special-scheme URLs; reject them
   // before parsing so inputs such as /\\\\attacker.example cannot become external.
-  if (candidate.includes("\\\\") || /[\u0000-\u001f\u007f]/.test(candidate)) {
+  if (candidate.includes("\\\\") || /%5c/i.test(candidate) || /[\u0000-\u001f\u007f]/.test(candidate)) {
     return "/dashboard";
   }
 
