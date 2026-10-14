@@ -6,38 +6,44 @@ import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const maxInputBytes = 10 * 1024;
 
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   const startedAt = Date.now();
   try {
     const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    if (!uuidPattern.test(workflowId)) return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
 
     const contentLength = Number(request.headers.get("content-length") ?? "0");
     if (contentLength > maxInputBytes) {
-      return NextResponse.json({ error: "Dry-run input must be 10 KB or smaller." }, { status: 413 });
+      return privateJson({ error: "Dry-run input must be 10 KB or smaller." }, { status: 413 });
     }
 
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
     let body: unknown;
     try { body = await request.json(); } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+      return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json({ error: "Request body must be an object." }, { status: 400 });
+      return privateJson({ error: "Request body must be an object." }, { status: 400 });
     }
     const requestBody = body as Record<string, unknown>;
     if (requestBody.mode !== undefined && requestBody.mode !== "dry_run") {
-      return NextResponse.json({ error: "Only dry-run mode is available; live execution is not enabled." }, { status: 400 });
+      return privateJson({ error: "Only dry-run mode is available; live execution is not enabled." }, { status: 400 });
     }
     const input = requestBody.input === undefined ? {} : requestBody.input;
     if (!input || typeof input !== "object" || Array.isArray(input)) {
-      return NextResponse.json({ error: "Dry-run input must be a JSON object." }, { status: 400 });
+      return privateJson({ error: "Dry-run input must be a JSON object." }, { status: 400 });
     }
     if (Buffer.byteLength(JSON.stringify(input), "utf8") > maxInputBytes) {
-      return NextResponse.json({ error: "Dry-run input must be 10 KB or smaller." }, { status: 413 });
+      return privateJson({ error: "Dry-run input must be 10 KB or smaller." }, { status: 413 });
     }
 
     const { data: workflow, error: workflowError } = await supabase
@@ -46,14 +52,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .eq("id", workflowId)
       .maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!workflow) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     if (workflow.status === "archived") {
-      return NextResponse.json({ error: "Archived workflows cannot be run." }, { status: 409 });
+      return privateJson({ error: "Archived workflows cannot be run." }, { status: 409 });
     }
 
     const validated = validateDefinition(workflow.definition);
     if (!validated.definition) {
-      return NextResponse.json({ error: "This workflow definition is invalid. Save a valid definition before testing." }, { status: 422 });
+      return privateJson({ error: "This workflow definition is invalid. Save a valid definition before testing." }, { status: 422 });
     }
 
     const result = runDryRun(validated.definition, input as Record<string, unknown>);
@@ -76,15 +82,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       })),
     });
     if (runError) {
-      if (runError.code === "P0002") return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-      if (runError.code === "40001") return NextResponse.json({ error: "This workflow changed during the test. Reload it and try again." }, { status: 409 });
-      if (runError.code === "22023") return NextResponse.json({ error: "This workflow could not be recorded safely." }, { status: 422 });
+      if (runError.code === "P0002") return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      if (runError.code === "40001") return privateJson({ error: "This workflow changed during the test. Reload it and try again." }, { status: 409 });
+      if (runError.code === "22023") return privateJson({ error: "This workflow could not be recorded safely." }, { status: 422 });
       throw runError;
     }
     const saved = Array.isArray(data) ? data[0] : data;
     if (!saved) throw new Error("The dry-run was not recorded.");
 
-    return NextResponse.json({
+    return privateJson({
       run: {
         id: saved.run_id,
         mode: "dry_run",
@@ -98,18 +104,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }, { status: 201 });
   } catch (error) {
     console.error("Failed to run Aivanta workflow dry-run:", error);
-    return NextResponse.json({ error: "Could not complete this workflow dry-run. Try again." }, { status: 500 });
+    return privateJson({ error: "Could not complete this workflow dry-run. Try again." }, { status: 500 });
   }
 }
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   try {
     const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    if (!uuidPattern.test(workflowId)) return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
 
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
     const { data: workflow, error: workflowError } = await supabase
       .from("workflows")
@@ -117,7 +123,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
       .eq("id", workflowId)
       .maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!workflow) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
 
     const { data: runs, error: runsError } = await supabase
       .from("workflow_runs")
@@ -129,16 +135,18 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     if (runsError) throw runsError;
 
     const runIds = (runs ?? []).map((run) => run.id);
-    if (runIds.length === 0) return NextResponse.json({ runs: [] });
+    if (runIds.length === 0) return privateJson({ runs: [] });
 
+    // History UI needs only safe metadata; do not return persisted step results,
+    // inputs, outputs, or provider payloads from this endpoint.
     const { data: steps, error: stepsError } = await supabase
       .from("workflow_run_steps")
-      .select("id, run_id, step_id, position, step_type, title, status, result, started_at, completed_at")
+      .select("id, run_id, position, title, status")
       .in("run_id", runIds)
       .order("position", { ascending: true });
     if (stepsError) throw stepsError;
 
-    return NextResponse.json({
+    return privateJson({
       runs: (runs ?? []).map((run) => ({
         ...run,
         steps: (steps ?? []).filter((step) => step.run_id === run.id),
@@ -146,6 +154,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     });
   } catch (error) {
     console.error("Failed to load Aivanta workflow run history:", error);
-    return NextResponse.json({ error: "Could not load workflow run history. Try again." }, { status: 500 });
+    return privateJson({ error: "Could not load workflow run history. Try again." }, { status: 500 });
   }
 }
