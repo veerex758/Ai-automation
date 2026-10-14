@@ -25,20 +25,65 @@ export default function WorkflowBuilderPage() {
   const [notice, setNotice] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [localDrafts, setLocalDrafts] = useState<Record<string, { name: string; steps: BuilderStep[] }>>({});
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("aivanta-builder-draft");
-      if (saved) {
-        const parsed = JSON.parse(saved) as { name?: string; steps?: BuilderStep[] };
-        if (typeof parsed.name === "string") setName(parsed.name);
-        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-          setSteps(parsed.steps);
-          setSelected(parsed.steps[0].id);
+      const validDraftSteps = (value: unknown): value is BuilderStep[] => {
+        if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
+        const ids = new Set<number>();
+        return value.every((step) => {
+          if (!step || typeof step !== "object") return false;
+          const candidate = step as Partial<BuilderStep>;
+          const validId = typeof candidate.id === "number" && Number.isSafeInteger(candidate.id) && candidate.id >= 0;
+          if (!validId || !["Trigger", "Action", "Condition"].includes(String(candidate.kind)) ||
+              typeof candidate.title !== "string" || candidate.title.trim().length === 0 ||
+              typeof candidate.detail !== "string" || ids.has(candidate.id as number)) return false;
+          ids.add(candidate.id as number);
+          return true;
+        });
+      };
+      const rawDrafts = window.localStorage.getItem("aivanta-builder-drafts");
+      const drafts: Record<string, { name: string; steps: BuilderStep[] }> = {};
+      if (rawDrafts) {
+        const parsedDrafts = JSON.parse(rawDrafts) as unknown;
+        if (parsedDrafts && typeof parsedDrafts === "object" && !Array.isArray(parsedDrafts)) {
+          for (const [key, value] of Object.entries(parsedDrafts)) {
+            if (!value || typeof value !== "object") continue;
+            const candidate = value as { name?: unknown; steps?: unknown };
+            if (typeof candidate.name === "string" && candidate.name.trim() && validDraftSteps(candidate.steps)) {
+              drafts[key] = { name: candidate.name.slice(0, 80), steps: candidate.steps };
+            }
+          }
         }
+      }
+
+      // Migrate the former single-draft key without letting corrupt legacy data
+      // prevent valid drafts in the current format from loading.
+      try {
+        const legacyRaw = window.localStorage.getItem("aivanta-builder-draft");
+        if (legacyRaw) {
+          const legacy = JSON.parse(legacyRaw) as { name?: unknown; steps?: unknown };
+          if (typeof legacy.name === "string" && legacy.name.trim() && validDraftSteps(legacy.steps)) {
+            const legacyName = legacy.name.trim().slice(0, 80);
+            const key = legacyName.toLocaleLowerCase();
+            if (!drafts[key]) drafts[key] = { name: legacyName, steps: legacy.steps };
+          }
+        }
+      } catch {
+        // Ignore a malformed legacy entry; current-format drafts remain usable.
+      }
+
+      setLocalDrafts(drafts);
+      const initialKey = "Lead capture & follow-up".toLocaleLowerCase();
+      const initialDraft = drafts[initialKey] ?? Object.values(drafts)[0];
+      if (initialDraft) {
+        setName(initialDraft.name);
+        setSteps(initialDraft.steps);
+        setSelected(initialDraft.steps[0].id);
       }
     } catch {
       // Keep the starter workflow when saved browser data is invalid.
@@ -58,12 +103,20 @@ export default function WorkflowBuilderPage() {
 
   function saveDraft() {
     try {
+      const draftName = name.trim().slice(0, 80) || "Untitled workflow";
       const raw = window.localStorage.getItem("aivanta-workflows");
       const existing = raw ? JSON.parse(raw) as Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
-      const next = existing.filter(item => item.name !== name.trim());
-      next.unshift({ id: Date.now(), name: name.trim() || "Untitled workflow", description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
+      const next = existing.filter(item => item.name !== draftName);
+      next.unshift({ id: Date.now(), name: draftName, description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
+      // Persist each named canvas independently instead of overwriting one global draft.
       window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
-      setNotice("Draft saved in this browser. Live integrations and execution are not connected yet.");
+      const draftKey = draftName.toLocaleLowerCase();
+      const updatedDrafts = { ...localDrafts, [draftKey]: { name: draftName, steps } };
+      window.localStorage.setItem("aivanta-builder-drafts", JSON.stringify(updatedDrafts));
+      // Retain the legacy key for older builder versions while they age out.
+      window.localStorage.setItem("aivanta-builder-draft", JSON.stringify({ name: draftName, steps }));
+      setLocalDrafts(updatedDrafts);
+      setNotice("Draft and canvas steps saved separately in this browser. Live integrations and execution are not connected yet.");
     } catch {
       setNotice("Unable to save to this browser. Check storage settings and try again.");
     }
@@ -95,7 +148,7 @@ export default function WorkflowBuilderPage() {
       <section className="builder-main">
         <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft}>Save draft</button><button className="builder-primary-button" onClick={reviewWorkflow}>Review &amp; activate ↗</button></div></header>
         <div className="builder-content">
-          <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
+          <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span>{Object.keys(localDrafts).length > 0 && <label className="builder-local-draft-picker">Saved local drafts <select aria-label="Load a saved local draft" value={localDrafts[name.toLocaleLowerCase()] ? name.toLocaleLowerCase() : ""} onChange={event => { const draft = localDrafts[event.target.value]; if (draft) { setName(draft.name); setSteps(draft.steps); setSelected(draft.steps[0]?.id ?? 0); setNotice("Loaded saved browser draft. Save after editing to update it."); } }}><option value="">Choose draft…</option>{Object.entries(localDrafts).map(([key, draft]) => <option key={key} value={key}>{draft.name}</option>)}</select></label>}</div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
           <section className="ai-workflow-panel" aria-labelledby="ai-workflow-heading">
             <div className="ai-workflow-copy"><span className="builder-ai-badge">✳ AI ASSISTANT</span><h2 id="ai-workflow-heading">Describe it. We’ll draft it.</h2><p>Explain the workflow in plain English. Review the draft before applying it; nothing executes automatically.</p></div>
