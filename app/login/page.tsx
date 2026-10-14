@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { safeInternalPath } from "@/lib/auth/safe-internal-path";
 import "./login.css";
 
 export default function LoginPage() {
@@ -21,10 +22,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const requestedNext = params.get("next");
-    if (requestedNext && requestedNext.startsWith("/") && !requestedNext.startsWith("//")) {
-      setNextPath(requestedNext);
-    }
+    setNextPath(safeInternalPath(params.get("next"), window.location.origin));
     setReason(params.get("reason") ?? "");
     setConfirmationError(params.get("error") === "confirmation");
   }, []);
@@ -63,7 +61,8 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We couldn't complete that request. Please try again.");
+      // Do not expose provider/auth internals in the browser UI.
+      setError("We couldn’t complete sign-in. Check your details and try again.");
     } finally {
       setBusy(false);
     }
