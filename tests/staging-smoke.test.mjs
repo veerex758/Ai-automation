@@ -38,5 +38,5 @@ test("staging smoke script refuses non-HTTPS targets", () => {
 test("staging smoke script requires a hostname that identifies staging or preview", () => {
   const result = runSmoke("https://example.com");
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /hostname must clearly identify an approved staging or preview/);
+  assert.match(result.stderr, /target must be this project's Vercel Git preview hostname/);
 });

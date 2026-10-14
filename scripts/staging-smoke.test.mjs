@@ -48,10 +48,24 @@ test("staging smoke guardrails reject the known production hostname", () => {
   assert.doesNotMatch(result.stdout, /Aivanta staging smoke test:/);
 });
 
-test("staging smoke guardrails reject an unapproved hostname", () => {
-  const result = runGuardCheck({ url: "https://example.com" });
+test("staging smoke guardrails reject arbitrary domains with preview or git markers", () => {
+  for (const url of [
+    "https://example.com",
+    "https://preview.example.com",
+    "https://evil-git-preview.com",
+    "https://ai-automation-git-phase-12.attacker.example",
+  ]) {
+    const result = runGuardCheck({ url });
+    assert.equal(result.status, 2, url);
+    assert.match(result.stderr, /this project's Vercel Git preview hostname/, url);
+    assert.doesNotMatch(result.stdout, /Aivanta staging smoke test:/, url);
+  }
+});
+
+test("staging smoke guardrails reject the production main Git alias", () => {
+  const result = runGuardCheck({ url: "https://ai-automation-git-main-veerex-org.vercel.app" });
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /approved staging or preview deployment/);
+  assert.match(result.stderr, /Refusing to run smoke tests/);
   assert.doesNotMatch(result.stdout, /Aivanta staging smoke test:/);
 });
 
