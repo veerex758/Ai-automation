@@ -40,6 +40,17 @@ test("rejects unsafe step data and duplicate IDs", () => {
   assert.equal(builderDrafts.isValidDraftSteps(Array.from({ length: 101 }, (_, i) => step(i))), false);
 });
 
+test("allocates unique safe IDs when rapid additions share a timestamp", () => {
+  assert.deepEqual(builderDrafts.allocateStepIds([step(100), step(101)], 3, 100), [102, 103, 104]);
+  assert.deepEqual(builderDrafts.allocateStepIds([], 3, 100), [100, 101, 102]);
+});
+
+test("step ID allocator handles invalid timestamps, unsafe boundaries, and invalid counts", () => {
+  assert.deepEqual(builderDrafts.allocateStepIds([step(0)], 2, Number.MAX_SAFE_INTEGER), [Number.MAX_SAFE_INTEGER, 1]);
+  assert.deepEqual(builderDrafts.allocateStepIds([], 1, -1), [0]);
+  assert.deepEqual(builderDrafts.allocateStepIds([], 101, 10), []);
+});
+
 test("current-format draft takes precedence over a legacy draft with the same normalized name", () => {
   const drafts = builderDrafts.loadBuilderDrafts(
     JSON.stringify({ key: draft("Same name", [step(2)]) }),
