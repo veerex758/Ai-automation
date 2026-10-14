@@ -69,7 +69,7 @@ jobs:
           } catch (error) {
             let current = error;
             for (let depth = 0; current && depth < 3; depth += 1) {
-              console.log("Native fetch error depth " + (depth + 1) + ": " + (current.name || "Error") + " " + (current.code || "") + " " + (current.message || "")).trim());
+              console.log(("Native fetch error depth " + (depth + 1) + ": " + (current.name || "Error") + " " + (current.code || "") + " " + (current.message || "")).trim());
               current = current.cause;
             }
           }
