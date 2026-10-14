@@ -97,15 +97,28 @@ export default function WorkflowBuilderPage() {
       }
       const next = existing.filter(item => item.name !== draftName);
       next.unshift({ id: Date.now(), name: draftName, description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
-      // Persist each named canvas independently instead of overwriting one global draft.
-      window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
+      // Save the canonical canvas first. A failure updating the dashboard's
+      // summary cache must never leave the user with a success message for a
+      // canvas that was not persisted.
       const draftKey = draftName.toLocaleLowerCase();
       const updatedDrafts = { ...localDrafts, [draftKey]: { name: draftName, steps } };
       window.localStorage.setItem("aivanta-builder-drafts", JSON.stringify(updatedDrafts));
-      // Retain the legacy key for older builder versions while they age out.
-      window.localStorage.setItem("aivanta-builder-draft", JSON.stringify({ name: draftName, steps }));
       setLocalDrafts(updatedDrafts);
-      setNotice("Draft and canvas steps saved separately in this browser. Live integrations and execution are not connected yet.");
+
+      // The legacy key is compatibility-only. It must not turn a successful
+      // current-format save into a reported failure (or block future saves).
+      try {
+        window.localStorage.setItem("aivanta-builder-draft", JSON.stringify({ name: draftName, steps }));
+      } catch {
+        // Older builder versions may not be able to read the compatibility copy.
+      }
+
+      try {
+        window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
+        setNotice("Draft and canvas steps saved in this browser. Live integrations and execution are not connected yet.");
+      } catch {
+        setNotice("Canvas draft saved locally, but the workflow list could not be updated. Check browser storage space.");
+      }
     } catch {
       setNotice("Unable to save to this browser. Check storage settings and try again.");
     }
