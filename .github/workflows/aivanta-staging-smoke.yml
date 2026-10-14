@@ -26,6 +26,7 @@ jobs:
       - name: Diagnose runner DNS and fetch environment safely
         env:
           AIVANTA_STAGING_URL: https://ai-automation-52awb5lpz-veerex-org.vercel.app
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           node --input-type=module <<'NODE'
           import dns from "node:dns/promises";
@@ -70,6 +71,22 @@ jobs:
             let current = error;
             for (let depth = 0; current && depth < 3; depth += 1) {
               console.log(("Native fetch error depth " + (depth + 1) + ": " + (current.name || "Error") + " " + (current.code || "") + " " + (current.message || "")).trim());
+              current = current.cause;
+            }
+          }
+          try {
+            const response = await fetch(target.origin, {
+              headers: { "x-vercel-protection-bypass": process.env.VERCEL_AUTOMATION_BYPASS_SECRET || "" },
+              redirect: "manual",
+              cache: "no-store",
+              signal: AbortSignal.timeout(5000),
+            });
+            console.log("Native fetch with Vercel bypass header: HTTP " + response.status);
+            await response.body?.cancel();
+          } catch (error) {
+            let current = error;
+            for (let depth = 0; current && depth < 3; depth += 1) {
+              console.log(("Native fetch with bypass header error depth " + (depth + 1) + ": " + (current.name || "Error") + " " + (current.code || "") + " " + (current.message || "")).trim());
               current = current.cause;
             }
           }
