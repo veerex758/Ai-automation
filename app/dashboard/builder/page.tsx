@@ -42,10 +42,10 @@ export default function WorkflowBuilderPage() {
             const candidate = step as Partial<BuilderStep>;
             // BuilderStep IDs are numeric; reject string IDs rather than
             // widening the canvas state type and breaking selected-step handling.
-            const validId = typeof candidate.id === "number" && Number.isFinite(candidate.id);
+            const validId = typeof candidate.id === "number" && Number.isSafeInteger(candidate.id) && candidate.id >= 0;
             if (!validId || !["Trigger", "Action", "Condition"].includes(String(candidate.kind)) ||
                 typeof candidate.title !== "string" || candidate.title.trim().length === 0 ||
-                (candidate.detail !== undefined && typeof candidate.detail !== "string")) return false;
+                typeof candidate.detail !== "string") return false;
             const key = String(candidate.id);
             if (ids.has(key)) return false;
             ids.add(key);
