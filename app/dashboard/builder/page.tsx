@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { validateWorkflowDefinition } from "@/lib/workflows/validation";
+import builderDrafts from "@/lib/workflows/builder-drafts.cjs";
 import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
@@ -31,71 +32,29 @@ export default function WorkflowBuilderPage() {
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
 
   useEffect(() => {
+    let currentRaw: string | null = null;
+    let legacyRaw: string | null = null;
+    // Read the stores independently so a browser storage error on one key does not
+    // prevent recovery from the other key.
     try {
-      const validDraftSteps = (value: unknown): value is BuilderStep[] => {
-        if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
-        const ids = new Set<number>();
-        return value.every((step) => {
-          if (!step || typeof step !== "object") return false;
-          const candidate = step as Partial<BuilderStep>;
-          const validId = typeof candidate.id === "number" && Number.isSafeInteger(candidate.id) && candidate.id >= 0;
-          if (!validId || !["Trigger", "Action", "Condition"].includes(String(candidate.kind)) ||
-              typeof candidate.title !== "string" || candidate.title.trim().length === 0 ||
-              typeof candidate.detail !== "string" || ids.has(candidate.id as number)) return false;
-          ids.add(candidate.id as number);
-          return true;
-        });
-      };
-      // Treat localStorage keys as untrusted; a null-prototype map safely handles keys like "__proto__".
-      const drafts = Object.create(null) as Record<string, { name: string; steps: BuilderStep[] }>;
-      // A corrupt current-format entry must not prevent recovery from the legacy key.
-      try {
-        const rawDrafts = window.localStorage.getItem("aivanta-builder-drafts");
-        if (rawDrafts) {
-          const parsedDrafts = JSON.parse(rawDrafts) as unknown;
-          if (parsedDrafts && typeof parsedDrafts === "object" && !Array.isArray(parsedDrafts)) {
-            for (const value of Object.values(parsedDrafts)) {
-              if (!value || typeof value !== "object") continue;
-              const candidate = value as { name?: unknown; steps?: unknown };
-              if (typeof candidate.name === "string" && candidate.name.trim() && validDraftSteps(candidate.steps)) {
-                const draftName = candidate.name.trim().slice(0, 80);
-                // Derive the key from the validated name rather than trusting the stored object key.
-                const key = draftName.toLocaleLowerCase();
-                if (key) drafts[key] = { name: draftName, steps: candidate.steps };
-              }
-            }
-          }
-        }
-      } catch {
-        // Ignore corrupt current-format data and still attempt legacy recovery.
-      }
-
-      // Migrate the former single-draft key without letting corrupt legacy data
-      // prevent valid drafts in the current format from loading.
-      try {
-        const legacyRaw = window.localStorage.getItem("aivanta-builder-draft");
-        if (legacyRaw) {
-          const legacy = JSON.parse(legacyRaw) as { name?: unknown; steps?: unknown };
-          if (typeof legacy.name === "string" && legacy.name.trim() && validDraftSteps(legacy.steps)) {
-            const legacyName = legacy.name.trim().slice(0, 80);
-            const key = legacyName.toLocaleLowerCase();
-            if (!drafts[key]) drafts[key] = { name: legacyName, steps: legacy.steps };
-          }
-        }
-      } catch {
-        // Ignore a malformed legacy entry; current-format drafts remain usable.
-      }
-
-      setLocalDrafts(drafts);
-      const initialKey = "Lead capture & follow-up".toLocaleLowerCase();
-      const initialDraft = drafts[initialKey] ?? Object.values(drafts)[0];
-      if (initialDraft) {
-        setName(initialDraft.name);
-        setSteps(initialDraft.steps);
-        setSelected(initialDraft.steps[0].id);
-      }
+      currentRaw = window.localStorage.getItem("aivanta-builder-drafts");
     } catch {
-      // Keep the starter workflow when saved browser data is invalid.
+      // Continue with legacy recovery if the current-format key cannot be read.
+    }
+    try {
+      legacyRaw = window.localStorage.getItem("aivanta-builder-draft");
+    } catch {
+      // Current-format drafts remain usable if the legacy key cannot be read.
+    }
+
+    const drafts = builderDrafts.loadBuilderDrafts(currentRaw, legacyRaw) as Record<string, { name: string; steps: BuilderStep[] }>;
+    setLocalDrafts(drafts);
+    const initialKey = "Lead capture & follow-up".toLocaleLowerCase();
+    const initialDraft = drafts[initialKey] ?? Object.values(drafts)[0];
+    if (initialDraft) {
+      setName(initialDraft.name);
+      setSteps(initialDraft.steps);
+      setSelected(initialDraft.steps[0].id);
     }
     setHydrated(true);
   }, []);
