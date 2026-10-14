@@ -58,3 +58,10 @@ test("current-format draft takes precedence over a legacy draft with the same no
   );
   assert.equal(drafts["same name"].steps[0].id, 2);
 });
+
+test("separate allocator calls stay unique when React state has not refreshed", () => {
+  const first = builderDrafts.allocateStepIds([], 1, 500);
+  const second = builderDrafts.allocateStepIds([], 1, 500);
+  assert.equal(first[0], 500);
+  assert.equal(second[0], 501);
+});
