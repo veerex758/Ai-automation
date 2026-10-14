@@ -160,3 +160,15 @@ test("preserves the entire dashboard summary cache when any entry has an unknown
   assert.equal(storage.writes.includes("aivanta-workflows"), false);
   assert.ok(storage.values.has("aivanta-builder-drafts"));
 });
+
+
+test("preserves malformed or non-array summary cache values while saving the canonical draft", () => {
+  for (const original of ["{not-json", JSON.stringify({ legacy: "unknown format" })]) {
+    const storage = createStorage({ initial: { "aivanta-workflows": original } });
+    const result = builderDrafts.persistBuilderDraft(storage, {}, "Lead capture", [step(15)]);
+    assert.equal(result.summaryUpdated, false);
+    assert.equal(storage.values.get("aivanta-workflows"), original);
+    assert.equal(storage.writes.includes("aivanta-workflows"), false);
+    assert.ok(storage.values.has("aivanta-builder-drafts"));
+  }
+});
