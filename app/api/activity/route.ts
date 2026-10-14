@@ -51,6 +51,6 @@ export async function GET() {
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     console.error("Failed to load Aivanta activity:", error);
-    return NextResponse.json({ error: "Could not load activity. Check the Aivanta database configuration and try again." }, { status: 500, headers: { "Cache-Control": "private, no-store, max-age=0" } });
+    return NextResponse.json({ error: "Could not load activity. Please try again." }, { status: 500, headers: { "Cache-Control": "private, no-store, max-age=0" } });
   }
 }
