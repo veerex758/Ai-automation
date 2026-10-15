@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Invalid run identifier." }, { status: 400, headers });
     }
 
-    const workspace = await getOrCreateDefaultWorkspace(supabase, user);
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: run, error: runError } = await supabase
       .from("workflow_runs")
       .select("id, workflow_id, mode, status, workflow_version, started_at, completed_at, created_at, duration_ms")

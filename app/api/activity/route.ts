@@ -13,7 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: "Authentication required." }, { status: 401, headers: { "Cache-Control": "private, no-store, max-age=0" } });
     }
 
-    const workspace = await getOrCreateDefaultWorkspace(supabase, user);
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: runs, error: runsError } = await supabase
       .from("workflow_runs")
       .select("id, workflow_id, mode, status, workflow_version, created_at, duration_ms")
