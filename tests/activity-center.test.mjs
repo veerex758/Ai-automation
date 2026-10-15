@@ -20,7 +20,7 @@ test("activity endpoint requires an authenticated user", () => {
 });
 
 test("activity endpoint scopes run reads to the default workspace and bounds results", () => {
-  assert.match(endpoint, /getOrCreateDefaultWorkspace\(supabase\)/);
+  assert.match(endpoint, /getOrCreateDefaultWorkspace\(supabase, user\)/);
   assert.match(endpoint, /\.eq\("workspace_id", workspace\.id\)/);
   assert.match(endpoint, /\.limit\(limit\)/);
   assert.match(endpoint, /const limit = 50/);
