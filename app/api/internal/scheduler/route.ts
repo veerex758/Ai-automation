@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
+import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,11 +63,30 @@ async function finishClaim(
 }
 
 async function dispatchTick(request: NextRequest) {
+  const requestId = getRequestId(request.headers.get("x-request-id"));
+  const startedAt = Date.now();
+  const jsonResponse = (body: unknown, status = 200) => {
+    const response = NextResponse.json(body, { status });
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  };
+
   if (!isAuthorized(request)) {
     const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_SCHEDULER_SECRET;
-    return NextResponse.json(
+    const status = secret ? 401 : 503;
+    logOperationalEvent({
+      event: "scheduler_tick",
+      requestId,
+      route: "/api/internal/scheduler",
+      outcome: "rejected",
+      statusCode: status,
+      errorCode: secret ? "SCHEDULER_UNAUTHORIZED" : "SCHEDULER_AUTH_NOT_CONFIGURED",
+      durationMs: Math.min(600000, Math.max(0, Date.now() - startedAt)),
+    }, console.warn);
+    return jsonResponse(
       { error: secret ? "Unauthorized." : "Scheduler authentication is not configured." },
-      { status: secret ? 401 : 503 },
+      status,
     );
   }
 
@@ -74,16 +94,41 @@ async function dispatchTick(request: NextRequest) {
   try {
     supabase = createSchedulerClient();
   } catch {
-    return NextResponse.json({ error: "Scheduler database access is not configured." }, { status: 503 });
+    logOperationalEvent({
+      event: "scheduler_tick",
+      requestId,
+      route: "/api/internal/scheduler",
+      outcome: "failure",
+      statusCode: 503,
+      errorCode: "SCHEDULER_DATABASE_NOT_CONFIGURED",
+      durationMs: Math.min(600000, Math.max(0, Date.now() - startedAt)),
+    }, console.error);
+    return jsonResponse({ error: "Scheduler database access is not configured." }, 503);
   }
 
-  const { data, error } = await supabase.rpc("claim_due_workflow_schedules", {
-    p_limit: claimLimit,
-    p_lease_seconds: leaseSeconds,
-  });
-  if (error || !Array.isArray(data)) {
-    console.error("Aivanta scheduler could not claim due schedules.");
-    return NextResponse.json({ error: "Could not claim scheduled workflows." }, { status: 500 });
+  let data: unknown;
+  let claimFailed = false;
+  try {
+    const claimResult = await supabase.rpc("claim_due_workflow_schedules", {
+      p_limit: claimLimit,
+      p_lease_seconds: leaseSeconds,
+    });
+    data = claimResult.data;
+    claimFailed = Boolean(claimResult.error);
+  } catch {
+    claimFailed = true;
+  }
+  if (claimFailed || !Array.isArray(data)) {
+    logOperationalEvent({
+      event: "scheduler_tick",
+      requestId,
+      route: "/api/internal/scheduler",
+      outcome: "failure",
+      statusCode: 500,
+      errorCode: "SCHEDULER_CLAIM_FAILED",
+      durationMs: Math.min(600000, Math.max(0, Date.now() - startedAt)),
+    }, console.error);
+    return jsonResponse({ error: "Could not claim scheduled workflows." }, 500);
   }
 
   const claims = data as ScheduleClaim[];
@@ -91,6 +136,7 @@ async function dispatchTick(request: NextRequest) {
   let failed = 0;
 
   for (const claim of claims) {
+    const workflowStartedAt = Date.now();
     let failureCode = "SCHEDULED_RUN_FAILED";
     try {
       const validated = validateDefinition(claim.definition);
@@ -139,9 +185,26 @@ async function dispatchTick(request: NextRequest) {
         // The durable run record is idempotent. If this lease expired, a later
         // worker can safely observe the existing record and finish the schedule.
         failed += 1;
+        logOperationalEvent({
+          event: "scheduled_workflow",
+          requestId,
+          route: "/api/internal/scheduler",
+          outcome: "failure",
+          statusCode: 500,
+          errorCode: "SCHEDULED_RUN_FINALIZATION_FAILED",
+          durationMs: Math.min(600000, Math.max(0, Date.now() - workflowStartedAt)),
+        }, console.error);
         continue;
       }
       succeeded += 1;
+      logOperationalEvent({
+        event: "scheduled_workflow",
+        requestId,
+        route: "/api/internal/scheduler",
+        outcome: "success",
+        statusCode: 200,
+        durationMs: Math.min(600000, Math.max(0, Date.now() - workflowStartedAt)),
+      });
     } catch {
       try {
         await finishClaim(supabase, claim, false, failureCode);
@@ -149,14 +212,30 @@ async function dispatchTick(request: NextRequest) {
         // The lease expires and can be retried if the database is temporarily unavailable.
       }
       failed += 1;
-      console.error("Aivanta scheduled workflow failed.", {
-        scheduleId: claim.schedule_id,
+      logOperationalEvent({
+        event: "scheduled_workflow",
+        requestId,
+        route: "/api/internal/scheduler",
+        outcome: "failure",
+        statusCode: 500,
         errorCode: failureCode,
-      });
+        durationMs: Math.min(600000, Math.max(0, Date.now() - workflowStartedAt)),
+      }, console.error);
     }
   }
 
-  return NextResponse.json({ claimed: claims.length, succeeded, failed });
+  logOperationalEvent({
+    event: "scheduler_tick",
+    requestId,
+    route: "/api/internal/scheduler",
+    outcome: failed > 0 ? "failure" : "success",
+    statusCode: 200,
+    claimed: claims.length,
+    succeeded,
+    failed,
+    durationMs: Math.min(600000, Math.max(0, Date.now() - startedAt)),
+  }, failed > 0 ? console.warn : console.info);
+  return jsonResponse({ claimed: claims.length, succeeded, failed });
 }
 
 export async function GET(request: NextRequest) {
