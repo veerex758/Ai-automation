@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 
 type RouteContext = { params: Promise<{ runId: string }> };
 
@@ -65,8 +66,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         completedAt: step.completed_at,
       })),
     }, { headers });
-  } catch (error) {
-    console.error("Failed to load Aivanta run detail:", error);
+  } catch {
+    logOperationalEvent({
+      event: "activity_run_detail",
+      route: "/api/activity/run-detail",
+      outcome: "failure",
+      statusCode: 500,
+      errorCode: "ACTIVITY_RUN_DETAIL_FAILED",
+    });
     return NextResponse.json({ error: "Could not load run details. Please try again." }, { status: 500, headers: { "Cache-Control": "private, no-store, max-age=0" } });
   }
 }
