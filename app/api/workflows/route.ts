@@ -44,7 +44,7 @@ export async function GET() {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
 
-    const workspace = await getOrCreateDefaultWorkspace(supabase, user);
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data, error } = await supabase
       .from("workflows")
       .select("id, name, description, status, updated_at")
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       ? body.status
       : "draft";
 
-    const workspace = await getOrCreateDefaultWorkspace(supabase, user);
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data, error } = await supabase
       .from("workflows")
       .insert({
