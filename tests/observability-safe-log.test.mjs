@@ -132,3 +132,18 @@ test("scheduler contains claim and finalization transport failures", () => {
   assert.ok(finalizationFailureBranch.includes('event: "scheduled_workflow"'));
   assert.ok(finalizationFailureBranch.includes("logOperationalEvent"));
 });
+
+test("classifies thrown scheduled-run persistence transport errors explicitly", () => {
+  const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+  const persistenceBlock = schedulerRoute.slice(
+    schedulerRoute.indexOf('let persistError: unknown = null;'),
+    schedulerRoute.indexOf('if (persistError)', schedulerRoute.indexOf('let persistError: unknown = null;')),
+  );
+
+  assert.ok(persistenceBlock.includes('supabase.rpc("record_scheduled_workflow_run"'));
+  assert.ok(persistenceBlock.includes("catch {"), "persistence RPC transport exceptions should be caught");
+  assert.ok(
+    persistenceBlock.includes('failureCode = "SCHEDULED_RUN_PERSISTENCE_FAILED"'),
+    "thrown persistence errors must use the persistence-specific stable code",
+  );
+});
