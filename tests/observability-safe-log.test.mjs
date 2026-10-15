@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { getRequestId, logOperationalEvent } from "../lib/observability/safe-log.cjs";
 
 const validRequestId = "123e4567-e89b-42d3-a456-426614174000";
@@ -90,4 +91,43 @@ test("preserves only reviewed stable error codes emitted by AI and scheduler pat
     }, (line) => { output = line; });
     assert.equal(JSON.parse(output).errorCode, errorCode, `reviewed error code should remain available: ${errorCode}`);
   }
+});
+
+
+test("health, AI generation, and scheduler responses expose request IDs without caching", () => {
+  const healthRoute = readFileSync(new URL("../app/api/health/route.ts", import.meta.url), "utf8");
+  const aiRoute = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
+  const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+
+  for (const route of [healthRoute, aiRoute, schedulerRoute]) {
+    assert.ok(route.includes("getRequestId"), "route should create or validate a request ID");
+    assert.ok(route.includes('response.headers.set("x-request-id", requestId)'), "route should return the request ID");
+  }
+  assert.ok(healthRoute.includes('"Cache-Control": "no-store"'), "health response should not be cached");
+  assert.ok(aiRoute.includes("logOperationalEvent"));
+  assert.ok(schedulerRoute.includes("logOperationalEvent"));
+  assert.ok(aiRoute.includes('response.headers.set("Cache-Control", "no-store")'));
+  assert.ok(schedulerRoute.includes('response.headers.set("Cache-Control", "no-store")'));
+});
+
+test("scheduler contains claim and finalization transport failures", () => {
+  const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+  const finishClaim = schedulerRoute.slice(
+    schedulerRoute.indexOf("async function finishClaim"),
+    schedulerRoute.indexOf("async function dispatchTick"),
+  );
+
+  assert.ok(finishClaim.includes("try {"), "claim finalization should guard transport exceptions");
+  assert.ok(finishClaim.includes("catch {"), "claim finalization should handle thrown RPC errors");
+  assert.ok(finishClaim.includes("return false;"), "failed finalization should report an unfinalized lease");
+  assert.ok(schedulerRoute.includes("claimFailed = true;"), "claim RPC exceptions should be treated as failures");
+  assert.ok(schedulerRoute.includes("workflowStartedAt"), "scheduled workflow failures should be timed");
+
+  const finalizationFailureBranch = schedulerRoute.slice(
+    schedulerRoute.indexOf("if (!finalized)"),
+    schedulerRoute.indexOf("succeeded += 1;", schedulerRoute.indexOf("if (!finalized)")),
+  );
+  assert.ok(finalizationFailureBranch.includes('"SCHEDULED_RUN_FINALIZATION_FAILED"'));
+  assert.ok(finalizationFailureBranch.includes('event: "scheduled_workflow"'));
+  assert.ok(finalizationFailureBranch.includes("logOperationalEvent"));
 });
