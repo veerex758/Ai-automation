@@ -168,7 +168,7 @@ async function dispatchTick(request: NextRequest) {
 
       let persistError: unknown = null;
       try {
-        const result = await supabase.rpc("record_scheduled_workflow_run", {
+        const persistenceResponse = await supabase.rpc("record_scheduled_workflow_run", {
           p_schedule_id: claim.schedule_id,
           p_lease_token: claim.lease_token,
           p_expected_version: claim.workflow_version,
@@ -184,7 +184,7 @@ async function dispatchTick(request: NextRequest) {
             },
           })),
         });
-        persistError = result.error;
+        persistError = persistenceResponse.error;
       } catch {
         // Keep thrown transport exceptions classified consistently with RPC errors.
         failureCode = "SCHEDULED_RUN_PERSISTENCE_FAILED";
