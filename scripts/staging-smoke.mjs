@@ -25,9 +25,9 @@ if (baseUrl.protocol !== "https:") {
 
 const host = baseUrl.hostname.toLowerCase();
 const approvedPreviewHosts = new Set([
-  // Existing dedicated preview target already configured in the manual smoke workflow.
+  // Verified READY preview alias from merged PR #52; keep workflow and script allowlists aligned.
   // Change this allowlist only after verifying and recording the replacement deployment.
-  "ai-automation-3oo2aepz3-veerex-org.vercel.app",
+  "ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app",
 ]);
 const knownProductionHosts = new Set([
   "ai-automation-veerex-org.vercel.app",
