@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const scriptPath = fileURLToPath(new URL("../scripts/staging-smoke.mjs", import.meta.url));
-const approvedPreview = "https://ai-automation-3oo2aepz3-veerex-org.vercel.app";
+const approvedPreview = "https://ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app";
 
 function runSmoke(url, { secret } = {}) {
   const env = { ...process.env };
@@ -51,15 +51,15 @@ test("staging smoke script refuses arbitrary domains with preview or git markers
 });
 
 test("staging smoke script refuses non-HTTPS targets before any request", () => {
-  const result = runSmoke("http://ai-automation-3oo2aepz3-veerex-org.vercel.app");
+  const result = runSmoke("http://ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app");
   assert.equal(result.status, 2);
   assert.match(result.stderr, /non-HTTPS/);
 });
 
 test("staging smoke script refuses URL credentials and non-default ports", () => {
   for (const url of [
-    "https://user:password@ai-automation-3oo2aepz3-veerex-org.vercel.app",
-    "https://ai-automation-3oo2aepz3-veerex-org.vercel.app:8443",
+    "https://user:password@ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app",
+    "https://ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app:8443",
   ]) {
     const result = runSmoke(url);
     assert.equal(result.status, 2, url);
