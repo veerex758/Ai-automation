@@ -69,6 +69,7 @@ test("preserves only reviewed stable error codes emitted by AI and scheduler pat
     "AI_TIMEOUT",
     "AI_PROVIDER_UNAVAILABLE",
     "AI_PROVIDER_AUTH_ERROR",
+    "AI_RATE_LIMITED",
     "AI_INVALID_RESPONSE",
     "AI_EMPTY_RESPONSE",
     "AI_INVALID_JSON",
