@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 
 const limit = 50;
 
@@ -49,8 +50,14 @@ export async function GET() {
       workspace: { id: workspace.id, name: workspace.name },
       limit,
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
-  } catch (error) {
-    console.error("Failed to load Aivanta activity:", error);
+  } catch {
+    logOperationalEvent({
+      event: "activity_list",
+      route: "/api/activity",
+      outcome: "failure",
+      statusCode: 500,
+      errorCode: "ACTIVITY_LIST_FAILED",
+    });
     return NextResponse.json({ error: "Could not load activity. Please try again." }, { status: 500, headers: { "Cache-Control": "private, no-store, max-age=0" } });
   }
 }
