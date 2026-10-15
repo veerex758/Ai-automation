@@ -166,22 +166,30 @@ async function dispatchTick(request: NextRequest) {
         throw new Error("SCHEDULED_RUN_FAILED");
       }
 
-      const { error: persistError } = await supabase.rpc("record_scheduled_workflow_run", {
-        p_schedule_id: claim.schedule_id,
-        p_lease_token: claim.lease_token,
-        p_expected_version: claim.workflow_version,
-        p_duration_ms: durationMs,
-        p_steps: result.steps.map((step) => ({
-          step_id: step.stepId,
-          step_type: step.type,
-          title: step.title,
-          status: step.status,
-          result: {
-            message: step.message,
-            ...(step.conditionMatched === undefined ? {} : { conditionMatched: step.conditionMatched }),
-          },
-        })),
-      });
+      let persistError: unknown = null;
+      try {
+        const result = await supabase.rpc("record_scheduled_workflow_run", {
+          p_schedule_id: claim.schedule_id,
+          p_lease_token: claim.lease_token,
+          p_expected_version: claim.workflow_version,
+          p_duration_ms: durationMs,
+          p_steps: result.steps.map((step) => ({
+            step_id: step.stepId,
+            step_type: step.type,
+            title: step.title,
+            status: step.status,
+            result: {
+              message: step.message,
+              ...(step.conditionMatched === undefined ? {} : { conditionMatched: step.conditionMatched }),
+            },
+          })),
+        });
+        persistError = result.error;
+      } catch {
+        // Keep thrown transport exceptions classified consistently with RPC errors.
+        failureCode = "SCHEDULED_RUN_PERSISTENCE_FAILED";
+        throw new Error(failureCode);
+      }
       if (persistError) {
         failureCode = "SCHEDULED_RUN_PERSISTENCE_FAILED";
         throw new Error(failureCode);
