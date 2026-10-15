@@ -25,7 +25,7 @@ jobs:
           node-version: 20
       - name: Diagnose runner DNS and fetch environment safely
         env:
-          AIVANTA_STAGING_URL: https://ai-automation-3oo2aepz3-veerex-org.vercel.app
+          AIVANTA_STAGING_URL: https://ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           node --input-type=module <<'NODE'
@@ -93,6 +93,6 @@ jobs:
           NODE
       - name: Run staging-only unauthenticated smoke checks
         env:
-          AIVANTA_STAGING_URL: https://ai-automation-3oo2aepz3-veerex-org.vercel.app
+          AIVANTA_STAGING_URL: https://ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node scripts/staging-smoke.mjs
