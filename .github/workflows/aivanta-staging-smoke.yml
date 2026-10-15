@@ -2,6 +2,9 @@ name: Aivanta staging runtime smoke test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ops/authorized-staging-smoke-20261015
 
 permissions:
   contents: read
