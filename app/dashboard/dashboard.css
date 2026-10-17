@@ -5,3 +5,78 @@
 .workflow-row{position:relative}.workflow-actions{position:relative;display:flex;justify-content:flex-end;align-items:center}.workflow-action-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:5;width:158px;padding:5px;background:#fff;border:1px solid #e5eae2;border-radius:9px;box-shadow:0 12px 30px rgba(20,35,22,.12)}.workflow-action-menu button{display:block;width:100%;border:0;background:transparent;border-radius:6px;text-align:left;padding:9px 10px;font:500 10px 'DM Sans',sans-serif;color:#4d5c50;cursor:pointer}.workflow-action-menu button:hover{background:#f4f7f0}.workflow-action-menu .builder-action{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:#eff5e8;border-radius:6px;text-align:left;padding:9px 10px;font:700 10px 'DM Sans',sans-serif;color:#4e7038;cursor:pointer}.workflow-action-menu .builder-action:hover{background:#e6f0da}.workflow-action-menu .builder-action span{font-size:13px}.workflow-action-menu button.danger-action{color:#b34e43}.workflow-action-menu button.danger-action:hover{background:#fff1ef}.create-modal form>textarea{display:block;width:100%;min-height:82px;resize:vertical;border:1px solid #dfe6db;border-radius:7px;padding:10px 11px;font:11px/1.6 'DM Sans',sans-serif;outline:none}.create-modal form>textarea:focus{border-color:#8baa6d;box-shadow:0 0 0 3px #edf4e6}.create-modal form>.description-label{display:flex;justify-content:space-between;align-items:center;margin-top:15px}.description-label span{font-weight:400;color:#98a198}
 @media(max-width:1100px){.workflow-row>.workflow-actions{grid-column:4;grid-row:1}.table-header span:nth-child(5){display:none}}
 @media(max-width:720px){.workflow-row>.workflow-actions{grid-column:3;grid-row:1}.workflow-action-menu{right:0;top:calc(100% + 6px)}}
+
+
+/* Mobile layout correction: keep navigation readable and let content use the full viewport. */
+@media (max-width: 720px) {
+  .app-shell { flex-direction: column; min-width: 0; }
+  .sidebar {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    padding: 12px 14px 10px;
+    border-right: 0;
+    border-bottom: 1px solid #e8ece6;
+    gap: 10px;
+  }
+  .dash-brand { padding: 0 2px 2px; font-size: 20px; }
+  .dash-brand > span:last-child { font-size: 20px; }
+  .workspace-switch, .sidebar-label, .sidebar-bottom, .tools-label { display: none; }
+  .side-nav {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    overflow-x: auto;
+    padding: 2px 0 3px;
+    scrollbar-width: thin;
+  }
+  .side-link, .side-link.selected, .side-link:not(.selected) {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 38px;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 9px 11px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .side-link .side-icon { flex: 0 0 auto; width: 17px; font-size: 16px; }
+  .dashboard-main { width: 100%; min-width: 0; }
+  .dashboard-topbar {
+    min-height: 54px;
+    height: auto;
+    padding: 10px 14px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .breadcrumbs { min-width: 0; font-size: 10px; }
+  .breadcrumbs span { padding: 0 5px; }
+  .topbar-right { min-width: 0; gap: 7px; flex-wrap: wrap; }
+  .dashboard-content { width: 100%; padding: 22px 14px 32px; }
+  .welcome-row { align-items: flex-start; flex-wrap: wrap; gap: 14px; }
+  .welcome-row > div { min-width: 0; }
+  .welcome-row h1 { overflow-wrap: anywhere; }
+  .welcome-row p { max-width: 100%; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat-card { min-width: 0; }
+  .stat-heading { gap: 5px; flex-wrap: wrap; }
+  .stat-bottom { align-items: flex-start; }
+  .section-title-row { align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .section-title-row > div { min-width: 0; }
+  .workflow-toolbar { min-width: 0; }
+  .search-box { min-width: 0; }
+  .workflow-row { min-width: 0; }
+  .workflow-name-cell, .workflow-name-copy { min-width: 0; }
+  .workflow-name-copy strong, .workflow-name-copy small { max-width: 100%; }
+  .dashboard-footnote { min-width: 0; }
+}
+@media (max-width: 380px) {
+  .dashboard-content { padding-right: 11px; padding-left: 11px; }
+  .dashboard-topbar { padding-right: 11px; padding-left: 11px; }
+  .stats-grid { gap: 7px; }
+  .stat-card { padding: 11px 9px; }
+  .stat-number { font-size: 22px; }
+  .side-link, .side-link.selected, .side-link:not(.selected) { padding: 8px 9px; }
+}
