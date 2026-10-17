@@ -74,3 +74,6 @@
 #workflow-test-panel{scroll-margin-top:18px}
 #workflow-test-panel:focus{outline:2px solid #c5dcb3;outline-offset:3px}
 @media(max-width:600px){.builder-test-link{min-height:36px;padding:8px 9px}}
+
+.builder-test-link-prominent{margin-top:12px;min-height:40px;padding:10px 13px;font-size:12px;box-shadow:0 2px 0 rgba(47,84,52,.04)}
+@media(max-width:600px){.builder-test-link-prominent{display:inline-flex;margin-top:12px;min-height:42px;font-size:13px;padding:11px 14px}}
