@@ -223,7 +223,7 @@ export default function WorkflowBuilderPage() {
 
       <div className="builder-layout">
         <section className="builder-workspace">
-          <div className="builder-heading"><div><div className="builder-eyebrow">WORKFLOW DESIGNER</div><h1>{workflow?.name ?? "Workflow builder"}</h1><p>{workflow?.description || "Connect steps into a clear, repeatable process."}</p></div><span className="builder-mode"><i /> Draft mode</span></div>
+          <div className="builder-heading"><div><div className="builder-eyebrow">WORKFLOW DESIGNER</div><h1>{workflow?.name ?? "Workflow builder"}</h1><p>{workflow?.description || "Connect steps into a clear, repeatable process."}</p><a className="builder-test-link builder-test-link-prominent" href="#workflow-test-panel">↓ Find safe test panel</a></div><span className="builder-mode"><i /> Draft mode</span></div>
           {notice && <div className="builder-notice" role="status">{notice}</div>}
           {validation && <div className={`builder-validation ${validation.valid ? "validation-pass" : "validation-fail"}`} role="status"><span className="validation-mark">{validation.valid ? "✓" : "!"}</span><div><strong>{validation.valid ? "Draft checks passed" : "Draft needs attention"}</strong><p>{validation.message}</p>{validation.counts && <small>{validation.counts.triggers} trigger · {validation.counts.actions} actions · {validation.counts.conditions} conditions</small>}<small>Checked {new Date(validation.checkedAt).toLocaleTimeString()}</small></div></div>}
           {error && <div className="builder-error-banner" role="alert">{error}</div>}
