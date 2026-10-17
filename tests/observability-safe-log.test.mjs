@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { getRequestId, logOperationalEvent } from "../lib/observability/safe-log.cjs";
+import { callSchedulerRpc } from "../lib/observability/scheduler-rpc.cjs";
 
 const validRequestId = "123e4567-e89b-42d3-a456-426614174000";
 
@@ -133,17 +134,47 @@ test("scheduler contains claim and finalization transport failures", () => {
   assert.ok(finalizationFailureBranch.includes("logOperationalEvent"));
 });
 
-test("classifies thrown scheduled-run persistence transport errors explicitly", () => {
-  const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
-  const persistenceBlock = schedulerRoute.slice(
-    schedulerRoute.indexOf('let persistError: unknown = null;'),
-    schedulerRoute.indexOf('if (persistError)', schedulerRoute.indexOf('let persistError: unknown = null;')),
-  );
+test("scheduler routes claim, persistence, and finalization through the safe wrapper", () => {
+  const route = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+  assert.ok(route.includes('callSchedulerRpc(supabase.rpc.bind(supabase), "claim_due_workflow_schedules"'));
+  assert.ok(route.includes('callSchedulerRpc(supabase.rpc.bind(supabase), "record_scheduled_workflow_run"'));
+  assert.ok(route.includes('callSchedulerRpc(supabase.rpc.bind(supabase), "finish_workflow_schedule_claim"'));
+  assert.ok(route.includes("SCHEDULED_RUN_PERSISTENCE_FAILED"));
+});
 
-  assert.ok(persistenceBlock.includes('supabase.rpc("record_scheduled_workflow_run"'));
-  assert.ok(persistenceBlock.includes("catch {"), "persistence RPC transport exceptions should be caught");
-  assert.ok(
-    persistenceBlock.includes('failureCode = "SCHEDULED_RUN_PERSISTENCE_FAILED"'),
-    "thrown persistence errors must use the persistence-specific stable code",
-  );
+test("scheduler RPC wrapper contains thrown claim transport errors without leaking details", async () => {
+  const secret = "postgres://private-host/internal-secret";
+  const result = await callSchedulerRpc(async () => { throw new Error(secret); }, "claim_due_workflow_schedules", {});
+  assert.equal(result.data, null);
+  assert.equal(result.error.message, "SCHEDULER_RPC_TRANSPORT_FAILED");
+  assert.equal(result.error.message.includes(secret), false);
+});
+
+test("scheduler RPC wrapper classifies thrown persistence transport errors", async () => {
+  let called = "";
+  const result = await callSchedulerRpc(async (name) => {
+    called = name;
+    throw new Error("connection reset with credentials");
+  }, "record_scheduled_workflow_run", {});
+  assert.equal(called, "record_scheduled_workflow_run");
+  assert.equal(result.data, null);
+  assert.equal(result.error.message, "SCHEDULER_RPC_TRANSPORT_FAILED");
+  assert.equal(result.error.message.includes("credentials"), false);
+});
+
+test("scheduler RPC wrapper treats thrown finalization as failure, never success", async () => {
+  const result = await callSchedulerRpc(async () => { throw new Error("temporary network failure"); }, "finish_workflow_schedule_claim", {});
+  assert.notEqual(result.data, true);
+  assert.ok(result.error);
+});
+
+test("scheduler RPC wrapper preserves returned RPC errors and successful dry-run record responses", async () => {
+  const returnedError = await callSchedulerRpc(async () => ({ data: null, error: { message: "denied" } }), "claim_due_workflow_schedules", {});
+  assert.equal(returnedError.error.message, "denied");
+
+  let providerCalls = 0;
+  const success = await callSchedulerRpc(async () => ({ data: [{ status: "succeeded", sideEffectsPerformed: false }], error: null }), "claim_due_workflow_schedules", {});
+  assert.equal(success.error, null);
+  assert.equal(success.data[0].sideEffectsPerformed, false);
+  assert.equal(providerCalls, 0, "RPC wrapper must not invoke external providers");
 });

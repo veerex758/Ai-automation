@@ -4,6 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
+import { callSchedulerRpc } from "@/lib/observability/scheduler-rpc.cjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ async function finishClaim(
   errorCode: string | null,
 ): Promise<boolean> {
   try {
-    const { data, error } = await supabase.rpc("finish_workflow_schedule_claim", {
+    const { data, error } = await callSchedulerRpc(supabase.rpc.bind(supabase), "finish_workflow_schedule_claim", {
       p_schedule_id: claim.schedule_id,
       p_lease_token: claim.lease_token,
       p_succeeded: succeeded,
@@ -114,7 +115,7 @@ async function dispatchTick(request: NextRequest) {
   let claimData: unknown;
   let claimFailed = false;
   try {
-    const { data, error } = await supabase.rpc("claim_due_workflow_schedules", {
+    const { data, error } = await callSchedulerRpc(supabase.rpc.bind(supabase), "claim_due_workflow_schedules", {
       p_limit: claimLimit,
       p_lease_seconds: leaseSeconds,
     });
@@ -168,7 +169,7 @@ async function dispatchTick(request: NextRequest) {
 
       let persistError: unknown = null;
       try {
-        const persistenceResponse = await supabase.rpc("record_scheduled_workflow_run", {
+        const persistenceResponse = await callSchedulerRpc(supabase.rpc.bind(supabase), "record_scheduled_workflow_run", {
           p_schedule_id: claim.schedule_id,
           p_lease_token: claim.lease_token,
           p_expected_version: claim.workflow_version,
