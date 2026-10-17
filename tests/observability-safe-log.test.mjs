@@ -134,7 +134,13 @@ test("scheduler contains claim and finalization transport failures", () => {
   assert.ok(finalizationFailureBranch.includes("logOperationalEvent"));
 });
 
-test("scheduler routes claim, persistence, and finalization through the safe wrapper", () => {\n  const route = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");\n  assert.ok(route.includes("callSchedulerRpc(supabase.rpc.bind(supabase), \\"claim_due_workflow_schedules\\""));\n  assert.ok(route.includes("callSchedulerRpc(supabase.rpc.bind(supabase), \\"record_scheduled_workflow_run\\""));\n  assert.ok(route.includes("callSchedulerRpc(supabase.rpc.bind(supabase), \\"finish_workflow_schedule_claim\\""));\n  assert.ok(route.includes("SCHEDULED_RUN_PERSISTENCE_FAILED"));\n});
+test("scheduler routes claim, persistence, and finalization through the safe wrapper", () => {
+  const route = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+  assert.ok(route.includes('callSchedulerRpc(supabase.rpc.bind(supabase), "claim_due_workflow_schedules"'));
+  assert.ok(route.includes('callSchedulerRpc(supabase.rpc.bind(supabase), "record_scheduled_workflow_run"'));
+  assert.ok(route.includes('callSchedulerRpc(supabase.rpc.bind(supabase), "finish_workflow_schedule_claim"'));
+  assert.ok(route.includes("SCHEDULED_RUN_PERSISTENCE_FAILED"));
+});
 
 test("scheduler RPC wrapper contains thrown claim transport errors without leaking details", async () => {
   const secret = "postgres://private-host/internal-secret";
