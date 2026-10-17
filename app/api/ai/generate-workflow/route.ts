@@ -1,37 +1,55 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
+import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request.headers.get("x-request-id"));
+  const startedAt = Date.now();
+  const jsonResponse = (body: unknown, init?: { status?: number }) => {
+    const response = NextResponse.json(body, init);
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  };
+
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+      return jsonResponse({ error: "Authentication required." }, { status: 401 });
     }
 
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 12000) {
-      return NextResponse.json({ error: "Request is too large. Shorten your workflow description." }, { status: 413 });
+      return jsonResponse({ error: "Request is too large. Shorten your workflow description." }, { status: 413 });
     }
 
     let body: unknown;
     try { body = await request.json(); } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+      return jsonResponse({ error: "Request body must be valid JSON." }, { status: 400 });
     }
     if (!body || typeof body !== "object" || !("prompt" in body) || typeof body.prompt !== "string") {
-      return NextResponse.json({ error: "Describe the workflow you want to create." }, { status: 400 });
+      return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
     }
-    if (!body.prompt.trim()) return NextResponse.json({ error: "Describe the workflow you want to create." }, { status: 400 });
+    if (!body.prompt.trim()) return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
     if (body.prompt.trim().length > MAX_PROMPT_LENGTH) {
-      return NextResponse.json({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
+      return jsonResponse({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
     }
 
     const result = await generateWorkflow({ prompt: body.prompt });
-    return NextResponse.json(result);
+    logOperationalEvent({
+      event: "workflow_generation",
+      requestId,
+      route: "/api/ai/generate-workflow",
+      outcome: "success",
+      statusCode: 200,
+      durationMs: Math.max(0, Date.now() - startedAt),
+    });
+    return jsonResponse(result);
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
@@ -50,7 +68,17 @@ export async function POST(request: NextRequest) {
       AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Aivanta's safety and validation rules. Try describing a simpler workflow." },
     };
     const mapped = responses[code] || { status: 502, message: "Workflow generation failed safely. Please try again." };
-    if (mapped.status >= 500) console.error("Aivanta AI workflow generation failed:", code);
-    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+    if (mapped.status >= 500) {
+      logOperationalEvent({
+        event: "workflow_generation",
+        requestId,
+        route: "/api/ai/generate-workflow",
+        outcome: "failure",
+        statusCode: mapped.status,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
+      }, console.error);
+    }
+    return jsonResponse({ error: mapped.message }, { status: mapped.status });
   }
 }
