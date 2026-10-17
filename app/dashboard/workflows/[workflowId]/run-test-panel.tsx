@@ -144,7 +144,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
   }
 
   return (
-    <section className="dry-run-panel" aria-labelledby="dry-run-title">
+    <section id="workflow-test-panel" className="dry-run-panel" aria-labelledby="dry-run-title" tabIndex={-1}>
       <div className="dry-run-heading">
         <div><span className="panel-kicker">SAFE PREVIEW</span><h2 id="dry-run-title">Test your workflow</h2>
           <p>Conditions use this sample data. Actions are simulated; nothing is sent, created, or requested externally.</p>
