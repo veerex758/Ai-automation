@@ -109,3 +109,11 @@
 .template-note span{color:#81976b}
 @media(max-width:1100px){.quick-start-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){.quick-start-section{padding:15px;margin-bottom:25px}.quick-start-heading{align-items:flex-start}.quick-start-heading h2{font-size:18px}.quick-start-heading p{font-size:10px;line-height:1.6}.quick-start-grid{grid-template-columns:1fr}.quick-template-card{padding:13px}.quick-template-card p{margin-bottom:12px}.template-count{font-size:8px}}
+
+.template-setup-modal{max-height:90vh;overflow-y:auto}
+.template-setup-modal form>label{display:block;font-size:10px;font-weight:700;margin:15px 0 8px}
+.template-setup-modal form>input,.template-setup-modal form>select,.template-setup-modal form>textarea{width:100%;min-height:41px;border:1px solid #dfe6db;border-radius:7px;padding:10px 11px;font:11px 'DM Sans',sans-serif;outline:none;background:#fff;color:#334238}
+.template-setup-modal form>textarea{resize:vertical;line-height:1.6}
+.template-setup-modal form>input:focus,.template-setup-modal form>select:focus,.template-setup-modal form>textarea:focus{border-color:#8baa6d;box-shadow:0 0 0 3px #edf4e6}
+.template-setup-modal .description-label{margin-top:15px}
+.template-setup-modal .description-label span{float:right;color:#98a198;font-weight:400}
