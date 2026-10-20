@@ -64,9 +64,19 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
 
     const stored = data.definition as { version?: unknown; nodes?: unknown } | null;
     const valid = validateDefinition(stored && typeof stored === "object" ? stored : { version: 1, nodes: [] });
+    const starterDefinition = {
+      version: 1 as const,
+      nodes: [{
+        id: "trigger-1",
+        type: "trigger" as const,
+        title: "When this happens",
+        description: "Choose an event that starts your workflow.",
+        settings: { event: "manual" },
+      }],
+    };
     return NextResponse.json({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status },
-      definition: valid.definition ?? { version: 1, nodes: [] },
+      definition: valid.definition ?? starterDefinition,
     });
   } catch (error) {
     console.error("Failed to load Aivanta workflow definition:", error);
