@@ -40,6 +40,12 @@ export default function WorkflowBuilderPage() {
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
   const isDirty = JSON.stringify(definition) !== savedFingerprint;
+  const isCommentToDm = /comment to dm/i.test(workflow?.name ?? "");
+  const isLeadFollowUp = /lead follow-up/i.test(workflow?.name ?? "");
+  const isLeadAlert = /new lead alert/i.test(workflow?.name ?? "");
+  const isFormToLead = /form to lead/i.test(workflow?.name ?? "");
+  const isSupportTriage = /support ticket triage/i.test(workflow?.name ?? "");
+  const isContentApproval = /content approval/i.test(workflow?.name ?? "");
 
   useEffect(() => {
     if (!isDirty) return;
@@ -258,7 +264,7 @@ export default function WorkflowBuilderPage() {
             <label htmlFor="step-description">Description <span>Optional</span></label><textarea id="step-description" maxLength={240} rows={4} value={selectedNode.description} onChange={(event) => updateSelected({ description: event.target.value })} placeholder="Describe what this step should do…" />
             {selectedNode.type === "trigger" && <div className="step-config-fields">
               <div className="config-section-title">Trigger configuration</div>
-              <label htmlFor="trigger-event">Start when</label>
+              <label htmlFor="trigger-event">{isCommentToDm ? "When a comment arrives" : isLeadFollowUp || isLeadAlert ? "When a new lead arrives" : isFormToLead ? "When a form is submitted" : isSupportTriage ? "When a support request arrives" : isContentApproval ? "When a draft is submitted" : "Start when"}</label>
               <select id="trigger-event" value={selectedNode.settings.event ?? "manual"} onChange={(event) => updateSetting("event", event.target.value)}>
                 <option value="manual">Started manually</option><option value="schedule">On a schedule</option><option value="webhook">A webhook is received</option><option value="record_created">A new record is created</option>
               </select>
@@ -280,19 +286,20 @@ export default function WorkflowBuilderPage() {
               {selectedNode.settings.operation === "http_request" && <>
                 <label htmlFor="action-url">Request URL</label><input id="action-url" maxLength={500} type="url" value={selectedNode.settings.url ?? ""} onChange={(event) => updateSetting("url", event.target.value)} placeholder="https://api.example.com/…" />
               </>}
-              <label htmlFor="action-message">Payload / message <span>Optional</span></label>
-              <textarea id="action-message" maxLength={500} rows={3} value={selectedNode.settings.message ?? ""} onChange={(event) => updateSetting("message", event.target.value)} placeholder="Describe the content or payload…" />
+              <label htmlFor="action-message">{isCommentToDm ? "DM reply and guide link" : isLeadFollowUp ? "Follow-up task notes" : isLeadAlert ? "Lead alert details" : isFormToLead ? "Lead review notes" : isSupportTriage ? "Support task details" : isContentApproval ? "Review task details" : "Payload / message"} <span>Optional</span></label>
+              <textarea id="action-message" maxLength={500} rows={3} value={selectedNode.settings.message ?? ""} onChange={(event) => updateSetting("message", event.target.value)} placeholder={isCommentToDm ? "Thanks for commenting! Here is your guide: https://…" : isLeadFollowUp ? "Follow up with {{lead_name}} about {{interest}}." : isLeadAlert ? "Review new lead {{lead_name}} from {{source}}." : isFormToLead ? "Qualify {{name}} using the submitted details." : isSupportTriage ? "Review {{customer_name}}’s request: {{subject}}." : isContentApproval ? "Review the draft: {{content_title}}." : "Describe the content or payload…"} />
+              {isLeadFollowUp && <><label htmlFor="follow-up-delay">Follow-up delay</label><select id="follow-up-delay" value={selectedNode.settings.delay ?? "immediate"} onChange={(event) => updateSetting("delay", event.target.value)}><option value="immediate">Immediately</option><option value="15_minutes">After 15 minutes</option><option value="1_hour">After 1 hour</option><option value="1_day">After 1 day</option></select><p className="config-note">Delay is saved as a draft setting. Scheduled waiting is not active yet.</p></>}
               <p className="config-note">Configuration is saved as a draft only. No service is contacted yet.</p>
             </div>}
             {selectedNode.type === "condition" && <div className="step-config-fields">
               <div className="config-section-title">Condition rules</div>
-              <label htmlFor="condition-field">Field to check</label><input id="condition-field" maxLength={120} value={selectedNode.settings.field ?? ""} onChange={(event) => updateSetting("field", event.target.value)} placeholder="e.g. order.total" />
+              <label htmlFor="condition-field">{isCommentToDm ? "Comment text" : isLeadFollowUp ? "Lead follow-up status" : isSupportTriage ? "Ticket priority" : isContentApproval ? "Approval status" : "Field to check"}</label><input id="condition-field" maxLength={120} value={selectedNode.settings.field ?? ""} onChange={(event) => updateSetting("field", event.target.value)} placeholder={isCommentToDm ? "comment_text" : isLeadFollowUp ? "follow_up_status" : isSupportTriage ? "priority" : isContentApproval ? "approval_status" : "e.g. order.total"} />
               <label htmlFor="condition-operator">Comparison</label>
               <select id="condition-operator" value={selectedNode.settings.operator ?? "equals"} onChange={(event) => updateSetting("operator", event.target.value)}>
                 <option value="equals">Equals</option><option value="contains">Contains</option><option value="greater_than">Greater than</option><option value="less_than">Less than</option><option value="is_set">Is set</option>
               </select>
               {selectedNode.settings.operator !== "is_set" && <>
-                <label htmlFor="condition-value">Expected value</label><input id="condition-value" maxLength={240} value={selectedNode.settings.value ?? ""} onChange={(event) => updateSetting("value", event.target.value)} placeholder="Value to compare against" />
+                <label htmlFor="condition-value">{isCommentToDm ? "Keyword to match" : isLeadFollowUp ? "Status to match" : isSupportTriage ? "Urgency to match" : isContentApproval ? "Approval status to match" : "Expected value"}</label><input id="condition-value" maxLength={240} value={selectedNode.settings.value ?? ""} onChange={(event) => updateSetting("value", event.target.value)} placeholder={isCommentToDm ? "guide" : isLeadFollowUp ? "pending" : isSupportTriage ? "urgent" : isContentApproval ? "pending" : "Value to compare against"} />
               </>}
               <p className="config-note">Rules are stored in your draft. They will not be evaluated until execution is implemented.</p>
             </div>}
