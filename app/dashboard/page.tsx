@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import "./dashboard.css";
 
 type Workflow = { id: string; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused" | "Archived"; runs: string; updated: string; icon: string; tone: string };
@@ -14,6 +15,7 @@ const navItems = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [activeNav, setActiveNav] = useState("Overview");
   const [filter, setFilter] = useState("All workflows");
@@ -77,6 +79,7 @@ export default function DashboardPage() {
     event.preventDefault();
     const name = newName.trim();
     const description = workflowDescription.trim();
+    const creatingWorkflow = !editingWorkflow;
     if (!name || savingWorkflow) return;
 
     setSavingWorkflow(true);
@@ -106,6 +109,7 @@ export default function DashboardPage() {
       setShowCreate(false);
       setFilter("All workflows");
       setSearch("");
+      if (creatingWorkflow) router.push(`/dashboard/workflows/${(result.workflow as Workflow).id}`);
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "Could not save this workflow.");
     } finally {
