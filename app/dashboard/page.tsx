@@ -96,6 +96,12 @@ export default function DashboardPage() {
   const [workspaceName, setWorkspaceName] = useState("Your workspace");
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const [savingWorkflow, setSavingWorkflow] = useState(false);
+  const [setupTemplate, setSetupTemplate] = useState<WorkflowTemplate | null>(null);
+  const [setupKeyword, setSetupKeyword] = useState("guide");
+  const [setupGuideUrl, setSetupGuideUrl] = useState("");
+  const [setupLeadSource, setSetupLeadSource] = useState("Website form");
+  const [setupDelay, setSetupDelay] = useState("15_minutes");
+  const [setupMessage, setSetupMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -183,6 +189,16 @@ export default function DashboardPage() {
     }
   }
 
+  function openTemplateSetup(template: WorkflowTemplate) {
+    setSetupTemplate(template);
+    setSetupKeyword("guide");
+    setSetupGuideUrl("");
+    setSetupLeadSource(template.id === "form-to-lead" ? "Website form" : "Website");
+    setSetupDelay("15_minutes");
+    setSetupMessage(template.id === "comment-to-dm" ? "Thanks for commenting! Here is your guide:" : template.id === "lead-follow-up" ? "Hi {{lead_name}}, just following up on your interest." : "Review the details and take the next step.");
+    setNotice("");
+  }
+
   async function createFromTemplate(template: WorkflowTemplate) {
     if (savingWorkflow) return;
     setSavingWorkflow(true);
@@ -196,13 +212,24 @@ export default function DashboardPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not create this template.");
       const workflow = result.workflow as Workflow;
+      const configuredDefinition = JSON.parse(JSON.stringify(template.definition)) as WorkflowTemplate["definition"];
+      for (const node of configuredDefinition.nodes) {
+        if (node.type === "condition" && template.id === "comment-to-dm") node.settings.value = setupKeyword.trim() || "guide";
+        if (node.type === "trigger" && ["lead-follow-up", "new-lead-alert", "form-to-lead"].includes(template.id)) node.settings.source = setupLeadSource.trim() || "Not specified";
+        if (node.type === "action") {
+          if (template.id === "comment-to-dm") { node.settings.message = setupMessage.trim() || "Thanks for commenting! Here is your guide:"; node.settings.url = setupGuideUrl.trim(); }
+          else if (template.id === "lead-follow-up") { node.settings.message = setupMessage.trim() || "Follow up with {{lead_name}} about {{interest}}."; node.settings.delay = setupDelay; }
+          else if (template.id === "new-lead-alert" || template.id === "form-to-lead" || template.id === "support-triage" || template.id === "content-approval") node.settings.message = setupMessage.trim() || node.settings.message;
+        }
+      }
       const saveResponse = await fetch(`/api/workflows/${workflow.id}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definition: template.definition }),
+        body: JSON.stringify({ definition: configuredDefinition }),
       });
       const saveResult = await saveResponse.json();
       if (!saveResponse.ok) throw new Error(saveResult.error || "The workflow was created, but its template steps could not be saved.");
+      setSetupTemplate(null);
       router.push(`/dashboard/workflows/${workflow.id}`);
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "Could not create this template.");
@@ -258,7 +285,7 @@ export default function DashboardPage() {
                 <div className={`quick-template-icon ${template.tone}`}>{template.icon}</div>
                 <div className="quick-template-meta"><span>{template.category}</span><span>{template.time}</span></div>
                 <h3>{template.name}</h3><p>{template.description}</p>
-                <button type="button" onClick={() => void createFromTemplate(template)} disabled={savingWorkflow}>Use template <span>↗</span></button>
+                <button type="button" onClick={() => openTemplateSetup(template)} disabled={savingWorkflow}>Set up template <span>↗</span></button>
               </article>)}
             </div>
             <p className="template-note"><span>ⓘ</span> Templates create editable drafts. Live social, email and other integrations are not connected yet.</p>
@@ -284,6 +311,12 @@ export default function DashboardPage() {
           <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Aivanta database. Live workflow execution and connected services are still in development.</p></div>
         </div>
       </section>
+
+      {setupTemplate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingWorkflow) setSetupTemplate(null); }}><section className="create-modal template-setup-modal" role="dialog" aria-modal="true" aria-labelledby="template-setup-title"><button className="modal-close" aria-label="Close setup" onClick={() => { if (!savingWorkflow) setSetupTemplate(null); }}>×</button><div className="modal-icon">{setupTemplate.icon}</div><div className="dash-eyebrow">STEP 1 · QUICK SETUP</div><h2 id="template-setup-title">Set up {setupTemplate.name}</h2><p>Answer a few simple questions. You can adjust everything later in the builder.</p><form onSubmit={(event) => { event.preventDefault(); void createFromTemplate(setupTemplate); }}>
+        {setupTemplate.id === "comment-to-dm" && <><label htmlFor="setup-keyword">Keyword to watch for</label><input id="setup-keyword" maxLength={80} placeholder="guide" value={setupKeyword} onChange={(event) => setSetupKeyword(event.target.value)} required /><label htmlFor="setup-guide-url" className="description-label">Guide link <span>Optional</span></label><input id="setup-guide-url" type="url" placeholder="https://your-site.com/guide" value={setupGuideUrl} onChange={(event) => setSetupGuideUrl(event.target.value)} /><label htmlFor="setup-message" className="description-label">DM message</label><textarea id="setup-message" rows={3} maxLength={1000} value={setupMessage} onChange={(event) => setSetupMessage(event.target.value)} /></>}
+        {["lead-follow-up", "new-lead-alert", "form-to-lead"].includes(setupTemplate.id) && <><label htmlFor="setup-source">Where do leads come from?</label><select id="setup-source" value={setupLeadSource} onChange={(event) => setSetupLeadSource(event.target.value)}><option>Website</option><option>Website form</option><option>Instagram</option><option>Facebook</option><option>WhatsApp</option><option>CRM</option><option>Manual entry</option><option>Other</option></select>{setupTemplate.id === "lead-follow-up" && <><label htmlFor="setup-delay" className="description-label">When should follow-up happen?</label><select id="setup-delay" value={setupDelay} onChange={(event) => setSetupDelay(event.target.value)}><option value="immediate">Immediately</option><option value="15_minutes">After 15 minutes</option><option value="1_hour">After 1 hour</option><option value="1_day">After 1 day</option></select></>}<label htmlFor="setup-message" className="description-label">Task message</label><textarea id="setup-message" rows={3} maxLength={1000} value={setupMessage} onChange={(event) => setSetupMessage(event.target.value)} /></>}
+        {["support-triage", "content-approval"].includes(setupTemplate.id) && <><label htmlFor="setup-message">What should the team review?</label><textarea id="setup-message" rows={3} maxLength={1000} value={setupMessage} onChange={(event) => setSetupMessage(event.target.value)} /></>}
+        <div className="modal-actions"><button type="button" className="cancel-button" onClick={() => setSetupTemplate(null)} disabled={savingWorkflow}>Cancel</button><button type="submit" className="create-button" disabled={savingWorkflow}>{savingWorkflow ? "Creating draft…" : "Create my draft"} <span>↗</span></button></div></form><small className="modal-disclaimer">This creates a saved draft only. It will not send DMs, contact leads, or run timers until integrations and execution are connected.</small></section></div>}
 
       {showCreate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingWorkflow) { setShowCreate(false); setEditingWorkflow(null); } }}><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><button className="modal-close" aria-label="Close dialog" onClick={() => { if (!savingWorkflow) { setShowCreate(false); setEditingWorkflow(null); } }}>×</button><div className="modal-icon">✳</div><div className="dash-eyebrow">{editingWorkflow ? "REFINE YOUR AUTOMATION" : "START WITH A CLEAR OUTCOME"}</div><h2 id="create-title">{editingWorkflow ? "Edit workflow" : "Create a workflow"}</h2><p>{editingWorkflow ? "Update the name and description for this workflow." : "Give your workflow a name and a clear description. You can configure its steps in a future release."}</p><form onSubmit={saveWorkflow}><label htmlFor="workflow-name">Workflow name</label><input id="workflow-name" autoFocus maxLength={80} placeholder="e.g. Welcome new customers" value={newName} onChange={(event) => setNewName(event.target.value)} required /><label htmlFor="workflow-description" className="description-label">Description <span>Optional</span></label><textarea id="workflow-description" maxLength={500} rows={3} placeholder="What should this workflow help you accomplish?" value={workflowDescription} onChange={(event) => setWorkflowDescription(event.target.value)} /><div className="modal-actions"><button type="button" className="cancel-button" onClick={() => { setShowCreate(false); setEditingWorkflow(null); }}>Cancel</button><button type="submit" className="create-button" disabled={savingWorkflow}>{savingWorkflow ? "Saving…" : editingWorkflow ? "Save changes" : "Create draft"} <span>↗</span></button></div></form><small className="modal-disclaimer">Changes are saved to your Aivanta workspace. Live execution is not connected yet.</small></section></div>}
     </main>
