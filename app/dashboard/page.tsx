@@ -228,7 +228,12 @@ export default function DashboardPage() {
         body: JSON.stringify({ definition: configuredDefinition }),
       });
       const saveResult = await saveResponse.json();
-      if (!saveResponse.ok) throw new Error(saveResult.error || "The workflow was created, but its template steps could not be saved.");
+      if (!saveResponse.ok) {
+        // Avoid leaving an empty workflow behind when template configuration fails.
+        const cleanupResponse = await fetch(`/api/workflows/${workflow.id}`, { method: "DELETE" });
+        const cleanupNote = cleanupResponse.ok ? "" : " The empty workflow may still be in your dashboard.";
+        throw new Error((saveResult.error || "The template steps could not be saved.") + cleanupNote);
+      }
       setSetupTemplate(null);
       router.push(`/dashboard/workflows/${workflow.id}`);
     } catch (caught) {
