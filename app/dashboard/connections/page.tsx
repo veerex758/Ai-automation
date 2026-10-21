@@ -6,6 +6,7 @@ import "./connections.css";
 
 type Connection = {
   id: string;
+  product: "gmail" | "sheets";
   account_email: string;
   scopes: string[];
   status: "connected" | "needs_reauth" | "revoked";
@@ -72,11 +73,11 @@ export default function ConnectionsPage() {
       </section>
 
       <section className="connections-list">
-        <div className="connections-list-heading"><div><h2>Connected accounts</h2><p>Only account details and permission names are shown here. Tokens never reach the browser.</p></div><span>{connections.length} {connections.length === 1 ? "account" : "accounts"}</span></div>
+        <div className="connections-list-heading"><div><h2>Connected accounts</h2><p>Only account details and permission names are shown here. Tokens never reach the browser.</p></div><span>{connections.length} {connections.length === 1 ? "connection" : "connections"}</span></div>
         {loading ? <p className="connections-empty">Loading connections…</p> : connections.length === 0 ? <p className="connections-empty">No Google accounts connected yet.</p> : connections.map(connection => (
           <article className="connection-row" key={connection.id}>
-            <div className="connection-icon google-icon" aria-hidden="true">G</div>
-            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{connection.scopes.some(scope => scope.includes("gmail")) ? "Gmail" : ""}{connection.scopes.some(scope => scope.includes("spreadsheets")) ? "Google Sheets" : ""} · {connection.scopes.length} permissions</span></div>
+            <div className={`connection-icon ${connection.product === "gmail" ? "google-icon" : "sheets-icon"}`} aria-hidden="true">{connection.product === "gmail" ? "G" : "▦"}</div>
+            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{connection.product === "gmail" ? "Gmail" : "Google Sheets"} · {connection.scopes.length} permissions</span></div>
             <span className={`connection-status status-${connection.status}`}>{connection.status.replace("_", " ")}</span>
           </article>
         ))}
