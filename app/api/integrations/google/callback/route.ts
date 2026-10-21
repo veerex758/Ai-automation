@@ -17,7 +17,7 @@ function connectionsUrl(request: NextRequest, status: string) {
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const clearCookies = (response: NextResponse) => {
-    for (const name of ["aivanta_google_oauth_state", "aivanta_google_oauth_verifier", "aivanta_google_oauth_product"]) {
+    for (const name of ["aivanta_google_oauth_state", "aivanta_google_oauth_verifier", "aivanta_google_oauth_product", "aivanta_google_oauth_user"]) {
       response.cookies.set(name, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/integrations/google", maxAge: 0 });
     }
     return response;
@@ -31,8 +31,9 @@ export async function GET(request: NextRequest) {
   const expectedState = request.cookies.get("aivanta_google_oauth_state")?.value;
   const verifier = request.cookies.get("aivanta_google_oauth_verifier")?.value;
   const product = request.cookies.get("aivanta_google_oauth_product")?.value;
+  const initiatingUserId = request.cookies.get("aivanta_google_oauth_user")?.value;
 
-  if (!state || !expectedState || state !== expectedState || !code || !verifier || !isGoogleProduct(product)) {
+  if (!state || !expectedState || state !== expectedState || !code || !verifier || !initiatingUserId || !isGoogleProduct(product)) {
     return clearCookies(connectionsUrl(request, "invalid_state"));
   }
 
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return clearCookies(connectionsUrl(request, "sign_in_required"));
+    if (user.id !== initiatingUserId) return clearCookies(connectionsUrl(request, "user_changed"));
 
     const config = getGoogleOAuthConfig();
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
