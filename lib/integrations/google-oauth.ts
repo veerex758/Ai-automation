@@ -13,8 +13,8 @@ export const GOOGLE_PRODUCTS = {
 
 export type GoogleProduct = keyof typeof GOOGLE_PRODUCTS;
 
-export function isGoogleProduct(value: string | null): value is GoogleProduct {
-  return value !== null && Object.hasOwn(GOOGLE_PRODUCTS, value);
+export function isGoogleProduct(value: string | null | undefined): value is GoogleProduct {
+  return value != null && Object.hasOwn(GOOGLE_PRODUCTS, value);
 }
 
 export function getGoogleOAuthConfig() {
