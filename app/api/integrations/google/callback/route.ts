@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
+import { decryptGoogleCredentials, encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
 import { getGoogleOAuthConfig, isGoogleProduct } from "@/lib/integrations/google-oauth";
 
 export const runtime = "nodejs";
@@ -98,17 +98,36 @@ export async function GET(request: NextRequest) {
     const admin = createSupabaseClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    // Google may omit refresh_token on a subsequent consent. Preserve an existing
+    // refresh token for this exact user/workspace/product/account rather than
+    // accidentally replacing a durable connection with an access-token-only one.
+    const { data: existing, error: existingError } = await admin.from("google_connections")
+      .select("encrypted_credentials")
+      .eq("workspace_id", workspace.id)
+      .eq("connected_by", user.id)
+      .eq("provider", "google")
+      .eq("product", product)
+      .eq("account_email", profile.email)
+      .maybeSingle();
+    if (existingError) return clearCookies(connectionsUrl(request, "save_failed"));
+    if (!credentials.refresh_token && existing?.encrypted_credentials) {
+      const previousCredentials = decryptGoogleCredentials(existing.encrypted_credentials);
+      if (previousCredentials.refresh_token) credentials.refresh_token = previousCredentials.refresh_token;
+    }
+
     const { error: saveError } = await admin.from("google_connections").upsert({
       workspace_id: workspace.id,
       connected_by: user.id,
       provider: "google",
+      product,
       account_email: profile.email,
       scopes: (typeof raw.scope === "string" ? raw.scope : "").split(" ").filter(Boolean),
       encrypted_credentials: encryptGoogleCredentials(credentials),
       expires_at: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : null,
       status: "connected",
       updated_at: new Date().toISOString(),
-    }, { onConflict: "workspace_id,provider,account_email,connected_by" });
+    }, { onConflict: "workspace_id,provider,product,account_email,connected_by" });
 
     if (saveError) return clearCookies(connectionsUrl(request, "save_failed"));
     return clearCookies(connectionsUrl(request, "connected"));
