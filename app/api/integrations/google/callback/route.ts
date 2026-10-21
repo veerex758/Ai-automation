@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       expires_at: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : null,
       status: "connected",
       updated_at: new Date().toISOString(),
-    }, { onConflict: "workspace_id,provider,account_email" });
+    }, { onConflict: "workspace_id,provider,account_email,connected_by" });
 
     if (saveError) return clearCookies(connectionsUrl(request, "save_failed"));
     return clearCookies(connectionsUrl(request, "connected"));
