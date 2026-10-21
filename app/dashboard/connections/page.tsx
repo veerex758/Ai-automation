@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import "./connections.css";
 
 type Connection = {
   id: string;
