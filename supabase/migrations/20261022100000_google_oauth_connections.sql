@@ -13,7 +13,7 @@ create table if not exists public.google_connections (
   status text not null default 'connected' check (status in ('connected', 'needs_reauth', 'revoked')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (workspace_id, provider, account_email)
+  unique (workspace_id, provider, account_email, connected_by)
 );
 
 create index if not exists google_connections_workspace_idx
