@@ -25,7 +25,7 @@ export function getGoogleOAuthConfig() {
     throw new Error("Google OAuth is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.");
   }
   const callback = new URL(redirectUri);
-  if (callback.protocol !== "https:" && callback.hostname !== "localhost") {
+  if (callback.protocol !== "https:" && !(callback.protocol === "http:" && callback.hostname === "localhost")) {
     throw new Error("Google OAuth redirect URI must use HTTPS outside localhost.");
   }
   if (callback.pathname !== "/api/integrations/google/callback") {
