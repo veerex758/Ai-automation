@@ -20,7 +20,7 @@ export async function GET() {
 
     const admin = createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
     const { data, error } = await admin.from("google_connections")
-      .select("id, account_email, scopes, status, expires_at, created_at, updated_at")
+      .select("id, product, account_email, scopes, status, expires_at, created_at, updated_at")
       .eq("workspace_id", workspace.id)
       .eq("connected_by", user.id)
       .order("created_at", { ascending: false });
