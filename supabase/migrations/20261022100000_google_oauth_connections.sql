@@ -6,6 +6,7 @@ create table if not exists public.google_connections (
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   connected_by uuid not null references auth.users(id) on delete cascade,
   provider text not null default 'google' check (provider = 'google'),
+  product text not null check (product in ('gmail', 'sheets')),
   account_email text not null,
   scopes text[] not null default '{}',
   encrypted_credentials text not null,
@@ -13,7 +14,7 @@ create table if not exists public.google_connections (
   status text not null default 'connected' check (status in ('connected', 'needs_reauth', 'revoked')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (workspace_id, provider, account_email, connected_by)
+  unique (workspace_id, provider, product, account_email, connected_by)
 );
 
 create index if not exists google_connections_workspace_idx
