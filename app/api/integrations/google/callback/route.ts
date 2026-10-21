@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
-import { getGoogleOAuthConfig, GOOGLE_PRODUCTS, isGoogleProduct } from "@/lib/integrations/google-oauth";
+import { getGoogleOAuthConfig, isGoogleProduct } from "@/lib/integrations/google-oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
