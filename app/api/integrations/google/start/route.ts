@@ -35,7 +35,6 @@ export async function GET(request: NextRequest) {
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("scope", scopes.join(" "));
     authorize.searchParams.set("access_type", "offline");
-    authorize.searchParams.set("include_granted_scopes", "true");
     authorize.searchParams.set("prompt", "consent");
     authorize.searchParams.set("state", state);
     authorize.searchParams.set("code_challenge", challenge);
@@ -52,6 +51,7 @@ export async function GET(request: NextRequest) {
     response.cookies.set("aivanta_google_oauth_state", state, cookieOptions);
     response.cookies.set("aivanta_google_oauth_verifier", verifier, cookieOptions);
     response.cookies.set("aivanta_google_oauth_product", productValue, cookieOptions);
+    response.cookies.set("aivanta_google_oauth_user", user.id, cookieOptions);
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch {
