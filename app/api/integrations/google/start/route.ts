@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("scope", scopes.join(" "));
     authorize.searchParams.set("access_type", "offline");
+    authorize.searchParams.set("include_granted_scopes", "false");
     authorize.searchParams.set("prompt", "consent");
     authorize.searchParams.set("state", state);
     authorize.searchParams.set("code_challenge", challenge);
