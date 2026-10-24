@@ -199,7 +199,7 @@ export default function WorkflowBuilderPage() {
                 </div>
                 <div className="canvas-zoom"><button aria-label="Zoom out" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>−</button><span>100%</span><button aria-label="Zoom in" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>＋</button></div>
               </div>
-              <div className="canvas-foot"><span><i /> Draft saved locally on Save draft</span><span>Drag-and-drop connections coming soon</span></div>
+              <div className="canvas-foot"><span><i /> Draft canvas · save to keep your changes</span><span>Connected steps · select a node to edit</span></div>
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
