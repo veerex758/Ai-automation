@@ -44,6 +44,8 @@ test("connected preview has positioned connectors and a narrow-screen layout", (
   assert.match(styles, /@media\(max-width:640px\)/);
   assert.match(styles, /\.ai-node-scroll-hint\{display:block/);
   assert.match(styles, /\.ai-node-canvas\{[^}]*overflow-x:auto/s);
+  assert.match(styles, /background-image:radial-gradient\(#dce8d5 0\.8px,transparent 0\.8px\)/, "canvas uses a subtle dot grid instead of a flat blank surface");
+  assert.match(styles, /scrollbar-color:#cbd9c2 transparent/);
   assert.match(styles, /\.ai-generated-node:focus-within/);
   assert.match(styles, /\.ai-generated-node-trigger\{border-top:3px solid/);
   assert.match(styles, /\.ai-generated-node-action\{border-top:3px solid/);
