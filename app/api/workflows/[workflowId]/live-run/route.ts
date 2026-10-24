@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { sendResendEmail, isResendConfigured, isLiveEmailRecipientAllowed, getAllowedRecipients } from "@/lib/integrations/resend.cjs";
+import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const maxInputBytes = 10 * 1024;
@@ -11,27 +12,45 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   const startedAt = Date.now();
+  const requestId = getRequestId(request.headers.get("x-request-id"));
+  const jsonResponse = (body: unknown, init?: ResponseInit) => {
+    const response = NextResponse.json(body, init);
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  };
+  const logFailure = (errorCode: "LIVE_RUN_FAILED" | "LIVE_RUN_PERSISTENCE_FAILED" | "LIVE_RUN_RECOVERY_FAILED") => {
+    logOperationalEvent({
+      event: "live_workflow_run",
+      requestId,
+      route: "/api/workflows/live-run",
+      outcome: "failure",
+      statusCode: 500,
+      durationMs: Math.min(600000, Math.max(0, Date.now() - startedAt)),
+      errorCode,
+    });
+  };
   try {
     const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    if (!uuidPattern.test(workflowId)) return jsonResponse({ error: "Invalid workflow ID." }, { status: 400 });
 
     const contentLength = Number(request.headers.get("content-length") ?? "0");
-    if (contentLength > maxInputBytes) return NextResponse.json({ error: "Run input must be 10 KB or smaller." }, { status: 413 });
+    if (contentLength > maxInputBytes) return jsonResponse({ error: "Run input must be 10 KB or smaller." }, { status: 413 });
 
     const idempotencyKey = request.headers.get("idempotency-key") ?? "";
     if (!uuidPattern.test(idempotencyKey)) {
-      return NextResponse.json({ error: "A UUID Idempotency-Key header is required for live execution." }, { status: 400 });
+      return jsonResponse({ error: "A UUID Idempotency-Key header is required for live execution." }, { status: 400 });
     }
 
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return jsonResponse({ error: "Authentication required." }, { status: 401 });
 
     if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-      return NextResponse.json({ error: "Live execution is disabled by the server. Configure AIVANTA_LIVE_EXECUTION_ENABLED=true only when you are ready to send real email." }, { status: 503 });
+      return jsonResponse({ error: "Live execution is disabled by the server. Configure AIVANTA_LIVE_EXECUTION_ENABLED=true only when you are ready to send real email." }, { status: 503 });
     }
     if (!isResendConfigured()) {
-      return NextResponse.json({ error: "Email integration is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the server environment." }, { status: 503 });
+      return jsonResponse({ error: "Email integration is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the server environment." }, { status: 503 });
     }
 
     const { data: priorRun, error: priorRunError } = await supabase.from("workflow_runs")
@@ -41,7 +60,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .eq("workflow_id", workflowId)
       .maybeSingle();
     if (priorRunError) throw priorRunError;
-    if (priorRun) return NextResponse.json({
+    if (priorRun) return jsonResponse({
       run: priorRun,
       duplicate: true,
       message: "This idempotency key has already been processed. No second email was sent.",
@@ -49,38 +68,38 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
 
     let body: unknown;
     try { body = await request.json(); } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+      return jsonResponse({ error: "Request body must be valid JSON." }, { status: 400 });
     }
-    if (!isRecord(body)) return NextResponse.json({ error: "Run request must be a JSON object." }, { status: 400 });
+    if (!isRecord(body)) return jsonResponse({ error: "Run request must be a JSON object." }, { status: 400 });
     const input = body.input === undefined ? {} : body.input;
-    if (!isRecord(input)) return NextResponse.json({ error: "Run input must be a JSON object." }, { status: 400 });
-    if (Buffer.byteLength(JSON.stringify(input), "utf8") > maxInputBytes) return NextResponse.json({ error: "Run input must be 10 KB or smaller." }, { status: 413 });
+    if (!isRecord(input)) return jsonResponse({ error: "Run input must be a JSON object." }, { status: 400 });
+    if (Buffer.byteLength(JSON.stringify(input), "utf8") > maxInputBytes) return jsonResponse({ error: "Run input must be 10 KB or smaller." }, { status: 413 });
 
     const { data: workflow, error: workflowError } = await supabase.from("workflows")
       .select("id, workspace_id, version, definition, status")
       .eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    if (workflow.status !== "active") return NextResponse.json({ error: "Activate this workflow before running live actions." }, { status: 409 });
+    if (!workflow) return jsonResponse({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (workflow.status !== "active") return jsonResponse({ error: "Activate this workflow before running live actions." }, { status: 409 });
 
     const validated = validateDefinition(workflow.definition);
-    if (!validated.definition) return NextResponse.json({ error: "Save a valid workflow definition before live execution." }, { status: 422 });
+    if (!validated.definition) return jsonResponse({ error: "Save a valid workflow definition before live execution." }, { status: 422 });
     if (validated.definition.nodes[0]?.type !== "trigger" || validated.definition.nodes[0]?.settings.event !== "manual") {
-      return NextResponse.json({ error: "The first live integration currently supports manual-trigger workflows only." }, { status: 422 });
+      return jsonResponse({ error: "The first live integration currently supports manual-trigger workflows only." }, { status: 422 });
     }
 
     const actions = validated.definition.nodes.filter((node) => node.type === "action");
-    if (actions.length > 1) return NextResponse.json({ error: "The first live release supports one action per run to keep external side effects controlled." }, { status: 422 });
+    if (actions.length > 1) return jsonResponse({ error: "The first live release supports one action per run to keep external side effects controlled." }, { status: 422 });
     const emailAction = actions[0];
     if (!emailAction || emailAction.settings.provider !== "email" || emailAction.settings.operation !== "send_email") {
-      return NextResponse.json({ error: "The first live integration supports one Resend email action. Other providers remain in safe preview mode." }, { status: 422 });
+      return jsonResponse({ error: "The first live integration supports one Resend email action. Other providers remain in safe preview mode." }, { status: 422 });
     }
-    if (!emailAction.settings.message?.trim()) return NextResponse.json({ error: "Add a message to the email action before running live." }, { status: 422 });
+    if (!emailAction.settings.message?.trim()) return jsonResponse({ error: "Add a message to the email action before running live." }, { status: 422 });
     if (getAllowedRecipients().length === 0) {
-      return NextResponse.json({ error: "Live email is not configured. Add AIVANTA_LIVE_EMAIL_RECIPIENTS to the server environment." }, { status: 503 });
+      return jsonResponse({ error: "Live email is not configured. Add AIVANTA_LIVE_EMAIL_RECIPIENTS to the server environment." }, { status: 503 });
     }
     if (!isLiveEmailRecipientAllowed(emailAction.settings.recipient)) {
-      return NextResponse.json({ error: "This recipient is not on the server-configured live email allowlist." }, { status: 403 });
+      return jsonResponse({ error: "This recipient is not on the server-configured live email allowlist." }, { status: 403 });
     }
 
     const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -91,7 +110,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .gte("created_at", hourAgo);
     if (rateLimitError) throw rateLimitError;
     if ((recentLiveRuns ?? 0) >= 10) {
-      return NextResponse.json({ error: "Live run limit reached. A maximum of 10 live runs per user per hour is allowed." }, { status: 429 });
+      return jsonResponse({ error: "Live run limit reached. A maximum of 10 live runs per user per hour is allowed." }, { status: 429 });
     }
 
     const preview = runDryRun(validated.definition, input);
@@ -116,12 +135,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         .eq("workflow_id", workflowId)
         .maybeSingle();
       if (existingError) throw existingError;
-      if (existing) return NextResponse.json({
+      if (existing) return jsonResponse({
         run: existing,
         duplicate: true,
         message: "This idempotency key has already been processed. No second email was sent.",
       }, { status: 200 });
-      return NextResponse.json({ error: "This live-run key has already been used." }, { status: 409 });
+      return jsonResponse({ error: "This live-run key has already been used." }, { status: 409 });
     }
     if (insertError) throw insertError;
 
@@ -193,7 +212,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     } catch (persistenceError) {
       // Never leave a live run looking perpetually in progress after a persistence
       // failure. Do not retry the provider call: the external side effect may exist.
-      console.error("Failed to persist Aivanta live run results:", persistenceError);
+      logFailure("LIVE_RUN_PERSISTENCE_FAILED");
       const recoveryMessage = "Run results could not be fully saved. An external email may already have been accepted; verify provider delivery before retrying.";
       const { error: recoveryError } = await supabase.from("workflow_runs")
         .update({
@@ -203,8 +222,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
           error_message: recoveryMessage,
         })
         .eq("id", run.id).eq("status", "running");
-      if (recoveryError) console.error("Failed to recover Aivanta live run status:", recoveryError);
-      return NextResponse.json({
+      if (recoveryError) logFailure("LIVE_RUN_RECOVERY_FAILED");
+      return jsonResponse({
         error: recoveryMessage,
         runId: run.id,
         sideEffectsMayHaveOccurred: emailSent,
@@ -212,14 +231,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       }, { status: 500 });
     }
 
-    return NextResponse.json({
+    return jsonResponse({
       run: finalized,
       steps: stepRows.map((step) => ({ step_id: step.step_id, position: step.position, step_type: step.step_type, title: step.title, status: step.status, result: step.result })),
       sideEffectsPerformed: emailSent,
       ...(providerMessageId ? { providerMessageId } : {}),
     }, { status: 201 });
   } catch (error) {
-    console.error("Failed to execute Aivanta live workflow:", error);
-    return NextResponse.json({ error: "Could not complete this live workflow run. Check run history before retrying; an external email may already have been accepted." }, { status: 500 });
+    logFailure("LIVE_RUN_FAILED");
+    return jsonResponse({ error: "Could not complete this live workflow run. Check run history before retrying; an external email may already have been accepted." }, { status: 500 });
   }
 }
