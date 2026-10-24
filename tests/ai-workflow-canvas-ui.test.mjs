@@ -24,6 +24,7 @@ test("AI-generated workflow preview renders connected, reviewable node cards", (
 
 test("connected preview has positioned connectors and a narrow-screen layout", () => {
   assert.match(styles, /\.ai-node-connector\{position:relative;/);
+  assert.match(styles, /\.ai-node-connector:before\{content:"";position:absolute;left:0;top:50%;transform:translateY\(-50%\)/);
   assert.match(styles, /@media\(max-width:640px\)/);
   assert.match(styles, /\.ai-node-scroll-hint\{display:block/);
   assert.match(styles, /\.ai-node-canvas\{[^}]*overflow-x:auto/s);
