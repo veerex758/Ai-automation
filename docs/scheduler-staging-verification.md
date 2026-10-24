@@ -4,7 +4,7 @@
 
 The scheduler currently executes scheduled workflows through the dry-run engine only. A successful scheduler tick is not evidence that email, Slack, or webhook actions ran live. Do not enable live execution as part of this verification.
 
-Vercel Cron jobs are configured for production deployments; do not deploy this change to production solely to test cron. Verify the protected route against the approved, protected staging/preview deployment first using a manual request from an authorized operator or CI job. Never paste a secret into a ticket, terminal transcript, or browser URL.
+Vercel Cron jobs are configured for production deployments; do not deploy this change to production solely to test cron. The current Vercel Hobby plan rejects schedules more frequent than once per day. This branch uses 09:00 UTC daily as the Hobby-compatible baseline; it does not provide near-real-time scheduling. If the product requires five-minute cadence, upgrade the Vercel plan and change the cron expression in a separate reviewed commit/PR. Verify the protected route against the approved, protected staging/preview deployment first using a manual request from an authorized operator or CI job. Never paste a secret into a ticket, terminal transcript, or browser URL.
 
 ## Required server environment
 
@@ -27,11 +27,11 @@ Do not add real values to `.env.example`, GitHub issues, PR descriptions, or log
    - Missing scheduler auth configuration: HTTP 503.
    - Valid request with configured database: HTTP 200 with bounded `claimed`, `succeeded`, and `failed` counts, or a documented generic database/claim error.
    - Responses include `x-request-id` and `Cache-Control: no-store`.
-6. If harmless due schedules exist, confirm only dry-run records are created and no provider side effects occur. Do not create or activate a live external-action workflow for this check.
+6. The cron schedule is daily at 09:00 UTC on the current Hobby-compatible configuration. Confirm the product owner accepts this frequency before relying on it for scheduled workflows; interval-based schedules more frequent than daily will not be serviced at their intended cadence by this cron. If harmless due schedules exist, confirm only dry-run records are created and no provider side effects occur. Do not create or activate a live external-action workflow for this check.
 7. Review run history and operational logs using request ID and allow-listed status/error codes only. Never record tokens, authorization headers, workflow inputs/outputs, provider payloads, or customer secrets.
 8. Record target environment, exact deployment/commit, HTTP status, request ID, and sanitized result counts in the shared verification ledger.
 9. Stop if the hostname, deployment protection, database project, or scheduler RPC state is uncertain.
 
 ## Rollback
 
-Revert this PR to remove the cron declaration and this procedure. Removing the declaration prevents future cron scheduling after the corresponding deployment configuration is applied; it does not delete existing run-history rows or undo scheduler ticks that already occurred. Keep the endpoint's authentication gate in place.
+Revert this PR to remove the cron declaration and this procedure. Removing the declaration prevents future cron scheduling after the corresponding deployment configuration is applied; it does not delete existing run-history rows or undo scheduler ticks that already occurred. Keep the endpoint's authentication gate in place. To enable more frequent ticks, the Vercel plan must support them and the schedule must be changed explicitly; do not silently promise a frequency the account cannot deploy.
