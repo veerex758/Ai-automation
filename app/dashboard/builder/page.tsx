@@ -193,7 +193,7 @@ export default function WorkflowBuilderPage() {
                       <span className="builder-node-copy"><small>{step.kind.toUpperCase()} {String(index + 1).padStart(2, "0")}</small><strong>{step.title}</strong><span>{step.detail}</span></span>
                       <span className="node-menu">•••</span>
                     </button>
-                    {index < steps.length - 1 && <div className="node-connector"><span>↓</span></div>}
+                    {index < steps.length - 1 && <div className="node-connector"><span>→</span></div>}
                   </div>)}
                   <button className="canvas-add-node" onClick={() => setShowAdd(true)}>＋ Add next step</button>
                 </div>
