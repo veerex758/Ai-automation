@@ -121,6 +121,7 @@ export default function WorkflowBuilderPage() {
       };
 
       let workflowId = savedWorkflowId;
+      const isNewWorkflow = !workflowId;
       if (!workflowId) {
         const createResponse = await fetch("/api/workflows", {
           method: "POST",
@@ -130,6 +131,7 @@ export default function WorkflowBuilderPage() {
             name: name.trim(),
             description: `${steps.length} steps · Visual workflow draft`,
             status: "draft",
+            definition,
           }),
         });
         const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
@@ -140,6 +142,7 @@ export default function WorkflowBuilderPage() {
         setSavedWorkflowId(workflowId);
       }
 
+      if (!isNewWorkflow) {
       const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -149,6 +152,7 @@ export default function WorkflowBuilderPage() {
       const saved = await saveResponse.json() as { success?: boolean; error?: string };
       if (!saveResponse.ok || !saved.success) {
         throw new Error(saved.error || "The workflow record was created, but its steps could not be saved. Please retry after checking the workflow list.");
+      }
       }
 
       try {
