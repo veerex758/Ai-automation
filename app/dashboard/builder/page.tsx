@@ -174,7 +174,7 @@ export default function WorkflowBuilderPage() {
                   title: node.title,
                   detail: node.description || (node.type === "trigger" ? "Starts the workflow when its event occurs." : node.type === "condition" ? "Evaluate a rule before continuing." : action?.description || "Configure this action before running."),
                   ...(action ? { actionId: action.id } : {}),
-                  ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
+                  settings: { ...node.settings },
                 };
               });
               setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
