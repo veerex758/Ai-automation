@@ -41,3 +41,35 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+
+  authenticated-e2e:
+    name: Authenticated preview E2E
+    runs-on: ubuntu-latest
+    needs: verify
+    if: ${{ vars.AIVANTA_E2E_BASE_URL != '' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: Require dedicated staging credentials
+        env:
+          AIVANTA_E2E_BASE_URL: ${{ vars.AIVANTA_E2E_BASE_URL }}
+          AIVANTA_E2E_EMAIL: ${{ secrets.AIVANTA_E2E_EMAIL }}
+          AIVANTA_E2E_PASSWORD: ${{ secrets.AIVANTA_E2E_PASSWORD }}
+        run: |
+          test -n "$AIVANTA_E2E_BASE_URL" || { echo "Missing AIVANTA_E2E_BASE_URL repository variable"; exit 1; }
+          test -n "$AIVANTA_E2E_EMAIL" || { echo "Missing AIVANTA_E2E_EMAIL repository secret"; exit 1; }
+          test -n "$AIVANTA_E2E_PASSWORD" || { echo "Missing AIVANTA_E2E_PASSWORD repository secret"; exit 1; }
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run authenticated workflow lifecycle
+        env:
+          AIVANTA_E2E_BASE_URL: ${{ vars.AIVANTA_E2E_BASE_URL }}
+          AIVANTA_E2E_EMAIL: ${{ secrets.AIVANTA_E2E_EMAIL }}
+          AIVANTA_E2E_PASSWORD: ${{ secrets.AIVANTA_E2E_PASSWORD }}
+        run: npm run test:e2e
