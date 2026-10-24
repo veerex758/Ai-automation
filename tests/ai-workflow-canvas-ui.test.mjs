@@ -20,6 +20,8 @@ test("AI-generated workflow preview renders connected, reviewable node cards", (
   assert.match(preview, /ai-node-scroll-hint/);
   assert.doesNotMatch(preview, /Object\.entries\(node\.settings\)/, "raw settings are not printed in the generated preview");
   assert.doesNotMatch(page, /Object\.entries\(node\.settings\)/, "raw settings are not used as fallback canvas labels");
+  assert.match(page, /settings: \{ \.\.\.node\.settings \}/, "generated settings are retained when applying the draft");
+  assert.doesNotMatch(page, /node\.type === "action" \? \{ settings:/, "settings retention is not limited to action nodes");
 });
 
 test("connected preview has positioned connectors and a narrow-screen layout", () => {
