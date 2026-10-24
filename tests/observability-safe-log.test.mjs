@@ -62,7 +62,7 @@ test("rejects invalid event names and omits invalid field values", () => {
   assert.equal("errorCode" in record, false);
 });
 
-test("preserves only reviewed stable error codes emitted by AI and scheduler paths", () => {
+test("preserves only reviewed stable error codes emitted by AI, scheduler, and live-run paths", () => {
   const reviewedErrorCodes = [
     "AI_PROVIDER_ERROR",
     "AI_NOT_CONFIGURED",
@@ -83,6 +83,9 @@ test("preserves only reviewed stable error codes emitted by AI and scheduler pat
     "INVALID_WORKFLOW_DEFINITION",
     "SCHEDULED_RUN_PERSISTENCE_FAILED",
     "SCHEDULED_RUN_FINALIZATION_FAILED",
+    "LIVE_RUN_FAILED",
+    "LIVE_RUN_PERSISTENCE_FAILED",
+    "LIVE_RUN_RECOVERY_FAILED",
   ];
 
   for (const errorCode of reviewedErrorCodes) {
@@ -96,12 +99,40 @@ test("preserves only reviewed stable error codes emitted by AI and scheduler pat
 });
 
 
-test("health, AI generation, and scheduler responses expose request IDs without caching", () => {
+
+test("live-run operational events retain only safe correlation and error fields", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "live_workflow_run",
+    requestId: validRequestId,
+    route: "/api/workflows/live-run",
+    outcome: "failure",
+    statusCode: 500,
+    durationMs: 12,
+    errorCode: "LIVE_RUN_PERSISTENCE_FAILED",
+    error: "postgres://private-host/secret",
+    token: "provider-token",
+    providerMessageId: "private-provider-id",
+  }, (line) => { output = line; });
+
+  const record = JSON.parse(output);
+  assert.equal(record.event, "live_workflow_run");
+  assert.equal(record.errorCode, "LIVE_RUN_PERSISTENCE_FAILED");
+  assert.equal(record.requestId, validRequestId);
+  assert.equal("error" in record, false);
+  assert.equal("token" in record, false);
+  assert.equal("providerMessageId" in record, false);
+  assert.equal(output.includes("private-host"), false);
+  assert.equal(output.includes("provider-token"), false);
+});
+
+test("health, AI generation, scheduler, and live-run responses expose request IDs without caching", () => {
   const healthRoute = readFileSync(new URL("../app/api/health/route.ts", import.meta.url), "utf8");
   const aiRoute = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
   const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+  const liveRunRoute = readFileSync(new URL("../app/api/workflows/[workflowId]/live-run/route.ts", import.meta.url), "utf8");
 
-  for (const route of [healthRoute, aiRoute, schedulerRoute]) {
+  for (const route of [healthRoute, aiRoute, schedulerRoute, liveRunRoute]) {
     assert.ok(route.includes("getRequestId"), "route should create or validate a request ID");
     assert.ok(route.includes('response.headers.set("x-request-id", requestId)'), "route should return the request ID");
   }
@@ -110,6 +141,9 @@ test("health, AI generation, and scheduler responses expose request IDs without 
   assert.ok(schedulerRoute.includes("logOperationalEvent"));
   assert.ok(aiRoute.includes('response.headers.set("Cache-Control", "no-store")'));
   assert.ok(schedulerRoute.includes('response.headers.set("Cache-Control", "no-store")'));
+  assert.ok(liveRunRoute.includes("logOperationalEvent"));
+  assert.ok(liveRunRoute.includes('response.headers.set("Cache-Control", "no-store")'));
+  assert.equal(liveRunRoute.includes("console.error("), false, "live-run route must not log raw exceptions");
 });
 
 test("scheduler contains claim and finalization transport failures", () => {
