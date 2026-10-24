@@ -83,6 +83,9 @@ test("preserves only reviewed stable error codes emitted by AI, scheduler, and l
     "INVALID_WORKFLOW_DEFINITION",
     "SCHEDULED_RUN_PERSISTENCE_FAILED",
     "SCHEDULED_RUN_FINALIZATION_FAILED",
+    "LIVE_RUN_FAILED",
+    "LIVE_RUN_PERSISTENCE_FAILED",
+    "LIVE_RUN_RECOVERY_FAILED",
   ];
 
   for (const errorCode of reviewedErrorCodes) {
@@ -95,6 +98,33 @@ test("preserves only reviewed stable error codes emitted by AI, scheduler, and l
   }
 });
 
+
+
+test("live-run operational events retain only safe correlation and error fields", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "live_workflow_run",
+    requestId: validRequestId,
+    route: "/api/workflows/live-run",
+    outcome: "failure",
+    statusCode: 500,
+    durationMs: 12,
+    errorCode: "LIVE_RUN_PERSISTENCE_FAILED",
+    error: "postgres://private-host/secret",
+    token: "provider-token",
+    providerMessageId: "private-provider-id",
+  }, (line) => { output = line; });
+
+  const record = JSON.parse(output);
+  assert.equal(record.event, "live_workflow_run");
+  assert.equal(record.errorCode, "LIVE_RUN_PERSISTENCE_FAILED");
+  assert.equal(record.requestId, validRequestId);
+  assert.equal("error" in record, false);
+  assert.equal("token" in record, false);
+  assert.equal("providerMessageId" in record, false);
+  assert.equal(output.includes("private-host"), false);
+  assert.equal(output.includes("provider-token"), false);
+});
 
 test("health, AI generation, scheduler, and live-run responses expose request IDs without caching", () => {
   const healthRoute = readFileSync(new URL("../app/api/health/route.ts", import.meta.url), "utf8");
