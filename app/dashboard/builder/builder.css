@@ -23,6 +23,11 @@
 .ai-node-canvas{display:flex;align-items:center;gap:0;overflow-x:auto;padding:22px 12px 26px;border:1px solid #e8efe4;border-radius:14px;background-color:#fbfdf9;background-image:radial-gradient(#dce8d5 0.8px,transparent 0.8px);background-size:18px 18px;scroll-snap-type:x proximity;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#cbd9c2 transparent}
 .ai-node-slot{display:flex;align-items:center;flex:0 0 auto;scroll-snap-align:start}
 .ai-generated-node{width:218px;min-height:164px;display:flex;flex-direction:column;align-items:flex-start;padding:14px;background:rgba(255,255,255,.97);border:1px solid #e0e8dc;border-radius:12px;box-shadow:0 7px 22px rgba(29,49,34,.08);transition:border-color .15s,box-shadow .15s}
+.ai-generated-node{position:relative}
+.ai-generated-node:before,.ai-generated-node:after{content:"";position:absolute;top:50%;transform:translateY(-50%);width:9px;height:9px;border:2px solid #9fcaa5;border-radius:50%;background:#fff;z-index:2}
+.ai-generated-node:before{left:-6px}
+.ai-generated-node:after{right:-6px}
+.ai-node-slot:first-child .ai-generated-node:before,.ai-node-slot:last-child .ai-generated-node:after{display:none}
 .ai-generated-node:hover{border-color:#a6c48d;box-shadow:0 9px 26px rgba(29,49,34,.1)}
 .ai-generated-node-trigger{border-top:3px solid #8fba5b}
 .ai-generated-node-action{border-top:3px solid #85a9cc}
