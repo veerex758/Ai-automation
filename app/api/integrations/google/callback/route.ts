@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { decryptGoogleCredentials, encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
-import { getGoogleOAuthConfig, isGoogleProduct } from "@/lib/integrations/google-oauth";
+import { getGoogleOAuthConfig, hasOnlyApprovedGoogleScopes, isGoogleProduct } from "@/lib/integrations/google-oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,20 +67,9 @@ export async function GET(request: NextRequest) {
     }
 
     const raw = tokenPayload as Record<string, unknown>;
-    // Google may omit "scope" when it is identical to the requested scope. If it
-    // does return a grant list, reject grants that don't include this product's
-    // read-only scope or that include known write/send scopes.
-    if (typeof raw.scope === "string") {
-      const grantedScopes = raw.scope.split(" ").filter(Boolean);
-      const requiredReadScope = product === "gmail"
-        ? "https://www.googleapis.com/auth/gmail.readonly"
-        : "https://www.googleapis.com/auth/spreadsheets.readonly";
-      const hasUnexpectedWriteScope = grantedScopes.some((scope) =>
-        /googleapis\.com\/auth\/(gmail\.(?!readonly$)[a-z.]+|spreadsheets(?!\.readonly$)(?:\.[a-z.]+)?|drive(?:\.[a-z.]+)?)/i.test(scope),
-      );
-      if (!grantedScopes.includes(requiredReadScope) || hasUnexpectedWriteScope) {
-        return clearCookies(connectionsUrl(request, "scope_mismatch"));
-      }
+    // Accept only basic identity scopes and the requested product's read-only scope.
+    if (!hasOnlyApprovedGoogleScopes(product, raw.scope)) {
+      return clearCookies(connectionsUrl(request, "scope_mismatch"));
     }
     const credentials: GoogleCredentials = {
       access_token: raw.access_token as string,
