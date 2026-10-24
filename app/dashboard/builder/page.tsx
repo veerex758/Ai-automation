@@ -188,7 +188,7 @@ export default function WorkflowBuilderPage() {
                 <div className="canvas-grid" />
                 <div className="flow-nodes">
                   {steps.map((step, index) => <div className="flow-node-wrap" key={step.id}>
-                    <button className={selected === step.id ? "builder-node selected-node" : "builder-node"} onClick={() => setSelected(step.id)}>
+                    <button className={"builder-node node-kind-" + step.kind.toLowerCase() + (selected === step.id ? " selected-node" : "")} aria-pressed={selected === step.id} aria-label={"Select " + step.kind.toLowerCase() + " step " + (index + 1) + ": " + step.title} onClick={() => setSelected(step.id)}>
                       <span className={"builder-node-icon node-" + step.kind.toLowerCase()}>{kindIcons[step.kind]}</span>
                       <span className="builder-node-copy"><small>{step.kind.toUpperCase()} {String(index + 1).padStart(2, "0")}</small><strong>{step.title}</strong><span>{step.detail}</span></span>
                       <span className="node-menu">•••</span>
