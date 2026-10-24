@@ -40,3 +40,21 @@
   .ai-node-connector{width:32px;flex-basis:32px}
   .ai-node-connector:before{width:32px}
 }
+
+
+/* Connected-node canvas: a compact n8n-inspired horizontal flow. */
+.flow-canvas{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#cbd9c2 transparent;overscroll-behavior-x:contain}
+.flow-nodes{display:flex;align-items:center;gap:0;width:max-content;min-width:100%;margin:0;padding:42px 28px 82px}
+.flow-node-wrap{display:flex;align-items:center;flex-direction:row;flex:0 0 auto}
+.flow-node-wrap>.builder-node{width:218px;min-height:126px;align-self:center}
+.flow-node-wrap>.node-connector{width:44px;height:2px;flex:0 0 44px}
+.flow-node-wrap>.node-connector:before{width:100%;height:1px;left:0;top:50%}
+.flow-node-wrap>.node-connector span{padding:0 4px;background:#fbfcfa;line-height:1}
+.flow-nodes>.canvas-add-node{flex:0 0 auto;margin:0 0 0 18px;white-space:nowrap}
+.flow-canvas .canvas-zoom{position:sticky;float:right;margin:0 12px 12px 0;bottom:12px;right:12px}
+@media(max-width:520px){
+  .flow-nodes{padding:32px 16px 78px}
+  .flow-node-wrap>.builder-node{width:194px;min-height:122px;padding:11px;gap:9px}
+  .flow-node-wrap>.node-connector{width:32px;flex-basis:32px}
+  .flow-nodes>.canvas-add-node{margin-left:12px}
+}
