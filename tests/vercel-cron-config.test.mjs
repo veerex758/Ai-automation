@@ -9,7 +9,7 @@ const read = (path) => readFileSync(fileURLToPath(new URL(path, root)), "utf8");
 test("Vercel cron targets the protected scheduler endpoint at the intended cadence", () => {
   const config = JSON.parse(read("vercel.json"));
   assert.deepEqual(config.crons, [
-    { path: "/api/internal/scheduler", schedule: "*/5 * * * *" },
+    { path: "/api/internal/scheduler", schedule: "0 9 * * *" },
   ]);
 });
 
@@ -17,6 +17,8 @@ test("scheduler verification guide preserves dry-run and deployment safety bound
   const guide = read("docs/scheduler-staging-verification.md");
   assert.match(guide, /dry-run engine only/i);
   assert.match(guide, /do not deploy this change to production solely to test cron/i);
+  assert.match(guide, /Hobby plan rejects schedules more frequent than once per day/i);
+  assert.match(guide, /does not provide near-real-time scheduling/i);
   assert.match(guide, /Authorization: Bearer/i);
   assert.match(guide, /Never record tokens, authorization headers/i);
   assert.match(guide, /## Rollback/);
