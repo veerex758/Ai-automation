@@ -99,4 +99,8 @@ test("sends the requested workflow intent using JSON-only provider mode", async 
   assert.equal(captured.response_format.type, "json_object");
   assert.match(captured.messages[1].content, /When a customer signs up, create an onboarding task/);
   assert.match(captured.messages[0].content, /draft only/i);
+  assert.match(captured.messages[0].content, /Trigger settings may contain only event and optional source/);
+  assert.match(captured.messages[0].content, /Condition settings may contain only field, operator, value/);
+  assert.match(captured.messages[0].content, /obvious placeholder/);
+  assert.match(captured.messages[0].content, /never imply that any step has run/);
 });
