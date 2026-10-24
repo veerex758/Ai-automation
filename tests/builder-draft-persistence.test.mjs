@@ -18,6 +18,23 @@ test("saving a draft again reuses the created workflow instead of duplicating it
   assert.match(source, /setSavedWorkflowId\(workflowId\)/);
 });
 
+test("dashboard cache is updated only after the server confirms the definition save", () => {
+  const serverSave = source.indexOf('const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`');
+  const successCheck = source.indexOf('if (!saveResponse.ok || !saved.success)', serverSave);
+  const cacheWrite = source.indexOf('window.localStorage.setItem("aivanta-workflows"', serverSave);
+  assert.ok(serverSave >= 0, "definition save API call exists");
+  assert.ok(successCheck > serverSave, "server response is checked");
+  assert.ok(cacheWrite > successCheck, "local cache is written only after successful server save");
+});
+
+test("draft persistence never requests activation or execution", () => {
+  const saveStart = source.indexOf("async function saveDraft()");
+  const saveEnd = source.indexOf("\n  }", source.indexOf("finally {", saveStart));
+  const saveBody = source.slice(saveStart, saveEnd);
+  assert.doesNotMatch(saveBody, /status:\s*["']active["']/i);
+  assert.doesNotMatch(saveBody, /\/activate|\/execute|\/run\b/);
+});
+
 test("save button exposes a pending state to prevent repeated submissions", () => {
   assert.match(source, /if \(savingDraft\) return/);
   assert.match(source, /disabled=\{savingDraft\}/);
