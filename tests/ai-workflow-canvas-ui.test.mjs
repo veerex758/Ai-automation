@@ -18,7 +18,7 @@ test("AI-generated workflow preview renders connected, reviewable node cards", (
   assert.match(preview, /className="ai-node-connector"/);
   assert.match(preview, /Needs review/);
   assert.doesNotMatch(preview, /Object\.entries\(node\.settings\)/, "raw settings are not printed in the generated preview");
-  assert.doesNotMatch(page, /Object\\.entries\\(node\\.settings\\)/, "raw settings are not used as fallback canvas labels");
+  assert.doesNotMatch(page, /Object\.entries\(node\.settings\)/, "raw settings are not used as fallback canvas labels");
 });
 
 test("connected preview has positioned connectors and a narrow-screen layout", () => {
