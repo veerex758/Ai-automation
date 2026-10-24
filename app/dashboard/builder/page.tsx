@@ -31,6 +31,7 @@ export default function WorkflowBuilderPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [savedWorkflowId, setSavedWorkflowId] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
@@ -119,22 +120,27 @@ export default function WorkflowBuilderPage() {
         }),
       };
 
-      const createResponse = await fetch("/api/workflows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({
-          name: name.trim(),
-          description: `${steps.length} steps · Visual workflow draft`,
-          status: "draft",
-        }),
-      });
-      const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
-      if (!createResponse.ok || !created.workflow?.id) {
-        throw new Error(created.error || "Could not create the saved workflow.");
+      let workflowId = savedWorkflowId;
+      if (!workflowId) {
+        const createResponse = await fetch("/api/workflows", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            name: name.trim(),
+            description: `${steps.length} steps · Visual workflow draft`,
+            status: "draft",
+          }),
+        });
+        const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
+        if (!createResponse.ok || !created.workflow?.id) {
+          throw new Error(created.error || "Could not create the saved workflow.");
+        }
+        workflowId = created.workflow.id;
+        setSavedWorkflowId(workflowId);
       }
 
-      const saveResponse = await fetch(`/api/workflows/${created.workflow.id}/definition`, {
+      const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         cache: "no-store",
@@ -149,7 +155,7 @@ export default function WorkflowBuilderPage() {
         const raw = window.localStorage.getItem("aivanta-workflows");
         const existing = raw ? JSON.parse(raw) as Array<{ id: string | number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
         const next = existing.filter(item => item.name !== name.trim());
-        next.unshift({ id: created.workflow.id, name: name.trim(), description: `${steps.length} steps · Saved to Aivanta`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
+        next.unshift({ id: workflowId, name: name.trim(), description: `${steps.length} steps · Saved to Aivanta`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
         window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
       } catch {
         // The server save succeeded; local dashboard cache is only a convenience.
