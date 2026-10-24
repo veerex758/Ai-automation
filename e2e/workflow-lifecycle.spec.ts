@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
 const baseURL = process.env.AIVANTA_E2E_BASE_URL;
 const email = process.env.AIVANTA_E2E_EMAIL;
