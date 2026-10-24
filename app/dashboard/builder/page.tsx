@@ -163,7 +163,7 @@ export default function WorkflowBuilderPage() {
               <textarea id="ai-workflow-prompt" value={aiPrompt} maxLength={2000} onChange={event => setAiPrompt(event.target.value)} placeholder="When a new lead arrives, create a task and send a follow-up email…" rows={3} />
               <div className="ai-workflow-form-footer"><small>{aiPrompt.length}/2000 · Generated steps need review</small><button className="builder-primary-button" type="submit" disabled={aiGenerating || !aiPrompt.trim()}>{aiGenerating ? "Generating draft…" : "Generate workflow ✳"}</button></div>
             </form>
-            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
+            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div><div className="ai-node-legend" aria-label="Node type legend"><span><i className="ai-legend-trigger" />Trigger</span><span><i className="ai-legend-action" />Action</span><span><i className="ai-legend-condition" />Condition</span></div><div className="ai-node-canvas" role="list" aria-label="Generated workflow steps" aria-describedby="ai-node-scroll-hint">{aiPreview.nodes.map((node, index) => <div className="ai-node-slot" role="listitem" key={node.id}><article className={"ai-generated-node ai-generated-node-" + node.type}><div className="ai-generated-node-top"><span className={"builder-node-icon node-" + node.type}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><span className="ai-node-type">{node.type}</span><span className="ai-node-number">{String(index + 1).padStart(2, "0")}</span></div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><span className="ai-node-review">Needs review</span></article>{index < aiPreview.nodes.length - 1 && <div className="ai-node-connector" aria-hidden="true"><span>→</span></div>}</div>)}</div><p className="ai-node-scroll-hint" id="ai-node-scroll-hint">Swipe or scroll horizontally to explore every step</p><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
               const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => {
                 const action = node.type === "action"
                   ? actionCatalog.find(item => item.provider === node.settings.provider && item.operation === node.settings.operation)
@@ -172,9 +172,9 @@ export default function WorkflowBuilderPage() {
                   id: Date.now() + index,
                   kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action",
                   title: node.title,
-                  detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · "),
+                  detail: node.description || (node.type === "trigger" ? "Starts the workflow when its event occurs." : node.type === "condition" ? "Evaluate a rule before continuing." : action?.description || "Configure this action before running."),
                   ...(action ? { actionId: action.id } : {}),
-                  ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
+                  settings: { ...node.settings },
                 };
               });
               setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
@@ -188,18 +188,18 @@ export default function WorkflowBuilderPage() {
                 <div className="canvas-grid" />
                 <div className="flow-nodes">
                   {steps.map((step, index) => <div className="flow-node-wrap" key={step.id}>
-                    <button className={selected === step.id ? "builder-node selected-node" : "builder-node"} onClick={() => setSelected(step.id)}>
+                    <button className={"builder-node node-kind-" + step.kind.toLowerCase() + (selected === step.id ? " selected-node" : "")} aria-pressed={selected === step.id} aria-label={"Select " + step.kind.toLowerCase() + " step " + (index + 1) + ": " + step.title} onClick={() => setSelected(step.id)}>
                       <span className={"builder-node-icon node-" + step.kind.toLowerCase()}>{kindIcons[step.kind]}</span>
                       <span className="builder-node-copy"><small>{step.kind.toUpperCase()} {String(index + 1).padStart(2, "0")}</small><strong>{step.title}</strong><span>{step.detail}</span></span>
                       <span className="node-menu">•••</span>
                     </button>
-                    {index < steps.length - 1 && <div className="node-connector"><span>↓</span></div>}
+                    {index < steps.length - 1 && <div className="node-connector"><span>→</span></div>}
                   </div>)}
                   <button className="canvas-add-node" onClick={() => setShowAdd(true)}>＋ Add next step</button>
                 </div>
                 <div className="canvas-zoom"><button aria-label="Zoom out" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>−</button><span>100%</span><button aria-label="Zoom in" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>＋</button></div>
               </div>
-              <div className="canvas-foot"><span><i /> Draft saved locally on Save draft</span><span>Drag-and-drop connections coming soon</span></div>
+              <div className="canvas-foot"><span><i /> Draft canvas · save to keep your changes</span><span>Connected steps · select a node to edit</span></div>
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
