@@ -13,6 +13,25 @@ export const GOOGLE_PRODUCTS = {
 
 export type GoogleProduct = keyof typeof GOOGLE_PRODUCTS;
 
+const GOOGLE_IDENTITY_SCOPES = new Set(["openid", "email", "profile"]);
+
+/**
+ * If Google returns a granted-scope list, require the product's exact read-only
+ * scope and allow only the minimal identity scopes requested by Aivanta.
+ * Google may omit the scope field when the grant matches the requested scopes;
+ * in that case, the authorization request remains the boundary because
+ * include_granted_scopes=false.
+ */
+export function hasOnlyApprovedGoogleScopes(product: GoogleProduct, scopeValue: unknown): boolean {
+  if (scopeValue == null || scopeValue === "") return true;
+  if (typeof scopeValue !== "string") return false;
+
+  const granted = scopeValue.split(/\s+/).filter(Boolean);
+  const requiredProductScope = GOOGLE_PRODUCTS[product].scopes[0];
+  const allowed = new Set([...GOOGLE_IDENTITY_SCOPES, requiredProductScope]);
+  return granted.includes(requiredProductScope) && granted.every((scope) => allowed.has(scope));
+}
+
 export function isGoogleProduct(value: string | null | undefined): value is GoogleProduct {
   return value != null && Object.hasOwn(GOOGLE_PRODUCTS, value);
 }
