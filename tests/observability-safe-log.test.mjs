@@ -62,7 +62,7 @@ test("rejects invalid event names and omits invalid field values", () => {
   assert.equal("errorCode" in record, false);
 });
 
-test("preserves only reviewed stable error codes emitted by AI and scheduler paths", () => {
+test("preserves only reviewed stable error codes emitted by AI, scheduler, and live-run paths", () => {
   const reviewedErrorCodes = [
     "AI_PROVIDER_ERROR",
     "AI_NOT_CONFIGURED",
@@ -96,12 +96,13 @@ test("preserves only reviewed stable error codes emitted by AI and scheduler pat
 });
 
 
-test("health, AI generation, and scheduler responses expose request IDs without caching", () => {
+test("health, AI generation, scheduler, and live-run responses expose request IDs without caching", () => {
   const healthRoute = readFileSync(new URL("../app/api/health/route.ts", import.meta.url), "utf8");
   const aiRoute = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
   const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+  const liveRunRoute = readFileSync(new URL("../app/api/workflows/[workflowId]/live-run/route.ts", import.meta.url), "utf8");
 
-  for (const route of [healthRoute, aiRoute, schedulerRoute]) {
+  for (const route of [healthRoute, aiRoute, schedulerRoute, liveRunRoute]) {
     assert.ok(route.includes("getRequestId"), "route should create or validate a request ID");
     assert.ok(route.includes('response.headers.set("x-request-id", requestId)'), "route should return the request ID");
   }
@@ -110,6 +111,9 @@ test("health, AI generation, and scheduler responses expose request IDs without 
   assert.ok(schedulerRoute.includes("logOperationalEvent"));
   assert.ok(aiRoute.includes('response.headers.set("Cache-Control", "no-store")'));
   assert.ok(schedulerRoute.includes('response.headers.set("Cache-Control", "no-store")'));
+  assert.ok(liveRunRoute.includes("logOperationalEvent"));
+  assert.ok(liveRunRoute.includes('response.headers.set("Cache-Control", "no-store")'));
+  assert.equal(liveRunRoute.includes("console.error("), false, "live-run route must not log raw exceptions");
 });
 
 test("scheduler contains claim and finalization transport failures", () => {
