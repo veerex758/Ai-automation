@@ -52,7 +52,13 @@
 .flow-canvas{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#cbd9c2 transparent;overscroll-behavior-x:contain}
 .flow-nodes{display:flex;align-items:center;gap:0;width:max-content;min-width:100%;margin:0;padding:42px 28px 82px}
 .flow-node-wrap{display:flex;align-items:center;flex-direction:row;flex:0 0 auto}
-.flow-node-wrap>.builder-node{width:218px;min-height:126px;align-self:center}
+.flow-node-wrap>.builder-node{width:218px;min-height:126px;align-self:center;border-top:3px solid transparent;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.flow-node-wrap>.builder-node.node-kind-trigger{border-top-color:#8fba5b}
+.flow-node-wrap>.builder-node.node-kind-action{border-top-color:#85a9cc}
+.flow-node-wrap>.builder-node.node-kind-condition{border-top-color:#b4a0dd}
+.flow-node-wrap>.builder-node:hover{transform:translateY(-2px)}
+.flow-node-wrap>.builder-node:focus-visible{outline:3px solid #9fcaa5;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.flow-node-wrap>.builder-node{transition:none}.flow-node-wrap>.builder-node:hover{transform:none}}
 .flow-node-wrap>.node-connector{width:44px;height:2px;flex:0 0 44px}
 .flow-node-wrap>.node-connector:before{width:100%;height:1px;left:0;top:50%}
 .flow-node-wrap>.node-connector span{padding:0 4px;background:#fbfcfa;line-height:1}
