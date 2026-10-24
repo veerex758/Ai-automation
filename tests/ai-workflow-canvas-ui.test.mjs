@@ -39,6 +39,8 @@ test("main builder canvas distinguishes node types and exposes selection state",
 });
 
 test("connected preview has positioned connectors and a narrow-screen layout", () => {
+  assert.match(page, /aria-describedby="ai-node-scroll-hint"/, "canvas exposes its horizontal navigation hint to assistive technology");
+  assert.match(page, /id="ai-node-scroll-hint"/);
   assert.match(styles, /\.ai-node-connector\{position:relative;/);
   assert.match(styles, /\.ai-node-connector:before\{content:"";position:absolute;left:0;top:50%;transform:translateY\(-50%\)/);
   assert.match(styles, /@media\(max-width:640px\)/);
