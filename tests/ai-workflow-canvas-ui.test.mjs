@@ -13,6 +13,10 @@ test("AI-generated workflow preview renders connected, reviewable node cards", (
   const preview = page.slice(previewStart, applyStart);
 
   assert.match(preview, /className="ai-node-canvas"/);
+  assert.match(preview, /className="ai-node-legend" aria-label="Node type legend"/);
+  assert.match(preview, /ai-legend-trigger/);
+  assert.match(preview, /ai-legend-action/);
+  assert.match(preview, /ai-legend-condition/);
   assert.match(preview, /role="list"/);
   assert.match(preview, /ai-generated-node ai-generated-node-/);
   assert.match(preview, /className="ai-node-connector"/);
