@@ -172,7 +172,7 @@ export default function WorkflowBuilderPage() {
                   id: Date.now() + index,
                   kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action",
                   title: node.title,
-                  detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · "),
+                  detail: node.description || (node.type === "trigger" ? "Starts the workflow when its event occurs." : node.type === "condition" ? "Evaluate a rule before continuing." : action?.description || "Configure this action before running."),
                   ...(action ? { actionId: action.id } : {}),
                   ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
                 };
