@@ -50,4 +50,6 @@ test("connected preview has positioned connectors and a narrow-screen layout", (
   assert.match(styles, /\.ai-generated-node-trigger\{border-top:3px solid/);
   assert.match(styles, /\.ai-generated-node-action\{border-top:3px solid/);
   assert.match(styles, /\.ai-generated-node-condition\{border-top:3px solid/);
+  assert.match(styles, /\.ai-generated-node:before,\.ai-generated-node:after\{content:"";position:absolute;top:50%;transform:translateY\(-50%\)/);
+  assert.match(styles, /\.ai-node-slot:first-child \.ai-generated-node:before,\.ai-node-slot:last-child \.ai-generated-node:after\{display:none\}/);
 });
