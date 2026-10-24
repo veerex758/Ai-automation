@@ -24,6 +24,16 @@ test("AI-generated workflow preview renders connected, reviewable node cards", (
   assert.doesNotMatch(page, /node\.type === "action" \? \{ settings:/, "settings retention is not limited to action nodes");
 });
 
+test("main builder canvas distinguishes node types and exposes selection state", () => {
+  assert.match(page, /node-kind-" \+ step\.kind\.toLowerCase\(\)/);
+  assert.match(page, /aria-pressed=\{selected === step\.id\}/);
+  assert.match(page, /aria-label=\{"Select " \+ step\.kind\.toLowerCase\(\)/);
+  assert.match(styles, /\.flow-node-wrap>\.builder-node\.node-kind-trigger\{border-top-color:#8fba5b\}/);
+  assert.match(styles, /\.flow-node-wrap>\.builder-node\.node-kind-action\{border-top-color:#85a9cc\}/);
+  assert.match(styles, /\.flow-node-wrap>\.builder-node\.node-kind-condition\{border-top-color:#b4a0dd\}/);
+  assert.match(styles, /@media\(prefers-reduced-motion:reduce\)/);
+});
+
 test("connected preview has positioned connectors and a narrow-screen layout", () => {
   assert.match(styles, /\.ai-node-connector\{position:relative;/);
   assert.match(styles, /\.ai-node-connector:before\{content:"";position:absolute;left:0;top:50%;transform:translateY\(-50%\)/);
