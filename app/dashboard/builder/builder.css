@@ -16,6 +16,7 @@
 
 
 /* AI-generated workflow preview: connected nodes, without exposing raw settings. */
+.ai-node-scroll-hint{display:none;margin:0 0 12px;font-size:10px;line-height:1.5;color:#82917f;text-align:center}
 .ai-workflow-preview{overflow:hidden}
 .ai-workflow-preview .ai-preview-heading{position:relative;z-index:1}
 .ai-node-canvas{display:flex;align-items:center;gap:0;overflow-x:auto;padding:22px 4px 26px;scroll-snap-type:x proximity;overscroll-behavior-x:contain}
@@ -36,6 +37,7 @@
 .ai-node-connector span{position:relative;z-index:1;display:grid;place-items:center;width:22px;height:22px;border:1px solid #dce7d4;border-radius:50%;background:#f7faf3;font-size:13px}
 @media(max-width:640px){
   .ai-workflow-preview{padding:12px}
+  .ai-node-scroll-hint{display:block}
   .ai-node-canvas{margin:0 -4px;padding:18px 4px 22px}
   .ai-generated-node{width:196px;min-height:158px;padding:12px}
   .ai-node-connector{width:32px;flex-basis:32px}
