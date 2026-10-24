@@ -17,6 +17,7 @@ test("AI-generated workflow preview renders connected, reviewable node cards", (
   assert.match(preview, /ai-generated-node ai-generated-node-/);
   assert.match(preview, /className="ai-node-connector"/);
   assert.match(preview, /Needs review/);
+  assert.match(preview, /ai-node-scroll-hint/);
   assert.doesNotMatch(preview, /Object\.entries\(node\.settings\)/, "raw settings are not printed in the generated preview");
   assert.doesNotMatch(page, /Object\.entries\(node\.settings\)/, "raw settings are not used as fallback canvas labels");
 });
@@ -24,6 +25,7 @@ test("AI-generated workflow preview renders connected, reviewable node cards", (
 test("connected preview has positioned connectors and a narrow-screen layout", () => {
   assert.match(styles, /\.ai-node-connector\{position:relative;/);
   assert.match(styles, /@media\(max-width:640px\)/);
+  assert.match(styles, /\.ai-node-scroll-hint\{display:block/);
   assert.match(styles, /\.ai-node-canvas\{[^}]*overflow-x:auto/s);
   assert.match(styles, /\.ai-generated-node:focus-within/);
 });
