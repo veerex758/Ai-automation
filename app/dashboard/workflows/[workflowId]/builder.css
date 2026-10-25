@@ -141,3 +141,11 @@
 .workflow-builder-main .node-connector span:after{content:"→";font-size:14px;color:#78ad54}
 .workflow-builder-main .node-endpoint{margin:0 0 0 12px;white-space:nowrap}
 @media(max-width:720px){.workflow-builder-main .node-stack{display:block;width:calc(100% - 24px);min-width:0;margin:12px auto 55px}.workflow-builder-main .node-slot{display:flex;align-items:center;flex-direction:column;width:100%}.workflow-builder-main .builder-node{width:100%;min-height:83px}.workflow-builder-main .node-connector{width:2px;height:37px;flex:0 0 37px}.workflow-builder-main .node-connector span{font-size:13px;bottom:-7px;padding:0 5px}.workflow-builder-main .node-connector span:after{content:none}.workflow-builder-main .node-endpoint{margin:19px 0 0;white-space:normal}}
+
+
+/* Consistent lime-backed logo tile across both builder experiences. */
+.workflow-side-brand>span{background:#c9f26f;border-radius:8px;overflow:hidden;transform:rotate(-4deg)}
+.workflow-side-brand img{display:block;width:100%;height:100%;padding:4px;box-sizing:border-box;object-fit:contain}
+.workflow-side-link{transition:background .16s ease,color .16s ease}
+.workflow-side-link:focus-visible{outline:2px solid #c9f26f;outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.workflow-side-link{transition:none}}
