@@ -1,1 +1,45 @@
 .auth-page{min-height:100vh;position:relative;overflow:hidden;background:#f6f8f2;color:#17241c;padding:0 clamp(22px,6vw,88px);display:flex;flex-direction:column;font-family:'DM Sans',sans-serif}.auth-page:before{content:"";position:absolute;inset:0;background-image:radial-gradient(#a9b89c 0.65px,transparent .65px);background-size:21px 21px;opacity:.22;pointer-events:none;mask-image:linear-gradient(90deg,#000,transparent 75%)}.auth-orb{position:absolute;border-radius:50%;pointer-events:none;filter:blur(2px)}.auth-orb-one{width:540px;height:540px;background:radial-gradient(circle,rgba(203,239,151,.43),transparent 70%);top:100px;left:-180px}.auth-orb-two{width:500px;height:500px;background:radial-gradient(circle,rgba(224,231,211,.8),transparent 70%);right:-180px;bottom:-140px}.auth-header,.auth-footer{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between}.auth-header{height:86px;border-bottom:1px solid rgba(25,43,31,.1)}.auth-brand{display:flex;align-items:center;gap:10px;font-family:Manrope,sans-serif;font-size:23px;font-weight:800;letter-spacing:-1.2px}.auth-brand>span:last-child>span{color:#83a84e}.auth-brand-mark{display:grid;place-items:center;width:34px;height:34px;background:#c9f26f;color:#1c2a20;border-radius:11px;transform:rotate(-5deg);font-size:24px}.auth-back{font-size:12px;font-weight:700;color:#637166}.auth-back span{margin-left:10px}.auth-layout{position:relative;z-index:1;flex:1;width:min(1100px,100%);margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(370px,470px);align-items:center;gap:clamp(50px,9vw,130px);padding:64px 0 76px}.auth-story{max-width:510px}.auth-kicker{display:flex;align-items:center;gap:9px;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#70806e}.auth-kicker>span{width:7px;height:7px;border-radius:50%;background:#8eb84b;box-shadow:0 0 0 4px #e4efd5}.auth-story h1{font-family:Manrope,sans-serif;font-size:clamp(44px,5.3vw,70px);line-height:1.08;letter-spacing:-3.6px;font-weight:650;margin:25px 0 21px}.auth-story h1 em{font-family:Georgia,serif;color:#789563;font-weight:400}.auth-story>p{max-width:430px;color:#6b786e;font-size:15px;line-height:1.9}.auth-promise{display:flex;gap:14px;align-items:flex-start;max-width:400px;border-top:1px solid #e0e7db;margin-top:42px;padding-top:23px}.promise-icon{display:grid;place-items:center;width:31px;height:31px;flex-shrink:0;border-radius:10px;background:#e5f2d7;color:#5d843a}.auth-promise strong,.auth-promise span{display:block}.auth-promise strong{font-size:12px;margin:1px 0 7px}.auth-promise span{font-size:11px;line-height:1.8;color:#7a867c}.auth-bottom-note{margin-top:70px;color:#8b978a;font-size:10px;letter-spacing:.5px}.auth-bottom-note span{font-weight:800;color:#789563;margin-right:12px}.auth-card{position:relative;background:rgba(255,255,255,.92);border:1px solid #e3e9df;border-radius:21px;box-shadow:0 28px 90px rgba(31,53,35,.12);padding:clamp(25px,4vw,38px);backdrop-filter:blur(16px)}.auth-card-top{display:flex;justify-content:space-between;align-items:center}.auth-card-symbol{display:grid;place-items:center;width:37px;height:37px;background:#eff6e7;border-radius:12px;color:#648a43;font-size:18px}.auth-secure{display:flex;align-items:center;gap:7px;font-size:8px;letter-spacing:1px;font-weight:800;color:#7f8e7f}.auth-secure i{width:6px;height:6px;border-radius:50%;background:#7ca64b}.auth-heading{margin-top:28px}.auth-heading h2{font-family:Manrope,sans-serif;font-size:29px;letter-spacing:-1.2px;margin:0 0 9px}.auth-heading p{font-size:12px;color:#7a867c;margin:0}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#f2f5ef;border-radius:10px;margin:26px 0 22px}.auth-tab{border:0;background:transparent;padding:11px 8px;border-radius:7px;font:600 11px 'DM Sans',sans-serif;color:#7a867c;cursor:pointer}.auth-tab.active{background:#fff;color:#243428;box-shadow:0 2px 8px rgba(25,45,30,.07)}.auth-form{display:flex;flex-direction:column;gap:16px}.auth-form label{display:flex;flex-direction:column;gap:8px;font-size:11px;font-weight:700;color:#39483c}.auth-form input{width:100%;height:46px;border:1px solid #dfe6db;background:#fff;border-radius:9px;padding:0 13px;color:#1e2a21;font:400 12px 'DM Sans',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s}.auth-form input::placeholder{color:#a2aca2}.auth-form input:focus{border-color:#91b96b;box-shadow:0 0 0 3px rgba(156,197,113,.18)}.auth-submit{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:9px;background:#1c2c21;color:#fff;padding:15px 16px;margin-top:3px;font:700 12px 'DM Sans',sans-serif;cursor:pointer;transition:background .2s,transform .2s}.auth-submit:hover{background:#2c4332;transform:translateY(-1px)}.auth-submit:disabled{opacity:.65;cursor:wait;transform:none}.auth-submit span{color:#c9f26f}.auth-message{border-radius:8px;padding:11px 12px;font-size:11px;line-height:1.6;overflow-wrap:anywhere}.auth-error{background:#fff0ed;color:#a33f30;border:1px solid #f4d4cd}.auth-success{background:#f0f7e9;color:#4f7134;border:1px solid #dbeacb}.auth-card-foot{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:24px;padding-top:19px;border-top:1px solid #edf0eb;color:#8a958b;font-size:9px}.auth-card-foot span{font-size:15px;color:#7b9e5b}.auth-footer{min-height:68px;border-top:1px solid rgba(25,43,31,.1);font-size:9px;color:#8a958a}.auth-footer>span:last-child{display:flex;align-items:center;gap:10px}.auth-footer i{width:3px;height:3px;border-radius:50%;background:#9bb18b}@media(max-width:850px){.auth-layout{grid-template-columns:1fr minmax(330px,410px);gap:32px}.auth-story h1{font-size:47px;letter-spacing:-2.6px}.auth-bottom-note{margin-top:40px}}@media(max-width:700px){.auth-page{padding:0 20px}.auth-header{height:72px}.auth-brand{font-size:20px}.auth-back{font-size:10px}.auth-layout{grid-template-columns:1fr;gap:34px;padding:42px 0 48px}.auth-story h1{font-size:46px}.auth-story>p{font-size:13px}.auth-promise{margin-top:25px}.auth-bottom-note{display:none}.auth-card{width:100%;max-width:460px;margin:0 auto;padding:25px 22px}.auth-footer{gap:10px;font-size:8px}.auth-footer>span:last-child{gap:6px}}@media(prefers-reduced-motion:reduce){.auth-submit,.auth-form input{transition:none}}
+
+/* Mobile/tablet auth correction: stack the sign-in experience before it becomes cramped. */
+@media (max-width: 1024px) {
+  .auth-page { min-height: 100svh; padding-inline: clamp(18px, 5vw, 36px); }
+  .auth-header { height: 68px; flex-shrink: 0; }
+  .auth-layout {
+    flex: initial;
+    width: min(100%, 620px);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    padding: clamp(28px, 5vh, 44px) 0 34px;
+  }
+  .auth-story { max-width: 560px; }
+  .auth-story h1 { font-size: clamp(38px, 7vw, 52px); line-height: 1.04; letter-spacing: -2.4px; margin: 17px 0 14px; }
+  .auth-story > p { max-width: 520px; font-size: 13px; line-height: 1.75; }
+  .auth-promise { margin-top: 20px; padding-top: 16px; }
+  .auth-bottom-note { display: none; }
+  .auth-card { width: 100%; max-width: 520px; margin: 0; padding: clamp(22px, 4vw, 30px); border-radius: 17px; }
+  .auth-heading { margin-top: 20px; }
+  .auth-heading h2 { font-size: 26px; }
+  .auth-tabs { margin: 20px 0 18px; }
+  .auth-form { gap: 13px; }
+  .auth-form input { height: 46px; font-size: 16px; }
+  .auth-submit { min-height: 48px; }
+  .auth-card-foot { margin-top: 19px; padding-top: 15px; }
+  .auth-footer { min-height: 52px; flex-shrink: 0; }
+}
+@media (max-width: 480px) {
+  .auth-page { padding-inline: 18px; }
+  .auth-header { height: 62px; }
+  .auth-brand { font-size: 19px; gap: 8px; }
+  .auth-brand-mark { width: 30px; height: 30px; font-size: 21px; }
+  .auth-back { font-size: 10px; }
+  .auth-layout { gap: 22px; padding: 27px 0 26px; }
+  .auth-story h1 { font-size: clamp(36px, 10vw, 44px); letter-spacing: -2px; }
+  .auth-kicker { font-size: 8px; letter-spacing: 1.1px; }
+  .auth-story > p { font-size: 12px; }
+  .auth-card { padding: 21px 18px; }
+  .auth-secure { font-size: 7px; letter-spacing: .65px; }
+  .auth-heading h2 { font-size: 24px; }
+  .auth-tab { padding: 11px 5px; }
+  .auth-footer { align-items: center; }
+  .auth-footer > span:last-child { display: none; }
+}
