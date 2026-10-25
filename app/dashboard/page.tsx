@@ -273,18 +273,17 @@ export default function DashboardPage() {
     <main className="app-shell">
       <aside className="sidebar">
         <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta</span></Link>
-        <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
           {navItems.map((item) => <Link key={item.label} href={item.href} className={(activeNav === item.label || (item.label === "Dashboard" && activeNav === "Overview")) ? "side-link selected" : "side-link"} onClick={() => setActiveNav(item.label)}><span className="side-icon">{item.icon}</span>{item.label}{["Integrations","AI Agents","Billing"].includes(item.label) && <span className="soon-tag">SETUP</span>}</Link>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
         <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
-        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
+        <div className="sidebar-bottom"><div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></div><div className="sidebar-usage"><div><span>Workflow runs</span><strong>— / —</strong></div><div className="usage-track"><span /></div><small>Usage tracking appears when execution is connected.</small></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">⌄</span></button></div>
       </aside>
 
       <section className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>{activeNav}</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
+        <header className="dashboard-topbar"><label className="global-search"><span>⌕</span><input aria-label="Search workspace" placeholder="Search anything..." value={search} onChange={event => setSearch(event.target.value)} /></label><div className="topbar-right"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span><span className="topbar-profile"><strong>Workspace owner</strong><small>Free Plan</small></span><span className="switch-chevron">⌄</span></div></header>
         <div className="dashboard-content">
           <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Welcome back 👋</h1><p>Here’s what’s happening with your automation platform today.</p></div><button type="button" className="create-button" onClick={openCreateModal}><span>＋</span> Create Workflow</button></div>
 
