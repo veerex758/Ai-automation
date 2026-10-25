@@ -46,3 +46,17 @@
 
 .auth-brand-mark img{display:block;width:23px;height:23px;object-fit:contain;transform:rotate(5deg)}
 @media(max-width:480px){.auth-brand-mark img{width:21px;height:21px}}
+
+
+/* Shared mark and refined, consistent authentication surface. */
+.auth-brand-mark{overflow:hidden;display:grid;place-items:center}
+.auth-brand-mark img{width:100%;height:100%;padding:4px;box-sizing:border-box;object-fit:contain}
+.auth-card-symbol{overflow:hidden;display:grid;place-items:center;background:#eaf4dd;border:1px solid #e1edcf}
+.auth-card-symbol img{width:100%;height:100%;padding:5px;box-sizing:border-box;object-fit:contain;display:block}
+.auth-page{background:#f7f8f4;color:#19231f}
+.auth-card{border-color:#e0e7dd;box-shadow:0 24px 70px rgba(16,42,28,.10)}
+.auth-submit{background:#192f25;transition:background .18s ease,transform .18s ease,box-shadow .18s ease}
+.auth-submit:not(:disabled):hover{background:#244b36;box-shadow:0 7px 18px rgba(25,47,37,.15);transform:translateY(-1px)}
+.auth-tab:focus-visible,.auth-submit:focus-visible{outline:3px solid rgba(169,218,94,.55);outline-offset:2px}
+.auth-form input{box-sizing:border-box}
+@media(prefers-reduced-motion:reduce){.auth-submit{transition:none}.auth-submit:not(:disabled):hover{transform:none}}
