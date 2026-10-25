@@ -350,3 +350,26 @@ h1 span{color:#809e65}
 .auth-brand-mark{width:30px;height:30px;padding:3px;box-sizing:border-box}
 .auth-brand-mark img,.builder-brand-mark img{display:block;width:100%;height:100%;padding:1px;box-sizing:border-box;object-fit:contain}
 .dash-brand .brand-mark{background:#f7f8f4!important;border-color:#c9f26f}
+
+
+/* Final brand-system pass: restrained surfaces, clear contrast, no decorative logo tilt. */
+:root{--aivanta-ink:#19231f;--aivanta-emerald:#073127;--aivanta-emerald-deep:#031b16;--aivanta-lime:#c9f26f;--aivanta-cream:#f7f8f4;--aivanta-muted:#69766d;--aivanta-border:#e1e8df;--aivanta-shadow:0 14px 38px rgba(14,39,27,.08)}
+.brand-mark,.auth-brand-mark,.builder-brand-mark{background:#f7f8f4!important;border:1px solid rgba(201,242,111,.48);border-radius:9px;box-shadow:none;transform:none!important;display:grid;place-items:center;overflow:hidden;flex:0 0 auto}
+.brand-mark{width:34px;height:34px;padding:3px;box-sizing:border-box}
+.brand-logo,.brand-mark img,.auth-brand-mark img,.builder-brand-mark img{display:block;width:100%;height:100%;padding:1px;box-sizing:border-box;object-fit:contain}
+.reference-home .brand-mark,.reference-footer .brand-mark,.dash-brand .brand-mark{background:#f7f8f4!important;border:1px solid rgba(201,242,111,.48);border-radius:9px;overflow:hidden}
+.reference-home .brand-mark{width:34px;height:34px;padding:3px}
+.reference-home .brand{font-weight:750;letter-spacing:-.35px;gap:10px}
+.reference-nav-links a,.reference-auth a,.reference-footer a{transition:color .16s ease}
+.reference-primary,.reference-secondary,.reference-nav-cta{transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
+.reference-primary:not(:disabled):hover{box-shadow:0 5px 14px rgba(201,242,111,.16)}
+.reference-secondary:hover{border-color:rgba(201,242,111,.55);background:rgba(255,255,255,.045)}
+.reference-features{border-top:1px solid #e7eee6;border-bottom:1px solid #e7eee6}
+.reference-feature-card{border-radius:12px}
+.reference-feature-card>span,.reference-feature-icon{box-shadow:none}
+.reference-dashboard-preview{box-shadow:0 14px 38px rgba(0,0,0,.18);border-color:rgba(201,242,111,.62)}
+.reference-footer .brand{gap:10px;font-weight:750}
+.reference-footer .brand-mark{width:30px;height:30px;padding:3px}
+:where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:2px solid #a8d85a;outline-offset:3px}
+@media(max-width:680px){.reference-home .brand-mark{width:30px;height:30px;padding:2px}.reference-home .brand{font-size:17px;gap:8px}.reference-nav-inner{gap:8px}.reference-auth{gap:9px}}
+@media(prefers-reduced-motion:reduce){.reference-nav-links a,.reference-auth a,.reference-footer a,.reference-primary,.reference-secondary,.reference-nav-cta{transition:none}}
