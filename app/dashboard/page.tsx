@@ -88,7 +88,7 @@ const navItems = [
 export default function DashboardPage() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [activeNav, setActiveNav] = useState("Overview");
+  const [activeNav, setActiveNav] = useState("Dashboard");
   const [filter, setFilter] = useState("All workflows");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -325,6 +325,12 @@ export default function DashboardPage() {
           </div>
           <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Aivanta database. Live workflow execution and connected services are still in development.</p></div>
         </div>
+        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+          <Link href="/dashboard" className="mobile-bottom-link active"><span>⌂</span>Home</Link>
+          <Link href="/dashboard#workflows" className="mobile-bottom-link"><span>↗</span>Workflows</Link>
+          <Link href="/dashboard/integrations" className="mobile-bottom-link"><span>⌘</span>Integrations</Link>
+          <Link href="/dashboard/settings" className="mobile-bottom-link"><span>•••</span>More</Link>
+        </nav>
       </section>
 
       {setupTemplate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingWorkflow) setSetupTemplate(null); }}><section className="create-modal template-setup-modal" role="dialog" aria-modal="true" aria-labelledby="template-setup-title"><button className="modal-close" aria-label="Close setup" onClick={() => { if (!savingWorkflow) setSetupTemplate(null); }}>×</button><div className="modal-icon">{setupTemplate.icon}</div><div className="dash-eyebrow">STEP 1 · QUICK SETUP</div><h2 id="template-setup-title">Set up {setupTemplate.name}</h2><p>Answer a few simple questions. You can adjust everything later in the builder.</p><form onSubmit={(event) => { event.preventDefault(); void createFromTemplate(setupTemplate); }}>
