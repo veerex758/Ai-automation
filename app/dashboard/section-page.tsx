@@ -1,5 +1,5 @@
 import Link from "next/link";
-import "./dashboard/dashboard.css";
+import "./dashboard.css";
 
 type Section = "integrations" | "templates" | "analytics" | "activity" | "billing" | "settings";
 const navigation = [
