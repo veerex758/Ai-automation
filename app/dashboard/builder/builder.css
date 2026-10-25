@@ -48,3 +48,31 @@
 .builder-safety-note{border-color:#dcebd0;background:#f0f8e8}
 .builder-safety-note>span{color:#6d963e}
 @media(max-width:720px){.builder-sidebar{width:66px;padding:17px 6px}.builder-brand{font-size:0;padding:0 10px 22px}.builder-brand-mark{width:29px;height:29px}.builder-workspace{justify-content:center;padding:8px 3px}.builder-workspace>div,.builder-workspace>b,.builder-nav-label,.builder-sidebar-bottom{display:none}.builder-nav-link{font-size:0;justify-content:center;padding:12px 5px}.builder-nav-link>span{font-size:18px}.builder-nav-link small{display:none}.builder-topbar{padding:0 12px}.builder-top-actions{gap:6px}.builder-secondary-button,.builder-primary-button{padding:9px 8px;font-size:9px}}
+
+
+
+.canvas-panel{background:#fff;border-color:#e3ebe1;box-shadow:0 4px 20px rgba(17,43,25,.03)}
+.canvas-toolbar{border-color:#edf1eb}
+.canvas-toolbar>div strong{color:#263b2c}
+.canvas-toolbar>div small{color:#8a9a8d}
+.canvas-toolbar>button,.canvas-add-node{background:#eff9e5;border-color:#d9edc7;color:#436f32}
+.flow-canvas{background:#fbfdfb;border-color:#e8eee6}
+.canvas-grid{opacity:.45}
+.builder-node{background:#fff;border-color:#e0e9df;box-shadow:0 4px 12px rgba(14,42,24,.035)}
+.builder-node.selected-node{border-color:#8fd84a;box-shadow:0 0 0 3px rgba(184,255,88,.17)}
+.builder-node-icon.node-trigger{background:#e8f7dc;color:#46833b}
+.builder-node-icon.node-action{background:#e5f6ec;color:#188b5a}
+.builder-node-icon.node-condition{background:#f0eafa;color:#8063b4}
+.builder-node-copy small{color:#7b9b81}
+.node-connector{color:#80b95a}
+.canvas-zoom{background:#fff;border-color:#e0e9df}
+.canvas-zoom button{background:#f3f8ef;color:#55794b}
+.canvas-foot{background:#f8fbf7;border-color:#e7eee4}
+.canvas-foot>span{color:#7c8c7e}
+.settings-heading{border-color:#e6ede4}
+.step-settings{background:#fff;border-color:#e2eae0}
+.settings-input,.settings-textarea{border-color:#dfe8dc}
+.settings-input:focus,.settings-textarea:focus{border-color:#a5e35c;box-shadow:0 0 0 3px rgba(184,255,88,.14)}
+.settings-info{background:#f0f8e8;border-color:#e1edcf}
+.remove-step-button{color:#a34d4d}
+@media(max-width:720px){.builder-content{padding:20px 12px 34px}.builder-workspace-grid{grid-template-columns:minmax(0,1fr)}.flow-nodes{gap:0}.builder-node{padding:12px}.builder-title-row{gap:14px;flex-direction:column}.builder-progress{width:100%}.canvas-toolbar{align-items:flex-start;gap:8px}.canvas-toolbar>button{font-size:9px;padding:8px}.flow-canvas{overflow-x:auto}.flow-nodes{min-width:280px}}
