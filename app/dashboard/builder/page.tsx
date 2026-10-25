@@ -130,7 +130,7 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <aside className="builder-sidebar">
-        <Link className="builder-brand" href="/"><span className="builder-brand-mark">a</span>Aivanta<span className="builder-period">.</span></Link>
+        <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
         <div className="builder-workspace"><span>A</span><div><strong>Acme workspace</strong><small>Free workspace</small></div><b>⌄</b></div>
         <div className="builder-nav-label">WORKSPACE</div>
         <Link className="builder-nav-link" href="/dashboard"><span>⌂</span>Overview</Link>
