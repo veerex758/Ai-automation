@@ -74,10 +74,15 @@ const workflowTemplates: WorkflowTemplate[] = [
 ];
 
 const navItems = [
-  { label: "Overview", icon: "⌂" },
-  { label: "Workflows", icon: "↗" },
-  { label: "Integrations", icon: "⌘" },
-  { label: "Activity logs", icon: "◷" },
+  { label: "Dashboard", icon: "▦", href: "/dashboard" },
+  { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
+  { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
+  { label: "AI Agents", icon: "✺", href: "/dashboard/ai-assistant" },
+  { label: "Templates", icon: "▧", href: "/dashboard/templates" },
+  { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
+  { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
+  { label: "Billing", icon: "◇", href: "/dashboard/billing" },
+  { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
 ];
 
 export default function DashboardPage() {
@@ -267,11 +272,11 @@ export default function DashboardPage() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></Link>
+        <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta</span></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
-          {navItems.map((item) => <button key={item.label} className={activeNav === item.label ? "side-link selected" : "side-link"} onClick={() => { setActiveNav(item.label); if (item.label !== "Overview" && item.label !== "Workflows") setNotice(item.label + " is part of the upcoming workspace release."); }}><span className="side-icon">{item.icon}</span>{item.label}{item.label === "Integrations" && <span className="soon-tag">SOON</span>}</button>)}
+          {navItems.map((item) => <Link key={item.label} href={item.href} className={(activeNav === item.label || (item.label === "Dashboard" && activeNav === "Overview")) ? "side-link selected" : "side-link"} onClick={() => setActiveNav(item.label)}><span className="side-icon">{item.icon}</span>{item.label}{["Integrations","AI Agents","Billing"].includes(item.label) && <span className="soon-tag">SETUP</span>}</Link>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
         <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
@@ -281,7 +286,7 @@ export default function DashboardPage() {
       <section className="dashboard-main">
         <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>{activeNav}</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
         <div className="dashboard-content">
-          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={openCreateModal}><span>＋</span> New workflow</button></div>
+          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Welcome back 👋</h1><p>Here’s what’s happening with your automation platform today.</p></div><button type="button" className="create-button" onClick={openCreateModal}><span>＋</span> Create Workflow</button></div>
 
           <section className="quick-start-section" aria-labelledby="quick-start-title">
             <div className="quick-start-heading"><div><div className="dash-eyebrow">SKIP THE BLANK CANVAS</div><h2 id="quick-start-title">Start with a template<span>.</span></h2><p>Choose an outcome. Customize the steps in your builder.</p></div><span className="template-count">6 starter flows</span></div>
@@ -301,11 +306,16 @@ export default function DashboardPage() {
           <div className="stats-grid">
             <article className="stat-card"><div className="stat-heading">Total workflows <span className="stat-symbol">↗</span></div><div className="stat-number">{workflows.length.toString().padStart(2, "0")}<span className="stat-caption"> in workspace</span></div><div className="stat-bottom"><span className="stat-dot dot-lime" />Your automation library</div></article>
             <article className="stat-card"><div className="stat-heading">Active workflows <span className="stat-symbol">◉</span></div><div className="stat-number">{workflows.filter((w) => w.status === "Active").length.toString().padStart(2, "0")}<span className="stat-caption"> enabled</span></div><div className="stat-bottom"><span className="stat-dot dot-green" />Ready when connected</div></article>
-            <article className="stat-card"><div className="stat-heading">Tasks processed <span className="stat-symbol">⌁</span></div><div className="stat-number">2,392<span className="stat-caption"> sample data</span></div><div className="stat-bottom"><span className="stat-dot dot-violet" />Illustrative dashboard metric</div></article>
-            <article className="stat-card"><div className="stat-heading">Time returned <span className="stat-symbol">◷</span></div><div className="stat-number">48.5<span className="stat-unit">h</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />Estimated sample data</div></article>
+            <article className="stat-card"><div className="stat-heading">Successful runs <span className="stat-symbol">✓</span></div><div className="stat-number">—<span className="stat-caption"> no run data</span></div><div className="stat-bottom"><span className="stat-dot dot-violet" />Execution history not connected</div></article>
+            <article className="stat-card"><div className="stat-heading">Failed runs <span className="stat-symbol">!</span></div><div className="stat-number">—<span className="stat-caption"> no run data</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />Execution history not connected</div></article>
           </div>
 
-          <div className="section-title-row"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
+          <section className="dashboard-insights" aria-label="Workflow insights">
+            <article className="performance-card"><div className="insight-heading"><div><strong>Workflow Performance</strong><small>Run activity over time</small></div><span>Last 7 days</span></div><div className="performance-empty"><div className="empty-chart-grid"><span>200</span><span>150</span><span>100</span><span>50</span><span>0</span></div><div className="performance-chart-line"><svg viewBox="0 0 520 145" role="img" aria-label="No execution data available yet"><path d="M0 118 H520 M0 84 H520 M0 50 H520 M0 16 H520" stroke="rgba(196,255,218,.1)" strokeWidth="1" fill="none"/><path d="M0 118 C42 105 52 111 80 91 S123 110 155 70 S198 100 235 65 S281 82 315 45 S370 77 405 38 S465 43 520 13" stroke="#b8ff58" strokeWidth="3" fill="none" strokeLinecap="round" strokeDasharray="5 7" opacity=".48"/></svg><div className="chart-empty-message">Execution data will appear here</div></div></div><div className="chart-date-labels"><span>7 days ago</span><span>5 days ago</span><span>3 days ago</span><span>Today</span></div></article>
+            <article className="success-card"><strong>Success Rate</strong><div className="success-ring-dash"><span>—<small>No run data</small></span></div><p>Workflow runs will be summarized when execution history is available.</p></article>
+          </section>
+
+          <div className="section-title-row" id="workflows"><div><h2>Recent Workflows</h2><p>Manage your automations and check their current status.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
           <div className="workflow-toolbar"><div className="filter-tabs">{["All workflows", "Active", "Draft", "Paused"].map((item) => <button key={item} className={filter === item ? "filter-tab active-filter" : "filter-tab"} onClick={() => setFilter(item)}>{item}{item === "All workflows" && <span>{workflows.length}</span>}</button>)}</div><label className="search-box"><span>⌕</span><input aria-label="Search workflows" placeholder="Search workflows..." value={search} onChange={(e) => setSearch(e.target.value)} /><kbd>⌘ K</kbd></label></div>
 
           <div className="workflow-table"><div className="table-header"><span>WORKFLOW</span><span>STATUS</span><span>RUNS</span><span>LAST UPDATED</span><span /></div>
