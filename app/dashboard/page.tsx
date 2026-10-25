@@ -288,19 +288,6 @@ export default function DashboardPage() {
         <div className="dashboard-content">
           <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Welcome back 👋</h1><p>Here’s what’s happening with your automation platform today.</p></div><button type="button" className="create-button" onClick={openCreateModal}><span>＋</span> Create Workflow</button></div>
 
-          <section className="quick-start-section" aria-labelledby="quick-start-title">
-            <div className="quick-start-heading"><div><div className="dash-eyebrow">SKIP THE BLANK CANVAS</div><h2 id="quick-start-title">Start with a template<span>.</span></h2><p>Choose an outcome. Customize the steps in your builder.</p></div><span className="template-count">6 starter flows</span></div>
-            <div className="quick-start-grid">
-              {workflowTemplates.map((template) => <article className="quick-template-card" key={template.id}>
-                <div className={`quick-template-icon ${template.tone}`}>{template.icon}</div>
-                <div className="quick-template-meta"><span>{template.category}</span><span>{template.time}</span></div>
-                <h3>{template.name}</h3><p>{template.description}</p>
-                <button type="button" onClick={() => openTemplateSetup(template)} disabled={savingWorkflow}>Set up template <span>↗</span></button>
-              </article>)}
-            </div>
-            <p className="template-note"><span>ⓘ</span> Templates create editable drafts. Live social, email and other integrations are not connected yet.</p>
-          </section>
-
           {notice && <div className="notice-bar" role="status"><span>ⓘ</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
 
           <div className="stats-grid">
@@ -324,6 +311,19 @@ export default function DashboardPage() {
             {!loadingWorkflows && visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
           </div>
           <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Aivanta database. Live workflow execution and connected services are still in development.</p></div>
+
+          <section className="quick-start-section" aria-labelledby="quick-start-title">
+            <div className="quick-start-heading"><div><div className="dash-eyebrow">SKIP THE BLANK CANVAS</div><h2 id="quick-start-title">Start with a template<span>.</span></h2><p>Choose an outcome. Customize the steps in your builder.</p></div><span className="template-count">6 starter flows</span></div>
+            <div className="quick-start-grid">
+              {workflowTemplates.map((template) => <article className="quick-template-card" key={template.id}>
+                <div className={`quick-template-icon ${template.tone}`}>{template.icon}</div>
+                <div className="quick-template-meta"><span>{template.category}</span><span>{template.time}</span></div>
+                <h3>{template.name}</h3><p>{template.description}</p>
+                <button type="button" onClick={() => openTemplateSetup(template)} disabled={savingWorkflow}>Set up template <span>↗</span></button>
+              </article>)}
+            </div>
+            <p className="template-note"><span>ⓘ</span> Templates create editable drafts. Live social, email and other integrations are not connected yet.</p>
+          </section>
         </div>
         <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
           <Link href="/dashboard" className="mobile-bottom-link active"><span>⌂</span>Home</Link>
