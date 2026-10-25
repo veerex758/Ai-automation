@@ -133,14 +133,18 @@ export default function WorkflowBuilderPage() {
         <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
         <div className="builder-workspace"><span>A</span><div><strong>Acme workspace</strong><small>Free workspace</small></div><b>⌄</b></div>
         <div className="builder-nav-label">WORKSPACE</div>
-        <Link className="builder-nav-link" href="/dashboard"><span>⌂</span>Overview</Link>
-        <Link className="builder-nav-link active" href="/dashboard/builder"><span>⌘</span>Workflow builder</Link>
-        <button className="builder-nav-link" onClick={() => setNotice("Integrations are coming in a later release. No external service is connected yet.")}><span>⌁</span>Integrations <small>SOON</small></button>
+        <Link className="builder-nav-link" href="/dashboard"><span>▦</span>Dashboard</Link>
+        <Link className="builder-nav-link active" href="/dashboard/builder"><span>↗</span>Workflows</Link>
+        <Link className="builder-nav-link" href="/dashboard/integrations"><span>⌘</span>Integrations</Link>
+        <Link className="builder-nav-link" href="/dashboard/ai-assistant"><span>✺</span>AI Agents</Link>
+        <Link className="builder-nav-link" href="/dashboard/templates"><span>▧</span>Templates</Link>
+        <Link className="builder-nav-link" href="/dashboard/analytics"><span>▥</span>Analytics</Link>
+        <Link className="builder-nav-link" href="/dashboard/settings"><span>⚙</span>Settings</Link>
         <div className="builder-sidebar-bottom"><div className="builder-help-mark">✳</div><strong>Build with confidence</strong><p>Start with a trigger, add steps, and review your logic before you connect live services.</p><Link href="/dashboard">Back to workspace ↗</Link></div>
       </aside>
 
       <section className="builder-main">
-        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft}>Save draft</button><button className="builder-primary-button" onClick={reviewWorkflow}>Review &amp; activate ↗</button></div></header>
+        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft}>Save</button><button className="builder-secondary-button" onClick={reviewWorkflow}>Test</button><button className="builder-primary-button" disabled title="Activation remains disabled until integrations and execution safeguards are configured">Activate</button></div></header>
         <div className="builder-content">
           <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
