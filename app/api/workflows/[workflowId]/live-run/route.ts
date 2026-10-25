@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
+import { executeLiveAction } from "@/lib/workflows/live-action-executor.cjs";
 import { sendResendEmail, isResendConfigured, isLiveEmailRecipientAllowed, getAllowedRecipients } from "@/lib/integrations/resend.cjs";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -141,15 +142,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         result = { message: "Skipped because an earlier live action failed." };
       } else if (node.type === "action" && step.status === "simulated") {
         try {
-          const sent = await sendResendEmail({
-            to: node.settings.recipient,
-            subject: node.title,
-            text: node.settings.message,
-          }, { idempotencyKey: run.id });
+          const sent = await executeLiveAction(node, {
+            idempotencyKey: run.id,
+            sendEmail: sendResendEmail,
+          });
           emailSent = true;
-          providerMessageId = sent.messageId;
+          providerMessageId = sent.providerMessageId;
           status = "executed";
-          result = { message: "Email accepted by Resend.", provider: sent.provider, providerMessageId: sent.messageId };
+          result = { message: sent.message, provider: sent.provider, providerMessageId: sent.providerMessageId };
         } catch (error) {
           halted = true;
           status = "failed";
