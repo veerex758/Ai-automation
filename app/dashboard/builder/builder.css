@@ -76,3 +76,18 @@
 .settings-info{background:#f0f8e8;border-color:#e1edcf}
 .remove-step-button{color:#a34d4d}
 @media(max-width:720px){.builder-content{padding:20px 12px 34px}.builder-workspace-grid{grid-template-columns:minmax(0,1fr)}.flow-nodes{gap:0}.builder-node{padding:12px}.builder-title-row{gap:14px;flex-direction:column}.builder-progress{width:100%}.canvas-toolbar{align-items:flex-start;gap:8px}.canvas-toolbar>button{font-size:9px;padding:8px}.flow-canvas{overflow-x:auto}.flow-nodes{min-width:280px}}
+
+
+
+/* Desktop canvas follows the reference's left-to-right workflow sequence. */
+.flow-canvas{overflow:auto}
+.flow-nodes{display:flex;align-items:center;width:max-content;min-width:max-content;margin:75px 30px 75px;gap:0}
+.flow-node-wrap{display:flex;align-items:center;flex-direction:row;width:auto;flex:0 0 auto}
+.builder-node{width:205px;min-height:94px;max-width:205px}
+.node-connector{height:auto;width:39px;display:grid;place-items:center;flex:0 0 39px}
+.node-connector:before{height:1px;width:100%;left:0;top:50%}
+.node-connector span{font-size:0;padding:0 4px;background:#fbfdfb}
+.node-connector span:after{content:"→";font-size:15px;color:#7eaf5c}
+.canvas-add-node{min-width:116px;margin:0 0 0 10px}
+.builder-primary-button:disabled{opacity:.55;cursor:not-allowed;filter:saturate(.6)}
+@media(max-width:720px){.flow-canvas{overflow:auto}.flow-nodes{display:flex;flex-direction:column;width:min(440px,calc(100% - 28px));min-width:0;margin:28px auto 65px;gap:0}.flow-node-wrap{display:flex;align-items:center;flex-direction:column;width:100%;flex:0 0 auto}.builder-node{width:100%;max-width:none;min-height:83px}.node-connector{height:39px;width:auto;display:grid;place-items:center;flex:0 0 39px}.node-connector:before{height:100%;width:1px;left:50%;top:0}.node-connector span{font-size:0;padding:0 5px}.node-connector span:after{content:"↓";font-size:15px}.canvas-add-node{margin:0 auto;min-width:0}}
