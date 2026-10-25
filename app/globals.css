@@ -332,3 +332,12 @@ h1 span{color:#809e65}
 .marketing-sub-card strong{display:block;color:#d3e8d9;font-size:10px;margin-top:18px}
 .featured-plan{border-color:#9eea54;box-shadow:0 0 28px rgba(184,255,88,.07)}
 @media(max-width:680px){.marketing-sub-hero{padding:50px 18px 35px}.marketing-sub-hero h1{font-size:40px;letter-spacing:-1.5px}.marketing-sub-hero>p{font-size:12px}.marketing-sub-grid{grid-template-columns:1fr;width:calc(100% - 32px);padding-bottom:45px}.marketing-sub-card{min-height:0;padding:19px}}
+
+
+/* Aivanta brand system: shared tokens and predictable interaction states. */
+:root{--aivanta-ink:#19231f;--aivanta-emerald:#0b3026;--aivanta-emerald-deep:#061f19;--aivanta-lime:#c9f26f;--aivanta-cream:#f7f8f4;--aivanta-muted:#69766d;--aivanta-border:#e2e8df;--aivanta-focus:rgba(169,218,94,.42)}
+.brand-mark,.auth-brand-mark,.builder-brand-mark{background:var(--aivanta-lime);color:var(--aivanta-ink);overflow:hidden;flex-shrink:0}
+.brand-logo{padding:4px;box-sizing:border-box}
+.brand-mark img,.auth-brand-mark img,.builder-brand-mark img{display:block;width:100%;height:100%;object-fit:contain;padding:4px;box-sizing:border-box}
+:where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:3px solid var(--aivanta-focus);outline-offset:3px}
+::selection{background:#dff5b8;color:var(--aivanta-ink)}
