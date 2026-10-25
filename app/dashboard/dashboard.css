@@ -191,3 +191,27 @@
 .subtle-button:hover{background:#f2f9e9;border-color:#d5e9c1}
 @media(max-width:900px){.dashboard-insights{grid-template-columns:minmax(0,1.4fr) minmax(190px,.8fr)}}
 @media(max-width:720px){.sidebar{width:68px;padding:17px 7px 12px;overflow:hidden}.dash-brand{padding:0 10px 23px;font-size:0}.dash-brand .brand-mark{width:29px;height:29px}.workspace-switch{justify-content:center;padding:8px 4px;margin-bottom:20px}.workspace-copy,.switch-chevron,.sidebar-label,.side-link:not(.selected) .soon-tag,.side-link{font-size:0}.side-link{justify-content:center;gap:0;padding:12px 5px}.side-icon{font-size:18px;width:auto}.side-link.selected{font-size:0}.sidebar-bottom .help-card,.profile-button>span:nth-child(2),.profile-button>.switch-chevron{display:none}.profile-button{justify-content:center}.dashboard-topbar{padding:0 15px}.dashboard-content{padding:22px 14px 32px}.welcome-row{align-items:flex-start;flex-direction:column}.welcome-row h1{font-size:25px}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat-card{padding:13px}.stat-number{font-size:25px}.dashboard-insights{grid-template-columns:1fr}.success-card{display:grid;grid-template-columns:1fr auto;align-items:center}.success-card>strong{align-self:center}.success-ring-dash{grid-column:2;grid-row:1/3;width:80px;height:80px;margin:0}.success-ring-dash:before{inset:7px}.success-ring-dash>span{font-size:18px}.success-card p{grid-column:1;text-align:left}.workflow-toolbar{align-items:stretch;flex-direction:column}.search-box{min-width:0}.table-header,.workflow-row{grid-template-columns:minmax(150px,1.8fr) 78px 24px;gap:8px;padding:0 10px}.table-header span:nth-child(3),.table-header span:nth-child(4),.workflow-row>.run-count,.workflow-row>.updated-time{display:none}.workflow-name-cell{gap:7px}.workflow-app-icon{width:29px;height:29px}.workflow-name-copy strong{font-size:10px}.workflow-name-copy small{font-size:8px}.run-count{font-size:9px}}
+
+
+
+.section-page-content .welcome-row p{max-width:720px;line-height:1.65}
+.section-cards-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.section-info-card,.settings-section-card,.billing-plan-card{background:#fff;border:1px solid #e4ebe2;border-radius:11px;padding:19px;min-width:0}
+.section-info-card .workflow-app-icon{margin-bottom:13px}
+.section-card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.section-info-card h3,.settings-section-card h3{font-family:Manrope,sans-serif;font-size:15px;letter-spacing:-.3px;margin:0 0 8px;color:#172820}
+.section-info-card p,.settings-section-card p,.billing-plan-card p{font-size:11px;line-height:1.75;color:#718075;margin:8px 0 12px}
+.section-info-card>small{display:block;font-size:9px;line-height:1.6;color:#8a988d}
+.section-card-link{display:inline-flex;align-items:center;gap:8px;color:#396c32!important;font-size:10px;font-weight:800;margin-top:8px}
+.section-empty-panel{display:flex;flex-direction:column;align-items:center;text-align:center;padding:55px 22px;background:#fff;border:1px dashed #cddbc9;border-radius:12px}
+.section-empty-icon{display:grid;place-items:center;width:49px;height:49px;border-radius:13px;background:#e9f8dc;color:#4b7e32;font-size:22px;margin-bottom:15px}
+.section-empty-panel h2,.section-empty-panel h3{font-family:Manrope,sans-serif;font-size:19px;letter-spacing:-.4px;margin:0 0 9px}
+.section-empty-panel p{max-width:460px;font-size:11px;line-height:1.8;color:#718075;margin:0 0 10px}
+.billing-plan-card{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:14px}
+.billing-plan-card h2{font-family:Manrope,sans-serif;font-size:28px;margin:9px 0}
+.billing-plan-card p{max-width:550px;margin-bottom:0}
+.settings-section-card{display:flex;align-items:center;gap:15px;margin-bottom:12px}
+.settings-section-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:10px;background:#e8f6dd;color:#3c7b39;font-size:18px;flex-shrink:0}
+.settings-section-card>div:nth-child(2){flex:1;min-width:0}
+.settings-section-card p{margin:0}
+@media(max-width:720px){.section-cards-grid{grid-template-columns:1fr}.billing-plan-card{align-items:flex-start;flex-direction:column}.settings-section-card{align-items:flex-start;flex-wrap:wrap}.settings-section-card>div:nth-child(2){flex-basis:calc(100% - 60px)}}
