@@ -341,3 +341,12 @@ h1 span{color:#809e65}
 .brand-mark img,.auth-brand-mark img,.builder-brand-mark img{display:block;width:100%;height:100%;object-fit:contain;padding:4px;box-sizing:border-box}
 :where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:3px solid var(--aivanta-focus);outline-offset:3px}
 ::selection{background:#dff5b8;color:var(--aivanta-ink)}
+
+
+/* Contrast-safe placement for the supplied green/teal Aivanta mark. */
+.brand-mark,.auth-brand-mark,.builder-brand-mark{background:#f7f8f4!important;border:1px solid rgba(201,242,111,.42);border-radius:10px;box-shadow:0 1px 0 rgba(255,255,255,.24) inset;display:grid;place-items:center;overflow:hidden;flex-shrink:0}
+.brand-mark{width:32px;height:32px;padding:3px;box-sizing:border-box}
+.brand-logo,.brand-mark img{display:block;width:100%;height:100%;padding:1px;box-sizing:border-box;object-fit:contain}
+.auth-brand-mark{width:30px;height:30px;padding:3px;box-sizing:border-box}
+.auth-brand-mark img,.builder-brand-mark img{display:block;width:100%;height:100%;padding:1px;box-sizing:border-box;object-fit:contain}
+.dash-brand .brand-mark{background:#f7f8f4!important;border-color:#c9f26f}
