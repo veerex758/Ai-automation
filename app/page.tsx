@@ -16,7 +16,7 @@ export default function Home() {
   return (
     <main>
       <nav className="nav shell">
-        <Link className="brand" href="/" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></Link>
+        <Link className="brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta<span className="brand-period">.</span></span></Link>
         <div className="nav-links"><a href="#platform">Platform</a><a href="#how-it-works">How it works</a><a href="#security">Security</a></div>
         <a className="nav-cta" href="/dashboard">Open workspace <span>↗</span></a>
       </nav>
@@ -57,7 +57,7 @@ export default function Home() {
 
       <section className="cta-section shell" id="get-started"><div className="cta-card"><div className="eyebrow eyebrow-light">THE NEXT STEP STARTS HERE</div><h2>Give good work<br />room to happen.</h2><p>Take a closer look at the workspace and shape your first workflow. Aivanta is being built for thoughtful, controlled automation — one reliable step at a time.</p><div className="cta-actions"><a className="button button-light" href="/dashboard">Explore the workspace <span>↗</span></a><a className="cta-secondary-link" href="#how-it-works">See how it works <span>↓</span></a></div><span className="cta-decoration" aria-hidden="true">a.</span></div></section>
 
-      <footer className="footer shell"><a className="brand" href="#"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></a><span>Thoughtful automation. Real work.</span><span>© {new Date().getFullYear()} Aivanta. In active development.</span></footer>
+      <footer className="footer shell"><a className="brand" href="#"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta<span className="brand-period">.</span></span></a><span>Thoughtful automation. Real work.</span><span>© {new Date().getFullYear()} Aivanta. In active development.</span></footer>
     </main>
   );
 }
