@@ -18,11 +18,12 @@ export type RegisteredStepResult = {
 
 function resolveReferences(value: unknown, outputs: Readonly<Record<string, unknown>>, dryRun = false): unknown {
   if (typeof value === "string") {
-    return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (_match, path: string) => {
+    return value.replace(/\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}/g, (_match, path: string) => {
       const [stepId, ...parts] = path.split(".");
       let current: unknown = outputs[stepId];
       for (const part of parts) {
         if (!current || typeof current !== "object" || Array.isArray(current) || !Object.prototype.hasOwnProperty.call(current, part)) {
+          if (dryRun) return "[dry-run reference: " + path + "]";
           throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
         }
         current = (current as Record<string, unknown>)[part];
