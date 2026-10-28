@@ -38,6 +38,6 @@ test("OpenAI action makes a real Responses API request and validates actual outp
     previousOutputs: {},
   }, { prompt: "Say hello", model: "gpt-4o-mini", maxOutputTokens: 50 });
   assert.equal(requestedUrl, "https://api.openai.com/v1/responses");
-  assert.equal(result.text, "Hello from provider");
-  assert.equal(result.outputTokens, 4);
+  assert.equal((result as { text: string }).text, "Hello from provider");
+  assert.equal((result as { outputTokens?: number }).outputTokens, 4);
 });
