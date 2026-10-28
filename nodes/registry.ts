@@ -1,8 +1,10 @@
 import type { NodeDefinition } from "./types";
 import { openaiNode } from "./openai";
 import { webhooksNode } from "./webhooks";
+import { slackNode } from "./slack";
+import { emailNode } from "./email";
 
-export const nodes: NodeDefinition[] = [webhooksNode, openaiNode];
+export const nodes: NodeDefinition[] = [webhooksNode, openaiNode, slackNode, emailNode];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
