@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getNodeRegistry } from "@/lib/workflows/node-registry.cjs";
+import { getPublicNodeCatalog } from "@/nodes/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export async function GET() {
 
     return NextResponse.json({
       ...getNodeRegistry(),
+      nodes: getPublicNodeCatalog(),
     }, {
       headers: { "Cache-Control": "private, no-store" },
     });
