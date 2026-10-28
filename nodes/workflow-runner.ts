@@ -16,7 +16,7 @@ export type RegisteredStepResult = {
   error?: string;
 };
 
-function resolveReferences(value: unknown, outputs: Readonly<Record<string, unknown>>): unknown {
+function resolveReferences(value: unknown, outputs: Readonly<Record<string, unknown>>, dryRun = false): unknown {
   if (typeof value === "string") {
     return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (_match, path: string) => {
       const [stepId, ...parts] = path.split(".");
@@ -27,11 +27,11 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
         }
         current = (current as Record<string, unknown>)[part];
       }
-      if (current === null || current === undefined) throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
+      if (current === null || current === undefined) {\n        if (dryRun) return "[dry-run reference: " + path + "]";\n        throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");\n      }
       return typeof current === "string" ? current : JSON.stringify(current);
     });
   }
-  if (Array.isArray(value)) return value.map((item) => resolveReferences(item, outputs));
+  if (Array.isArray(value)) return value.map((item) => resolveReferences(item, outputs, dryRun));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveReferences(item, outputs)]));
   }
@@ -66,7 +66,7 @@ export async function executeRegisteredWorkflow(args: {
     }
 
     try {
-      const input = resolveReferences(step.input, outputs);
+      const input = resolveReferences(step.input, outputs, args.dryRun);
       const validatedInput = operation.inputSchema.parse(input);
       if (args.dryRun) {
         results.push({ stepId: step.id, status: "simulated" });
