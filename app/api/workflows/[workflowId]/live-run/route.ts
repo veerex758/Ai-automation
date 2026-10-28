@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { POST as registryRun } from "../registry-run/route";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
@@ -11,6 +12,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
+  // Explicit opt-in keeps existing legacy email behavior unchanged while routing registry-format workflows through the same run-history-backed execution API.
+  if (request.headers.get("x-aivanta-runner") === "registry") return registryRun(request, context);
   const startedAt = Date.now();
   try {
     const { workflowId } = await context.params;
