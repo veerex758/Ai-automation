@@ -53,12 +53,16 @@ export async function executeRegisteredWorkflow(args: {
 
   for (const step of args.steps) {
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id)) {
-      return { status: "failed", steps: [...results, { stepId: step.id, status: "failed", error: "INVALID_STEP_ID" }], outputs };
+      results.push({ stepId: step.id, status: "failed", error: "INVALID_STEP_ID" });
+      for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
+      return { status: "failed", steps: results, outputs };
     }
     seen.add(step.id);
     const operation = findOperation(step.nodeId, step.operationId, step.kind);
     if (!operation) {
-      return { status: "failed", steps: [...results, { stepId: step.id, status: "failed", error: "NODE_OPERATION_NOT_FOUND" }], outputs };
+      results.push({ stepId: step.id, status: "failed", error: "NODE_OPERATION_NOT_FOUND" });
+      for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
+      return { status: "failed", steps: results, outputs };
     }
 
     try {
