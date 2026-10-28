@@ -1,4 +1,8 @@
 -- Webhook endpoint metadata and idempotent event receipts.
+-- The composite key prevents an endpoint from referencing a workflow in another workspace.
+create unique index if not exists workflows_id_workspace_id_unique_idx
+  on public.workflows(id, workspace_id);
+
 -- Secrets are stored only as ciphertext; application code must encrypt/decrypt with
 -- a separately managed key before writing/reading secret_ciphertext.
 create table if not exists public.webhook_endpoints (
