@@ -102,15 +102,27 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       if ((count ?? 0) >= 10) return NextResponse.json({ error: "Live run limit reached." }, { status: 429 });
     }
 
+    // Current staging RLS requires dry-run parent rows to be inserted already finalized,
+    // and only then permits their simulated/skipped step rows. Live runs use the running
+    // -> finalized lifecycle so step inserts remain auditable before completion.
+    const dryRunExecution = dryRun
+      ? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: true })
+      : null;
+    const initialStatus = dryRunExecution
+      ? (dryRunExecution.status === "succeeded" ? "succeeded" : "failed")
+      : "running";
+    const initialCompletedAt = dryRunExecution ? new Date().toISOString() : null;
+    const initialDuration = dryRunExecution ? Math.min(600000, Date.now() - startedAt) : 0;
     const { data: run, error: insertError } = await supabase.from("workflow_runs").insert({
       workspace_id: workflow.workspace_id, workflow_id: workflow.id, workflow_version: workflow.version,
-      mode: dryRun ? "dry_run" : "live", status: "running", created_by: user.id,
+      mode: dryRun ? "dry_run" : "live", status: initialStatus, created_by: user.id,
       idempotency_key: dryRun ? null : idempotencyKey, started_at: new Date(startedAt).toISOString(),
-      completed_at: null, duration_ms: 0,
-    }).select("id,workflow_version,started_at").single();
+      completed_at: initialCompletedAt, duration_ms: initialDuration,
+      error_message: dryRunExecution?.status === "failed" ? "One or more registered workflow steps failed." : null,
+    }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
     if (insertError) throw insertError;
 
-    const execution = await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun });
+    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: false });
     const rows = execution.steps.map((step, index) => ({
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
@@ -123,20 +135,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         const { error } = await supabase.from("workflow_run_steps").insert(rows);
         if (error) throw error;
       }
-      const { data: finalized, error } = await supabase.from("workflow_runs").update({
-        status: finalStatus, completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
-        error_message: execution.status === "failed" ? "One or more registered workflow steps failed." : null,
-      }).eq("id", run.id).eq("status", "running")
-        .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
-      if (error) throw error;
+      let finalized = run;
+      if (!dryRun) {
+        const { data, error } = await supabase.from("workflow_runs").update({
+          status: finalStatus, completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
+          error_message: execution.status === "failed" ? "One or more registered workflow steps failed." : null,
+        }).eq("id", run.id).eq("status", "running")
+          .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
+        if (error) throw error;
+        finalized = data;
+      }
       return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.step_type === "action" && row.status === "executed") }, { status: 201 });
     } catch (error) {
       console.error("Failed to persist registry workflow history", error);
-      await supabase.from("workflow_runs").update({
-        status: "failed", completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
-        error_message: "Run results could not be fully saved; an external side effect may already have occurred. Check provider delivery before retrying.",
-      }).eq("id", run.id).eq("status", "running");
-      return NextResponse.json({ error: "Run history could not be fully saved. Check provider delivery before retrying.", runId: run.id, retrySafe: false }, { status: 500 });
+      if (!dryRun) {
+        await supabase.from("workflow_runs").update({
+          status: "failed", completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
+          error_message: "Run results could not be fully saved; an external side effect may already have occurred. Check provider delivery before retrying.",
+        }).eq("id", run.id).eq("status", "running");
+      }
+      return NextResponse.json({
+        error: "Run history could not be fully saved. Check run history before retrying.",
+        runId: run.id, retrySafe: dryRun,
+      }, { status: 500 });
     }
   } catch (error) {
     console.error("Registry workflow execution failed", error);
