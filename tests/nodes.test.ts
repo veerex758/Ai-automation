@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
+import { executeRegisteredOperation } from "../nodes/runner";
 
 test("registry includes versioned webhook trigger and OpenAI action", () => {
   assert.equal(nodes.length, 2);
@@ -15,6 +16,15 @@ test("webhook trigger refuses events not verified by ingress", async () => {
     credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } },
     previousOutputs: {},
   }, { eventId: "evt_1", eventType: "signup", receivedAt: new Date().toISOString(), payload: { email: "a@example.com" } }), /WEBHOOK_SIGNATURE_NOT_VERIFIED/);
+});
+
+test("registry runner resolves an operation by node and operation IDs", async () => {
+  const result = await executeRegisteredOperation({
+    nodeId: "webhooks", operationId: "receive_event", kind: "trigger",
+    context: { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {}, webhook: { verified: true } },
+    input: { eventId: "evt_1", eventType: "signup", receivedAt: new Date().toISOString(), payload: { email: "a@example.com" } },
+  });
+  assert.equal((result as { eventType: string }).eventType, "signup");
 });
 
 test("OpenAI action makes a real Responses API request and validates actual output", async () => {
