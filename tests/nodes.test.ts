@@ -4,11 +4,22 @@ import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
 test("registry includes versioned webhook, OpenAI, Slack and Email operations", () => {
-  assert.equal(nodes.length, 4);
+  assert.equal(nodes.length, 5);
+  assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
+});
+
+test("manual trigger accepts the legacy builder's manual start event", async () => {
+  const operation = findOperation("manual", "start", "trigger");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  }, {});
+  assert.deepEqual(result, { started: true });
 });
 
 test("webhook trigger refuses events not verified by ingress", async () => {
