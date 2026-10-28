@@ -1,0 +1,143 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import type { NodeContext } from "@/nodes/types";
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+function serverContext(): Omit<NodeContext, "previousOutputs"> {
+  const credentials: Record<string, Record<string, string>> = {};
+  if (process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
+  if (process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
+  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+    credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
+  }
+  return {
+    credentials,
+    logger: {
+      info(message, meta) { console.info("[registry-node]", message, meta ?? {}); },
+      error(message, meta) { console.error("[registry-node]", message, meta ?? {}); },
+    },
+    http: {
+      async request(args) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), args.timeoutMs ?? 15000);
+        try {
+          const response = await fetch(args.url, {
+            method: args.method,
+            headers: args.headers,
+            body: args.body === undefined ? undefined : JSON.stringify(args.body),
+            signal: controller.signal,
+            redirect: "error",
+          });
+          let body: unknown = null;
+          const raw = await response.text();
+          try { body = raw ? JSON.parse(raw) : raw; } catch { body = raw; }
+          return { status: response.status, body };
+        } finally { clearTimeout(timer); }
+      },
+    },
+  };
+}
+
+/** Registry-backed execution persisted in the same workflow_runs/workflow_run_steps history. */
+export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
+  const startedAt = Date.now();
+  try {
+    const { workflowId } = await context.params;
+    if (!uuid.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
+    let body: unknown;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
+    if (!isRecord(body) || typeof body.dryRun !== "boolean") {
+      return NextResponse.json({ error: "Provide dryRun as a boolean." }, { status: 400 });
+    }
+    const dryRun = body.dryRun;
+    const idempotencyKey = request.headers.get("idempotency-key") ?? "";
+    if (!dryRun && !uuid.test(idempotencyKey)) {
+      return NextResponse.json({ error: "A UUID Idempotency-Key header is required for live execution." }, { status: 400 });
+    }
+    if (!dryRun && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
+      return NextResponse.json({ error: "Live execution is disabled by the server." }, { status: 503 });
+    }
+
+    const { data: workflow, error: workflowError } = await supabase.from("workflows")
+      .select("id, workspace_id, version, definition, status")
+      .eq("id", workflowId).maybeSingle();
+    if (workflowError) throw workflowError;
+    if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!dryRun && workflow.status !== "active") return NextResponse.json({ error: "Activate this workflow before live execution." }, { status: 409 });
+
+    const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
+    if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
+      return NextResponse.json({ error: "This endpoint requires a saved aivanta-registry-v1 workflow definition." }, { status: 422 });
+    }
+    const steps = definition.steps as RegisteredWorkflowStep[];
+    if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
+      typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
+      return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
+    }
+    if (!dryRun) {
+      const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+      for (const step of steps) {
+        if (step.nodeId === "email" && step.operationId === "send_email") {
+          const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
+          if (!allowed.has(to)) return NextResponse.json({ error: "Email recipient is not on the server-configured live email allowlist." }, { status: 403 });
+        }
+      }
+      const { data: prior } = await supabase.from("workflow_runs").select("id,status,mode,created_at")
+        .eq("idempotency_key", idempotencyKey).eq("created_by", user.id).eq("workflow_id", workflowId).maybeSingle();
+      if (prior) return NextResponse.json({ run: prior, duplicate: true }, { status: 200 });
+      const hourAgo = new Date(Date.now() - 3600000).toISOString();
+      const { count, error } = await supabase.from("workflow_runs").select("id", { count: "exact", head: true })
+        .eq("created_by", user.id).eq("mode", "live").gte("created_at", hourAgo);
+      if (error) throw error;
+      if ((count ?? 0) >= 10) return NextResponse.json({ error: "Live run limit reached." }, { status: 429 });
+    }
+
+    const { data: run, error: insertError } = await supabase.from("workflow_runs").insert({
+      workspace_id: workflow.workspace_id, workflow_id: workflow.id, workflow_version: workflow.version,
+      mode: dryRun ? "dry_run" : "live", status: "running", created_by: user.id,
+      idempotency_key: dryRun ? null : idempotencyKey, started_at: new Date(startedAt).toISOString(),
+      completed_at: null, duration_ms: 0,
+    }).select("id,workflow_version,started_at").single();
+    if (insertError) throw insertError;
+
+    const execution = await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun });
+    const rows = execution.steps.map((step, index) => ({
+      run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
+      step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
+      status: step.status === "succeeded" ? "executed" : step.status,
+      result: step.status === "failed" ? { error: step.error } : step.status === "succeeded" ? step.output : { message: step.status === "simulated" ? "No provider action was executed." : step.error },
+    }));
+    const finalStatus = execution.status === "succeeded" ? "succeeded" : "failed";
+    try {
+      if (rows.length) {
+        const { error } = await supabase.from("workflow_run_steps").insert(rows);
+        if (error) throw error;
+      }
+      const { data: finalized, error } = await supabase.from("workflow_runs").update({
+        status: finalStatus, completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
+        error_message: execution.status === "failed" ? "One or more registered workflow steps failed." : null,
+      }).eq("id", run.id).eq("status", "running")
+        .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
+      if (error) throw error;
+      return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.status === "executed") }, { status: 201 });
+    } catch (error) {
+      console.error("Failed to persist registry workflow history", error);
+      await supabase.from("workflow_runs").update({
+        status: "failed", completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
+        error_message: "Run results could not be fully saved; an external side effect may already have occurred. Check provider delivery before retrying.",
+      }).eq("id", run.id).eq("status", "running");
+      return NextResponse.json({ error: "Run history could not be fully saved. Check provider delivery before retrying.", runId: run.id, retrySafe: false }, { status: 500 });
+    }
+  } catch (error) {
+    console.error("Registry workflow execution failed", error);
+    return NextResponse.json({ error: "Could not complete this workflow run. Check run history before retrying." }, { status: 500 });
+  }
+}
