@@ -109,11 +109,38 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     // while optionally storing a registry execution plan alongside it. The RPC
     // validates the legacy nodes and persists the full JSON document atomically.
     let definitionToSave: Record<string, unknown> = validated.definition;
-    if ("registrySteps" in body) {
-      if (!Array.isArray(body.registrySteps) || body.registrySteps.length < 1 || body.registrySteps.length > 30) {
+    const legacyNodes = validated.definition.nodes;
+    const canBridgeLegacyDefinition = legacyNodes[0]?.type === "trigger" &&
+      legacyNodes[0].settings.event === "manual" &&
+      legacyNodes.slice(1).every((node) => node.type === "action" &&
+        ((node.settings.provider === "email" && node.settings.operation === "send_email") ||
+         (node.settings.provider === "slack" && node.settings.operation === "send_message")));
+    const autoRegistrySteps: RegisteredWorkflowStep[] | null = canBridgeLegacyDefinition
+      ? legacyNodes.map((node) => {
+          if (node.type === "trigger") {
+            return { id: node.id, nodeId: "manual", operationId: "start", kind: "trigger", input: {} };
+          }
+          const provider = node.settings.provider ?? "internal";
+          if (provider === "email") {
+            return { id: node.id, nodeId: "email", operationId: "send_email", kind: "action", input: {
+              to: node.settings.recipient ?? "",
+              subject: (node.title || "Aivanta workflow notification").slice(0, 200),
+              text: node.settings.message?.trim() || node.title,
+            } };
+          }
+          return { id: node.id, nodeId: "slack", operationId: "send_message", kind: "action", input: {
+            message: node.settings.message?.trim() || node.title,
+          } };
+        })
+      : null;
+    const hasExplicitRegistrySteps = "registrySteps" in body;
+    const registryStepsInput = hasExplicitRegistrySteps ? body.registrySteps : autoRegistrySteps;
+    const shouldSaveRegistry = hasExplicitRegistrySteps || autoRegistrySteps !== null;
+    if (shouldSaveRegistry) {
+      if (!Array.isArray(registryStepsInput) || registryStepsInput.length < 1 || registryStepsInput.length > 30) {
         return NextResponse.json({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
       }
-      const registrySteps = body.registrySteps as unknown[];
+      const registrySteps = registryStepsInput as unknown[];
       const seen = new Set<string>();
       for (const candidate of registrySteps) {
         if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
@@ -156,7 +183,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     }
     const saved = Array.isArray(data) ? data[0] : data;
     if (!saved) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    return NextResponse.json({ success: true, version: saved.saved_version, definition: validated.definition, registry: "registrySteps" in body ? { format: "aivanta-registry-v1", steps: body.registrySteps } : null });
+    return NextResponse.json({ success: true, version: saved.saved_version, definition: validated.definition, registry: shouldSaveRegistry ? { format: "aivanta-registry-v1", steps: registryStepsInput } : null });
   } catch (error) {
     console.error("Failed to save Aivanta workflow definition:", error);
     return NextResponse.json({ error: "Could not save workflow steps. Try again." }, { status: 500 });
