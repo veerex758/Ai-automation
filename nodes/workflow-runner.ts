@@ -27,13 +27,16 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
         }
         current = (current as Record<string, unknown>)[part];
       }
-      if (current === null || current === undefined) {\n        if (dryRun) return "[dry-run reference: " + path + "]";\n        throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");\n      }
+      if (current === null || current === undefined) {
+        if (dryRun) return "[dry-run reference: " + path + "]";
+        throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
+      }
       return typeof current === "string" ? current : JSON.stringify(current);
     });
   }
   if (Array.isArray(value)) return value.map((item) => resolveReferences(item, outputs, dryRun));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveReferences(item, outputs)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveReferences(item, outputs, dryRun)]));
   }
   return value;
 }
