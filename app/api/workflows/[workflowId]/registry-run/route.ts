@@ -86,7 +86,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
       for (const step of steps) {
         if (step.nodeId === "email" && step.operationId === "send_email") {
-          const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
+          const rawTo = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
+          if (!rawTo || rawTo.includes("{{")) return NextResponse.json({ error: "Live email recipients must be literal addresses on the server-configured allowlist." }, { status: 403 });
+          const to = rawTo.toLowerCase();
           if (!allowed.has(to)) return NextResponse.json({ error: "Email recipient is not on the server-configured live email allowlist." }, { status: 403 });
         }
       }
