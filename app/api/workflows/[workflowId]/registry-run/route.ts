@@ -129,7 +129,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       }).eq("id", run.id).eq("status", "running")
         .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
       if (error) throw error;
-      return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.status === "executed") }, { status: 201 });
+      return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.step_type === "action" && row.status === "executed") }, { status: 201 });
     } catch (error) {
       console.error("Failed to persist registry workflow history", error);
       await supabase.from("workflow_runs").update({
