@@ -64,8 +64,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
 
-    const stored = data.definition as { version?: unknown; nodes?: unknown } | null;
+    const stored = data.definition as { version?: unknown; nodes?: unknown; format?: unknown; steps?: unknown } | null;
     const valid = validateDefinition(stored && typeof stored === "object" ? stored : { version: 1, nodes: [] });
+    const registrySteps = stored?.format === "aivanta-registry-v1" && Array.isArray(stored.steps) ? stored.steps : null;
     const starterDefinition = {
       version: 1 as const,
       nodes: [{
@@ -79,6 +80,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     return NextResponse.json({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status },
       definition: valid.definition ?? starterDefinition,
+      registrySteps,
     });
   } catch (error) {
     console.error("Failed to load Aivanta workflow definition:", error);
