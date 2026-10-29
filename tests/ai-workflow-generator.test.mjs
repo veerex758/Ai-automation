@@ -38,13 +38,14 @@ test("preserves OpenAI-compatible endpoint, model, and Bearer auth", async () =>
   assert.equal(result.saved, false);
   assert.equal(result.executed, false);
 });
-test("uses Gemini generateContent endpoint, key auth, model, and JSON response mode", async () => {
+test("uses Gemini generateContent endpoint, API-key header, model, and JSON response mode", async () => {
   const geminiEnv = { GEMINI_API_KEY: "gemini-test-secret", AIVANTA_AI_PROVIDER: "gemini", NODE_ENV: "test" };
   const result = await generateWorkflow({
     prompt: "Make a manual workflow", env: geminiEnv,
     fetchImpl: async (url, options) => {
-      assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=gemini-test-secret");
-      assert.equal(options.headers.Authorization, undefined);
+      assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
+      assert.equal(options.headers["x-goog-api-key"], "gemini-test-secret");
+      assert.equal(url.includes("gemini-test-secret"), false);
       const request = JSON.parse(options.body);
       assert.equal(request.generationConfig.responseMimeType, "application/json");
       assert.equal(request.systemInstruction.parts[0].text.includes("workflow drafts"), true);
@@ -55,9 +56,10 @@ test("uses Gemini generateContent endpoint, key auth, model, and JSON response m
   assert.equal(result.saved, false);
   assert.equal(result.executed, false);
 });
-test("auto-selects Gemini only when it is the sole configured provider key", () => {
+test("selects Gemini when configured and supports explicitly selecting OpenAI when both keys exist", () => {
   assert.equal(getProviderConfig({ GEMINI_API_KEY: "gemini-key" }).provider, "gemini");
-  assert.equal(getProviderConfig({ GEMINI_API_KEY: "gemini-key", OPENAI_API_KEY: "openai-key" }).provider, "openai");
+  assert.equal(getProviderConfig({ GEMINI_API_KEY: "gemini-key", OPENAI_API_KEY: "openai-key" }).provider, "gemini");
+  assert.equal(getProviderConfig({ AIVANTA_AI_PROVIDER: "openai", GEMINI_API_KEY: "gemini-key", OPENAI_API_KEY: "openai-key" }).provider, "openai");
   assert.equal(getProviderConfig({ AIVANTA_AI_PROVIDER: "gemini", AIVANTA_AI_API_KEY: "generic-key" }).apiKey, "generic-key");
   assert.throws(() => getProviderConfig({ AIVANTA_AI_PROVIDER: "anthropic", GEMINI_API_KEY: "key" }), /AI_CONFIGURATION_ERROR/);
 });
