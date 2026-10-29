@@ -129,3 +129,69 @@ test("Data mapping and text formatting support nested values", async () => {
     data: { customer: { name: "Ada" }, id: 7 },
   }), { text: "Hello Ada (#7)" });
 });
+
+
+test("registry exposes secured HTTP and Utilities operations", () => {
+  assert.equal(nodes.length, 9);
+  assert.ok(findOperation("http", "request", "action"));
+  assert.ok(findOperation("utilities", "parse_json", "action"));
+  assert.ok(findOperation("utilities", "stringify_json", "action"));
+  assert.ok(findOperation("utilities", "pick_fields", "action"));
+});
+
+test("HTTP request requires exact server-side host allowlist and restricts headers", async () => {
+  const operation = findOperation("http", "request", "action");
+  assert.ok(operation);
+  let requestedUrl = "";
+  const context = {
+    credentials: { http: { allowedHosts: "api.example.com", apiKey: "server-only-test-key" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args: { url: string; method: "GET" | "POST"; headers?: Record<string, string> }) {
+      requestedUrl = args.url;
+      assert.equal(args.headers?.authorization, "Bearer server-only-test-key");
+      return { status: 200, body: { ok: true } };
+    } },
+    previousOutputs: {},
+  };
+  const result = await operation.run(context, {
+    url: "https://api.example.com/v1/items",
+    method: "GET",
+    query: { q: "hello world" },
+    auth: "bearer",
+    headers: { accept: "application/json" },
+  });
+  assert.equal(requestedUrl, "https://api.example.com/v1/items?q=hello+world");
+  assert.deepEqual(result, { status: 200, body: { ok: true } });
+  await assert.rejects(() => operation.run(context, { url: "https://example.org/", method: "GET" }), /HTTP_HOST_NOT_ALLOWLISTED/);
+  await assert.rejects(() => operation.run(context, { url: "http://api.example.com/", method: "GET" }), /HTTP_URL_NOT_ALLOWED/);
+  await assert.rejects(() => operation.run(context, { url: "https://127.0.0.1/", method: "GET" }), /HTTP_HOST_NOT_ALLOWED/);
+  await assert.rejects(() => operation.run(context, { url: "https://api.example.com/", method: "GET", headers: { authorization: "attacker-value" } }), /HTTP_HEADER_NOT_ALLOWED/);
+});
+
+test("HTTP request rejects oversized JSON bodies and GET bodies", async () => {
+  const operation = findOperation("http", "request", "action");
+  assert.ok(operation);
+  const context = {
+    credentials: { http: { allowedHosts: "api.example.com" } },
+    logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } },
+    previousOutputs: {},
+  };
+  await assert.rejects(() => operation.run(context, { url: "https://api.example.com/", method: "GET", body: { no: "body" } }), /HTTP_GET_BODY_NOT_ALLOWED/);
+  await assert.rejects(() => operation.run(context, { url: "https://api.example.com/", method: "POST", body: { data: "x".repeat(33000) } }), /HTTP_BODY_TOO_LARGE/);
+});
+
+test("Utilities parse, stringify and pick fields with explicit bounds", async () => {
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  };
+  const parse = findOperation("utilities", "parse_json", "action");
+  const stringify = findOperation("utilities", "stringify_json", "action");
+  const pick = findOperation("utilities", "pick_fields", "action");
+  assert.ok(parse && stringify && pick);
+  assert.deepEqual(await parse.run(context, { text: "{\"ok\":true}" }), { value: { ok: true } });
+  await assert.rejects(() => parse.run(context, { text: "{" }), /JSON_PARSE_FAILED/);
+  assert.deepEqual(await stringify.run(context, { value: { ok: true }, pretty: false }), { text: "{\"ok\":true}" });
+  assert.deepEqual(await pick.run(context, { data: { a: 1, b: 2 }, fields: ["b", "missing"] }), { data: { b: 2 }, missing: ["missing"] });
+});
