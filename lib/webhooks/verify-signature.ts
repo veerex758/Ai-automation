@@ -24,8 +24,8 @@ export function verifyWebhookSignature(args: {
   if (!signatureHeader) return { ok: false, reason: "missing_signature" };
   if (signatureHeader.length > MAX_SIGNATURE_HEADER_LENGTH) return { ok: false, reason: "malformed_signature" };
 
-  const timestampMatches = [...signatureHeader.matchAll(/(?:^|,)\\s*t=(\\d{1,12})(?=,|$)/g)];
-  const signatures = [...signatureHeader.matchAll(/(?:^|,)\\s*v1=([a-fA-F0-9]{64})(?=,|$)/g)].map((match) => match[1]);
+  const timestampMatches = [...signatureHeader.matchAll(/(?:^|,)\s*t=(\d{1,12})(?=,|$)/g)];
+  const signatures = [...signatureHeader.matchAll(/(?:^|,)\s*v1=([a-fA-F0-9]{64})(?=,|$)/g)].map((match) => match[1]);
   // Require one unambiguous timestamp so every layer validates the same message.
   if (timestampMatches.length !== 1 || signatures.length === 0) return { ok: false, reason: "malformed_signature" };
 
