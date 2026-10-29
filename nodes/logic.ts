@@ -92,7 +92,6 @@ export const logicNode: NodeDefinition = {
       },
     },
     {
-      id: "filter_items", name: "Filter items",    {
       id: "if_else", name: "If / Else",
       description: "Evaluates a condition and executes only the selected branch. Each branch is limited to 10 registered actions; nested If / Else and Loop nodes are rejected to keep execution bounded. Returns the selected branch and its validated step outputs.",
       inputSchema: z.object({
@@ -133,7 +132,8 @@ export const logicNode: NodeDefinition = {
         return { result, branch: result ? "then" as const : "else" as const, outputs };
       },
     },
-
+    {
+      id: "filter_items", name: "Filter items",
       description: "Filters an array of records using a dot-separated field path and a supported comparison. Returns only matching records and their count; does not mutate the input or call external services.",
       inputSchema: filterInput, outputSchema: filterOutput,
       async run(_ctx, rawInput) {
