@@ -98,7 +98,7 @@ export async function safeHttpsRequest(args: {
       port: 443,
       path: url.pathname + url.search,
       method: args.method,
-      headers: args.headers,
+      headers: { "accept-encoding": "identity", ...(args.headers ?? {}) },
       lookup: pinnedLookup,
       servername: hostname,
       timeout: timeoutMs,
