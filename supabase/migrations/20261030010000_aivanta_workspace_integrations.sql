@@ -32,10 +32,43 @@ create policy "workspace members can read integration metadata"
   on public.workspace_integrations for select to authenticated
   using (private.is_workspace_member(workspace_id));
 
-create policy "workspace owners can manage integration metadata"
-  on public.workspace_integrations for all to authenticated
-  using (private.is_workspace_owner(workspace_id))
-  with check (private.is_workspace_owner(workspace_id) and created_by = (select auth.uid()));
+create policy "workspace owners and admins can add integration metadata"
+  on public.workspace_integrations for insert to authenticated
+  with check (
+    (private.is_workspace_owner(workspace_id) or exists (
+      select 1 from public.workspace_members wm
+      where wm.workspace_id = workspace_integrations.workspace_id
+        and wm.user_id = (select auth.uid()) and wm.role = 'admin'
+    ))
+    and created_by = (select auth.uid())
+  );
+
+create policy "workspace owners and admins can update integration metadata"
+  on public.workspace_integrations for update to authenticated
+  using (
+    private.is_workspace_owner(workspace_id) or exists (
+      select 1 from public.workspace_members wm
+      where wm.workspace_id = workspace_integrations.workspace_id
+        and wm.user_id = (select auth.uid()) and wm.role = 'admin'
+    )
+  )
+  with check (
+    private.is_workspace_owner(workspace_id) or exists (
+      select 1 from public.workspace_members wm
+      where wm.workspace_id = workspace_integrations.workspace_id
+        and wm.user_id = (select auth.uid()) and wm.role = 'admin'
+    )
+  );
+
+create policy "workspace owners and admins can delete integration metadata"
+  on public.workspace_integrations for delete to authenticated
+  using (
+    private.is_workspace_owner(workspace_id) or exists (
+      select 1 from public.workspace_members wm
+      where wm.workspace_id = workspace_integrations.workspace_id
+        and wm.user_id = (select auth.uid()) and wm.role = 'admin'
+    )
+  );
 
 revoke all on public.workspace_integrations from anon;
 revoke all on public.workspace_integration_secrets from public, anon, authenticated;
