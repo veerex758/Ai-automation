@@ -27,7 +27,7 @@ test("webhook ingress claims event IDs atomically and rejects changed-payload re
   assert.match(migration, /unique \(endpoint_id, event_id\)/);
   assert.match(migration, /on conflict \(endpoint_id, event_id\) do nothing/i);
   assert.match(source, /rpc\("claim_webhook_event"/);
-  assert.match(source, /prior\.payload_sha256 !== payloadSha256/);
+  assert.match(source, /prior\.payload_sha256 !== payloadSha256 \|\| prior\.event_type !== eventType/);
   assert.match(source, /duplicate: true/);
 });
 
