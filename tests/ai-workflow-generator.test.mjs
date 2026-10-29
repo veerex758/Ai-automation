@@ -20,10 +20,10 @@ test("rejects empty and oversized prompts before calling provider", async () => 
 test("requires server-side AI credentials", async () => {
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: {} }), /AI_NOT_CONFIGURED/);
 });
-test("defaults to Gemini OpenAI-compatible endpoint and Flash model", async () => {
+test("defaults to Gemini endpoint and accepts GEMINI_API_KEY", async () => {
   let requestedUrl = "";
   let requestBody;
-  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_API_KEY: "test-secret", NODE_ENV: "test" }, fetchImpl: async (url, options) => {
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { GEMINI_API_KEY: "test-secret", NODE_ENV: "test" }, fetchImpl: async (url, options) => {
     requestedUrl = url;
     requestBody = JSON.parse(options.body);
     return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
