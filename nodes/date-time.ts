@@ -18,7 +18,7 @@ const output = z.object({ value: z.string(), epochMs: z.number().finite() }).str
 
 function epoch(value: string | number): number {
   const parsed = typeof value === "number" ? value : Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new Error("DATETIME_INVALID_TIMESTAMP");
+  if (!Number.isFinite(parsed) || Number.isNaN(new Date(parsed).getTime())) throw new Error("DATETIME_INVALID_TIMESTAMP");
   return parsed;
 }
 
