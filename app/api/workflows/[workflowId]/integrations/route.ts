@@ -126,13 +126,13 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
     if (existing?.id) {
       integrationId = existing.id;
       const { error } = await auth.userClient.from("workspace_integrations").update({
-        status: "connected", display_name: validated.displayName, metadata: validated.metadata,
+        status: "needs_attention", display_name: validated.displayName, metadata: validated.metadata,
         last_test_status: null, last_tested_at: null,
       }).eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id);
       if (error) throw error;
     } else {
       const { data, error } = await auth.userClient.from("workspace_integrations").insert({
-        workspace_id: auth.workflow.workspace_id, provider, status: "connected", display_name: validated.displayName,
+        workspace_id: auth.workflow.workspace_id, provider, status: "needs_attention", display_name: validated.displayName,
         metadata: validated.metadata, created_by: auth.user.id,
       }).select("id").single();
       if (error) throw error;
@@ -142,7 +142,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
       integration_id: integrationId, encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
     }, { onConflict: "integration_id" });
     if (secretError) throw secretError;
-    return NextResponse.json({ connected: true, provider, displayName: validated.displayName, secretReturned: false }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ connected: true, provider, displayName: validated.displayName, tested: false, secretReturned: false }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     const status = code === "CONNECTION_FIELDS_INVALID" || code === "CONNECTION_SENDER_INVALID" || code === "CONNECTION_WEBHOOK_INVALID" || code === "CONNECTION_HOST_INVALID" ? 400 :
