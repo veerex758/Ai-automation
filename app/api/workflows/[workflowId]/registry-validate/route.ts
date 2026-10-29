@@ -83,6 +83,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       for (const match of serialized.matchAll(referencePattern)) {
         const referencePath = match[1];
         const sourceId = referencePath.split(".")[0];
+        if (step.nodeId === "loop" && (sourceId === "item" || sourceId === "index")) continue;
         const sourceIndex = seen.get(sourceId);
         if (sourceIndex === undefined || sourceIndex >= index) {
           issues.push({ stepId: step.id, code: "REFERENCE_ORDER", message: `Data reference {{${referencePath}}} must point to an earlier step.` });
