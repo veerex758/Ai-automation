@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
+import { isUnsafeAddress } from "../lib/workflows/safe-http-transport";
 
 test("registry includes versioned webhook, OpenAI, Slack, Email, Logic, Data, HTTP and Utilities operations", () => {
   assert.equal(nodes.length, 11);
@@ -241,4 +242,17 @@ test("Loop / Iterate executes bounded registered actions for each input record",
     items: Array.from({ length: 101 }, (_, index) => index),
     steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: { left: 1, operator: "equals", right: 1 } }],
   }), /Too big|maximum/i);
+});
+
+
+test("HTTP transport rejects private, loopback, link-local, reserved and mapped IPv6 addresses", () => {
+  for (const address of [
+    "127.0.0.1", "10.0.0.5", "172.16.0.1", "192.168.1.2", "169.254.169.254",
+    "100.64.0.1", "198.18.0.1", "203.0.113.8", "224.0.0.1",
+    "::", "::1", "fc00::1", "fd12::1", "fe80::1", "ff02::1",
+    "::ffff:127.0.0.1", "::ffff:7f00:1", "64:ff9b::7f00:1", "2002:7f00:1::1",
+  ]) assert.equal(isUnsafeAddress(address), true, address);
+  for (const address of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) {
+    assert.equal(isUnsafeAddress(address), false, address);
+  }
 });
