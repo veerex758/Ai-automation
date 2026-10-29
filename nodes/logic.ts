@@ -51,7 +51,7 @@ const nestedStepSchema = z.object({
 
 function resolveBranchReferences(value: unknown, outputs: Readonly<Record<string, unknown>>): unknown {
   if (typeof value === "string") {
-    const exact = value.match(/^\\{\\{([a-zA-Z0-9_-]{1,64})(?:\\.([a-zA-Z0-9_.-]{1,200}))?\\}\\}$/);
+    const exact = value.match(/^\{\{([a-zA-Z0-9_-]{1,64})(?:\.([a-zA-Z0-9_.-]{1,200}))?\}\}$/);
     const lookup = (path: string): unknown => {
       const [stepId, ...parts] = path.split(".");
       let current: unknown = outputs[stepId];
@@ -67,7 +67,7 @@ function resolveBranchReferences(value: unknown, outputs: Readonly<Record<string
       if (resolved === undefined) throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
       return resolved;
     }
-    return value.replace(/\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}/g, (match, path: string) => {
+    return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (match, path: string) => {
       const resolved = lookup(path);
       if (resolved === undefined || resolved === null) return match;
       return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
