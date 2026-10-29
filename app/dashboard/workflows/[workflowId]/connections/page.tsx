@@ -65,7 +65,7 @@ export default function WorkflowConnectionsPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not connect provider.");
       setApiKey(""); setFromEmail(""); setWebhookUrl(""); setHost("");
-      setNotice(`${providerNames[provider]} connected securely. Run the connection test before using it in a live workflow.`);
+      setNotice(`${providerNames[provider]} saved securely but is not active yet. Run the connection test to enable it for workflow execution.`);
       await load();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not connect provider."); }
     finally { setSaving(false); }
