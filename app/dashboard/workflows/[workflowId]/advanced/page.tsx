@@ -130,6 +130,7 @@ export default function RegistryBuilderPage() {
       <Link className="workflow-side-brand" href="/"><span><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
       <div className="workflow-side-label">WORKSPACE</div>
       <Link className="workflow-side-link active" href={`/dashboard/workflows/${workflowId}`}>← Visual workflow</Link>
+      <Link className="workflow-side-link" href={`/dashboard/workflows/${workflowId}/connections`}>App connections</Link>
       <Link className="workflow-side-link" href="/dashboard">Dashboard</Link>
       <div className="workflow-side-bottom"><strong>Advanced nodes</strong><small>Registry-backed workflow steps</small></div>
     </aside>
