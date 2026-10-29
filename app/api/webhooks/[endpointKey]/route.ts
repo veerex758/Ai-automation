@@ -181,6 +181,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       (step.kind === "trigger" && !(step.nodeId === "webhooks" && step.operationId === "receive_event")) ||
       (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email")));
     if (unsupportedLiveStep) return jsonError("This workflow contains an action that is not enabled for live webhook execution.", 403);
+    if (steps.some((step) => step.kind === "action") && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
+      return jsonError("Live workflow execution is disabled by the server.", 503);
+    }
     const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
       .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
     for (const step of steps) {
