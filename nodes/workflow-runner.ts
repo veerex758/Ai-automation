@@ -29,7 +29,7 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
   };
 
   if (typeof value === "string") {
-    const exact = value.match(/^\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}$/);
+    const exact = value.match(/^\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}$/);
     if (exact) {
       const resolved = lookup(exact[1]);
       if (resolved === undefined || resolved === null) {
@@ -38,7 +38,7 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
       }
       return resolved;
     }
-    return value.replace(/\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}/g, (_match, path: string) => {
+    return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (_match, path: string) => {
       const current = lookup(path);
       if (current === undefined || current === null) {
         if (dryRun) return "[dry-run reference: " + path + "]";
