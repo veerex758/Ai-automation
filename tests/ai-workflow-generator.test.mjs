@@ -20,6 +20,17 @@ test("rejects empty and oversized prompts before calling provider", async () => 
 test("requires server-side AI credentials", async () => {
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: {} }), /AI_NOT_CONFIGURED/);
 });
+test("defaults to Gemini OpenAI-compatible endpoint and Flash model", async () => {
+  let requestedUrl = "";
+  let requestBody;
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_API_KEY: "test-secret", NODE_ENV: "test" }, fetchImpl: async (url, options) => {
+    requestedUrl = url;
+    requestBody = JSON.parse(options.body);
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  } });
+  assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(requestBody.model, "gemini-2.5-flash");
+});
 test("accepts a provider response only after schema validation", async () => {
   const result = await generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) });
   assert.equal(result.definition.nodes[0].settings.event, "manual");
