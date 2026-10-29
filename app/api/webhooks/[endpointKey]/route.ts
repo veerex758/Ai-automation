@@ -252,7 +252,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       status: step.status === "succeeded" ? "executed" : step.status,
       result: step.status === "failed"
         ? { error: step.error }
-        : step.status === "succeeded" ? (step.output ?? {}) : { message: step.error ?? "Step skipped." },
+        : step.status === "succeeded" && executionSteps[index]?.kind === "trigger"
+          ? { eventId, eventType, receivedAt: eventInput.receivedAt, payloadSha256 }
+          : step.status === "succeeded" ? (step.output ?? {}) : { message: step.error ?? "Step skipped." },
     }));
     const finalStatus = execution.status === "succeeded" ? "succeeded" : "failed";
     const { error: stepsError } = await db.from("workflow_run_steps").insert(rows);
