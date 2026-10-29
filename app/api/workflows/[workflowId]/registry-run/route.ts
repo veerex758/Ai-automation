@@ -3,24 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
 import { safeHttpsRequest } from "@/lib/workflows/safe-http-transport";
+import { loadWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
-function serverContext(): Omit<NodeContext, "previousOutputs"> {
-  const credentials: Record<string, Record<string, string>> = {};
-  if (process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
-  if (process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
-    credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
-  }
-  if (process.env.AIVANTA_HTTP_ALLOWED_HOSTS) {
-    credentials.http = {
-      allowedHosts: process.env.AIVANTA_HTTP_ALLOWED_HOSTS,
-      apiKeys: process.env.AIVANTA_HTTP_API_KEYS ?? "{}",
-    };
-  }
+async function serverContext(workspaceId: string): Promise<Omit<NodeContext, "previousOutputs">> {
+  const credentials = await loadWorkspaceCredentials(workspaceId);
   return {
     credentials,
     logger: {
@@ -113,8 +103,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
     // -> finalized lifecycle so step inserts remain auditable before completion.
+    const executionContext: Omit<NodeContext, "previousOutputs"> = dryRun
+      ? {
+          credentials: {},
+          logger: {
+            info(message, meta) { console.info("[registry-node]", message, meta ?? {}); },
+            error(message, meta) { console.error("[registry-node]", message, meta ?? {}); },
+          },
+          http: { async request() { throw new Error("DRY_RUN_NETWORK_BLOCKED"); } },
+        }
+      : await serverContext(workflow.workspace_id);
     const dryRunExecution = dryRun
-      ? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: true })
+      ? await executeRegisteredWorkflow({ steps, context: executionContext, dryRun: true })
       : null;
     const initialStatus = dryRunExecution
       ? (dryRunExecution.status === "succeeded" ? "succeeded" : "failed")
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
     if (insertError) throw insertError;
 
-    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: false });
+    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: executionContext, dryRun: false });
     const rows = execution.steps.map((step, index) => ({
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
