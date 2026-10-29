@@ -34,6 +34,41 @@ function inputExample(nodeId: string, operationId: string): string {
   return "{}";
 }
 
+function parseCurlImport(command: string): { input: Record<string, unknown>; warning: string } {
+  const tokens = [...command.matchAll(/"((?:\\.|[^"])*)"|'((?:\\.|[^'])*)'|(\\S+)/g)]
+    .map((match) => (match[1] ?? match[2] ?? match[3] ?? "").replace(/\\\\(["'\\\\])/g, "$1"));
+  if (!tokens.length || tokens[0] !== "curl") throw new Error("Paste a curl command beginning with curl.");
+  let method = "GET";
+  let url = "";
+  let body: string | undefined;
+  let auth: "none" | "bearer" | "apiKey" = "none";
+  const headers: Record<string, string> = {};
+  let warning = "";
+  for (let i = 1; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === "-X" || token === "--request") { method = (tokens[++i] ?? "GET").toUpperCase(); continue; }
+    if (token === "-H" || token === "--header") {
+      const header = tokens[++i] ?? "";
+      const split = header.indexOf(":");
+      if (split > 0) {
+        const name = header.slice(0, split).trim();
+        const value = header.slice(split + 1).trim();
+        if (name.toLowerCase() === "authorization") {
+          auth = /^bearer\\s/i.test(value) ? "bearer" : "none";
+          warning = "Imported Authorization header value was discarded. Select a saved workspace connection; secrets are never imported from cURL.";
+        } else if (!["host", "cookie", "proxy-authorization", "content-length"].includes(name.toLowerCase())) headers[name] = value;
+      }
+      continue;
+    }
+    if (["-d", "--data", "--data-raw", "--data-binary"].includes(token)) { body = tokens[++i] ?? ""; if (method === "GET") method = "POST"; continue; }
+    if (token === "--url") { url = tokens[++i] ?? ""; continue; }
+    if (token.startsWith("http://") || token.startsWith("https://")) url = token;
+  }
+  if (!url) throw new Error("Could not find a URL in that cURL command.");
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) throw new Error("Only GET, POST, PUT, PATCH, and DELETE are supported.");
+  return { input: { url, method, auth, headers, ...(body !== undefined ? { body } : {}) }, warning };
+}
+
 export default function RegistryBuilderPage() {
   const params = useParams<{ workflowId: string }>();
   const workflowId = params.workflowId;
@@ -53,6 +88,7 @@ export default function RegistryBuilderPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
+  const [curlText, setCurlText] = useState("");
 
   const selected = steps.find((step) => step.id === selectedId) ?? steps[0] ?? null;
   const dirty = JSON.stringify(steps) !== savedFingerprint;
@@ -181,6 +217,30 @@ export default function RegistryBuilderPage() {
     finally { setTesting(false); }
   }
 
+  function updateHttpConfig(key: string, value: unknown) {
+    if (!selected || selected.nodeId !== "http") return;
+    const current = selected.input && typeof selected.input === "object" && !Array.isArray(selected.input)
+      ? selected.input as Record<string, unknown> : {};
+    const next = { ...current, [key]: value };
+    updateStep(selected.id, { input: next });
+    setInputText(JSON.stringify(next, null, 2));
+    setError("");
+  }
+
+  function importCurl() {
+    try {
+      const parsed = parseCurlImport(curlText);
+      if (!selected || selected.nodeId !== "http") throw new Error("Select an HTTP Request node before importing cURL.");
+      updateStep(selected.id, { input: parsed.input });
+      setInputText(JSON.stringify(parsed.input, null, 2));
+      setCurlText("");
+      setNotice(parsed.warning || "Imported common cURL options into the HTTP Request draft. Review the URL and saved connection before testing.");
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not import cURL command.");
+    }
+  }
+
   if (loading) return <main className="builder-loading">Loading advanced node builder…</main>;
   if (error && !catalog.length) return <main className="builder-error"><h1>Couldn’t open advanced builder</h1><p>{error}</p><Link href={`/dashboard/workflows/${workflowId}`}>Back to workflow</Link></main>;
 
@@ -272,12 +332,41 @@ export default function RegistryBuilderPage() {
             <select id="registry-node" value={selected.nodeId + "." + selected.operationId} disabled={selected.kind === "trigger"} onChange={(event) => { const [nodeId, operationId] = event.target.value.split("."); changeOperation(selected.id, nodeId, operationId); }}>
               {catalog.flatMap((node) => node.actions.map((operation) => <option key={node.id + "." + operation.id} value={node.id + "." + operation.id}>{node.name} · {operation.name}</option>))}
             </select>
-            <label htmlFor="registry-input">Input JSON</label>
-            <textarea id="registry-input" rows={18} spellCheck={false} value={inputText} onChange={(event) => {
-              setInputText(event.target.value);
-              try { updateStep(selected.id, { input: JSON.parse(event.target.value) as unknown }); setError(""); }
-              catch { setError("Input JSON is incomplete or invalid. Finish the JSON before saving."); }
-            }} />
+            {selected.nodeId === "http" ? <>
+              <label htmlFor="http-method">Method</label>
+              <select id="http-method" value={String((selected.input as Record<string, unknown>)?.method ?? "GET")} onChange={(event) => updateHttpConfig("method", event.target.value)}>
+                {["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => <option key={method}>{method}</option>)}
+              </select>
+              <label htmlFor="http-url">HTTPS URL</label>
+              <input id="http-url" value={String((selected.input as Record<string, unknown>)?.url ?? "")} onChange={(event) => updateHttpConfig("url", event.target.value)} placeholder="https://api.example.com/v1/leads/{{ $json.email }}" />
+              <label htmlFor="http-auth">Authentication</label>
+              <select id="http-auth" value={String((selected.input as Record<string, unknown>)?.auth ?? "none")} onChange={(event) => updateHttpConfig("auth", event.target.value)}>
+                <option value="none">No authentication</option><option value="bearer">Saved API key as Bearer</option><option value="apiKey">Saved API key in custom header</option>
+              </select>
+              <label htmlFor="http-headers">Headers (JSON)</label>
+              <textarea id="http-headers" rows={4} spellCheck={false} value={JSON.stringify((selected.input as Record<string, unknown>)?.headers ?? {}, null, 2)} onChange={(event) => { try { const value = JSON.parse(event.target.value); if (value && typeof value === "object" && !Array.isArray(value)) updateHttpConfig("headers", value); } catch { /* preserve editor until valid JSON */ } }} />
+              <label htmlFor="http-query">Query parameters (JSON)</label>
+              <textarea id="http-query" rows={3} spellCheck={false} value={JSON.stringify((selected.input as Record<string, unknown>)?.query ?? {}, null, 2)} onChange={(event) => { try { const value = JSON.parse(event.target.value); if (value && typeof value === "object" && !Array.isArray(value)) updateHttpConfig("query", value); } catch { /* preserve editor until valid JSON */ } }} />
+              <label htmlFor="http-body">JSON body template</label>
+              <textarea id="http-body" rows={6} spellCheck={false} value={String((selected.input as Record<string, unknown>)?.body ?? "")} onChange={(event) => updateHttpConfig("body", event.target.value)} placeholder={'{"email":"{{ $json.email }}"}'} />
+              <label htmlFor="http-curl">Import cURL (common options)</label>
+              <textarea id="http-curl" rows={4} value={curlText} onChange={(event) => setCurlText(event.target.value)} placeholder="curl -X POST https://api.example.com/leads -H 'Content-Type: application/json' -d '{...}'" />
+              <button type="button" className="builder-validate" disabled={!curlText.trim()} onClick={importCurl}>Import cURL</button>
+              <button type="button" className="builder-validate" disabled={validating || saving || testing} onClick={() => void validateSetup()}>Test step (safe validation)</button>
+              <p className="config-note">Variables use {{ $json.field }} from the previous node. Import supports common cURL flags; imported authorization secrets are discarded. Test step validates only and never sends a request.</p>
+              <details><summary>Advanced JSON configuration</summary><textarea id="registry-input" rows={12} spellCheck={false} value={inputText} onChange={(event) => {
+                setInputText(event.target.value);
+                try { updateStep(selected.id, { input: JSON.parse(event.target.value) as unknown }); setError(""); }
+                catch { setError("Input JSON is incomplete or invalid. Finish the JSON before saving."); }
+              }} /></details>
+            </> : <>
+              <label htmlFor="registry-input">Input JSON</label>
+              <textarea id="registry-input" rows={18} spellCheck={false} value={inputText} onChange={(event) => {
+                setInputText(event.target.value);
+                try { updateStep(selected.id, { input: JSON.parse(event.target.value) as unknown }); setError(""); }
+                catch { setError("Input JSON is incomplete or invalid. Finish the JSON before saving."); }
+              }} />
+            </>}
             {selected.kind !== "trigger" && <button className="remove-step" type="button" onClick={() => { setSteps((current) => current.filter((step) => step.id !== selected.id)); setSelectedId(steps.find((step) => step.id !== selected.id)?.id ?? ""); setInputText(JSON.stringify(steps.find((step) => step.id !== selected.id)?.input ?? {}, null, 2)); setRun(null); }}>Remove node</button>}
             <div className="config-note">HTTP requests are allowlist-only and live execution remains guarded. Date & Time and Loop actions are available to the registry runner; safe previews never perform provider side effects.</div>
           </div>}
