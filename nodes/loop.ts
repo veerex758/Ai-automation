@@ -73,6 +73,9 @@ export const loopNode: NodeDefinition = {
         seen.add(step.id);
         const operation = findOperation(step.nodeId, step.operationId, "action");
         if (!operation) throw new Error("LOOP_OPERATION_NOT_FOUND");
+        if (!["logic", "data", "utilities", "date_time"].includes(step.nodeId)) {
+          throw new Error("LOOP_OPERATION_NOT_ALLOWED");
+        }
         if (step.nodeId === "loop") throw new Error("LOOP_NESTING_NOT_SUPPORTED");
         if (!operation.inputSchema.safeParse(step.input).success &&
             !JSON.stringify(step.input).includes("{{")) {
