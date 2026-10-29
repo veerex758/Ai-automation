@@ -102,7 +102,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     if (!body || typeof body !== "object" || !("definition" in body)) {
       return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
     }
-    const validated = validateDefinition(body.definition);
+    const requestBody = body as Record<string, unknown>;
+    const validated = validateDefinition(requestBody.definition);
     if (!validated.definition) return NextResponse.json({ error: validated.error }, { status: 400 });
 
     // Keep the existing version-1 nodes contract for the builder and database RPC,
@@ -133,8 +134,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
           } };
         })
       : null;
-    const hasExplicitRegistrySteps = "registrySteps" in body;
-    const registryStepsInput = hasExplicitRegistrySteps ? body.registrySteps : autoRegistrySteps;
+    const hasExplicitRegistrySteps = Object.prototype.hasOwnProperty.call(requestBody, "registrySteps");
+    const registryStepsInput = hasExplicitRegistrySteps ? requestBody.registrySteps : autoRegistrySteps;
     const shouldSaveRegistry = hasExplicitRegistrySteps || autoRegistrySteps !== null;
     if (shouldSaveRegistry) {
       if (!Array.isArray(registryStepsInput) || registryStepsInput.length < 1 || registryStepsInput.length > 30) {
