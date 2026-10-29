@@ -6,7 +6,7 @@ import type { LookupFunction } from "node:dns";
 const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024;
 
-function isUnsafeAddress(address: string): boolean {
+export function isUnsafeAddress(address: string): boolean {
   const family = isIP(address);
   if (family === 4) {
     const octets = address.split(".").map(Number);
