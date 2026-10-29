@@ -17,22 +17,35 @@ export type RegisteredStepResult = {
 };
 
 function resolveReferences(value: unknown, outputs: Readonly<Record<string, unknown>>, dryRun = false): unknown {
+  const lookup = (path: string): unknown => {
+    const [stepId, ...parts] = path.split(".");
+    let current: unknown = outputs[stepId];
+    for (const part of parts) {
+      if (!current || typeof current !== "object" || Array.isArray(current) ||
+          !Object.prototype.hasOwnProperty.call(current, part)) return undefined;
+      current = (current as Record<string, unknown>)[part];
+    }
+    return current;
+  };
+
   if (typeof value === "string") {
-    return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (_match, path: string) => {
-      const [stepId, ...parts] = path.split(".");
-      let current: unknown = outputs[stepId];
-      for (const part of parts) {
-        if (!current || typeof current !== "object" || Array.isArray(current) || !Object.prototype.hasOwnProperty.call(current, part)) {
-          if (dryRun) return "[dry-run reference: " + path + "]";
-          throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
-        }
-        current = (current as Record<string, unknown>)[part];
+    const exact = value.match(/^\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}$/);
+    if (exact) {
+      const resolved = lookup(exact[1]);
+      if (resolved === undefined || resolved === null) {
+        if (dryRun) return "[dry-run reference: " + exact[1] + "]";
+        throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
       }
-      if (current === null || current === undefined) {
+      return resolved;
+    }
+    return value.replace(/\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}/g, (_match, path: string) => {
+      const current = lookup(path);
+      if (current === undefined || current === null) {
         if (dryRun) return "[dry-run reference: " + path + "]";
         throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
       }
-      return typeof current === "string" ? current : JSON.stringify(current);
+      if (typeof current === "string") return current;
+      return JSON.stringify(current) ?? "";
     });
   }
   if (Array.isArray(value)) return value.map((item) => resolveReferences(item, outputs, dryRun));
