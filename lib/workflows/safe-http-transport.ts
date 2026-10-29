@@ -23,9 +23,18 @@ function isUnsafeAddress(address: string): boolean {
   if (family === 6) {
     const value = address.toLowerCase().split("%")[0];
     if (value === "::" || value === "::1" || value.startsWith("fc") || value.startsWith("fd") ||
-        /^fe[89ab]/.test(value) || value.startsWith("ff") || value.startsWith("2001:db8:")) return true;
-    const mapped = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    return mapped ? isUnsafeAddress(mapped[1]) : false;
+        /^fe[89ab]/.test(value) || value.startsWith("ff") || value.startsWith("2001:db8:") ||
+        value.startsWith("2002:") || value.startsWith("2001:0:") ||
+        value.startsWith("64:ff9b:") || value.startsWith("64:ff9b::")) return true;
+    const mappedDotted = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mappedDotted) return isUnsafeAddress(mappedDotted[1]);
+    const mappedHex = value.match(/::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (mappedHex) {
+      const high = Number.parseInt(mappedHex[1], 16);
+      const low = Number.parseInt(mappedHex[2], 16);
+      return isUnsafeAddress([high >> 8, high & 255, low >> 8, low & 255].join("."));
+    }
+    return false;
   }
   return true;
 }
