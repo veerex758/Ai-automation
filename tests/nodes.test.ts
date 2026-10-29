@@ -144,6 +144,28 @@ test("registry exposes secured HTTP and Utilities operations", () => {
   assert.ok(findOperation("loop", "for_each", "action"));
 });
 
+test("Data nodes deduplicate, sort, and aggregate without coercion", async () => {
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  };
+  const dedupe = findOperation("data", "deduplicate_items", "action");
+  const sort = findOperation("data", "sort_items", "action");
+  const aggregate = findOperation("data", "aggregate_numbers", "action");
+  assert.ok(dedupe && sort && aggregate);
+  assert.deepEqual(dedupe.outputSchema.parse(await dedupe.run(context, {
+    items: [{ id: 1, name: "Ada" }, { id: 1, name: "Ada" }, { id: 2, name: "Lin" }],
+    key: "id",
+  })), { items: [{ id: 1, name: "Ada" }, { id: 2, name: "Lin" }], count: 2, removed: 1 });
+  assert.deepEqual(sort.outputSchema.parse(await sort.run(context, {
+    items: [{ score: 9 }, { score: 2 }, { score: 5 }], key: "score",
+  })), { items: [{ score: 2 }, { score: 5 }, { score: 9 }], count: 3 });
+  assert.deepEqual(aggregate.outputSchema.parse(await aggregate.run(context, { values: [2, 4, 6] })), {
+    count: 3, sum: 12, average: 4, min: 2, max: 6,
+  });
+  await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /Expected number/);
+});
+
 test("HTTP request requires exact server-side host allowlist and restricts headers", async () => {
   const operation = findOperation("http", "request", "action");
   assert.ok(operation);
