@@ -72,11 +72,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
     }
     if (!dryRun) {
-      // Until each provider has its own workspace-scoped connection and explicit live-action gate,
-      // keep production execution restricted to the existing guarded Resend email action.
+      // Manual start and side-effect-free internal nodes are always eligible for a live run.
+      // Every provider action needs an explicit server-side allowlist entry in addition to
+      // workflow activation and AIVANTA_LIVE_EXECUTION_ENABLED=true.
+      const internalActions = new Set(["logic", "data", "utilities", "date_time", "loop"]);
+      const enabledActions = new Set((process.env.AIVANTA_LIVE_ENABLED_ACTIONS ?? "email.send_email")
+        .split(",").map((item) => item.trim()).filter(Boolean));
       const unsupportedLiveStep = steps.find((step) =>
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
-        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email"))
+        (step.kind === "action" && !internalActions.has(step.nodeId) && !enabledActions.has(step.nodeId + "." + step.operationId))
       );
       if (unsupportedLiveStep) {
         return NextResponse.json({ error: "This registry operation is available in dry-run only until its live integration is explicitly enabled." }, { status: 403 });
@@ -153,7 +157,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         if (error) throw error;
         finalized = data;
       }
-      return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.step_type === "action" && row.status === "executed") }, { status: 201 });
+      const executedSteps = execution.steps.filter((step) => step.status === "succeeded");
+      const externalCallsPerformed = !dryRun && executedSteps.some((step) => {
+        const definition = steps.find((candidate) => candidate.id === step.stepId);
+        return Boolean(definition && ["openai", "gemini", "email", "slack", "http"].includes(definition.nodeId));
+      });
+      const sideEffectsPerformed = !dryRun && executedSteps.some((step) => {
+        const definition = steps.find((candidate) => candidate.id === step.stepId);
+        if (!definition) return false;
+        if (definition.nodeId === "email" || definition.nodeId === "slack") return true;
+        if (definition.nodeId === "http" && isRecord(definition.input)) return definition.input.method === "POST";
+        return false;
+      });
+      return NextResponse.json({ run: finalized, steps: rows, externalCallsPerformed, sideEffectsPerformed }, { status: 201 });
     } catch (error) {
       console.error("Failed to persist registry workflow history", error);
       if (!dryRun) {
