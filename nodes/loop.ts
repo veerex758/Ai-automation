@@ -26,20 +26,27 @@ const outputSchema = z.object({
   }).strict()),
 }).strict();
 
+function getItemReference(root: string, path: string | undefined, item: unknown, index: number, outputs: Record<string, unknown>): unknown {
+  let current: unknown = root === "index" ? index : root === "item" ? item : outputs[root];
+  if (path) {
+    for (const segment of path.split(".")) {
+      if (!current || typeof current !== "object" || Array.isArray(current) ||
+          !Object.prototype.hasOwnProperty.call(current, segment)) return undefined;
+      current = (current as Record<string, unknown>)[segment];
+    }
+  }
+  return current;
+}
+
 function resolveItemReferences(value: unknown, item: unknown, index: number, outputs: Record<string, unknown>): unknown {
   if (typeof value === "string") {
+    const exact = value.match(/^\{\{(item|index|[a-zA-Z0-9_-]{1,64})(?:\.([a-zA-Z0-9_.-]{1,200}))?\}\}$/);
+    if (exact) {
+      const resolved = getItemReference(exact[1], exact[2], item, index, outputs);
+      return resolved === undefined ? value : resolved;
+    }
     return value.replace(/\{\{(item|index|[a-zA-Z0-9_-]{1,64})(?:\.([a-zA-Z0-9_.-]{1,200}))?\}\}/g, (match, root: string, path?: string) => {
-      let current: unknown;
-      if (root === "index") current = index;
-      else if (root === "item") current = item;
-      else current = outputs[root];
-      if (path) {
-        for (const segment of path.split(".")) {
-          if (!current || typeof current !== "object" || Array.isArray(current) ||
-              !Object.prototype.hasOwnProperty.call(current, segment)) return match;
-          current = (current as Record<string, unknown>)[segment];
-        }
-      }
+      const current = getItemReference(root, path, item, index, outputs);
       if (current === undefined || current === null) return match;
       return typeof current === "string" ? current : JSON.stringify(current);
     });
