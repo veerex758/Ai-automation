@@ -95,7 +95,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         eventIdHeader: "X-Aivanta-Event-Id",
         eventTypeHeader: "X-Aivanta-Event-Type",
       },
-    }, { status: 201 });
+    }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[webhook-provisioning] failed", {
       code: error instanceof Error ? error.message : "WEBHOOK_PROVISIONING_FAILED",
