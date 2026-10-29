@@ -102,7 +102,7 @@ export const dataNode: NodeDefinition = {
             else if (typeof left === "number" && typeof right === "number") order = left < right ? -1 : 1;
             else if (typeof left === "string" && typeof right === "string") order = left.localeCompare(right);
             else if (typeof left === "boolean" && typeof right === "boolean") order = left === right ? 0 : left ? 1 : -1;
-            else order = JSON.stringify(left).localeCompare(JSON.stringify(right));
+            else order = (JSON.stringify(left) ?? String(left)).localeCompare(JSON.stringify(right) ?? String(right));
             return order === 0 ? a.index - b.index : order * sign;
           }).map(({ item }) => item);
         return { items, count: items.length };
