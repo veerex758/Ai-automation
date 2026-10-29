@@ -66,3 +66,26 @@ test("rejects ambiguous signature headers with multiple timestamps", () => {
     rawBody: body, signatureHeader, secret: "test-secret", nowSeconds: timestamp,
   }), { ok: false, reason: "malformed_signature" });
 });
+
+
+test("binds event ID and type metadata into the signed message", () => {
+  const body = '{"leadId":"lead_1"}';
+  const timestamp = 1_800_000_000;
+  const secret = "test-secret";
+  const signedMetadata = JSON.stringify(["evt_1", "lead.created"]);
+  const digest = createHmac("sha256", secret)
+    .update(timestamp + "." + signedMetadata + "." + body)
+    .digest("hex");
+  const signatureHeader = "t=" + timestamp + ",v1=" + digest;
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody: body, signatureHeader, secret, nowSeconds: timestamp, signedMetadata,
+  }), { ok: true, timestamp });
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody: body, signatureHeader, secret, nowSeconds: timestamp,
+    signedMetadata: JSON.stringify(["evt_2", "lead.created"]),
+  }), { ok: false, reason: "signature_mismatch" });
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody: body, signatureHeader, secret, nowSeconds: timestamp,
+    signedMetadata: JSON.stringify(["evt_1", "lead.updated"]),
+  }), { ok: false, reason: "signature_mismatch" });
+});
