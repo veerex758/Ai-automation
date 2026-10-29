@@ -17,14 +17,17 @@ test("registry includes versioned webhook, OpenAI, Slack, Email, Logic, Data, HT
   assert.ok(findOperation("data", "format_text", "action"));
 });
 
-test("manual trigger accepts the legacy builder's manual start event", async () => {
+test("manual trigger accepts empty input and preserves an enquiry message for mapped downstream nodes", async () => {
   const operation = findOperation("manual", "start", "trigger");
   assert.ok(operation);
-  const result = await operation.run({
+  const context = {
     credentials: {}, logger: { info() {}, error() {} },
     http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
-  }, {});
-  assert.deepEqual(result, { started: true });
+  };
+  assert.deepEqual(await operation.run(context, {}), { started: true });
+  assert.deepEqual(await operation.run(context, { message: "I need pricing and next steps." }), {
+    started: true, message: "I need pricing and next steps.",
+  });
 });
 
 test("webhook trigger refuses events not verified by ingress", async () => {
