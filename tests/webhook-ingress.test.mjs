@@ -44,7 +44,7 @@ test("webhook dispatch is workspace-bound and persists run, steps, and receipt o
 test("inbound webhook events cannot bypass the guarded live action allowlist", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.match(source, /only enabled for live webhook execution/);
+  assert.match(source, /not enabled for live webhook execution/);
   assert.match(source, /recipient\.includes\("\{\{"\)/);
 });
 
