@@ -83,6 +83,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
     }
     if (!dryRun) {
+      // Until each provider has its own workspace-scoped connection and explicit live-action gate,
+      // keep production execution restricted to the existing guarded Resend email action.
+      const unsupportedLiveStep = steps.find((step) =>
+        (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
+        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email"))
+      );
+      if (unsupportedLiveStep) {
+        return NextResponse.json({ error: "This registry operation is available in dry-run only until its live integration is explicitly enabled." }, { status: 403 });
+      }
       const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
       for (const step of steps) {
         if (step.nodeId === "email" && step.operationId === "send_email") {
