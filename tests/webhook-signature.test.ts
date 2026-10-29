@@ -44,3 +44,25 @@ test("rejects missing secret or signature without throwing", () => {
     ok: false, reason: "missing_signature",
   });
 });
+
+test("verifies exact non-UTF8 request bytes without decoding and re-encoding", () => {
+  const rawBody = Buffer.from([0xff, 0x00, 0x80, 0x7b, 0x7d]);
+  const timestamp = 1_800_000_000;
+  const secret = "test-secret";
+  const digest = createHmac("sha256", secret)
+    .update(Buffer.concat([Buffer.from(timestamp + "."), rawBody]))
+    .digest("hex");
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody, signatureHeader: "t=" + timestamp + ",v1=" + digest,
+    secret, nowSeconds: timestamp,
+  }), { ok: true, timestamp });
+});
+
+test("rejects ambiguous signature headers with multiple timestamps", () => {
+  const body = "{}";
+  const timestamp = 1_800_000_000;
+  const signatureHeader = sign(body, "test-secret", timestamp) + ",t=" + timestamp;
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody: body, signatureHeader, secret: "test-secret", nowSeconds: timestamp,
+  }), { ok: false, reason: "malformed_signature" });
+});
