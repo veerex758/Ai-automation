@@ -16,7 +16,10 @@ function serverContext(): Omit<NodeContext, "previousOutputs"> {
     credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
   }
   if (process.env.AIVANTA_HTTP_ALLOWED_HOSTS) {
-    credentials.http = { allowedHosts: process.env.AIVANTA_HTTP_ALLOWED_HOSTS };
+    credentials.http = {
+      allowedHosts: process.env.AIVANTA_HTTP_ALLOWED_HOSTS,
+      apiKeys: process.env.AIVANTA_HTTP_API_KEYS ?? "{}",
+    };
   }
   return {
     credentials,
