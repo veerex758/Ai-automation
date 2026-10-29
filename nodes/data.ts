@@ -52,5 +52,76 @@ export const dataNode: NodeDefinition = {
         return templateOutput.parse({ text });
       },
     },
+    {
+      id: "deduplicate_items", name: "Deduplicate items",
+      description: "Removes duplicate primitive values or records by stable JSON value, or by a selected dot-separated key path. Preserves first-seen order and does not mutate input items.",
+      inputSchema: z.object({
+        items: z.array(z.unknown()).max(5000),
+        key: z.string().trim().min(1).max(200).optional(),
+      }).strict(),
+      outputSchema: z.object({ items: z.array(z.unknown()), count: z.number().int().nonnegative(), removed: z.number().int().nonnegative() }).strict(),
+      async run(_ctx, rawInput) {
+        const input = z.object({ items: z.array(z.unknown()).max(5000), key: z.string().trim().min(1).max(200).optional() }).strict().parse(rawInput);
+        const seen = new Set<string>();
+        const items: unknown[] = [];
+        for (const item of input.items) {
+          const value = input.key ? readPath(item, input.key) : item;
+          let identity: string;
+          try { identity = JSON.stringify(value) ?? String(value); } catch { throw new Error("DATA_DEDUPE_VALUE_INVALID"); }
+          if (seen.has(identity)) continue;
+          seen.add(identity);
+          items.push(item);
+        }
+        return { items, count: items.length, removed: input.items.length - items.length };
+      },
+    },
+    {
+      id: "sort_items", name: "Sort items",
+      description: "Sorts up to 5,000 primitive values or records by an optional dot-separated field. Supports ascending or descending order and stable ordering for equal values.",
+      inputSchema: z.object({
+        items: z.array(z.unknown()).max(5000),
+        key: z.string().trim().min(1).max(200).optional(),
+        direction: z.enum(["asc", "desc"]).default("asc"),
+      }).strict(),
+      outputSchema: z.object({ items: z.array(z.unknown()), count: z.number().int().nonnegative() }).strict(),
+      async run(_ctx, rawInput) {
+        const input = z.object({
+          items: z.array(z.unknown()).max(5000),
+          key: z.string().trim().min(1).max(200).optional(),
+          direction: z.enum(["asc", "desc"]).default("asc"),
+        }).strict().parse(rawInput);
+        const sign = input.direction === "asc" ? 1 : -1;
+        const items = input.items.map((item, index) => ({ item, index, value: input.key ? readPath(item, input.key) : item }))
+          .sort((a, b) => {
+            const left = a.value;
+            const right = b.value;
+            let order = 0;
+            if (left === right) order = 0;
+            else if (left === undefined || left === null) order = -1;
+            else if (right === undefined || right === null) order = 1;
+            else if (typeof left === "number" && typeof right === "number") order = left < right ? -1 : 1;
+            else if (typeof left === "string" && typeof right === "string") order = left.localeCompare(right);
+            else if (typeof left === "boolean" && typeof right === "boolean") order = left === right ? 0 : left ? 1 : -1;
+            else order = JSON.stringify(left).localeCompare(JSON.stringify(right));
+            return order === 0 ? a.index - b.index : order * sign;
+          }).map(({ item }) => item);
+        return { items, count: items.length };
+      },
+    },
+    {
+      id: "aggregate_numbers", name: "Aggregate numbers",
+      description: "Calculates count, sum, average, minimum and maximum for a bounded list of finite numbers, rejecting non-numeric values rather than silently coercing them.",
+      inputSchema: z.object({ values: z.array(z.number().finite()).max(10000).min(1) }).strict(),
+      outputSchema: z.object({
+        count: z.number().int().positive(), sum: z.number().finite(), average: z.number().finite(),
+        min: z.number().finite(), max: z.number().finite(),
+      }).strict(),
+      async run(_ctx, rawInput) {
+        const input = z.object({ values: z.array(z.number().finite()).max(10000).min(1) }).strict().parse(rawInput);
+        const sum = input.values.reduce((total, value) => total + value, 0);
+        if (!Number.isFinite(sum)) throw new Error("DATA_AGGREGATE_OVERFLOW");
+        return { count: input.values.length, sum, average: sum / input.values.length, min: Math.min(...input.values), max: Math.max(...input.values) };
+      },
+    },
   ],
 };
