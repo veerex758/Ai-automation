@@ -8,8 +8,8 @@ const DEFAULT_TOLERANCE_SECONDS = 300;
 const MAX_SIGNATURE_HEADER_LENGTH = 2048;
 
 /**
- * Verify an HMAC-SHA256 signature over the exact raw request body.
- * Header format: t=<unix-seconds>,v1=<lowercase-hex-digest>
+ * Verify an HMAC-SHA256 signature over exact raw bytes, optionally binding canonical metadata.
+ * Header format: t=<unix-seconds>,v1=<lowercase-hex-digest>; metadata is included between timestamp and body.
  * The caller must read and size-limit the raw body before invoking this helper.
  */
 export function verifyWebhookSignature(args: {
