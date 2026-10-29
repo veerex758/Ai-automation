@@ -66,7 +66,20 @@ export async function executeRegisteredWorkflow(args: {
 }): Promise<{ status: "succeeded" | "failed"; steps: RegisteredStepResult[]; outputs: Record<string, unknown> }> {
   const outputs: Record<string, unknown> = {};
   const results: RegisteredStepResult[] = [];
+  if (args.steps.length === 0 || args.steps.length > 30) {
+    return { status: "failed", steps: [{ stepId: "", status: "failed", error: "WORKFLOW_STEP_LIMIT_EXCEEDED" }], outputs };
+  }
   const seen = new Set<string>();
+  for (const step of args.steps) {
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id)) {
+      return { status: "failed", steps: args.steps.map((item, index) => ({ stepId: item.id, status: index === 0 ? "failed" as const : "skipped" as const, error: index === 0 ? "WORKFLOW_PREFLIGHT_FAILED" : "PREFLIGHT_FAILED" })), outputs };
+    }
+    if (!findOperation(step.nodeId, step.operationId, step.kind)) {
+      return { status: "failed", steps: args.steps.map((item, index) => ({ stepId: item.id, status: index === 0 ? "failed" as const : "skipped" as const, error: index === 0 ? "NODE_OPERATION_NOT_FOUND" : "PREFLIGHT_FAILED" })), outputs };
+    }
+    seen.add(step.id);
+  }
+  seen.clear();
 
   for (const step of args.steps) {
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id)) {
