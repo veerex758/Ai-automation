@@ -211,7 +211,7 @@ test("Date & Time formats timestamps, compares dates, and calculates durations",
   const compare = findOperation("date_time", "compare_dates", "action");
   const duration = findOperation("date_time", "calculate_duration", "action");
   assert.ok(format && compare && duration);
-  assert.equal(format.outputSchema.parse(await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })).value, "2026-01-01T00:00:00.000Z");
+  assert.equal(format.outputSchema.parse(await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })).value as string, "2026-01-01T00:00:00.000Z");
   assert.deepEqual(compare.outputSchema.parse(await compare.run(context, { left: "2026-01-01T00:00:00Z", right: "2026-01-02T00:00:00Z" })), {
     comparison: "before", differenceMs: 86400000, differenceSeconds: 86400,
   });
@@ -236,8 +236,8 @@ test("Loop / Iterate executes bounded registered actions for each input record",
   }));
   assert.equal(result.itemsProcessed, 2);
   assert.equal(result.itemsSucceeded, 2);
-  assert.equal(result.results[0].outputs.check.result, false);
-  assert.equal(result.results[1].outputs.check.result, true);
+  assert.equal((result.results[0].outputs.check as { result: boolean }).result, false);
+  assert.equal((result.results[1].outputs.check as { result: boolean }).result, true);
   await assert.rejects(() => loop.run(context, {
     items: Array.from({ length: 101 }, (_, index) => index),
     steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: { left: 1, operator: "equals", right: 1 } }],
