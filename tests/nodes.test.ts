@@ -123,7 +123,7 @@ test("If / Else executes only the selected branch and preserves typed references
       id: "never", nodeId: "data", operationId: "format_text",
       input: { template: "Wrong branch", data: {} },
     }],
-  }));
+  })) as { result: boolean; branch: "then" | "else"; outputs: Record<string, unknown> };
   assert.equal(result.result, true);
   assert.equal(result.branch, "then");
   assert.deepEqual(result.outputs.format, { text: "Hello Ada" });
@@ -202,7 +202,7 @@ test("Data nodes deduplicate, sort, and aggregate without coercion", async () =>
 test("Data split_batches keeps every item in ordered batches", async () => {
   const operation = findOperation("data", "split_batches", "action");
   assert.ok(operation);
-  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 }));
+  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 })) as { batches: unknown[][] };
   assert.deepEqual(result.batches, [[1, 2], [3, 4], [5]]);
 });
 
@@ -273,7 +273,8 @@ test("Date & Time formats timestamps, compares dates, and calculates durations",
   const compare = findOperation("date_time", "compare_dates", "action");
   const duration = findOperation("date_time", "calculate_duration", "action");
   assert.ok(format && compare && duration);
-  assert.equal(format.outputSchema.parse(await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })).value as string, "2026-01-01T00:00:00.000Z");
+  const formatted = format.outputSchema.parse(await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })) as { value: string };
+  assert.equal(formatted.value, "2026-01-01T00:00:00.000Z");
   assert.deepEqual(compare.outputSchema.parse(await compare.run(context, { left: "2026-01-01T00:00:00Z", right: "2026-01-02T00:00:00Z" })), {
     comparison: "before", differenceMs: 86400000, differenceSeconds: 86400,
   });
@@ -337,7 +338,7 @@ test("Gemini node calls the provider and returns generated text", async () => {
     },
     previousOutputs: {},
   };
-  const result = await operation.outputSchema.parseAsync(await operation.run(context, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 100 }));
+  const result = await operation.outputSchema.parseAsync(await operation.run(context, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 100 })) as { text: string; inputTokens?: number };
   assert.match(requestedUrl, /generativelanguage\.googleapis\.com/);
   assert.equal(result.text, "Hello from Gemini");
   assert.equal(result.inputTokens, 3);
