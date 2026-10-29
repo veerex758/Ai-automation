@@ -115,6 +115,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
     if (!isRecord(body) || typeof body.provider !== "string" || !providers.includes(body.provider as Provider)) return NextResponse.json({ error: "Unsupported integration provider." }, { status: 400 });
     const provider = body.provider as Provider;
     const validated = validateCredentials(provider, body.credentials);
+    // Validate key material before mutating metadata so a bad key cannot leave an orphan connection.
+    const encrypted = encryptCredentials(validated.credentials);
     const admin = createAdminClient();
     const { data: existing, error: existingError } = await auth.userClient.from("workspace_integrations")
       .select("id").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
@@ -135,7 +137,6 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
       if (error) throw error;
       integrationId = data.id;
     }
-    const encrypted = encryptCredentials(validated.credentials);
     const { error: secretError } = await admin.from("workspace_integration_secrets").upsert({
       integration_id: integrationId, encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
     }, { onConflict: "integration_id" });
