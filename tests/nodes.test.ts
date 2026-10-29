@@ -196,6 +196,13 @@ test("Data nodes deduplicate, sort, and aggregate without coercion", async () =>
   await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /Expected number/);
 });
 
+test("Data split_batches keeps every item in ordered batches", async () => {
+  const operation = findOperation("data", "split_batches", "action");
+  assert.ok(operation);
+  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 }));
+  assert.deepEqual(result.batches, [[1, 2], [3, 4], [5]]);
+});
+
 test("HTTP request requires exact server-side host allowlist and restricts headers", async () => {
   const operation = findOperation("http", "request", "action");
   assert.ok(operation);
