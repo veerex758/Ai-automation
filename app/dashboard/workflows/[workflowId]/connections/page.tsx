@@ -136,7 +136,7 @@ export default function WorkflowConnectionsPage() {
           </div>
           <div className="builder-panel">
             <h2>Add or update a connection</h2>
-            <p>Choose the provider. Existing credentials are never displayed; saving replaces that provider's current workspace connection.</p>
+            <p>Choose the provider. Existing credentials are never displayed; saving replaces that provider&apos;s current workspace connection.</p>
             <label className="integration-field">Provider
               <select value={provider} onChange={(event) => setProvider(event.target.value as Provider)}>
                 {Object.entries(providerNames).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
