@@ -79,7 +79,8 @@ async function testProvider(provider: Provider, credentials: Credentials, metada
   const allowedHosts = (process.env.AIVANTA_HTTP_ALLOWED_HOSTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
   if (!allowedHosts.includes(host)) throw new Error("HTTP_HOST_NOT_SERVER_ALLOWLISTED");
   const result = await safeHttpsRequest({ url: "https://" + host + "/", method: "GET", headers: { Authorization: "Bearer " + credentials.apiKey }, timeoutMs: 8000, maxResponseBytes: 8192 });
-  if (result.status === 401 || result.status === 403) throw new Error("CONNECTION_AUTH_FAILED");\n  if (result.status >= 500) throw new Error("CONNECTION_TEST_FAILED");
+  if (result.status === 401 || result.status === 403) throw new Error("CONNECTION_AUTH_FAILED");
+  if (result.status >= 500) throw new Error("CONNECTION_TEST_FAILED");
 }
 
 async function loadSecret(admin: ReturnType<typeof createAdminClient>, integrationId: string) {
