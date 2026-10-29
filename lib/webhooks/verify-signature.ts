@@ -24,11 +24,13 @@ export function verifyWebhookSignature(args: {
   if (!signatureHeader) return { ok: false, reason: "missing_signature" };
   if (signatureHeader.length > MAX_SIGNATURE_HEADER_LENGTH) return { ok: false, reason: "malformed_signature" };
 
-  const timestampMatch = /(?:^|,)\s*t=(\d{1,12})(?:,|$)/.exec(signatureHeader);
-  const signatures = [...signatureHeader.matchAll(/(?:^|,)\s*v1=([a-fA-F0-9]{64})(?=,|$)/g)].map((match) => match[1]);
-  if (!timestampMatch || signatures.length === 0) return { ok: false, reason: "malformed_signature" };
+  const timestampMatches = [...signatureHeader.matchAll(/(?:^|,)\\s*t=(\\d{1,12})(?=,|$)/g)];
+  const signatures = [...signatureHeader.matchAll(/(?:^|,)\\s*v1=([a-fA-F0-9]{64})(?=,|$)/g)].map((match) => match[1]);
+  // Require one unambiguous timestamp so every layer validates the same message.
+  if (timestampMatches.length !== 1 || signatures.length === 0) return { ok: false, reason: "malformed_signature" };
 
-  const timestamp = Number(timestampMatch[1]);
+  const timestampText = timestampMatches[0][1];
+  const timestamp = Number(timestampText);
   const nowSeconds = args.nowSeconds ?? Math.floor(Date.now() / 1000);
   const toleranceSeconds = args.toleranceSeconds ?? DEFAULT_TOLERANCE_SECONDS;
   if (!Number.isSafeInteger(timestamp) || !Number.isSafeInteger(nowSeconds) || !Number.isFinite(toleranceSeconds) || toleranceSeconds < 0 ||
@@ -36,8 +38,11 @@ export function verifyWebhookSignature(args: {
     return { ok: false, reason: "timestamp_out_of_range" };
   }
 
-  const body = typeof rawBody === "string" ? rawBody : Buffer.from(rawBody).toString("utf8");
-  const expected = createHmac("sha256", secret).update(timestampMatch[1] + "." + body, "utf8").digest();
+  // Preserve exact raw bytes; decoding arbitrary bytes as UTF-8 can change the signed payload.
+  const bodyBytes = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : Buffer.from(rawBody);
+  const expected = createHmac("sha256", secret)
+    .update(Buffer.concat([Buffer.from(timestampText + ".", "utf8"), bodyBytes]))
+    .digest();
   const matches = signatures.some((signature) => {
     const supplied = Buffer.from(signature, "hex");
     return supplied.length === expected.length && timingSafeEqual(supplied, expected);
