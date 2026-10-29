@@ -79,7 +79,7 @@ function executionContext(): Omit<NodeContext, "previousOutputs"> {
           });
           const raw = await response.text();
           let body: unknown = raw;
-          try { body = raw ? JSON.parse(raw) : raw; } catch {}
+          try { body = raw ? JSON.parse(raw) : raw; } catch { body = raw; }
           return { status: response.status, body };
         } finally {
           clearTimeout(timer);
@@ -146,6 +146,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       rawBody,
       signatureHeader,
       secret: signingSecret,
+      signedMetadata: JSON.stringify([eventId, eventType]),
       toleranceSeconds: MAX_EVENT_AGE_SECONDS,
     });
     signingSecret = "";
