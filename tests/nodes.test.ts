@@ -315,3 +315,26 @@ test("HTTP transport rejects private, loopback, link-local, reserved and mapped 
     assert.equal(isUnsafeAddress(address), false, address);
   }
 });
+
+test("Logic switch routes to the first strict-equality case and supports a default route", async () => {
+  const operation = findOperation("logic", "switch", "action");
+  assert.ok(operation);
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  };
+  assert.deepEqual(await operation.run(context, {
+    value: "qualified",
+    cases: [{ value: "new", route: "new_lead" }, { value: "qualified", route: "qualified_lead" }],
+    defaultRoute: "review",
+  }), { route: "qualified_lead", matched: true, matchedIndex: 1 });
+  assert.deepEqual(await operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "new_lead" }], defaultRoute: "review",
+  }), { route: "review", matched: false });
+  await assert.rejects(() => operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "same" }, { value: "qualified", route: "same" }],
+  }), /LOGIC_SWITCH_DUPLICATE_ROUTE/);
+  await assert.rejects(() => operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "new_lead" }],
+  }), /LOGIC_SWITCH_NO_MATCH/);
+});
