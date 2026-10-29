@@ -8,7 +8,7 @@ const inputSchema = z.object({
   method: httpMethod.default("GET"),
   credentialId: z.string().trim().min(1).max(128).optional().describe("Optional workspace connection label for future multi-credential selection; host-scoped saved HTTP connections are used today."),
   query: z.record(z.string(), z.string().max(2000)).optional(),
-  body: z.string().max(32768).optional().describe("JSON request body as text; variables are resolved before parsing."),
+  body: z.unknown().optional().describe("JSON request body or JSON template text; variables are resolved before parsing."),
   headers: z.record(z.string(), z.string().max(2000)).optional().describe("Request headers. Authentication and hop-by-hop headers are reserved."),
   auth: z.enum(["none", "bearer", "apiKey"]).default("none"),
   authHeader: z.string().trim().min(1).max(128).optional().describe("Header name for apiKey auth; defaults to x-api-key."),
@@ -21,7 +21,9 @@ const outputSchema = z.object({
   status: z.number().int().min(100).max(599),
   ok: z.boolean(),
   data: z.unknown(),
+  body: z.unknown(),
 }).strict();
+const MAX_BODY_BYTES = 32 * 1024;
 
 const FORBIDDEN_HOSTS = new Set(["localhost", "metadata.google.internal", "metadata.google", "host.docker.internal"]);
 const RESERVED_HEADERS = new Set(["authorization", "proxy-authorization", "host", "cookie", "set-cookie", "connection", "content-length", "transfer-encoding", "upgrade"]);
@@ -97,9 +99,15 @@ export const httpNode: NodeDefinition = {
 
       let body: unknown;
       if (input.body !== undefined) {
-        const resolvedBody = resolveString(input.body, ctx, true);
-        try { body = JSON.parse(resolvedBody) as unknown; } catch { throw new Error("HTTP_BODY_INVALID_JSON"); }
-        if (input.method === "GET" || input.method === "DELETE") throw new Error("HTTP_METHOD_BODY_NOT_ALLOWED");
+        if (input.method === "GET" || input.method === "DELETE") throw new Error("HTTP_GET_BODY_NOT_ALLOWED");
+        if (typeof input.body === "string") {
+          const resolvedBody = resolveString(input.body, ctx, true);
+          try { body = JSON.parse(resolvedBody) as unknown; } catch { throw new Error("HTTP_BODY_INVALID_JSON"); }
+        } else {
+          body = input.body;
+        }
+        const serialized = JSON.stringify(body);
+        if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > MAX_BODY_BYTES) throw new Error("HTTP_BODY_TOO_LARGE");
         headers["content-type"] = headers["content-type"] ?? headers["Content-Type"] ?? "application/json";
       }
 
@@ -117,7 +125,7 @@ export const httpNode: NodeDefinition = {
         url: url.toString(), method: input.method, headers,
         body, timeoutMs: input.timeoutMs, retries: input.retries,
       });
-      const result = { status: response.status, ok: response.status >= 200 && response.status < 300, data: response.body };
+      const result = { status: response.status, ok: response.status >= 200 && response.status < 300, data: response.body, body: response.body };
       if (!result.ok) {
         ctx.logger.error("HTTP request returned a non-success status", { status: response.status, hostname: url.hostname });
         if (!input.continueOnError) throw new Error(response.status === 429 ? "HTTP_RATE_LIMITED" : "HTTP_REQUEST_FAILED");
