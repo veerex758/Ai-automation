@@ -42,7 +42,7 @@ test("HTTP node rejects non-allowlisted hosts before making a request", async ()
   const { context, calls } = makeContext();
   await assert.rejects(
     operation.run(context, { url: "https://other.example.com/data", method: "GET" }),
-    /HTTP_URL_NOT_ALLOWLISTED/,
+    /HTTP_HOST_NOT_ALLOWLISTED/,
   );
   assert.equal(calls.length, 0);
 });
@@ -55,7 +55,7 @@ test("HTTP node blocks unsafe headers and refuses a body on GET", async () => {
   );
   await assert.rejects(
     operation.run(context, { url: "https://api.example.com/data", method: "GET", body: '{"x":1}' }),
-    /HTTP_METHOD_BODY_NOT_ALLOWED/,
+    /HTTP_GET_BODY_NOT_ALLOWED/,
   );
   assert.equal(calls.length, 0);
 });
