@@ -149,7 +149,7 @@ test("HTTP request requires exact server-side host allowlist and restricts heade
   assert.ok(operation);
   let requestedUrl = "";
   const context = {
-    credentials: { http: { allowedHosts: "api.example.com", apiKey: "server-only-test-key" } },
+    credentials: { http: { allowedHosts: "api.example.com", apiKeys: JSON.stringify({ "api.example.com": "server-only-test-key" }) } },
     logger: { info() {}, error() {} },
     http: { async request(args: { url: string; method: "GET" | "POST"; headers?: Record<string, string> }) {
       requestedUrl = args.url;
