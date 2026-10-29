@@ -56,13 +56,12 @@ export default function RegistryBuilderPage() {
       setCatalog(catalogData.nodes as CatalogNode[]);
       const restored = Array.isArray(definitionData.registrySteps) && definitionData.registrySteps.length
         ? definitionData.registrySteps as RegistryStep[] : starterSteps;
-      setSteps(restored); setSavedFingerprint(JSON.stringify(restored)); setSelectedId(restored[0]?.id ?? "");
+      setSteps(restored); setSavedFingerprint(JSON.stringify(restored)); setSelectedId(restored[0]?.id ?? ""); setInputText(JSON.stringify(restored[0]?.input ?? {}, null, 2));
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load registry builder."); }
     finally { setLoading(false); }
   }, [workflowId]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (selected) setInputText(JSON.stringify(selected.input, null, 2)); }, [selectedId]);
 
   function updateStep(id: string, patch: Partial<RegistryStep>) {
     setSteps((current) => current.map((step) => step.id === id ? { ...step, ...patch } : step));
@@ -76,11 +75,13 @@ export default function RegistryBuilderPage() {
     const first = available.find((operation) => operation.nodeId === "date_time") ?? available[0];
     const id = "step-" + Date.now().toString(36);
     setSteps((current) => [...current, { id, nodeId: first.nodeId, operationId: first.operationId, kind: "action", input: JSON.parse(inputExample(first.nodeId, first.operationId)) }]);
-    setSelectedId(id); setRun(null); setNotice("Registry step added. Configure the input JSON and save before testing.");
+    setSelectedId(id); setInputText(JSON.stringify(JSON.parse(inputExample(first.nodeId, first.operationId)), null, 2)); setRun(null); setNotice("Registry step added. Configure the input JSON and save before testing.");
   }
 
   function changeOperation(stepId: string, nodeId: string, operationId: string) {
-    updateStep(stepId, { nodeId, operationId, input: JSON.parse(inputExample(nodeId, operationId)) });
+    const input = JSON.parse(inputExample(nodeId, operationId));
+    updateStep(stepId, { nodeId, operationId, input });
+    setInputText(JSON.stringify(input, null, 2));
   }
 
   async function save() {
@@ -152,7 +153,7 @@ export default function RegistryBuilderPage() {
                 const operation = node?.[step.kind === "trigger" ? "triggers" : "actions"].find((item) => item.id === step.operationId);
                 return <div className="node-slot" key={step.id}>
                   {index > 0 && <div className="node-connector"><span>↓</span></div>}
-                  <button className={`builder-node node-${step.kind === "trigger" ? "trigger" : "action"} ${selectedId === step.id ? "node-selected" : ""}`} onClick={() => setSelectedId(step.id)} aria-pressed={selectedId === step.id}>
+                  <button className={`builder-node node-${step.kind === "trigger" ? "trigger" : "action"} ${selectedId === step.id ? "node-selected" : ""}`} onClick={() => { setSelectedId(step.id); setInputText(JSON.stringify(step.input, null, 2)); }} aria-pressed={selectedId === step.id}>
                     <span className="node-icon">{step.kind === "trigger" ? "⚡" : node?.id === "date_time" ? "◷" : node?.id === "loop" ? "↻" : "↗"}</span>
                     <span className="node-copy"><small>{node?.name ?? step.nodeId} · STEP {index + 1}</small><strong>{operation?.name ?? step.operationId}</strong><span>{operation?.description ?? "Registered operation"}</span></span><span className="node-chevron">›</span>
                   </button>
@@ -182,7 +183,7 @@ export default function RegistryBuilderPage() {
               try { updateStep(selected.id, { input: JSON.parse(event.target.value) as unknown }); setError(""); }
               catch { setError("Input JSON is incomplete or invalid. Finish the JSON before saving."); }
             }} />
-            {selected.kind !== "trigger" && <button className="remove-step" type="button" onClick={() => { setSteps((current) => current.filter((step) => step.id !== selected.id)); setSelectedId(steps.find((step) => step.id !== selected.id)?.id ?? ""); setRun(null); }}>Remove node</button>}
+            {selected.kind !== "trigger" && <button className="remove-step" type="button" onClick={() => { setSteps((current) => current.filter((step) => step.id !== selected.id)); setSelectedId(steps.find((step) => step.id !== selected.id)?.id ?? ""); setInputText(JSON.stringify(steps.find((step) => step.id !== selected.id)?.input ?? {}, null, 2)); setRun(null); }}>Remove node</button>}
             <div className="config-note">HTTP requests are allowlist-only and live execution remains guarded. Date & Time and Loop actions are available to the registry runner; safe previews never perform provider side effects.</div>
           </div>}
           <div className="panel-add">
