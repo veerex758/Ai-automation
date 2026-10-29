@@ -37,7 +37,7 @@ export const httpNode: NodeDefinition = {
   triggers: [],
   actions: [{
     id: "request", name: "Make HTTP request",
-    description: "Makes a bounded HTTPS GET or POST request to a hostname explicitly allowlisted in the server-side HTTP connection. Supports query parameters, JSON POST bodies up to 32 KiB, safe Accept/Content-Type headers, and an optional server-stored Bearer API key. Blocks IP literals, localhost, custom ports, URL credentials and unapproved hosts. The shared HTTP transport must additionally enforce DNS-resolved private-address blocking, no redirects to unvalidated targets, response-size limits and timeout cancellation before this action is enabled in production.",
+    description: "Makes a bounded HTTPS GET or POST request to a hostname explicitly allowlisted in the server-side HTTP connection. Supports query parameters, JSON POST bodies up to 32 KiB, safe Accept/Content-Type headers, and an optional server-stored Bearer API key. Blocks IP literals, localhost, custom ports, URL credentials and unapproved hosts. The shared server transport pins validated public DNS answers to the TLS connection, rejects redirects, blocks private/reserved IPv4 and IPv6 destinations, caps responses at 256 KiB, caps request bodies at 32 KiB and enforces a 10-second timeout.",
     inputSchema, outputSchema,
     async run(ctx, rawInput) {
       const input = inputSchema.parse(rawInput);
