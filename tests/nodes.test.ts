@@ -102,6 +102,36 @@ test("Logic condition compares values without external side effects", async () =
   assert.deepEqual(result, { result: true });
 });
 
+test("If / Else executes only the selected branch and preserves typed references", async () => {
+  const operation = findOperation("logic", "if_else", "action");
+  assert.ok(operation);
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } },
+    previousOutputs: { source: { customer: { name: "Ada" }, score: 9 } },
+  };
+  const result = operation.outputSchema.parse(await operation.run(context, {
+    left: 9, operator: "greater_than", right: 5,
+    thenSteps: [{
+      id: "format", nodeId: "data", operationId: "format_text",
+      input: { template: "Hello {{customer.name}}", data: "{{source}}" },
+    }],
+    elseSteps: [{
+      id: "never", nodeId: "data", operationId: "format_text",
+      input: { template: "Wrong branch", data: {} },
+    }],
+  }));
+  assert.equal(result.result, true);
+  assert.equal(result.branch, "then");
+  assert.deepEqual(result.outputs.format, { text: "Hello Ada" });
+  assert.equal("never" in result.outputs, false);
+  await assert.rejects(() => operation.run(context, {
+    left: true, operator: "equals", right: true,
+    thenSteps: [{ id: "nested", nodeId: "logic", operationId: "if_else", input: { left: true, operator: "equals", right: true } }],
+    elseSteps: [],
+  }), /IF_ELSE_NESTING_NOT_SUPPORTED/);
+});
+
 test("Logic filter supports nested fields and preserves matching records", async () => {
   const operation = findOperation("logic", "filter_items", "action");
   assert.ok(operation);
