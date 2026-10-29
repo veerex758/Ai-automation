@@ -7,11 +7,12 @@ export type RuntimeCredentials = Readonly<Record<string, Readonly<Record<string,
 export async function loadWorkspaceCredentials(workspaceId: string): Promise<RuntimeCredentials> {
   const admin = createAdminClient();
   const { data: integrations, error } = await admin.from("workspace_integrations")
-    .select("id,provider,metadata")
+    .select("id,provider,metadata,status")
     .eq("workspace_id", workspaceId);
   if (error) throw new Error("WORKSPACE_CONNECTIONS_LOAD_FAILED");
   const credentials: Record<string, Record<string, string>> = {};
   for (const integration of integrations ?? []) {
+    if (integration.status !== "connected") continue;
     const { data: secret, error: secretError } = await admin.from("workspace_integration_secrets")
       .select("encrypted_credentials").eq("integration_id", integration.id).maybeSingle();
     if (secretError || !secret) throw new Error("WORKSPACE_CONNECTION_SECRET_UNAVAILABLE");
