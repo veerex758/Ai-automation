@@ -47,3 +47,21 @@ test("inbound webhook events cannot bypass the guarded live action allowlist", a
   assert.match(source, /only enabled for live webhook execution/);
   assert.match(source, /recipient\.includes\("\{\{"\)/);
 });
+
+
+test("endpoint provisioning is authenticated and returns the signing secret only once", async () => {
+  const provisionUrl = new URL("../app/api/workflows/[workflowId]/webhook/route.ts", import.meta.url);
+  const source = await readFile(provisionUrl, "utf8");
+  assert.match(source, /userClient\.auth\.getUser/);
+  assert.match(source, /body\.confirm !== true/);
+  assert.match(source, /encryptWebhookSecret\(signingSecret, encryptionKey\)/);
+  assert.match(source, /endpoint_key_hash: createHash\("sha256"\)/);
+  assert.match(source, /secretShownOnce: true/);
+  assert.match(source, /status: "active"/);
+});
+
+test("run history does not persist the raw webhook payload in the trigger result", async () => {
+  const source = await readFile(routeUrl, "utf8");
+  assert.match(source, /payloadSha256/);
+  assert.match(source, /eventId, eventType, receivedAt: eventInput\.receivedAt, payloadSha256/);
+});
