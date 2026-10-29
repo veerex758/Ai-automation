@@ -71,6 +71,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
       return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
     }
+    if (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "manual" || steps[0]?.operationId !== "start" ||
+        steps.slice(1).some((step) => step.kind === "trigger")) {
+      return NextResponse.json({ error: "A registry workflow must begin with a manual trigger and may not contain later trigger steps." }, { status: 422 });
+    }
     if (!dryRun) {
       // Manual start and side-effect-free internal nodes are always eligible for a live run.
       // Every provider action needs an explicit server-side allowlist entry in addition to
