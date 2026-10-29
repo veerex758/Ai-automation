@@ -1,5 +1,6 @@
 import type { NodeDefinition } from "./types";
 import { openaiNode } from "./openai";
+import { geminiNode } from "./gemini";
 import { webhooksNode } from "./webhooks";
 import { slackNode } from "./slack";
 import { emailNode } from "./email";
@@ -11,7 +12,7 @@ import { utilitiesNode } from "./utilities";
 import { dateTimeNode } from "./date-time";
 import { loopNode } from "./loop";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, logicNode, dataNode, httpNode, utilitiesNode, dateTimeNode, loopNode];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode, logicNode, dataNode, httpNode, utilitiesNode, dateTimeNode, loopNode];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
