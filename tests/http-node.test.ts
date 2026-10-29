@@ -29,7 +29,7 @@ test("HTTP node resolves $json variables in URL, query, headers, and JSON body",
     timeoutMs: 5000,
     retries: 1,
   });
-  assert.deepEqual(result, { status: 200, ok: true, data: { id: "lead-123" } });
+  assert.deepEqual(result, { status: 200, ok: true, data: { id: "lead-123" }, body: { id: "lead-123" } });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://api.example.com/leads/ada@example.com?source=Hello");
   assert.equal(calls[0].method, "POST");
@@ -67,6 +67,6 @@ test("continueOnError returns the HTTP response without misrepresenting its ok f
     method: "GET",
     continueOnError: true,
   });
-  assert.deepEqual(result, { status: 429, ok: false, data: { error: "rate limited" } });
+  assert.deepEqual(result, { status: 429, ok: false, data: { error: "rate limited" }, body: { error: "rate limited" } });
   assert.equal(calls.length, 1);
 });
