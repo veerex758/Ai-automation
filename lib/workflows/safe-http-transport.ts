@@ -1,0 +1,120 @@
+import { lookup as dnsLookup } from "node:dns/promises";
+import { isIP } from "node:net";
+import { request as httpsRequest, type RequestOptions } from "node:https";
+import type { LookupFunction } from "node:dns";
+
+const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
+const MAX_REQUEST_BODY_BYTES = 32 * 1024;
+
+function isUnsafeAddress(address: string): boolean {
+  const family = isIP(address);
+  if (family === 4) {
+    const octets = address.split(".").map(Number);
+    const [a, b] = octets;
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 168 || (b === 0 && octets[2] === 0) || (b === 0 && octets[2] === 2))) ||
+      (a === 198 && (b === 18 || b === 19 || (b === 51 && octets[2] === 100))) ||
+      (a === 203 && b === 0 && octets[2] === 113) ||
+      (a === 255 && b === 255);
+  }
+  if (family === 6) {
+    const value = address.toLowerCase().split("%")[0];
+    if (value === "::" || value === "::1" || value.startsWith("fc") || value.startsWith("fd") ||
+        /^fe[89ab]/.test(value) || value.startsWith("ff") || value.startsWith("2001:db8:")) return true;
+    const mapped = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    return mapped ? isUnsafeAddress(mapped[1]) : false;
+  }
+  return true;
+}
+
+function parseResponseBody(raw: string): unknown {
+  if (!raw) return null;
+  try { return JSON.parse(raw) as unknown; } catch { return raw; }
+}
+
+/**
+ * HTTPS-only transport with DNS pinning, no redirect following, bounded request/
+ * response bodies, TLS hostname verification, and an enforced socket timeout.
+ */
+export async function safeHttpsRequest(args: {
+  url: string;
+  method: "GET" | "POST";
+  headers?: Record<string, string>;
+  body?: unknown;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
+}): Promise<{ status: number; body: unknown }> {
+  let url: URL;
+  try { url = new URL(args.url); } catch { throw new Error("HTTP_URL_INVALID"); }
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) {
+    throw new Error("HTTP_URL_NOT_ALLOWED");
+  }
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (!hostname || isIP(hostname) || hostname === "localhost" ||
+      hostname.endsWith(".localhost") || hostname.endsWith(".local") ||
+      hostname === "metadata.google.internal" || hostname === "host.docker.internal") {
+    throw new Error("HTTP_HOST_NOT_ALLOWED");
+  }
+
+  const addresses = await dnsLookup(hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(({ address }) => isUnsafeAddress(address))) {
+    throw new Error("HTTP_DNS_TARGET_NOT_PUBLIC");
+  }
+  // Pin the socket's DNS result to an address we already validated. This prevents
+  // a second DNS lookup (and DNS rebinding) between validation and connection.
+  const pinned = addresses[0];
+  const pinnedLookup = ((requestedHost: string, options: { all?: boolean }, callback: (...values: unknown[]) => void) => {
+    if (requestedHost.toLowerCase().replace(/\.$/, "") !== hostname) {
+      callback(Object.assign(new Error("HTTP_DNS_HOST_MISMATCH"), { code: "ENOTFOUND" }));
+      return;
+    }
+    if (options?.all) callback(null, [{ address: pinned.address, family: pinned.family }]);
+    else callback(null, pinned.address, pinned.family);
+  }) as unknown as LookupFunction;
+
+  const serializedBody = args.body === undefined ? undefined : JSON.stringify(args.body);
+  if (serializedBody !== undefined && Buffer.byteLength(serializedBody, "utf8") > MAX_REQUEST_BODY_BYTES) {
+    throw new Error("HTTP_BODY_TOO_LARGE");
+  }
+  const timeoutMs = Math.min(10000, Math.max(1000, args.timeoutMs ?? 10000));
+  const maxResponseBytes = Math.min(DEFAULT_MAX_RESPONSE_BYTES, Math.max(1024, args.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES));
+
+  return new Promise((resolve, reject) => {
+    const options: RequestOptions = {
+      protocol: "https:",
+      hostname,
+      port: 443,
+      path: url.pathname + url.search,
+      method: args.method,
+      headers: args.headers,
+      lookup: pinnedLookup,
+      servername: hostname,
+      timeout: timeoutMs,
+    };
+    const req = httpsRequest(options, (res) => {
+      const chunks: Buffer[] = [];
+      let totalBytes = 0;
+      res.on("data", (chunk: Buffer | string) => {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        totalBytes += bytes.length;
+        if (totalBytes > maxResponseBytes) {
+          req.destroy(new Error("HTTP_RESPONSE_TOO_LARGE"));
+          return;
+        }
+        chunks.push(bytes);
+      });
+      res.on("error", reject);
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks).toString("utf8");
+        resolve({ status: res.statusCode ?? 502, body: parseResponseBody(raw) });
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("HTTP_TIMEOUT")));
+    req.on("error", reject);
+    if (serializedBody !== undefined) req.write(serializedBody);
+    req.end();
+  });
+}
