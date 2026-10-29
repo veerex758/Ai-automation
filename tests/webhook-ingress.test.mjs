@@ -25,7 +25,7 @@ test("webhook ingress claims event IDs atomically and rejects changed-payload re
   const source = await readFile(routeUrl, "utf8");
   const migration = await readFile(migrationUrl, "utf8");
   assert.match(migration, /unique \(endpoint_id, event_id\)/);
-  assert.match(migration, /on conflict \(endpoint_id, target_event_id\) do nothing/i);
+  assert.match(migration, /on conflict \(endpoint_id, event_id\) do nothing/i);
   assert.match(source, /rpc\("claim_webhook_event"/);
   assert.match(source, /prior\.payload_sha256 !== payloadSha256/);
   assert.match(source, /duplicate: true/);
@@ -64,4 +64,10 @@ test("run history does not persist the raw webhook payload in the trigger result
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /payloadSha256/);
   assert.match(source, /eventId, eventType, receivedAt: eventInput\.receivedAt, payloadSha256/);
+});
+
+
+test("live webhook actions honor the global execution kill switch", async () => {
+  const source = await readFile(routeUrl, "utf8");
+  assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
 });
