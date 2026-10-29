@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
-test("registry includes versioned webhook, OpenAI, Slack, Email, Logic and Data operations", () => {
-  assert.equal(nodes.length, 7);
+test("registry includes versioned webhook, OpenAI, Slack, Email, Logic, Data, HTTP and Utilities operations", () => {
+  assert.equal(nodes.length, 9);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
