@@ -4,7 +4,7 @@ import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
 test("registry includes versioned webhook, OpenAI, Slack, Email, Logic, Data, HTTP and Utilities operations", () => {
-  assert.equal(nodes.length, 9);
+  assert.equal(nodes.length, 11);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
@@ -132,11 +132,15 @@ test("Data mapping and text formatting support nested values", async () => {
 
 
 test("registry exposes secured HTTP and Utilities operations", () => {
-  assert.equal(nodes.length, 9);
+  assert.equal(nodes.length, 11);
   assert.ok(findOperation("http", "request", "action"));
   assert.ok(findOperation("utilities", "parse_json", "action"));
   assert.ok(findOperation("utilities", "stringify_json", "action"));
   assert.ok(findOperation("utilities", "pick_fields", "action"));
+  assert.ok(findOperation("date_time", "format_timestamp", "action"));
+  assert.ok(findOperation("date_time", "compare_dates", "action"));
+  assert.ok(findOperation("date_time", "calculate_duration", "action"));
+  assert.ok(findOperation("loop", "for_each", "action"));
 });
 
 test("HTTP request requires exact server-side host allowlist and restricts headers", async () => {
@@ -194,4 +198,47 @@ test("Utilities parse, stringify and pick fields with explicit bounds", async ()
   await assert.rejects(() => parse.run(context, { text: "{" }), /JSON_PARSE_FAILED/);
   assert.deepEqual(await stringify.run(context, { value: { ok: true }, pretty: false }), { text: "{\"ok\":true}" });
   assert.deepEqual(await pick.run(context, { data: { a: 1, b: 2 }, fields: ["b", "missing"] }), { data: { b: 2 }, missing: ["missing"] });
+});
+
+
+test("Date & Time formats timestamps, compares dates, and calculates durations", async () => {
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  };
+  const format = findOperation("date_time", "format_timestamp", "action");
+  const compare = findOperation("date_time", "compare_dates", "action");
+  const duration = findOperation("date_time", "calculate_duration", "action");
+  assert.ok(format && compare && duration);
+  assert.equal((await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })).value, "2026-01-01T00:00:00.000Z");
+  assert.deepEqual(await compare.run(context, { left: "2026-01-01T00:00:00Z", right: "2026-01-02T00:00:00Z" }), {
+    comparison: "before", differenceMs: 86400000, differenceSeconds: 86400,
+  });
+  assert.deepEqual(await duration.run(context, { start: 0, end: 7200000, unit: "hours" }), {
+    duration: 2, unit: "hours", milliseconds: 7200000,
+  });
+  await assert.rejects(() => format.run(context, { timestamp: "not-a-date", style: "iso" }), /DATETIME_INVALID_TIMESTAMP/);
+});
+
+test("Loop / Iterate executes bounded registered actions for each input record", async () => {
+  const loop = findOperation("loop", "for_each", "action");
+  assert.ok(loop);
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  };
+  const result = await loop.run(context, {
+    items: [{ score: 3 }, { score: 8 }],
+    steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: {
+      left: "{{item.score}}", operator: "greater_than", right: 5,
+    } }],
+  });
+  assert.equal(result.itemsProcessed, 2);
+  assert.equal(result.itemsSucceeded, 2);
+  assert.equal(result.results[0].outputs.check.result, false);
+  assert.equal(result.results[1].outputs.check.result, true);
+  await assert.rejects(() => loop.run(context, {
+    items: Array.from({ length: 101 }, (_, index) => index),
+    steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: { left: 1, operator: "equals", right: 1 } }],
+  }), /Too big|maximum/i);
 });
