@@ -5,7 +5,7 @@ import { executeRegisteredOperation } from "../nodes/runner";
 import { isUnsafeAddress } from "../lib/workflows/safe-http-transport";
 
 test("registry includes versioned webhook, OpenAI, Slack, Email, Logic, Data, HTTP and Utilities operations", () => {
-  assert.equal(nodes.length, 11);
+  assert.equal(nodes.length, 12);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
@@ -314,4 +314,28 @@ test("HTTP transport rejects private, loopback, link-local, reserved and mapped 
   for (const address of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) {
     assert.equal(isUnsafeAddress(address), false, address);
   }
+});
+
+
+test("Gemini node calls the provider and returns generated text", async () => {
+  const operation = findOperation("gemini", "generate_text", "action");
+  assert.ok(operation);
+  let requestedUrl = "";
+  const context = {
+    credentials: { gemini: { apiKey: "test-gemini-key" } },
+    logger: { info() {}, error() {} },
+    http: {
+      async request(args: { url: string; method: "GET" | "POST"; headers?: Record<string, string>; body?: unknown }) {
+        requestedUrl = args.url;
+        assert.equal(args.method, "POST");
+        assert.equal(args.headers?.["x-goog-api-key"], "test-gemini-key");
+        return { status: 200, body: { modelVersion: "gemini-2.5-flash", candidates: [{ content: { parts: [{ text: "Hello from Gemini" }] } }], usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 4 } } };
+      },
+    },
+    previousOutputs: {},
+  };
+  const result = await operation.outputSchema.parseAsync(await operation.run(context, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 100 }));
+  assert.match(requestedUrl, /generativelanguage\.googleapis\.com/);
+  assert.equal(result.text, "Hello from Gemini");
+  assert.equal(result.inputTokens, 3);
 });
