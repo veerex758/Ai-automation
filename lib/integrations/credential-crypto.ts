@@ -43,3 +43,7 @@ export function decryptCredentials(envelope: string): Record<string, string> {
     throw new Error("CREDENTIALS_DECRYPTION_FAILED");
   }
 }
+
+export function isCredentialEncryptionConfigured(): boolean {
+  try { keyBytes(); return true; } catch { return false; }
+}
