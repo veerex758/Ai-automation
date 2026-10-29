@@ -103,3 +103,39 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     return jsonError("Could not provision webhook endpoint.", 500);
   }
 }
+
+
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
+  try {
+    const { workflowId } = await context.params;
+    if (!UUID.test(workflowId)) return jsonError("Invalid workflow ID.", 400);
+    const userClient = await createClient();
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) return jsonError("Authentication required.", 401);
+
+    const { data: workflow, error: workflowError } = await userClient.from("workflows")
+      .select("id,workspace_id").eq("id", workflowId).maybeSingle();
+    if (workflowError) throw workflowError;
+    if (!workflow) return jsonError("Workflow not found or you do not have access to it.", 404);
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!serviceRoleKey || !supabaseUrl) return jsonError("Secure webhook provisioning is not configured on this environment.", 503);
+    const serviceClient = createSupabaseClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await serviceClient.from("webhook_endpoints")
+      .update({ status: "revoked" })
+      .eq("workflow_id", workflow.id)
+      .eq("workspace_id", workflow.workspace_id)
+      .in("status", ["active", "disabled"])
+      .select("id,status");
+    if (error) throw error;
+    return NextResponse.json({ revoked: data?.length ?? 0 });
+  } catch (error) {
+    console.error("[webhook-provisioning] revoke failed", {
+      code: error instanceof Error ? error.message : "WEBHOOK_REVOKE_FAILED",
+    });
+    return jsonError("Could not revoke webhook endpoint.", 500);
+  }
+}
