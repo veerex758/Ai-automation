@@ -211,11 +211,11 @@ test("Date & Time formats timestamps, compares dates, and calculates durations",
   const compare = findOperation("date_time", "compare_dates", "action");
   const duration = findOperation("date_time", "calculate_duration", "action");
   assert.ok(format && compare && duration);
-  assert.equal((await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })).value, "2026-01-01T00:00:00.000Z");
-  assert.deepEqual(await compare.run(context, { left: "2026-01-01T00:00:00Z", right: "2026-01-02T00:00:00Z" }), {
+  assert.equal(format.outputSchema.parse(await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })).value, "2026-01-01T00:00:00.000Z");
+  assert.deepEqual(compare.outputSchema.parse(await compare.run(context, { left: "2026-01-01T00:00:00Z", right: "2026-01-02T00:00:00Z" })), {
     comparison: "before", differenceMs: 86400000, differenceSeconds: 86400,
   });
-  assert.deepEqual(await duration.run(context, { start: 0, end: 7200000, unit: "hours" }), {
+  assert.deepEqual(duration.outputSchema.parse(await duration.run(context, { start: 0, end: 7200000, unit: "hours" })), {
     duration: 2, unit: "hours", milliseconds: 7200000,
   });
   await assert.rejects(() => format.run(context, { timestamp: "not-a-date", style: "iso" }), /DATETIME_INVALID_TIMESTAMP/);
@@ -228,12 +228,12 @@ test("Loop / Iterate executes bounded registered actions for each input record",
     credentials: {}, logger: { info() {}, error() {} },
     http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
   };
-  const result = await loop.run(context, {
+  const result = loop.outputSchema.parse(await loop.run(context, {
     items: [{ score: 3 }, { score: 8 }],
     steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: {
       left: "{{item.score}}", operator: "greater_than", right: 5,
     } }],
-  });
+  }));
   assert.equal(result.itemsProcessed, 2);
   assert.equal(result.itemsSucceeded, 2);
   assert.equal(result.results[0].outputs.check.result, false);
