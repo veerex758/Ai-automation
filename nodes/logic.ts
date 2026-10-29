@@ -122,6 +122,9 @@ export const logicNode: NodeDefinition = {
           if (step.nodeId === "loop" || (step.nodeId === "logic" && step.operationId === "if_else")) {
             throw new Error("IF_ELSE_NESTING_NOT_SUPPORTED");
           }
+          if (!["logic", "data", "utilities", "date_time"].includes(step.nodeId)) {
+            throw new Error("IF_ELSE_OPERATION_NOT_ALLOWED");
+          }
           const operation = findOperation(step.nodeId, step.operationId, "action");
           if (!operation) throw new Error("IF_ELSE_OPERATION_NOT_FOUND");
           const resolved = resolveBranchReferences(step.input, { ...ctx.previousOutputs, ...outputs });
