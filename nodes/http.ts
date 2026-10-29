@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
 import { z } from "zod";
-import type { NodeDefinition } from "./types";
+import type { NodeContext, NodeDefinition } from "./types";
 
 const httpMethod = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 const inputSchema = z.object({
@@ -42,7 +42,7 @@ function validateTarget(rawUrl: string, allowedHostsValue: string | undefined): 
   return url;
 }
 
-function previousJson(ctx: Parameters<NonNullable<NodeDefinition["actions"][number]["run"]>>[0]): unknown {
+function previousJson(ctx: NodeContext): unknown {
   const outputs = Object.values(ctx.previousOutputs);
   return outputs.length ? outputs[outputs.length - 1] : undefined;
 }
@@ -56,7 +56,7 @@ function pathValue(root: unknown, path: string): unknown {
   return current;
 }
 
-function resolveString(value: string, ctx: Parameters<NonNullable<NodeDefinition["actions"][number]["run"]>>[0], jsonSafe = false): string {
+function resolveString(value: string, ctx: NodeContext, jsonSafe = false): string {
   const current = previousJson(ctx);
   return value.replace(/\{\{\s*\$json\.([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)\s*\}\}/g, (_match, path: string) => {
     const resolved = pathValue(current, path);
