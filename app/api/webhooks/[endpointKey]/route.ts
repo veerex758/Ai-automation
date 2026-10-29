@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_EVENT_AGE_SECONDS = 300;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
@@ -97,6 +96,7 @@ function jsonError(message: string, status: number) {
 export async function POST(request: NextRequest, context: { params: Promise<{ endpointKey: string }> }) {
   const startedAt = Date.now();
   let receipt: { id: string; endpoint_id: string } | null = null;
+  let runId: string | null = null;
   let db: ReturnType<typeof serviceClient> | null = null;
   try {
     const { endpointKey } = await context.params;
@@ -150,8 +150,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     });
     signingSecret = "";
     if (!verification.ok) {
-      const status = verification.reason === "timestamp_out_of_range" ? 401 : 401;
-      return jsonError("Webhook signature is missing, invalid, or stale.", status);
+      return jsonError("Webhook signature is missing, invalid, or stale.", 401);
     }
 
     const { data: workflow, error: workflowError } = await db.from("workflows")
@@ -236,6 +235,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       duration_ms: 0,
     }).select("id,mode,status,workflow_version,started_at").single();
     if (runInsertError) throw runInsertError;
+    runId = run.id;
 
     const execution = await executeRegisteredWorkflow({
       steps: executionSteps,
@@ -285,6 +285,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       receiptId: receipt?.id ?? null,
       code: error instanceof Error ? error.message : "WEBHOOK_DISPATCH_FAILED",
     });
+    if (db && runId) {
+      await db.from("workflow_runs").update({
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        duration_ms: Math.min(600000, Date.now() - startedAt),
+        error_message: "Webhook dispatch or history persistence failed; an external side effect may already have occurred.",
+      }).eq("id", runId).eq("status", "running");
+    }
     if (db && receipt) {
       await db.from("webhook_event_receipts").update({
         status: "failed",
