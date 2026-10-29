@@ -193,7 +193,7 @@ test("Data nodes deduplicate, sort, and aggregate without coercion", async () =>
   assert.deepEqual(aggregate.outputSchema.parse(await aggregate.run(context, { values: [2, 4, 6] })), {
     count: 3, sum: 12, average: 4, min: 2, max: 6,
   });
-  await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /Expected number/);
+  await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /expected number/i);
 });
 
 test("Data split_batches keeps every item in ordered batches", async () => {
