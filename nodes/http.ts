@@ -37,7 +37,7 @@ export const httpNode: NodeDefinition = {
   triggers: [],
   actions: [{
     id: "request", name: "Make HTTP request",
-    description: "Makes a bounded HTTPS GET or POST request to a hostname explicitly allowlisted in the server-side HTTP connection. Supports query parameters, JSON POST bodies up to 32 KiB, safe Accept/Content-Type headers, and an optional server-stored Bearer API key. Blocks IP literals, localhost, custom ports, URL credentials and unapproved hosts. The shared server transport pins validated public DNS answers to the TLS connection, rejects redirects, blocks private/reserved IPv4 and IPv6 destinations, caps responses at 256 KiB, caps request bodies at 32 KiB and enforces a 10-second timeout.",
+    description: "Makes a bounded HTTPS GET or POST request to a hostname explicitly allowlisted in the server-side HTTP connection. Supports query parameters, JSON POST bodies up to 32 KiB, safe Accept/Content-Type headers, and an optional server-stored Bearer API key. Blocks IP literals, localhost, custom ports, URL credentials and unapproved hosts. Bearer credentials are selected from a server-only JSON map keyed by exact hostname. The shared server transport pins validated public DNS answers to the TLS connection, rejects redirects, blocks private/reserved IPv4 and IPv6 destinations, caps responses at 256 KiB, caps request bodies at 32 KiB and enforces a 10-second timeout.",
     inputSchema, outputSchema,
     async run(ctx, rawInput) {
       const input = inputSchema.parse(rawInput);
@@ -56,8 +56,11 @@ export const httpNode: NodeDefinition = {
         headers["content-type"] = headers["content-type"] ?? "application/json";
       }
       if (input.auth === "bearer") {
-        const apiKey = ctx.credentials.http?.apiKey;
-        if (!apiKey) throw new Error("HTTP_CONNECTION_REQUIRED");
+        let apiKeys: Record<string, unknown>;
+        try { apiKeys = JSON.parse(ctx.credentials.http?.apiKeys ?? "{}") as Record<string, unknown>; }
+        catch { throw new Error("HTTP_CONNECTION_INVALID"); }
+        const apiKey = apiKeys[url.hostname.toLowerCase()];
+        if (typeof apiKey !== "string" || !apiKey) throw new Error("HTTP_CONNECTION_REQUIRED");
         headers.authorization = "Bearer " + apiKey;
       }
       const response = await ctx.http.request({
