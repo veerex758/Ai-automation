@@ -58,6 +58,7 @@ test("endpoint provisioning is authenticated and returns the signing secret only
   assert.match(source, /encryptWebhookSecret\(signingSecret, encryptionKey\)/);
   assert.match(source, /endpoint_key_hash: createHash\("sha256"\)/);
   assert.match(source, /secretShownOnce: true/);
+  assert.match(source, /Cache-Control": "no-store"/);
   assert.match(source, /status: "active"/);
 });
 
