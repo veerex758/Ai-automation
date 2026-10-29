@@ -125,7 +125,7 @@ export default function RegistryBuilderPage() {
   }
 
   function mappingLabel(from: RegistryStep, to: RegistryStep): string {
-    const serialized = JSON.stringify(to.input);
+    const serialized = JSON.stringify(to.input) ?? "";
     const refs = [...serialized.matchAll(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g)]
       .map((match) => match[1]).filter((path) => path.startsWith(from.id + "."));
     return refs.length ? "Maps " + refs.map((path) => path.slice(from.id.length + 1)).join(", ") + " → " + to.nodeId + " input" : "Connected to next step";
