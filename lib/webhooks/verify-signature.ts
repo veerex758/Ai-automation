@@ -14,12 +14,13 @@ const MAX_SIGNATURE_HEADER_LENGTH = 2048;
  */
 export function verifyWebhookSignature(args: {
   rawBody: string | Uint8Array;
+  signedMetadata?: string;
   signatureHeader: string | null;
   secret: string | undefined;
   nowSeconds?: number;
   toleranceSeconds?: number;
 }): WebhookVerificationResult {
-  const { rawBody, signatureHeader, secret } = args;
+  const { rawBody, signatureHeader, secret, signedMetadata } = args;
   if (!secret || !secret.trim()) return { ok: false, reason: "missing_secret" };
   if (!signatureHeader) return { ok: false, reason: "missing_signature" };
   if (signatureHeader.length > MAX_SIGNATURE_HEADER_LENGTH) return { ok: false, reason: "malformed_signature" };
@@ -41,7 +42,7 @@ export function verifyWebhookSignature(args: {
   // Preserve exact raw bytes; decoding arbitrary bytes as UTF-8 can change the signed payload.
   const bodyBytes = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : Buffer.from(rawBody);
   const expected = createHmac("sha256", secret)
-    .update(Buffer.concat([Buffer.from(timestampText + ".", "utf8"), bodyBytes]))
+    .update(Buffer.concat([Buffer.from(timestampText + "." + (signedMetadata === undefined ? "" : signedMetadata + "."), "utf8"), bodyBytes]))
     .digest();
   const matches = signatures.some((signature) => {
     const supplied = Buffer.from(signature, "hex");
