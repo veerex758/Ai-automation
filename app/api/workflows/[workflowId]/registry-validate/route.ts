@@ -78,7 +78,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       const parsed = operation.inputSchema.safeParse(step.input);
       if (!parsed.success) issues.push({ stepId: step.id, code: "INPUT_SCHEMA", message: parsed.error.issues.map((issue) => issue.path.length ? issue.path.join(".") + ": " + issue.message : issue.message).join("; ") });
 
-      const serialized = JSON.stringify(step.input);
+      const serialized = JSON.stringify(step.input) ?? "";
       const referencePattern = /\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}/g;
       for (const match of serialized.matchAll(referencePattern)) {
         const referencePath = match[1];
