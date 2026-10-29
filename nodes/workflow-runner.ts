@@ -119,7 +119,15 @@ export async function executeRegisteredWorkflow(args: {
       const input = resolveReferences(step.input, outputs, args.dryRun);
       const validatedInput = operation.inputSchema.parse(input);
       if (args.dryRun) {
-        results.push({ stepId: step.id, status: "simulated" });
+        // Switch is deterministic and side-effect-free, so evaluate it in dry-run
+        // to predict which branch would be selected. All other operations remain simulated.
+        if (step.nodeId === "logic" && step.operationId === "switch") {
+          const output = operation.outputSchema.parse(await operation.run({ ...args.context, previousOutputs: outputs }, validatedInput));
+          outputs[step.id] = output;
+          results.push({ stepId: step.id, status: "simulated", output });
+        } else {
+          results.push({ stepId: step.id, status: "simulated" });
+        }
         continue;
       }
       const output = await operation.run({ ...args.context, previousOutputs: outputs }, validatedInput);
