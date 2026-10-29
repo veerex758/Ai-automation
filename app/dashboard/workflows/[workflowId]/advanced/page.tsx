@@ -353,7 +353,7 @@ export default function RegistryBuilderPage() {
               <textarea id="http-curl" rows={4} value={curlText} onChange={(event) => setCurlText(event.target.value)} placeholder="curl -X POST https://api.example.com/leads -H 'Content-Type: application/json' -d '{...}'" />
               <button type="button" className="builder-validate" disabled={!curlText.trim()} onClick={importCurl}>Import cURL</button>
               <button type="button" className="builder-validate" disabled={validating || saving || testing} onClick={() => void validateSetup()}>Test step (safe validation)</button>
-              <p className="config-note">Variables use {{ $json.field }} from the previous node. Import supports common cURL flags; imported authorization secrets are discarded. Test step validates only and never sends a request.</p>
+              <p className="config-note">Variables use <code>{"{{ $json.field }}"}</code> from the previous node. Import supports common cURL flags; imported authorization secrets are discarded. Test step validates only and never sends a request.</p>
               <details><summary>Advanced JSON configuration</summary><textarea id="registry-input" rows={12} spellCheck={false} value={inputText} onChange={(event) => {
                 setInputText(event.target.value);
                 try { updateStep(selected.id, { input: JSON.parse(event.target.value) as unknown }); setError(""); }
