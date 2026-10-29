@@ -10,6 +10,7 @@ test("webhook ingress authenticates raw bytes with the endpoint's encrypted sign
   assert.match(source, /decryptWebhookSecret\(ciphertextBytes\(endpoint\.secret_ciphertext\)/);
   assert.match(source, /verifyWebhookSignature\(\{[\s\S]*rawBody,[\s\S]*signatureHeader,[\s\S]*secret: signingSecret/);
   assert.match(source, /toleranceSeconds: MAX_EVENT_AGE_SECONDS/);
+  assert.match(source, /signedMetadata: JSON\.stringify\(\[eventId, eventType\]\)/);
   assert.match(source, /endpoint\.secret_key_version !== configuredKeyVersion/);
 });
 
