@@ -233,7 +233,7 @@ test("Loop / Iterate executes bounded registered actions for each input record",
     steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: {
       left: "{{item.score}}", operator: "greater_than", right: 5,
     } }],
-  }));
+  })) as { itemsProcessed: number; itemsSucceeded: number; itemsFailed: number; results: Array<{ outputs: Record<string, unknown> }> };
   assert.equal(result.itemsProcessed, 2);
   assert.equal(result.itemsSucceeded, 2);
   assert.equal((result.results[0].outputs.check as { result: boolean }).result, false);
