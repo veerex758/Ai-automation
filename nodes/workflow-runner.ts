@@ -7,6 +7,8 @@ export type RegisteredWorkflowStep = {
   operationId: string;
   kind: "trigger" | "action";
   input: unknown;
+  /** Execute this step only when the referenced Switch / Route output selects this route. */
+  branch?: { stepId: string; route: string };
 };
 
 export type RegisteredStepResult = {
@@ -88,11 +90,29 @@ export async function executeRegisteredWorkflow(args: {
       return { status: "failed", steps: results, outputs };
     }
     seen.add(step.id);
+    if (step.branch && (!/^[a-zA-Z0-9_-]{1,64}$/.test(step.branch.stepId) || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.branch.route))) {
+      results.push({ stepId: step.id, status: "failed", error: "INVALID_BRANCH_CONDITION" });
+      for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
+      return { status: "failed", steps: results, outputs };
+    }
     const operation = findOperation(step.nodeId, step.operationId, step.kind);
     if (!operation) {
       results.push({ stepId: step.id, status: "failed", error: "NODE_OPERATION_NOT_FOUND" });
       for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
       return { status: "failed", steps: results, outputs };
+    }
+
+    if (step.branch) {
+      const branchOutput = outputs[step.branch.stepId];
+      if (!branchOutput || typeof branchOutput !== "object" || !("route" in branchOutput) || typeof (branchOutput as { route?: unknown }).route !== "string") {
+        results.push({ stepId: step.id, status: "failed", error: "WORKFLOW_BRANCH_SOURCE_INVALID" });
+        for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
+        return { status: "failed", steps: results, outputs };
+      }
+      if ((branchOutput as { route: string }).route !== step.branch.route) {
+        results.push({ stepId: step.id, status: "skipped", error: "BRANCH_NOT_SELECTED" });
+        continue;
+      }
     }
 
     try {
