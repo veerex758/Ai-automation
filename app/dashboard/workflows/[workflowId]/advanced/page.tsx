@@ -27,6 +27,8 @@ export default function RegistryBuilderPage() {
   const [workflowName, setWorkflowName] = useState("Workflow");
   const [catalog, setCatalog] = useState<CatalogNode[]>([]);
   const [steps, setSteps] = useState<RegistryStep[]>(starterSteps);
+  const [legacyDefinition, setLegacyDefinition] = useState<{ version: 1; nodes: Array<{ id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> }> }>({ version: 1, nodes: [{ id: "trigger-1", type: "trigger", title: "Manual start", description: "Registry workflow start", settings: { event: "manual" } }] });
+  const [inputText, setInputText] = useState("{}");
   const [savedFingerprint, setSavedFingerprint] = useState(JSON.stringify(starterSteps));
   const [selectedId, setSelectedId] = useState("trigger-1");
   const [loading, setLoading] = useState(true);
@@ -50,6 +52,7 @@ export default function RegistryBuilderPage() {
       if (!definitionResponse.ok) throw new Error(definitionData.error || "Could not load workflow.");
       if (!catalogResponse.ok || !Array.isArray(catalogData.nodes)) throw new Error(catalogData.error || "Could not load node catalog.");
       setWorkflowName(definitionData.workflow?.name || "Workflow");
+      if (definitionData.definition && Array.isArray(definitionData.definition.nodes)) setLegacyDefinition(definitionData.definition);
       setCatalog(catalogData.nodes as CatalogNode[]);
       const restored = Array.isArray(definitionData.registrySteps) && definitionData.registrySteps.length
         ? definitionData.registrySteps as RegistryStep[] : starterSteps;
@@ -59,6 +62,7 @@ export default function RegistryBuilderPage() {
   }, [workflowId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (selected) setInputText(JSON.stringify(selected.input, null, 2)); }, [selectedId]);
 
   function updateStep(id: string, patch: Partial<RegistryStep>) {
     setSteps((current) => current.map((step) => step.id === id ? { ...step, ...patch } : step));
@@ -81,12 +85,13 @@ export default function RegistryBuilderPage() {
 
   async function save() {
     if (saving || testing || dirty === false) return;
+    try { JSON.parse(inputText); } catch { setError("Finish the input JSON before saving."); return; }
     setSaving(true); setError(""); setNotice(""); setRun(null);
     try {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          definition: { version: 1, nodes: [{ id: "trigger-1", type: "trigger", title: "Manual start", description: "Registry workflow start", settings: { event: "manual" } }] },
+          definition: legacyDefinition,
           registrySteps: steps,
         }),
       });
@@ -172,7 +177,8 @@ export default function RegistryBuilderPage() {
               {catalog.flatMap((node) => node.actions.map((operation) => <option key={node.id + "." + operation.id} value={node.id + "." + operation.id}>{node.name} · {operation.name}</option>))}
             </select>
             <label htmlFor="registry-input">Input JSON</label>
-            <textarea id="registry-input" rows={18} spellCheck={false} value={JSON.stringify(selected.input, null, 2)} onChange={(event) => {
+            <textarea id="registry-input" rows={18} spellCheck={false} value={inputText} onChange={(event) => {
+              setInputText(event.target.value);
               try { updateStep(selected.id, { input: JSON.parse(event.target.value) as unknown }); setError(""); }
               catch { setError("Input JSON is incomplete or invalid. Finish the JSON before saving."); }
             }} />
