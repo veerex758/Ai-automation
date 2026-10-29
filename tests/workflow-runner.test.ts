@@ -138,11 +138,11 @@ test("Switch / Route runs only steps attached to the selected route", async () =
       },
       {
         id: "newPath", nodeId: "data", operationId: "format_text", kind: "action",
-        input: { template: "new lead", values: {} }, branch: { stepId: "routeLead", route: "new_lead" },
+        input: { template: "new lead", data: {} }, branch: { stepId: "routeLead", route: "new_lead" },
       },
       {
         id: "qualifiedPath", nodeId: "data", operationId: "format_text", kind: "action",
-        input: { template: "qualified lead", values: {} }, branch: { stepId: "routeLead", route: "qualified_lead" },
+        input: { template: "qualified lead", data: {} }, branch: { stepId: "routeLead", route: "qualified_lead" },
       },
     ],
     context: { ...context, http: { async request() { calls.push("http"); return { status: 200, body: {} }; } } },
@@ -168,4 +168,31 @@ test("Switch / Route rejects branch conditions without a valid prior route outpu
   });
   assert.equal(result.status, "failed");
   assert.equal(result.steps[0].error, "WORKFLOW_BRANCH_SOURCE_INVALID");
+});
+
+test("Switch / Route dry-run predicts selected branch without executing branch actions", async () => {
+  let calls = 0;
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      {
+        id: "routeLead", nodeId: "logic", operationId: "switch", kind: "action",
+        input: { value: "new", cases: [{ value: "new", route: "new_lead" }], defaultRoute: "review" },
+      },
+      {
+        id: "newPath", nodeId: "data", operationId: "format_text", kind: "action",
+        input: { template: "new lead", data: {} }, branch: { stepId: "routeLead", route: "new_lead" },
+      },
+      {
+        id: "reviewPath", nodeId: "data", operationId: "format_text", kind: "action",
+        input: { template: "review", data: {} }, branch: { stepId: "routeLead", route: "review" },
+      },
+    ],
+    context: { ...context, http: { async request() { calls++; return { status: 200, body: {} }; } } },
+    dryRun: true,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated", "skipped"]);
+  assert.equal((result.outputs.routeLead as { route: string }).route, "new_lead");
+  assert.equal(result.steps[2].error, "BRANCH_NOT_SELECTED");
+  assert.equal(calls, 0);
 });
