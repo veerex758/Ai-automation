@@ -28,15 +28,10 @@ export async function loadWorkspaceCredentials(workspaceId: string): Promise<Run
       }
     }
   }
-  // Backward-compatible server-managed credentials are used only when a workspace
-  // has not explicitly connected that provider. No credential is ever returned to the browser.
-  if (!credentials.openai && process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
-  if (!credentials.slack && process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
-  if (!credentials.resend && process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
-    credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
-  }
+  // The host allowlist is server policy, not a credential. Provider secrets must be
+  // explicitly connected to this workspace; never silently fall back to a shared key.
   if (!credentials.http && process.env.AIVANTA_HTTP_ALLOWED_HOSTS) {
-    credentials.http = { allowedHosts: process.env.AIVANTA_HTTP_ALLOWED_HOSTS, apiKeys: process.env.AIVANTA_HTTP_API_KEYS ?? "{}" };
+    credentials.http = { allowedHosts: process.env.AIVANTA_HTTP_ALLOWED_HOSTS, apiKeys: "{}" };
   }
   return credentials;
 }
