@@ -18,6 +18,10 @@ function inputExample(nodeId: string, operationId: string): string {
   if (nodeId === "date_time" && operationId === "calculate_duration") return JSON.stringify({ start: "2026-01-01T00:00:00Z", end: "2026-01-02T00:00:00Z", unit: "hours" }, null, 2);
   if (nodeId === "loop" && operationId === "for_each") return JSON.stringify({ items: [{ email: "lead@example.com" }, { email: "customer@example.com" }], steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: { left: "{{item.email}}", operator: "is_not_empty" } }], stopOnError: true }, null, 2);
   if (nodeId === "http" && operationId === "request") return JSON.stringify({ url: "https://api.example.com/items", method: "GET", auth: "none" }, null, 2);
+  if (nodeId === "gemini" && operationId === "generate_text") return JSON.stringify({ prompt: "Summarize this customer enquiry: {{trigger.body.message}}", model: "gemini-2.5-flash", maxOutputTokens: 800 }, null, 2);
+  if (nodeId === "openai" && operationId === "generate_text") return JSON.stringify({ prompt: "Summarize this customer enquiry: {{trigger.body.message}}", model: "gpt-4o-mini", maxOutputTokens: 800 }, null, 2);
+  if (nodeId === "email" && operationId === "send_email") return JSON.stringify({ to: "owner@example.com", subject: "New workflow result", text: "{{gemini.text}}" }, null, 2);
+  if (nodeId === "slack" && operationId === "send_message") return JSON.stringify({ message: "{{gemini.text}}" }, null, 2);
   return "{}";
 }
 
