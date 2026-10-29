@@ -1,7 +1,6 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { request as httpsRequest, type RequestOptions } from "node:https";
-import type { LookupFunction } from "node:dns";
 
 const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024;
@@ -82,7 +81,7 @@ export async function safeHttpsRequest(args: {
     }
     if (options?.all) callback(null, [{ address: pinned.address, family: pinned.family }]);
     else callback(null, pinned.address, pinned.family);
-  }) as unknown as LookupFunction;
+  }) as NonNullable<RequestOptions["lookup"]>;
 
   const serializedBody = args.body === undefined ? undefined : JSON.stringify(args.body);
   if (serializedBody !== undefined && Buffer.byteLength(serializedBody, "utf8") > MAX_REQUEST_BODY_BYTES) {
