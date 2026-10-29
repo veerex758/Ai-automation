@@ -149,3 +149,21 @@
 .workflow-side-link{transition:background .16s ease,color .16s ease}
 .workflow-side-link:focus-visible{outline:2px solid #c9f26f;outline-offset:2px}
 @media(prefers-reduced-motion:reduce){.workflow-side-link{transition:none}}
+
+/* Workspace integration manager */
+.integration-list{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+.integration-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px;border:1px solid #e5ebe1;border-radius:9px;background:#fff}
+.integration-card strong{font-size:12px;color:#304334}
+.integration-card p{font-size:10px;line-height:1.6;color:#829083;margin:6px 0}
+.integration-card small{font-size:9px;color:#7c8c7d}
+.integration-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.integration-actions button{white-space:nowrap}
+.integration-field{display:flex;flex-direction:column;gap:7px;margin:14px 0;font-size:10px;font-weight:700;color:#4b5c4d}
+.integration-field input,.integration-field select{width:100%;min-width:0;border:1px solid #dfe7db;border-radius:7px;background:#fff;padding:11px 12px;font:11px 'DM Sans',sans-serif;color:#334436;outline:none}
+.integration-field input:focus,.integration-field select:focus{border-color:#8eae70;box-shadow:0 0 0 3px #eff5e8}
+.integration-form{display:flex;flex-direction:column;gap:3px;margin-top:10px}
+.builder-workspace>.builder-panel{margin-bottom:16px;border:1px solid #e4eae1;border-radius:10px;padding:22px;box-shadow:0 3px 15px rgba(39,59,42,.025)}
+.builder-workspace>.builder-panel h2{font:700 16px Manrope,sans-serif;margin:0 0 8px;color:#2d4031}
+.builder-workspace>.builder-panel>p,.builder-workspace>.builder-panel li{font-size:10px;line-height:1.7;color:#7e8d7e}
+.builder-workspace>.builder-panel ul{padding-left:18px}
+@media(max-width:760px){.integration-card{align-items:flex-start;flex-direction:column}.integration-actions{width:100%}.builder-workspace>.builder-panel{padding:17px}}
