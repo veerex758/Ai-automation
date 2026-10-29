@@ -51,12 +51,12 @@ function validateCredentials(provider: Provider, value: unknown): { credentials:
 
 async function testProvider(provider: Provider, credentials: Credentials, metadata: Record<string, unknown>) {
   if (provider === "openai") {
-    const result = await safeHttpsRequest({ url: "https://api.openai.com/v1/models", method: "GET", headers: { Authorization: "Bearer " + credentials.apiKey }, timeoutMs: 8000, maxResponseBytes: 32768 });
+    const result = await safeHttpsRequest({ url: "https://api.openai.com/v1/models/gpt-4o-mini", method: "GET", headers: { Authorization: "Bearer " + credentials.apiKey }, timeoutMs: 8000, maxResponseBytes: 32768 });
     if (result.status < 200 || result.status >= 300) throw new Error(result.status === 401 ? "CONNECTION_AUTH_FAILED" : "CONNECTION_TEST_FAILED");
     return;
   }
   if (provider === "gemini") {
-    const result = await safeHttpsRequest({ url: "https://generativelanguage.googleapis.com/v1beta/models", method: "GET", headers: { "x-goog-api-key": credentials.apiKey }, timeoutMs: 8000, maxResponseBytes: 32768 });
+    const result = await safeHttpsRequest({ url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash", method: "GET", headers: { "x-goog-api-key": credentials.apiKey }, timeoutMs: 8000, maxResponseBytes: 32768 });
     if (result.status < 200 || result.status >= 300) throw new Error(result.status === 401 || result.status === 403 ? "CONNECTION_AUTH_FAILED" : "CONNECTION_TEST_FAILED");
     return;
   }
