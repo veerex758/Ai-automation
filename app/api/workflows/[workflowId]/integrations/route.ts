@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { decryptCredentials, encryptCredentials } from "@/lib/integrations/credential-crypto";
+import { decryptCredentials, encryptCredentials, isCredentialEncryptionConfigured } from "@/lib/integrations/credential-crypto";
 import { safeHttpsRequest } from "@/lib/workflows/safe-http-transport";
 
 export const dynamic = "force-dynamic";
@@ -79,7 +79,7 @@ async function testProvider(provider: Provider, credentials: Credentials, metada
   const allowedHosts = (process.env.AIVANTA_HTTP_ALLOWED_HOSTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
   if (!allowedHosts.includes(host)) throw new Error("HTTP_HOST_NOT_SERVER_ALLOWLISTED");
   const result = await safeHttpsRequest({ url: "https://" + host + "/", method: "GET", headers: { Authorization: "Bearer " + credentials.apiKey }, timeoutMs: 8000, maxResponseBytes: 8192 });
-  if (result.status >= 500) throw new Error("CONNECTION_TEST_FAILED");
+  if (result.status === 401 || result.status === 403) throw new Error("CONNECTION_AUTH_FAILED");\n  if (result.status >= 500) throw new Error("CONNECTION_TEST_FAILED");
 }
 
 async function loadSecret(admin: ReturnType<typeof createAdminClient>, integrationId: string) {
@@ -98,7 +98,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
       .select("provider,status,display_name,metadata,last_tested_at,last_test_status,updated_at")
       .eq("workspace_id", auth.workflow.workspace_id).order("provider");
     if (error) throw error;
-    return NextResponse.json({ integrations: data ?? [], encryptionConfigured: Boolean(process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY) }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ integrations: data ?? [], encryptionConfigured: isCredentialEncryptionConfigured() }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not load workspace integrations." }, { status: 500 });
   }
@@ -165,12 +165,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!integration) return NextResponse.json({ error: "Connect this integration first." }, { status: 404 });
     const admin = createAdminClient();
     const credentials = await loadSecret(admin, integration.id);
-    await testProvider(provider, credentials, (integration.metadata ?? {}) as Record<string, unknown>);
+    try {
+      await testProvider(provider, credentials, (integration.metadata ?? {}) as Record<string, unknown>);
+    } catch (testError) {
+      const { error: updateError } = await auth.userClient.from("workspace_integrations").update({
+        status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
+      }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
+      if (updateError) throw updateError;
+      throw testError;
+    }
     const now = new Date().toISOString();
     const { error: updateError } = await auth.userClient.from("workspace_integrations").update({ status: "connected", last_tested_at: now, last_test_status: "passed" })
       .eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
     if (updateError) throw updateError;
-    return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "slack" ? "Webhook URL validated; no test message was sent." : "Provider accepted the connection check." });
+    return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "slack" ? "Webhook URL validated; no test message was sent." : provider === "http" ? "The HTTPS host responded; this does not prove every API route or scope is authorized." : "Provider accepted the connection check." });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     return NextResponse.json({ error: code.startsWith("CONNECTION_") || code.startsWith("HTTP_HOST_") ? code : "Integration test failed. Check the provider key and permissions." }, { status: 400 });
