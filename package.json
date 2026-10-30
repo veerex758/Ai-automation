@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/credential-secret-crypto.test.ts && node --test",
+    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/credential-secret-crypto.test.ts tests/credential-redaction.test.ts && node --test",
     "dev": "next dev",
     "build": "npm run validate:nodes && next build",
     "start": "next start",
