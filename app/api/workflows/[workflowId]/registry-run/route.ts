@@ -134,7 +134,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         return NextResponse.json({ error: "Selected credential cannot be decrypted with the active server key version." }, { status: 503 });
       }
       const encodedCiphertext = String(credential.secret_ciphertext);
-      const hex = encodedCiphertext.startsWith("\\\\x") ? encodedCiphertext.slice(2) : encodedCiphertext;
+      const hex = encodedCiphertext.startsWith("\\x") ? encodedCiphertext.slice(2) : encodedCiphertext;
       if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error("CREDENTIAL_CIPHERTEXT_MALFORMED");
       const plaintext = decryptCredentialSecret(Buffer.from(hex, "hex"), encodedKey, `${workflow.workspace_id}:${expectedProvider}`);
       let parsedSecret: unknown;
