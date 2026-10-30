@@ -108,7 +108,7 @@ export async function executeRegisteredWorkflow(args: {
       }
       const provider = step.nodeId === "email" ? "resend" : step.nodeId;
       const credentials = step.credential
-        ? { ...args.context.credentials, [provider]: step.credential }
+        ? { ...args.context.credentials, [provider]: { ...(args.context.credentials[provider] ?? {}), ...step.credential } }
         : args.context.credentials;
       const output = await operation.run({ ...args.context, credentials, previousOutputs: outputs }, validatedInput);
       outputs[step.id] = operation.outputSchema.parse(output);
