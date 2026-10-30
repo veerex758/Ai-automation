@@ -1,6 +1,7 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { decryptCredentialSecret } from "@/lib/credentials/secret-crypto";
+import { redactSensitiveData } from "@/lib/credentials/redact-sensitive";
 import { createClient } from "@/lib/supabase/server";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
@@ -194,11 +195,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (insertError) throw insertError;
 
     const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps: resolvedSteps, context: serverContext(), dryRun: false });
+    const knownSecrets = resolvedSteps.flatMap((step) => Object.values(step.credential ?? {}));
     const rows = execution.steps.map((step, index) => ({
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
       status: step.status === "succeeded" ? "executed" : step.status,
-      result: step.status === "failed" ? { error: step.error } : step.status === "succeeded" ? step.output : { message: step.status === "simulated" ? "No provider action was executed." : step.error },
+      result: redactSensitiveData(step.status === "failed"
+        ? { error: step.error }
+        : step.status === "succeeded"
+          ? step.output
+          : { message: step.status === "simulated" ? "No provider action was executed." : step.error }, knownSecrets),
     }));
     const finalStatus = execution.status === "succeeded" ? "succeeded" : "failed";
     try {
@@ -218,7 +224,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       }
       return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.step_type === "action" && row.status === "executed") }, { status: 201 });
     } catch (error) {
-      console.error("Failed to persist registry workflow history", error);
+      console.error("Failed to persist registry workflow history.");
       if (!dryRun) {
         await supabase.from("workflow_runs").update({
           status: "failed", completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
@@ -231,7 +237,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       }, { status: 500 });
     }
   } catch (error) {
-    console.error("Registry workflow execution failed", error);
+    console.error("Registry workflow execution failed.");
     return NextResponse.json({ error: "Could not complete this workflow run. Check run history before retrying." }, { status: 500 });
   }
 }
