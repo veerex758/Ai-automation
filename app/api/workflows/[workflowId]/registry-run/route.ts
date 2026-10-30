@@ -177,8 +177,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
     // -> finalized lifecycle so step inserts remain auditable before completion.
+    const executionContext = serverContext();
     const dryRunExecution = dryRun
-      ? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: true })
+      ? await executeRegisteredWorkflow({ steps: resolvedSteps, context: executionContext, dryRun: true })
       : null;
     const initialStatus = dryRunExecution
       ? (dryRunExecution.status === "succeeded" ? "succeeded" : "failed")
@@ -194,8 +195,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
     if (insertError) throw insertError;
 
-    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps: resolvedSteps, context: serverContext(), dryRun: false });
-    const knownSecrets = resolvedSteps.flatMap((step) => Object.values(step.credential ?? {}));
+    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps: resolvedSteps, context: executionContext, dryRun: false });
+    const knownSecrets = [
+      ...resolvedSteps.flatMap((step) => Object.values(step.credential ?? {})),
+      ...Object.values(executionContext.credentials).flatMap((providerCredentials) => Object.values(providerCredentials)),
+    ];
     const rows = execution.steps.map((step, index) => ({
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
