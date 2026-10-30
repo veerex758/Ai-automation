@@ -7,6 +7,8 @@ export type RegisteredWorkflowStep = {
   operationId: string;
   kind: "trigger" | "action";
   input: unknown;
+  /** Optional selected workspace credential ID; resolved and authorized by the server route. */
+  credentialId?: string;
   /** Server-resolved credential material; never persisted in workflow definitions or returned to clients. */
   credential?: Record<string, string>;
 };
