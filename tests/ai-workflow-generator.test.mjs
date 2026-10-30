@@ -118,6 +118,12 @@ test("registry planner rejects unknown operations, future references, missing fi
   const missing = structuredClone(registryPlan);
   missing.steps[2].input.message = "Summary {{gemini-1.noSuchField}}";
   await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(missing) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const typeMismatch = structuredClone(registryPlan);
+  typeMismatch.steps[1].input.prompt = "{{trigger-1.started}}";
+  await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(typeMismatch) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const unsupportedSyntax = structuredClone(registryPlan);
+  unsupportedSyntax.steps[1].input.prompt = "Summarize {{ $json.message }}";
+  await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsupportedSyntax) } }] }) }), /AI_UNSAFE_WORKFLOW/);
   const unsupported = structuredClone(registryPlan);
   unsupported.steps[0].nodeId = "schedule";
   unsupported.steps[0].operationId = "start";
