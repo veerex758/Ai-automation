@@ -291,7 +291,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
   } catch (error) {
     console.error("[webhook-ingress] event dispatch failed", {
       receiptId: receipt?.id ?? null,
-      code: error instanceof Error ? error.message : "WEBHOOK_DISPATCH_FAILED",
+      code: error instanceof Error && /^[A-Z0-9_]{1,80}$/.test(error.message) ? error.message : "WEBHOOK_DISPATCH_FAILED",
     });
     if (db && runId) {
       await db.from("workflow_runs").update({
