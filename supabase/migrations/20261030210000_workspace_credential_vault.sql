@@ -18,6 +18,7 @@ create table if not exists public.workspace_credentials (
 create index if not exists workspace_credentials_workspace_provider_idx
   on public.workspace_credentials (workspace_id, provider, status);
 
+drop trigger if exists workspace_credentials_set_updated_at on public.workspace_credentials;
 create trigger workspace_credentials_set_updated_at
   before update on public.workspace_credentials
   for each row execute function public.set_updated_at();
