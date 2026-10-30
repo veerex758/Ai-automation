@@ -30,11 +30,18 @@ async function authorizeWorkspace(workspaceId: string) {
   const { data: { user }, error: authError } = await userClient.auth.getUser();
   if (authError || !user) return { response: json({ error: "Authentication required." }, 401) } as const;
 
-  const { data: membership, error } = await userClient.from("workspace_members")
-    .select("role").eq("workspace_id", workspaceId).eq("user_id", user.id).maybeSingle();
-  if (error) throw error;
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
-    return { response: json({ error: "Workspace owner or admin access is required." }, 403) } as const;
+  const { data: workspace, error: workspaceError } = await userClient.from("workspaces")
+    .select("owner_id").eq("id", workspaceId).maybeSingle();
+  if (workspaceError) throw workspaceError;
+  if (!workspace) return { response: json({ error: "Workspace not found or access denied." }, 404) } as const;
+  const isOwner = workspace.owner_id === user.id;
+  if (!isOwner) {
+    const { data: membership, error } = await userClient.from("workspace_members")
+      .select("role").eq("workspace_id", workspaceId).eq("user_id", user.id).maybeSingle();
+    if (error) throw error;
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      return { response: json({ error: "Workspace owner or admin access is required." }, 403) } as const;
+    }
   }
   return { user, admin: adminClient() } as const;
 }
