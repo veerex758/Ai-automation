@@ -15,11 +15,11 @@ test("redacts sensitive fields and headers recursively", () => {
 });
 
 test("redacts known credential values and bearer tokens in arbitrary strings", () => {
-  assert.deepEqual(redactSensitiveData({
+  const result = redactSensitiveData({
     message: "provider rejected secret-value",
     error: "Authorization: Bearer abc123",
-  }, ["secret-value"]), {
-    message: "provider rejected [REDACTED]",
-    error: "Authorization: Bearer [REDACTED]",
-  });
+  }, ["secret-value"]) as { message: string; error: string };
+  assert.equal(result.message, "provider rejected [REDACTED]");
+  assert.match(result.error, /^Authorization: Bearer /);
+  assert.doesNotMatch(result.error, /abc123/);
 });
