@@ -37,9 +37,11 @@ These PRs do not all target `main`. Several are based on intermediate feature br
 
 - GitHub repository: `veerex758/Ai-automation`; default branch: `main`.
 - The connected Vercel project has a READY deployment from a feature branch. READY means the deployment build completed; it does not prove production promotion, public accessibility, or authenticated end-to-end acceptance.
-- The Supabase connector currently exposes only project `sjrzgzatnnlyyatrpsww` (`supabase-cobalt-harbor`). The intended project selected for this audit is `xymbwkegcpjxlgclqiop`, but the connected Supabase account cannot access it and returns a permission error. No database was changed.
-- Repository history and earlier project documentation identify `xymbwkegcpjxlgclqiop` as the dedicated Aivanta project. This identity must be re-confirmed in the Supabase dashboard and connector access restored before schema inspection or migration execution.
-- The main branch contains migrations through 2026-10-14. Integration and credential-vault migrations on feature branches are not confirmed applied to any database.
+- The user selected the project reference `xymbwkegcpjxlgclqiop` as the intended database, but the currently accessible Supabase project is `ygclofqxtztnynkljipj` (`aivanta-staging`). Do not assume these are the same project. The selected `xym...` project remains inaccessible through the current connector.
+- `aivanta-staging` is ACTIVE_HEALTHY in `eu-west-1` (Ireland), PostgreSQL 17.11. It contains 13 public tables and 36 recorded migrations, including Google OAuth, webhook ingress, workspace integrations and integration grant hardening.
+- The current GitHub `main` tree contains only 16 migration files, ending at `20261014010000_aivanta_workspace_race_safe_default.sql`. The staging database has 20 additional recorded migrations not present in `main`. This is migration drift and a release blocker: reconcile the missing migration files and branch history before promoting or creating new migrations.
+- Supabase branch metadata reports its default `main` branch with status `MIGRATIONS_FAILED`, despite the parent project being ACTIVE_HEALTHY. Investigate the branch provisioning/migration failure before treating database branching as healthy.
+- No database changes were made during this audit.
 
 ## Product capability assessment
 
@@ -150,3 +152,57 @@ Choose queue/orchestration technology after a small load/recovery proof-of-conce
 - Every side-effecting step must have a documented idempotency and retry policy.
 - Every tenant-owned record and execution action must be authorized against the active workspace.
 - Every release must have a rollback/recovery plan.
+
+
+## Staging database audit — 2026-10-31
+
+Target inspected: `aivanta-staging` (`ygclofqxtztnynkljipj`). This is the accessible staging project, not confirmed to be the user's separately selected `xymbwkegcpjxlgclqiop` project.
+
+### Current schema and sample data
+
+All 13 public tables have RLS enabled:
+
+- `workspaces` (2 rows), `workspace_members` (2), `workflows` (6), `workflow_versions` (4), `audit_events` (12)
+- `workflow_runs` (8), `workflow_run_steps` (24), `workflow_schedules` (0)
+- `google_connections` (0), `webhook_endpoints` (0), `webhook_event_receipts` (0)
+- `workspace_integrations` (0), `workspace_integration_secrets` (0)
+
+The staging schema is materially ahead of GitHub main. The 36 applied migration records must be reconciled against the 16 migration files on main and all feature-branch migrations. Do not try to solve this by blindly applying migrations or resetting the database.
+
+### Security advisor interpretation
+
+The advisor reports four tables with RLS enabled but no policies:
+
+- `google_connections`
+- `webhook_endpoints`
+- `webhook_event_receipts`
+- `workspace_integration_secrets`
+
+A direct catalog/grant inspection shows these four tables currently grant table privileges to `service_role` only; no `anon` or `authenticated` table grants were found for them. This is consistent with an intentionally server-only access model and explains why the RLS-without-policy findings may be deliberate defense-in-depth rather than an exposed-client vulnerability. Preserve the server-only model; do not add broad authenticated policies merely to silence the advisor. Verify every backend route uses trusted server authorization and never returns secret material.
+
+The security advisor also reports Supabase Auth leaked-password protection disabled. Enable it in the project's Auth password settings if supported by the current plan. Supabase documentation: https://supabase.com/docs/guides/auth/password-security
+
+### Performance advisor
+
+Five foreign keys are missing covering indexes:
+
+- `google_connections.connected_by`
+- `webhook_endpoints(workflow_id, workspace_id)` composite foreign key
+- `webhook_endpoints.workspace_id`
+- `webhook_endpoints.created_by`
+- `workspace_integrations.created_by`
+
+The advisor also lists 12 indexes as unused. Staging has small sample volumes and some features have zero rows, so do not drop these indexes based on staging-only usage statistics. Add only the missing FK indexes after reviewing existing indexes and migration definitions; reassess unused indexes with representative workload data.
+
+### Database branching
+
+Supabase reports the default database branch as `MIGRATIONS_FAILED` while the parent project status is `ACTIVE_HEALTHY`. This requires investigation. It is not evidence that the parent staging database is down, but it means branch-based migration workflows should not be assumed healthy.
+
+### Immediate staging remediation order
+
+1. Reconcile the 20 migration records missing from GitHub main and establish a single canonical migration history.
+2. Investigate the failed Supabase database branch migration status.
+3. Keep server-only integration/OAuth/webhook/secret tables restricted to backend roles; test that anon/authenticated cannot access them.
+4. Enable leaked-password protection in Auth settings, subject to plan availability.
+5. Add reviewed covering indexes for the five flagged foreign keys in a version-controlled migration.
+6. Run Supabase advisors and cross-workspace authorization tests again.
