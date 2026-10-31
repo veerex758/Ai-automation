@@ -54,4 +54,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export { COOKIE as GOOGLE_OAUTH_STATE_COOKIE, signature as signGoogleOAuthState };
