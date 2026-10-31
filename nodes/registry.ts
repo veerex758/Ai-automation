@@ -8,8 +8,10 @@ import { logicNode } from "./logic";
 import { dataNode } from "./data";
 import { httpNode } from "./http";
 import { utilitiesNode } from "./utilities";
+import { dateTimeNode } from "./date-time";
+import { loopNode } from "./loop";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, logicNode, dataNode, httpNode, utilitiesNode];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, logicNode, dataNode, httpNode, utilitiesNode, dateTimeNode, loopNode];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);

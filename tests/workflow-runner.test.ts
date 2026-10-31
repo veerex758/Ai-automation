@@ -31,6 +31,23 @@ test("registry workflow stores validated operation outputs for later steps", asy
   assert.equal((result.outputs.draft as { text: string }).text, "Generated text");
 });
 
+
+test("workflow references preserve exact numeric and object types", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "numbers", nodeId: "data", operationId: "aggregate_numbers", kind: "action", input: { values: [3, 4, 5] } },
+      { id: "condition", nodeId: "logic", operationId: "condition", kind: "action", input: { left: "{{numbers.sum}}", operator: "equals", right: 12 } },
+      { id: "mapped", nodeId: "data", operationId: "map_fields", kind: "action", input: { data: { name: "Ada", score: 12 }, fields: { customer: "name", score: "score" } } },
+      { id: "remapped", nodeId: "data", operationId: "map_fields", kind: "action", input: { data: "{{mapped.data}}", fields: { customer: "customer", score: "score" } } },
+    ],
+    context,
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.condition, { result: true });
+  assert.deepEqual(result.outputs.remapped, { data: { customer: "Ada", score: 12 } });
+});
+
 test("registry workflow stops after a failed registered operation", async () => {
   const result = await executeRegisteredWorkflow({
     steps: [

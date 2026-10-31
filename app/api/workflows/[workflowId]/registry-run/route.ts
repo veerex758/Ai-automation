@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
+import { safeHttpsRequest } from "@/lib/workflows/safe-http-transport";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -14,6 +15,12 @@ function serverContext(): Omit<NodeContext, "previousOutputs"> {
   if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
     credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
   }
+  if (process.env.AIVANTA_HTTP_ALLOWED_HOSTS) {
+    credentials.http = {
+      allowedHosts: process.env.AIVANTA_HTTP_ALLOWED_HOSTS,
+      apiKeys: process.env.AIVANTA_HTTP_API_KEYS ?? "{}",
+    };
+  }
   return {
     credentials,
     logger: {
@@ -22,21 +29,13 @@ function serverContext(): Omit<NodeContext, "previousOutputs"> {
     },
     http: {
       async request(args) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), args.timeoutMs ?? 15000);
-        try {
-          const response = await fetch(args.url, {
-            method: args.method,
-            headers: args.headers,
-            body: args.body === undefined ? undefined : JSON.stringify(args.body),
-            signal: controller.signal,
-            redirect: "error",
-          });
-          let body: unknown = null;
-          const raw = await response.text();
-          try { body = raw ? JSON.parse(raw) : raw; } catch { body = raw; }
-          return { status: response.status, body };
-        } finally { clearTimeout(timer); }
+        return safeHttpsRequest({
+          url: args.url,
+          method: args.method,
+          headers: args.headers,
+          body: args.body,
+          timeoutMs: args.timeoutMs,
+        });
       },
     },
   };
