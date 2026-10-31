@@ -127,3 +127,72 @@ test("registry dry-run simulates Slack and Email without calling their providers
   assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated"]);
   assert.equal(calls, 0);
 });
+
+test("Switch / Route runs only steps attached to the selected route", async () => {
+  const calls: string[] = [];
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      {
+        id: "routeLead", nodeId: "logic", operationId: "switch", kind: "action",
+        input: { value: "qualified", cases: [{ value: "new", route: "new_lead" }, { value: "qualified", route: "qualified_lead" }], defaultRoute: "review" },
+      },
+      {
+        id: "newPath", nodeId: "data", operationId: "format_text", kind: "action",
+        input: { template: "new lead", data: {} }, branch: { stepId: "routeLead", route: "new_lead" },
+      },
+      {
+        id: "qualifiedPath", nodeId: "data", operationId: "format_text", kind: "action",
+        input: { template: "qualified lead", data: {} }, branch: { stepId: "routeLead", route: "qualified_lead" },
+      },
+    ],
+    context: { ...context, http: { async request() { calls.push("http"); return { status: 200, body: {} }; } } },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.steps[0].status, "succeeded");
+  assert.equal(result.steps[1].status, "skipped");
+  assert.equal(result.steps[1].error, "BRANCH_NOT_SELECTED");
+  assert.equal(result.steps[2].status, "succeeded");
+  assert.equal((result.outputs.qualifiedPath as { text: string }).text, "qualified lead");
+  assert.deepEqual(calls, []);
+});
+
+test("Switch / Route rejects branch conditions without a valid prior route output", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [{
+      id: "branch", nodeId: "data", operationId: "format_text", kind: "action",
+      input: { template: "not allowed", values: {} }, branch: { stepId: "missing", route: "go" },
+    }],
+    context,
+    dryRun: false,
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.steps[0].error, "WORKFLOW_BRANCH_SOURCE_INVALID");
+});
+
+test("Switch / Route dry-run predicts selected branch without executing branch actions", async () => {
+  let calls = 0;
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      {
+        id: "routeLead", nodeId: "logic", operationId: "switch", kind: "action",
+        input: { value: "new", cases: [{ value: "new", route: "new_lead" }], defaultRoute: "review" },
+      },
+      {
+        id: "newPath", nodeId: "data", operationId: "format_text", kind: "action",
+        input: { template: "new lead", data: {} }, branch: { stepId: "routeLead", route: "new_lead" },
+      },
+      {
+        id: "reviewPath", nodeId: "data", operationId: "format_text", kind: "action",
+        input: { template: "review", data: {} }, branch: { stepId: "routeLead", route: "review" },
+      },
+    ],
+    context: { ...context, http: { async request() { calls++; return { status: 200, body: {} }; } } },
+    dryRun: true,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated", "skipped"]);
+  assert.equal((result.outputs.routeLead as { route: string }).route, "new_lead");
+  assert.equal(result.steps[2].error, "BRANCH_NOT_SELECTED");
+  assert.equal(calls, 0);
+});
