@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -118,6 +119,16 @@ export async function POST(request: NextRequest) {
       ? body.status
       : "draft";
 
+    const definitionResult = "definition" in body
+      ? validateDefinition(body.definition)
+      : { definition: { version: 1, nodes: [] }, error: null };
+    if (!definitionResult.definition) {
+      return NextResponse.json(
+        { error: definitionResult.error || "Invalid workflow definition." },
+        { status: 422, headers: { "Cache-Control": "private, no-store" } },
+      );
+    }
+
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data, error } = await supabase
       .from("workflows")
@@ -126,7 +137,7 @@ export async function POST(request: NextRequest) {
         name,
         description,
         status,
-        definition: {},
+        definition: definitionResult.definition,
         created_by: user.id,
       })
       .select("id, name, description, status, updated_at")
