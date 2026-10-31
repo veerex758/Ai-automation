@@ -37,7 +37,8 @@ test("rejects suspicious identifiers and malformed artifact integrity", () => {
   const base = {
     workspaceId: "workspace-123",
     actorUserId: "user-456",
-    eventType: "node.version_approved" as const,
+    eventType: "node.installation_created" as const,
+    installationId: "install-789",
     packageName: "@aivanta/crm",
     packageVersion: "1.2.3",
   };
