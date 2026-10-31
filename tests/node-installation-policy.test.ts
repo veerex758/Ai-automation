@@ -58,7 +58,6 @@ test("pending, rejected and quarantined packages can never activate", () => {
 test("any missing publisher, artifact, scan, permission or worker gate blocks activation", () => {
   const grant = {
     state: "active" as const,
-    approvedByRole: "owner" as const,
     approvedPermissions: ["connector.invoke"],
   };
   const gates = [
