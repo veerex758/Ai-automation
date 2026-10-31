@@ -129,7 +129,7 @@ begin
   if v_actor is null then
     raise exception 'Authentication required' using errcode = '28000';
   end if;
-  if p_action not in ('grant','revoke') then
+  if p_action is null or p_action not in ('grant','revoke') then
     raise exception 'Invalid permission action' using errcode = '22023';
   end if;
 
@@ -152,7 +152,7 @@ begin
   if v_installation_status = 'uninstalled' then
     raise exception 'Uninstalled node packages cannot change permissions' using errcode = '22023';
   end if;
-  if not (v_manifest -> 'permissions') ? p_permission then
+  if p_permission is null or not ((v_manifest -> 'permissions') ? p_permission) then
     raise exception 'Permission is not declared by the package' using errcode = '22023';
   end if;
 
@@ -229,7 +229,7 @@ begin
   if v_actor is null then
     raise exception 'Authentication required' using errcode = '28000';
   end if;
-  if p_status not in ('disabled','uninstalled') then
+  if p_status is null or p_status not in ('disabled','uninstalled') then
     raise exception 'Installations cannot be activated until the isolated worker is available' using errcode = '22023';
   end if;
 
