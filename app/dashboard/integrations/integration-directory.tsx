@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Provider = "openai" | "gemini" | "resend" | "slack" | "http";
 type Integration = { provider: Provider; status: string; display_name: string; metadata: Record<string, unknown>; last_tested_at: string | null; last_test_status: string | null; updated_at: string };
@@ -77,7 +78,7 @@ export default function IntegrationDirectory() {
     <div className="section-card-title"><h3>{item.name}</h3><span className={`workflow-status ${connected?"status-active":"status-draft"}`}><i/>{connected?"Connected":saved?"Needs attention":"Not connected"}</span></div>
     <p>{item.description}</p>
     <small>{saved?.last_tested_at? `Last test: ${new Date(saved.last_tested_at).toLocaleString()} · ${saved.last_test_status||"unknown"}`: "No successful connection test recorded."}</small>
-    <div className="integration-card-actions"><button className="section-card-link" type="button" onClick={()=>open(item.provider)}>{saved?"Update credentials":"Connect"} ↗</button>{saved&&<><button className="integration-test-button" type="button" disabled={busy} onClick={()=>void test(item.provider)}>Test connection</button><button className="integration-disconnect-button" type="button" disabled={busy} onClick={()=>void disconnect(item.provider)}>Disconnect</button></>}</div>
+    <div className="integration-card-actions"><button className="section-card-link" type="button" onClick={()=>open(item.provider)}>{saved?"Update credentials":"Connect"} ↗</button>{saved&&<><button className="integration-test-button" type="button" disabled={busy} onClick={()=>void test(item.provider)}>Test connection</button><button className="integration-disconnect-button" type="button" disabled={busy} onClick={()=>void disconnect(item.provider)}>Disconnect</button></>}<Link className="integration-builder-link" href="/dashboard/builder">Configure in builder ↗</Link></div>
     {item.provider==="slack"&&saved&&<label className="integration-confirm"><input type="checkbox" checked={confirmSlack} onChange={event=>setConfirmSlack(event.target.checked)}/> I understand the test sends a message to Slack.</label>}
     {item.provider==="http"&&<small>Requests are restricted by the server&apos;s configured host allowlist.</small>}
    </article>;
