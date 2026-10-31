@@ -37,7 +37,7 @@ create table public.node_package_versions (
   runtime_api_version text not null,
   entrypoint text not null
     check (entrypoint <> '' and left(entrypoint, 1) <> '/' and entrypoint !~ '(^|/)\.\.(/|$)'),
-  manifest jsonb not null check (jsonb_typeof(manifest) = 'object'),
+  manifest jsonb not null check (jsonb_typeof(manifest) = 'object' and jsonb_typeof(manifest -> 'permissions') = 'array'),
   artifact_integrity text not null
     check (artifact_integrity ~ '^sha512-[A-Za-z0-9+/]{86}==$'),
   publisher_provenance_verified boolean not null default false,
@@ -108,7 +108,7 @@ create table public.workspace_node_permission_grants (
     references public.workspace_node_installations(id, workspace_id) on delete cascade,
   check (
     (status = 'active' and revoked_at is null and revoked_by is null)
-    or (status = 'revoked' and revoked_at is not null)
+    or (status = 'revoked' and revoked_at is not null and revoked_by is not null)
   )
 );
 
@@ -206,17 +206,34 @@ create policy workspace_node_permission_grants_admin_insert
     private.is_workspace_admin(workspace_id)
     and granted_by = (select auth.uid())
     and exists (
-      select 1 from public.workspace_node_installations i
+      select 1
+      from public.workspace_node_installations i
+      join public.node_package_versions v on v.id = i.package_version_id
       where i.id = installation_id
         and i.workspace_id = workspace_id
         and i.status = 'active'
+        and (v.manifest -> 'permissions') ? permission
     )
   );
 
 create policy workspace_node_permission_grants_admin_update
   on public.workspace_node_permission_grants for update to authenticated
   using (private.is_workspace_admin(workspace_id))
-  with check (private.is_workspace_admin(workspace_id));
+  with check (
+    private.is_workspace_admin(workspace_id)
+    and (
+      (status = 'active' and revoked_at is null and revoked_by is null)
+      or (status = 'revoked' and revoked_at is not null and revoked_by = (select auth.uid()))
+    )
+    and exists (
+      select 1
+      from public.workspace_node_installations i
+      join public.node_package_versions v on v.id = i.package_version_id
+      where i.id = installation_id
+        and i.workspace_id = workspace_id
+        and (v.manifest -> 'permissions') ? permission
+    )
+  );
 
 -- Existing member audit insert policy is retained; this restrictive policy
 -- requires workspace admin authority for node lifecycle events specifically.
@@ -241,8 +258,16 @@ revoke update on public.workspace_node_installations from authenticated;
 grant update (status, updated_at, disabled_at, uninstalled_at)
   on public.workspace_node_installations to authenticated;
 revoke update on public.workspace_node_permission_grants from authenticated;
-grant update (status, revoked_by, revoked_at, updated_at)
+grant update (status, granted_by, revoked_by, revoked_at, updated_at)
   on public.workspace_node_permission_grants to authenticated;
+
+-- Keep modification timestamps server-generated for lifecycle rows.
+create trigger workspace_node_installations_set_updated_at
+  before update on public.workspace_node_installations
+  for each row execute function public.set_updated_at();
+create trigger workspace_node_permission_grants_set_updated_at
+  before update on public.workspace_node_permission_grants
+  for each row execute function public.set_updated_at();
 
 -- Platform audit history is append-only even for the service role.
 revoke update, delete, truncate on public.node_platform_audit_events from anon, authenticated, service_role;
