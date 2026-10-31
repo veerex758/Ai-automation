@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_EVENT_AGE_SECONDS = 300;
+const DURABLE_WEBHOOK_DRY_RUN_QUEUE = process.env.AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED === "true";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
@@ -196,6 +197,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       }
     }
 
+    const eventInput = {
+      eventId,
+      eventType,
+      receivedAt: new Date().toISOString(),
+      payload: payloadValue,
+    };
+    if (DURABLE_WEBHOOK_DRY_RUN_QUEUE && Buffer.byteLength(JSON.stringify(eventInput), "utf8") > 12000) {
+      return jsonError("Queued webhook payload exceeds the 12 KiB durable queue limit.", 413);
+    }
+
     const payloadSha256 = createHash("sha256").update(rawBody).digest("hex");
     const { data: claimRows, error: claimError } = await db.rpc("claim_webhook_event", {
       target_endpoint_id: endpoint.id,
@@ -215,16 +226,53 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       if (prior && (prior.payload_sha256 !== payloadSha256 || prior.event_type !== eventType)) {
         return jsonError("This event ID was already used for a different payload.", 409);
       }
+      if (DURABLE_WEBHOOK_DRY_RUN_QUEUE) {
+        // A retry must re-attempt the idempotent queue RPC. The receipt may have
+        // been claimed before a transient failure, or the previous response may
+        // have been lost after queue commit.
+        const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
+          p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
+          p_workflow_version: workflow.version, p_created_by: null,
+          p_idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
+          p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
+          p_max_attempts: 5,
+        });
+        const queued = dispatch as Record<string, unknown> | null;
+        if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
+          throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
+        }
+        const { error: receiptError } = await db.from("webhook_event_receipts").update({
+          status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
+        }).eq("id", claim.receipt_id);
+        if (receiptError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
+        return NextResponse.json({ accepted: true, queued: true, duplicate: true, jobId: queued.job_id, runId: queued.run_id, mode: "dry_run" }, { status: 202 });
+      }
       return NextResponse.json({ accepted: true, duplicate: true, receiptStatus: prior?.status ?? "accepted" }, { status: 200 });
     }
     receipt = { id: claim.receipt_id, endpoint_id: endpoint.id };
 
-    const eventInput = {
-      eventId,
-      eventType,
-      receivedAt: new Date().toISOString(),
-      payload: payloadValue,
-    };
+    if (DURABLE_WEBHOOK_DRY_RUN_QUEUE) {
+      const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
+        p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
+        p_workflow_version: workflow.version, p_created_by: null,
+        p_idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
+        p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
+        p_max_attempts: 5,
+      });
+      const queued = dispatch as Record<string, unknown> | null;
+      if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
+        throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
+      }
+      const { error: receiptUpdateError } = await db.from("webhook_event_receipts").update({
+        status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
+      }).eq("id", receipt.id);
+      if (receiptUpdateError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
+      return NextResponse.json({
+        accepted: true, queued: true, duplicate: false,
+        jobId: queued.job_id, runId: queued.run_id, mode: "dry_run",
+      }, { status: 202 });
+    }
+
     const executionSteps = steps.map((step, index) => index === 0 ? { ...step, input: eventInput } : step);
     const { data: run, error: runInsertError } = await db.from("workflow_runs").insert({
       workspace_id: workflow.workspace_id,
