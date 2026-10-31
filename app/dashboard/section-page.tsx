@@ -7,10 +7,8 @@ const navigation = [
   ["Dashboard","/dashboard","▦"],["Workflows","/dashboard#workflows","↗"],["Integrations","/dashboard/integrations","⌘"],["AI Agents","/dashboard/ai-assistant","✺"],["Templates","/dashboard/templates","▧"],["Analytics","/dashboard/analytics","▥"],["Activity logs","/dashboard/activity","◷"],["Billing","/dashboard/billing","◇"],["Settings","/dashboard/settings","⚙"],
 ] as const;
 const catalog = [
-  {name:"Google Sheets",symbol:"▦",tone:"lime",description:"Add rows and keep lead or operations data organized."},
-  {name:"Gmail",symbol:"M",tone:"orange",description:"Prepare and send email actions with reviewed configuration."},
-  {name:"Slack",symbol:"✳",tone:"violet",description:"Prepare team notifications and handoff messages."},
-  {name:"Webhooks",symbol:"↗",tone:"blue",description:"Connect external events through validated HTTPS endpoints."},
+  {name:"Slack",symbol:"✳",tone:"violet",description:"Connect a workspace webhook for reviewed team notifications."},
+  {name:"HTTP API",symbol:"↗",tone:"blue",description:"Connect an approved HTTPS API host for controlled requests."},
 ];
 const templates = [
   {name:"Lead Capture & Welcome Email",category:"Lead capture",description:"Start from a website form, record lead details, and prepare a welcome message."},
