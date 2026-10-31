@@ -207,14 +207,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .select("id,metadata").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
     if (error) throw error;
     if (!integration) return NextResponse.json({ error: "Connect this integration first." }, { status: 404 });
-    // Check workspace-owner/admin write permission before decrypting credentials or sending Slack.
-    // This avoids privileged secret reads for users who cannot manage the integration.
-    if (provider === "slack" && confirmSlackDelivery) {
-      const { data: permissionCheck, error: permissionError } = await auth.userClient.from("workspace_integrations").update({
-        status: "needs_attention", last_tested_at: null, last_test_status: null,
-      }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
-      if (permissionError || !permissionCheck) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
-    }
+    // Require workspace-owner/admin write permission before privileged secret access or
+    // provider requests. Even nominally read-only provider checks consume stored credentials.
+    const { data: permissionCheck, error: permissionError } = await auth.userClient.from("workspace_integrations").update({
+      status: "needs_attention", last_tested_at: null, last_test_status: null,
+    }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
+    if (permissionError || !permissionCheck) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
     const admin = createAdminClient();
     const credentials = await loadSecret(admin, integration.id);
     try {
@@ -241,9 +239,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }
 
     const now = new Date().toISOString();
-    const { error: updateError } = await auth.userClient.from("workspace_integrations").update({ status: "connected", last_tested_at: now, last_test_status: "passed" })
-      .eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
+    const { data: persisted, error: updateError } = await auth.userClient.from("workspace_integrations").update({ status: "connected", last_tested_at: now, last_test_status: "passed" })
+      .eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
     if (updateError) throw updateError;
+    if (!persisted) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
     return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "http" ? "The HTTPS host responded; this does not prove every API route or scope is authorized." : "Provider accepted the connection check." }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
@@ -261,9 +260,11 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     if ("response" in auth) return auth.response;
     const provider = new URL(request.url).searchParams.get("provider") as Provider | null;
     if (!provider || !providers.includes(provider)) return NextResponse.json({ error: "Provide a supported provider." }, { status: 400 });
-    const { error } = await auth.userClient.from("workspace_integrations").delete().eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider);
+    const { data: deleted, error } = await auth.userClient.from("workspace_integrations").delete()
+      .eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).select("id").maybeSingle();
     if (error) throw error;
-    return NextResponse.json({ disconnected: true, provider });
+    if (!deleted) return NextResponse.json({ error: "Only workspace owners and admins can disconnect integrations." }, { status: 403 });
+    return NextResponse.json({ disconnected: true, provider }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not disconnect this integration." }, { status: 500 });
   }
