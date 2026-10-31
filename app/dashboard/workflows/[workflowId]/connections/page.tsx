@@ -159,7 +159,7 @@ export default function WorkflowConnectionsPage() {
             <li>Resend sends only to the server-configured live recipient allowlist.</li>
             <li>Slack verification sends a real test message only after you choose “Send test message” and confirm the action.</li>
             <li>Custom HTTP hosts must also be included in the server-side HTTPS host allowlist.</li>
-            <li>Connection tests and safe previews do not activate a workflow or trigger external side effects.</li>
+            <li>Provider connection checks are read-only except the explicitly confirmed Slack test message; safe previews never trigger external side effects.</li>
           </ul></div>
         </section>
       </div>
