@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 
 const integrations = [
-  { name: "Slack", category: "Communication", symbol: "✳", tone: "violet", description: "Send reviewed team notifications through a configured Slack webhook.", capability: "Webhook action", state: "Configure in builder" },
+  { name: "Slack", category: "Communication", symbol: "✳", tone: "violet", description: "Send reviewed team notifications through a configured Slack webhook.", capability: "Webhook action" },
   { name: "HTTP API", category: "Developer tools", symbol: "↗", tone: "blue", description: "Call approved HTTPS endpoints with controlled request settings.", capability: "HTTP request action", state: "Configure in builder" },
 ];
 
