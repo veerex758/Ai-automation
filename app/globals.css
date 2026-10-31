@@ -373,3 +373,76 @@ h1 span{color:#809e65}
 :where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:2px solid #a8d85a;outline-offset:3px}
 @media(max-width:680px){.reference-home .brand-mark{width:30px;height:30px;padding:2px}.reference-home .brand{font-size:17px;gap:8px}.reference-nav-inner{gap:8px}.reference-auth{gap:9px}}
 @media(prefers-reduced-motion:reduce){.reference-nav-links a,.reference-auth a,.reference-footer a,.reference-primary,.reference-secondary,.reference-nav-cta{transition:none}}
+
+
+/* Aivanta premium neutral design system — October 2026 */
+:root{
+  --aivanta-ink:#292D2A;--aivanta-forest:#183B32;--aivanta-forest-deep:#122F28;
+  --aivanta-ivory:#F5F3EE;--aivanta-surface:#FFFFFF;--aivanta-stone:#E8E5DD;
+  --aivanta-muted:#737970;--aivanta-champagne:#C2A879;--aivanta-focus:rgba(24,59,50,.28);
+  --ink:var(--aivanta-ink);--muted:var(--aivanta-muted);--paper:var(--aivanta-ivory);
+  --green:var(--aivanta-forest);--deep:var(--aivanta-forest-deep);--line:var(--aivanta-stone);
+}
+body{background:var(--aivanta-ivory);color:var(--aivanta-ink)}
+.nav{border-color:var(--aivanta-stone)}
+.nav-links a:hover,.text-link:hover{color:var(--aivanta-forest)}
+.nav-cta{border-color:var(--aivanta-stone);background:#fff;color:var(--aivanta-forest)}
+.brand-period,h1 span{color:var(--aivanta-forest)}
+.pulse{background:var(--aivanta-champagne);box-shadow:0 0 0 4px rgba(194,168,121,.16)}
+.button-dark{background:var(--aivanta-forest);color:#fff}.button-dark:hover{background:var(--aivanta-forest-deep)}
+.hero-proof .avatar-stack span{background:#e8e5dd;color:var(--aivanta-ink)}
+.preview-glow{background:radial-gradient(circle,#e9e5dc 0%,rgba(233,229,220,.35) 48%,transparent 74%)}
+.flow-icon,.flow-icon-1,.flow-icon-2,.note-icon,.note-green{background:#f0eee8;color:var(--aivanta-forest)}
+.status-pill{background:#edf1ed;color:var(--aivanta-forest)}.status-pill i{background:var(--aivanta-forest)}
+.workflow-footer{background:#f5f3ee;color:#626a62}.footer-check{background:#e8e5dd;color:var(--aivanta-forest)}
+.dark-section,.cta-card{background:var(--aivanta-forest-deep)}
+.dark-inner h2 span,.principle-arrow{color:#d5c19b}.button-light{background:#d5c19b;color:#292D2A}.button-light:hover{background:#e2d2b5}
+.eyebrow-light{color:#d5c19b}.principles>div{border-color:rgba(255,255,255,.13)}
+.security-mark,.security-badge>span,.capability-icon{background:#eeece5;color:var(--aivanta-forest)}
+.capability-card:nth-child(2) .capability-icon,.capability-card:nth-child(3) .capability-icon{background:#eeece5;color:var(--aivanta-forest)}
+.capability-card:hover{border-color:#c2b9a7}
+.reference-home{background:var(--aivanta-ivory);color:var(--aivanta-ink)}
+.reference-header{background:#fff;border-color:var(--aivanta-stone)}
+.reference-home .brand,.reference-home .reference-hero h1,.reference-home .reference-section-heading h2{color:var(--aivanta-ink)}
+.reference-nav-links,.reference-auth{color:#626a62}
+.reference-hero{background:var(--aivanta-ivory)}
+.reference-hero-copy>p,.reference-trust-points{color:#697169}
+.reference-hero h1 span,.reference-workspace-copy h2 span{color:var(--aivanta-forest)}
+.reference-primary,.reference-nav-cta{background:var(--aivanta-forest);border-color:var(--aivanta-forest);color:#fff}
+.reference-primary:hover,.reference-nav-cta:hover{background:var(--aivanta-forest-deep)}
+.reference-secondary{background:#fff;border-color:var(--aivanta-stone);color:var(--aivanta-ink)}
+.reference-hero-visual{background:transparent}
+.floating-app-window{background:#fff;border-color:var(--aivanta-stone);box-shadow:0 22px 55px rgba(41,45,42,.10);transform:none}
+.mini-sidebar{color:#626a62}.mini-brand{color:var(--aivanta-ink)}
+.mini-sidebar .mini-active{background:#eeece5;color:var(--aivanta-forest)}
+.mini-workflow{background:#f8f7f3;border-color:var(--aivanta-stone)}
+.mini-node{background:#fff;border-color:var(--aivanta-stone);color:var(--aivanta-ink)}
+.node-icon,.form-icon,.sheets-icon,.gmail-icon{background:#eeece5;color:var(--aivanta-forest)}
+.node-check,.mini-connector{color:var(--aivanta-forest)}
+.reference-chat-card,.reference-live-card{background:#fff;border-color:var(--aivanta-stone);color:var(--aivanta-ink);box-shadow:0 12px 30px rgba(41,45,42,.09)}
+.reference-chat-card p,.reference-live-card small{color:#697169}.reference-chat-card a{color:var(--aivanta-forest)}
+.chat-spark,.reference-live-card>span{background:#eeece5;color:var(--aivanta-forest)}
+.reference-features{background:#fff;color:var(--aivanta-ink);border-color:var(--aivanta-stone)}
+.reference-feature-icon{background:#eeece5;color:var(--aivanta-forest)}
+.reference-workspace-section{background:var(--aivanta-forest-deep)}
+.reference-workspace-copy h2 span{color:#d5c19b}
+.reference-dashboard-preview{border-color:var(--aivanta-stone);box-shadow:0 16px 40px rgba(0,0,0,.14)}
+.preview-dashboard-sidebar{background:var(--aivanta-forest-deep)}
+.preview-dashboard-sidebar>span.selected{background:#31574b;color:#fff}
+.preview-chart,.preview-success{background:var(--aivanta-forest-deep)}
+.success-ring{background:conic-gradient(#d5c19b 0deg,#789486 280deg,#31574b 280deg)}
+.reference-footer{background:var(--aivanta-forest-deep);border-color:rgba(255,255,255,.12);color:#c4cbc5}
+:where(a,button,input,textarea,select):focus-visible{outline:2px solid rgba(24,59,50,.55);outline-offset:3px}
+::selection{background:#d9d0bf;color:var(--aivanta-ink)}
+
+/* Remove neon glow remnants from the approved neutral marketing palette. */
+.reference-eyebrow{color:var(--aivanta-forest)}
+.reference-hero{background:var(--aivanta-ivory)}
+.hero-orb{background:none;filter:none}
+.reference-trust-points{color:#697169}
+.reference-trust-points span>i{border-color:var(--aivanta-champagne);color:var(--aivanta-forest)}
+.marketing-sub-hero{background:var(--aivanta-ivory)}
+.marketing-sub-card{background:var(--aivanta-forest-deep);border-color:rgba(255,255,255,.12)}
+.marketing-sub-card>span{background:#31574b;color:#e7dbc5}
+.marketing-sub-card a{color:#e1d1b2}
+.featured-plan{border-color:var(--aivanta-champagne);box-shadow:none}
