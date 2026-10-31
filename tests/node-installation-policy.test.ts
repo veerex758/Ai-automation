@@ -26,19 +26,18 @@ test("only workspace owners and admins can manage node installations", () => {
 test("activation requires every platform security gate and an active admin grant", () => {
   const grant = {
     state: "active" as const,
-    approvedByRole: "admin" as const,
     approvedPermissions: ["connector.invoke", "logger.write"],
   };
   assert.equal(
-    canActivateNodeForWorkspace(readyReview, grant, ["connector.invoke"]),
+    canActivateNodeForWorkspace(readyReview, grant, ["connector.invoke"], "admin"),
     true,
   );
   assert.equal(
-    canActivateNodeForWorkspace(readyReview, grant, ["connector.invoke", "http.outbound"]),
+    canActivateNodeForWorkspace(readyReview, grant, ["connector.invoke", "http.outbound"], "admin"),
     false,
   );
   assert.equal(
-    canActivateNodeForWorkspace(readyReview, { ...grant, state: "revoked" }, ["connector.invoke"]),
+    canActivateNodeForWorkspace(readyReview, { ...grant, state: "revoked" }, ["connector.invoke"], "owner"),
     false,
   );
 });
@@ -46,12 +45,11 @@ test("activation requires every platform security gate and an active admin grant
 test("pending, rejected and quarantined packages can never activate", () => {
   const grant = {
     state: "active" as const,
-    approvedByRole: "owner" as const,
     approvedPermissions: ["connector.invoke"],
   };
   for (const state of ["pending_review", "rejected", "quarantined"] as const) {
     assert.equal(
-      canActivateNodeForWorkspace({ ...readyReview, state }, grant, ["connector.invoke"]),
+      canActivateNodeForWorkspace({ ...readyReview, state }, grant, ["connector.invoke"], "owner"),
       false,
     );
   }
@@ -74,9 +72,20 @@ test("any missing publisher, artifact, scan, permission or worker gate blocks ac
   ] as const;
   for (const gate of gates) {
     assert.equal(
-      canActivateNodeForWorkspace({ ...readyReview, [gate]: false }, grant, ["connector.invoke"]),
+      canActivateNodeForWorkspace({ ...readyReview, [gate]: false }, grant, ["connector.invoke"], "owner"),
       false,
       gate,
     );
   }
+});
+
+test("a member cannot activate a package even when a matching grant exists", () => {
+  const grant = {
+    state: "active" as const,
+    approvedPermissions: ["connector.invoke"],
+  };
+  assert.equal(
+    canActivateNodeForWorkspace(readyReview, grant, ["connector.invoke"], "member"),
+    false,
+  );
 });
