@@ -38,7 +38,7 @@ async function loadGoogleProductCredential(admin: ReturnType<typeof createAdminC
       await admin.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", data.id);
       throw new Error(product === "gmail" ? "GMAIL_REAUTH_REQUIRED" : "SHEETS_REAUTH_REQUIRED");
     }
-    const refreshed = payload as Record<string, unknown>;
+    const refreshed = payload as { access_token: string; refresh_token?: unknown; token_type?: unknown; expires_in?: unknown };
     stored = {
       ...stored,
       access_token: refreshed.access_token,
