@@ -16,6 +16,20 @@ type NodeEntry = {
   actions: NodeOperation[];
 };
 type CatalogResponse = { nodes?: NodeEntry[]; error?: string };
+type InstalledNode = {
+  id: string;
+  status: "active" | "disabled" | "uninstalled";
+  package: {
+    name: string;
+    displayName: string;
+    version: string | null;
+    publisher: string;
+    registryStatus: string;
+    reviewStatus: string | null;
+  } | null;
+  permissions: { id: string; name: string; status: "active" | "revoked"; revokedAt: string | null }[];
+};
+type InstallationResponse = { installations?: InstalledNode[]; error?: string };
 
 const categoryLabels: Record<string, string> = {
   triggers: "Triggers",
@@ -31,15 +45,26 @@ export default function NodeLibraryPage() {
   const [category, setCategory] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [installations, setInstallations] = useState<InstalledNode[]>([]);
+  const [installationsError, setInstallationsError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const response = await fetch("/api/workflows/actions", { cache: "no-store" });
+        const [response, installationResponse] = await Promise.all([
+          fetch("/api/workflows/actions", { cache: "no-store" }),
+          fetch("/api/nodes/installations", { cache: "no-store" }),
+        ]);
         const result = (await response.json()) as CatalogResponse;
         if (!response.ok) throw new Error(result.error || "Could not load the node catalogue.");
         if (!cancelled) setNodes(Array.isArray(result.nodes) ? result.nodes : []);
+
+        const installationResult = (await installationResponse.json()) as InstallationResponse;
+        if (!cancelled) {
+          if (installationResponse.ok) setInstallations(Array.isArray(installationResult.installations) ? installationResult.installations : []);
+          else setInstallationsError(installationResult.error || "Workspace installations could not be loaded.");
+        }
       } catch (caught) {
         if (!cancelled) setError(caught instanceof Error ? caught.message : "Could not load the node catalogue.");
       } finally {
@@ -84,13 +109,23 @@ export default function NodeLibraryPage() {
           <div className="node-library-summary">
             <article><span>Trusted nodes</span><strong>{loading ? "—" : nodes.length}</strong><small>Built into Aivanta</small></article>
             <article><span>Available operations</span><strong>{loading ? "—" : operationCount}</strong><small>Triggers and actions</small></article>
-            <article><span>Community installs</span><strong>0</strong><small>Not enabled yet</small></article>
+            <article><span>Workspace installs</span><strong>{loading ? "—" : installations.filter((item) => item.status !== "uninstalled").length}</strong><small>Persisted package records</small></article>
           </div>
           <section className="community-install-panel">
             <div className="community-install-mark">＋</div>
-            <div><span className="dash-eyebrow">COMMUNITY NODE INSTALLATION</span><h2>Curated community nodes are next</h2><p>We&apos;re building publisher verification, package scanning, workspace approvals and isolated execution before enabling third-party installs. No unreviewed package can access your workspace.</p></div>
-            <span className="workflow-status status-draft"><i/>In development</span>
+            <div><span className="dash-eyebrow">COMMUNITY NODE INSTALLATION</span><h2>Curated packages stay inactive until the sandbox is ready</h2><p>Approved package metadata and workspace permission consent can be stored now. New installations remain disabled; third-party code cannot execute until the isolated worker is deployed and explicitly enabled.</p></div>
+            <span className="workflow-status status-draft"><i/>Execution gated</span>
           </section>
+          <div className="section-title-row"><div><h2>Workspace installations</h2><p>Persisted community package records and workspace capability consent.</p></div></div>
+          {installationsError && <div className="integration-feedback error" role="alert">{installationsError}</div>}
+          {installations.length ? <div className="section-cards-grid node-library-grid">{installations.map((installation) => <article className="section-info-card node-library-card" key={installation.id}>
+            <div className="node-library-card-top"><span className="node-library-icon">◇</span><span className="workflow-status status-draft"><i/>{installation.status === "uninstalled" ? "Uninstalled" : "Disabled"}</span></div>
+            <div className="quick-template-meta"><span>{installation.package?.publisher || "Registry package"}</span><span>{installation.package?.version ? `v${installation.package.version}` : "Version unavailable"}</span></div>
+            <h3>{installation.package?.displayName || installation.package?.name || "Package metadata unavailable"}</h3>
+            <p>{installation.package?.name || installation.id}</p>
+            <div className="node-operation-preview">{installation.permissions.map((permission) => <span key={permission.id}>{permission.name} · {permission.status}</span>)}</div>
+            <small>{installation.status === "uninstalled" ? "Uninstall retained in history" : "Execution blocked until isolated worker readiness"}</small>
+          </article>)}</div> : <div className="section-empty-panel"><h3>No community packages installed</h3><p>First-party nodes are available above. Community package installation remains gated until a reviewed package and isolated worker are ready.</p></div>}
           <div className="section-title-row"><div><h2>Available in your builder</h2><p>These are the live first-party node definitions loaded from Aivanta&apos;s trusted registry.</p></div></div>
           <div className="node-library-tools">
             <label className="integration-search"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search nodes and operations" aria-label="Search nodes and operations" /></label>
