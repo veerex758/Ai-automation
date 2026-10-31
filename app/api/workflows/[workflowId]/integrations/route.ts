@@ -207,12 +207,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .select("id,metadata").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
     if (error) throw error;
     if (!integration) return NextResponse.json({ error: "Connect this integration first." }, { status: 404 });
-    // Require workspace-owner/admin write permission before privileged secret access or
-    // provider requests. Even nominally read-only provider checks consume stored credentials.
-    const { data: permissionCheck, error: permissionError } = await auth.userClient.from("workspace_integrations").update({
-      status: "needs_attention", last_tested_at: null, last_test_status: null,
-    }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
-    if (permissionError || !permissionCheck) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
+    // Read the caller's own membership role as a non-mutating authorization preflight.
+    // The workspace_members self-read policy exposes this row to the member, and the
+    // workspace foundation creates an owner membership for every workspace owner.
+    // Do not use an UPDATE as a permission probe: it would erase a previous successful
+    // connection state before a provider request has even started.
+    const { data: membership, error: membershipError } = await auth.userClient.from("workspace_members")
+      .select("role").eq("workspace_id", auth.workflow.workspace_id).eq("user_id", auth.user.id).maybeSingle();
+    if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
+      throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
+    }
     const admin = createAdminClient();
     const credentials = await loadSecret(admin, integration.id);
     try {
