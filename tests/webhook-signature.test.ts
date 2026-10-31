@@ -3,8 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { verifyWebhookSignature } from "../lib/webhooks/verify-signature";
 
-function sign(body: string, secret: string, timestamp: number) {
-  return "t=" + timestamp + ",v1=" + createHmac("sha256", secret).update(timestamp + "." + body).digest("hex");
+function sign(body: string, secret: string, timestamp: number, signedMetadata?: string) {
+  const prefix = timestamp + "." + (signedMetadata === undefined ? "" : signedMetadata + ".");
+  return "t=" + timestamp + ",v1=" + createHmac("sha256", secret).update(prefix + body).digest("hex");
 }
 
 test("verifies a signature over the exact raw body", () => {
@@ -65,4 +66,25 @@ test("rejects ambiguous signature headers with multiple timestamps", () => {
   assert.deepEqual(verifyWebhookSignature({
     rawBody: body, signatureHeader, secret: "test-secret", nowSeconds: timestamp,
   }), { ok: false, reason: "malformed_signature" });
+});
+
+test("binds event ID and event type to the webhook signature", () => {
+  const body = '{"orderId":"ord_1"}';
+  const timestamp = 1_800_000_000;
+  const metadata = JSON.stringify(["evt_1", "order.created"]);
+  const signatureHeader = sign(body, "test-secret", timestamp, metadata);
+
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody: body, signedMetadata: metadata, signatureHeader, secret: "test-secret", nowSeconds: timestamp,
+  }), { ok: true, timestamp });
+
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody: body, signedMetadata: JSON.stringify(["evt_2", "order.created"]),
+    signatureHeader, secret: "test-secret", nowSeconds: timestamp,
+  }), { ok: false, reason: "signature_mismatch" });
+
+  assert.deepEqual(verifyWebhookSignature({
+    rawBody: body, signedMetadata: JSON.stringify(["evt_1", "order.cancelled"]),
+    signatureHeader, secret: "test-secret", nowSeconds: timestamp,
+  }), { ok: false, reason: "signature_mismatch" });
 });
