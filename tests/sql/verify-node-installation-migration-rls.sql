@@ -202,6 +202,6 @@ begin
     raise exception 'RLS is not enabled on every node installation table';
   end if;
 end;
-$$;
+$verify$;
 
 reset role;
