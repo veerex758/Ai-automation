@@ -117,12 +117,7 @@ declare
   v_actor uuid := (select auth.uid());
   v_workspace_id uuid;
   v_installation_status text;
-  v_package_name text;
-  v_package_version text;
   v_manifest jsonb;
-  v_review_status text;
-  v_package_status text;
-  v_publisher_status text;
   v_grant_id uuid;
   v_event_type text;
 begin
@@ -132,15 +127,13 @@ begin
   if p_action is null or p_action not in ('grant','revoke') then
     raise exception 'Invalid permission action' using errcode = '22023';
   end if;
+  if p_permission is null then
+    raise exception 'Permission is required' using errcode = '22023';
+  end if;
 
-  select i.workspace_id, i.status, p.package_name, v.version, v.manifest,
-         v.review_status, p.status, pub.verification_status
-    into v_workspace_id, v_installation_status, v_package_name, v_package_version,
-         v_manifest, v_review_status, v_package_status, v_publisher_status
+  select i.workspace_id, i.status
+    into v_workspace_id, v_installation_status
   from public.workspace_node_installations i
-  join public.node_package_versions v on v.id = i.package_version_id
-  join public.node_packages p on p.id = v.package_id
-  join public.node_publishers pub on pub.id = p.publisher_id
   where i.id = p_installation_id;
 
   if not found then
@@ -152,14 +145,23 @@ begin
   if v_installation_status = 'uninstalled' then
     raise exception 'Uninstalled node packages cannot change permissions' using errcode = '22023';
   end if;
-  if p_permission is null or not ((v_manifest -> 'permissions') ? p_permission) then
-    raise exception 'Permission is not declared by the package' using errcode = '22023';
-  end if;
 
   if p_action = 'grant' then
-    if v_review_status <> 'approved' or v_package_status <> 'active'
-      or v_publisher_status <> 'verified' then
+    select v.manifest into v_manifest
+    from public.workspace_node_installations i
+    join public.node_package_versions v on v.id = i.package_version_id
+    join public.node_packages p on p.id = v.package_id
+    join public.node_publishers pub on pub.id = p.publisher_id
+    where i.id = p_installation_id
+      and v.review_status = 'approved'
+      and p.status = 'active'
+      and pub.verification_status = 'verified';
+
+    if not found then
       raise exception 'Package is not currently approved for installation' using errcode = '22023';
+    end if;
+    if not ((v_manifest -> 'permissions') ? p_permission) then
+      raise exception 'Permission is not declared by the package' using errcode = '22023';
     end if;
 
     insert into public.workspace_node_permission_grants (
@@ -196,8 +198,6 @@ begin
     v_workspace_id, v_actor, v_event_type,
     'workspace_node_installation', p_installation_id::text,
     jsonb_build_object(
-      'package_name', v_package_name,
-      'package_version', v_package_version,
       'installation_id', p_installation_id::text,
       'permission', p_permission
     )
@@ -220,9 +220,6 @@ declare
   v_actor uuid := (select auth.uid());
   v_workspace_id uuid;
   v_current_status text;
-  v_package_name text;
-  v_package_version text;
-  v_artifact_integrity text;
   v_grant record;
   v_event_type text;
 begin
@@ -233,11 +230,9 @@ begin
     raise exception 'Installations cannot be activated until the isolated worker is available' using errcode = '22023';
   end if;
 
-  select i.workspace_id, i.status, p.package_name, v.version, v.artifact_integrity
-    into v_workspace_id, v_current_status, v_package_name, v_package_version, v_artifact_integrity
+  select i.workspace_id, i.status
+    into v_workspace_id, v_current_status
   from public.workspace_node_installations i
-  join public.node_package_versions v on v.id = i.package_version_id
-  join public.node_packages p on p.id = v.package_id
   where i.id = p_installation_id;
 
   if not found then
@@ -265,8 +260,6 @@ begin
         v_workspace_id, v_actor, 'node.permission_revoked',
         'workspace_node_installation', p_installation_id::text,
         jsonb_build_object(
-          'package_name', v_package_name,
-          'package_version', v_package_version,
           'installation_id', p_installation_id::text,
           'permission', v_grant.permission
         )
@@ -290,10 +283,8 @@ begin
     v_workspace_id, v_actor, v_event_type,
     'workspace_node_installation', p_installation_id::text,
     jsonb_build_object(
-      'package_name', v_package_name,
-      'package_version', v_package_version,
       'installation_id', p_installation_id::text,
-      'artifact_integrity', v_artifact_integrity
+      'reason_code', case when p_status = 'uninstalled' then 'workspace_uninstall' else 'workspace_disabled' end
     )
   );
 
