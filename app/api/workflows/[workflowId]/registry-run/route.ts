@@ -25,6 +25,7 @@ async function serverContext(workspaceId: string): Promise<Omit<NodeContext, "pr
           headers: args.headers,
           body: args.body,
           timeoutMs: args.timeoutMs,
+          retries: args.retries,
         });
       },
     },
