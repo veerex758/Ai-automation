@@ -1,10 +1,8 @@
 # Supabase setup (Aivanta)
 
-This folder contains version-controlled migrations for Aivanta's dedicated Supabase project. Never run these migrations against another application's project.
+This folder contains version-controlled migrations for Aivanta. The approved staging project is `aivanta-staging` (ref `ygclofqxtztnynkljipj`) and is for read-only verification in this workflow. Do not use legacy project references or run migration repair/reset/apply commands against staging.
 
-- Project ref: `xymbwkegcpjxlgclqiop`
-- API URL: `https://xymbwkegcpjxlgclqiop.supabase.co`
-- Region: `eu-west-1`
+For clean migration replay, use a disposable local Supabase project only. Keep project URLs and credentials in environment configuration rather than hard-coding them in this repository.
 
 ## Migrations
 1. `20261010180000_aivanta_workspace_workflow_foundation.sql` — workspaces, memberships, workflows, workflow versions, audit events, triggers, indexes, and RLS.
