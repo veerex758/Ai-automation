@@ -206,3 +206,22 @@ Supabase reports the default database branch as `MIGRATIONS_FAILED` while the pa
 4. Enable leaked-password protection in Auth settings, subject to plan availability.
 5. Add reviewed covering indexes for the five flagged foreign keys in a version-controlled migration.
 6. Run Supabase advisors and cross-workspace authorization tests again.
+
+
+## Work completed in the 2026-10-31 working session
+
+- Created PR #94, `aivanta/reconcile-staging-migration-history`, containing the 17 exact migration files from the staging rebuild branch that were absent from main. It remains draft pending clean replay/schema-diff review.
+- Added the five missing foreign-key indexes in migration `20261031040000_aivanta_foreign_key_covering_indexes.sql` on the PR #94 branch and applied that additive migration to the explicitly selected staging project only. The Supabase migration ledger records it as `20261031082734`.
+- Verified all five indexes exist after application.
+- Re-ran Supabase advisors: the five missing-FK-index warnings are gone. The performance advisor now reports 17 unused indexes; retain them until representative workload evidence supports removal.
+- The four no-policy tables remain service-role-only and are intentionally server-only. Do not add client policies just to silence the informational advisor.
+- Leaked-password protection remains disabled and requires an Auth dashboard/configuration change; it was not silently changed during this database session.
+
+## Remaining release blockers after this session
+
+1. PR #94 clean local replay and schema diff are still required; do not merge or replay its historical reconciliation migrations on the live staging database without that proof.
+2. Four post-rebuild migration ledger entries must be matched to exact source files and PRs. PR #86 and PR #90 branches contain migration filenames that do not exactly match the versions recorded in the current staging ledger; reconcile content and names before treating migration history as canonical.
+3. The Supabase default branch reports `MIGRATIONS_FAILED`; diagnose its failed preview branch provisioning separately from the healthy parent project.
+4. Enable leaked-password protection in Supabase Auth.
+5. Complete authenticated staging tests for workspace isolation, integrations save/test/disconnect, webhook ingress and failure recovery.
+6. Verify the intended production Supabase project separately; none was modified.
