@@ -22,7 +22,6 @@ export interface NodeSecurityReview {
 
 export interface WorkspaceNodeGrant {
   state: WorkspaceGrantState;
-  approvedByRole: WorkspaceRole;
   approvedPermissions: readonly string[];
 }
 
@@ -34,7 +33,11 @@ export function canActivateNodeForWorkspace(
   review: NodeSecurityReview,
   grant: WorkspaceNodeGrant | null | undefined,
   requestedPermissions: readonly string[],
+  currentActorWorkspaceRole: WorkspaceRole | null | undefined,
 ): boolean {
+  // The caller must derive this role from the authenticated workspace membership,
+  // never from request input. This helper does not replace the database RLS check.
+  if (!canManageWorkspaceNodes(currentActorWorkspaceRole)) return false;
   if (review.state !== "approved") return false;
   if (
     !review.publisherVerified ||
@@ -46,7 +49,7 @@ export function canActivateNodeForWorkspace(
     !review.isolatedWorkerAvailable
   ) return false;
 
-  if (!grant || grant.state !== "active" || !canManageWorkspaceNodes(grant.approvedByRole)) {
+  if (!grant || grant.state !== "active") {
     return false;
   }
 
