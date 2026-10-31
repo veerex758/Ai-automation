@@ -276,3 +276,39 @@
 .google-oauth-notice{color:#32743b;background:#f1faed;padding:10px;border-radius:8px}
 .google-oauth-refresh{margin-top:10px;border:0;background:none;color:#477b3b;font-size:10px;font-weight:700;cursor:pointer}
 @media(max-width:720px){.google-oauth-grid{grid-template-columns:1fr}.google-oauth-panel{padding:15px}}
+
+
+/* Premium neutral workspace system */
+:root{--aivanta-ink:#292D2A;--aivanta-forest:#183B32;--aivanta-forest-deep:#122F28;--aivanta-ivory:#F5F3EE;--aivanta-surface:#fff;--aivanta-stone:#E8E5DD;--aivanta-muted:#737970;--aivanta-champagne:#C2A879}
+.app-shell,.dashboard-main{background:var(--aivanta-ivory);color:var(--aivanta-ink)}
+.sidebar{background:#fff;border-right:1px solid var(--aivanta-stone);color:var(--aivanta-ink)}
+.dash-brand{color:var(--aivanta-ink)}
+.workspace-switch{background:#fff;border-color:var(--aivanta-stone);color:var(--aivanta-ink)}
+.workspace-avatar,.profile-avatar,.top-avatar{background:#eeece5;color:var(--aivanta-forest)}
+.sidebar-label{color:#92958e}.side-link{color:#626a62}.side-link:hover{background:#f5f3ee;color:var(--aivanta-forest)}
+.side-link.selected{background:#eeece5;color:var(--aivanta-forest);box-shadow:inset 2px 0 var(--aivanta-champagne)}
+.help-card{background:#f8f7f3;border-color:var(--aivanta-stone);color:var(--aivanta-ink)}
+.help-icon,.settings-section-icon{background:#eeece5;color:var(--aivanta-forest)}.help-card p{color:#737970}.help-card a{color:var(--aivanta-forest)}
+.dashboard-topbar{background:rgba(255,255,255,.94);border-color:var(--aivanta-stone)}
+.breadcrumbs{color:#858980}.breadcrumbs strong,.welcome-row h1{color:var(--aivanta-ink)}
+.environment-badge{background:#f8f7f3;border-color:var(--aivanta-stone);color:#626a62}.environment-badge i{background:var(--aivanta-champagne)}
+.dash-eyebrow{color:#737970}.dash-eyebrow .pulse{background:var(--aivanta-champagne)}
+.create-button{background:var(--aivanta-forest);border-color:var(--aivanta-forest);color:#fff;box-shadow:none}.create-button:hover{background:var(--aivanta-forest-deep);border-color:var(--aivanta-forest-deep)}
+.stat-card,.section-info-card,.settings-section-card,.billing-plan-card,.workflow-table,.quick-template-card{background:#fff;border-color:var(--aivanta-stone);box-shadow:none}
+.stat-symbol,.workflow-app-icon.lime,.workflow-app-icon.violet,.workflow-app-icon.blue,.workflow-app-icon.orange,.quick-template-icon.lime,.quick-template-icon.violet,.quick-template-icon.blue,.quick-template-icon.orange{background:#eeece5;color:var(--aivanta-forest)}
+.stat-number,.section-info-card h3,.settings-section-card h3{color:var(--aivanta-ink)}
+.stat-card:nth-child(2) .stat-symbol,.stat-card:nth-child(3) .stat-symbol,.stat-card:nth-child(4) .stat-symbol{background:#eeece5;color:var(--aivanta-forest)}
+.status-active{background:#edf2ee;color:#315c4b}.status-active i{background:#527c68}
+.status-draft{background:#f1f0ec;color:#737970}.status-paused{background:#f5efe5;color:#8b704b}
+.filter-tab.active-filter{background:var(--aivanta-forest);border-color:var(--aivanta-forest);color:#fff}
+.filter-tab>span{background:#eeece5;color:var(--aivanta-forest)}
+.search-box:focus-within{border-color:var(--aivanta-forest);box-shadow:0 0 0 3px rgba(24,59,50,.10)}
+.quick-start-section{background:#fff;border-color:var(--aivanta-stone)}.quick-start-heading h2 span{color:var(--aivanta-forest)}
+.quick-template-card>button{background:#f5f3ee;border-color:var(--aivanta-stone);color:var(--aivanta-forest)}
+.quick-template-card>button:hover{background:#eeece5;border-color:#d2c8b6}
+.section-empty-panel{background:#fff;border-color:#d8d4ca}.section-empty-icon{background:#eeece5;color:var(--aivanta-forest)}
+.section-card-link{color:var(--aivanta-forest)!important}
+.google-oauth-panel{border-color:var(--aivanta-stone);box-shadow:none}.google-oauth-button{background:var(--aivanta-forest)}
+.google-oauth-refresh{color:var(--aivanta-forest)}
+.dashboard-footnote{background:#f8f7f3;border-color:var(--aivanta-stone);color:#737970}
+@media(max-width:720px){.mobile-bottom-nav{background:rgba(255,255,255,.97);border-color:var(--aivanta-stone)}.mobile-bottom-link.active{color:var(--aivanta-forest)}.mobile-bottom-link.active span{background:#eeece5}}
