@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const routeUrl = new URL("../app/api/webhooks/[endpointKey]/route.ts", import.meta.url);
-const migrationUrl = new URL("../supabase/migrations/20261028220000_aivanta_webhook_ingress_foundation.sql", import.meta.url);
+const migrationUrl = new URL("../supabase/migrations/20261029222027_aivanta_webhook_ingress_foundation.sql", import.meta.url);
 
 test("webhook ingress authenticates raw bytes with the endpoint's encrypted signing secret", async () => {
   const source = await readFile(routeUrl, "utf8");
