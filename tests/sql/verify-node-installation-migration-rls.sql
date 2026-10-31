@@ -229,6 +229,35 @@ begin
 end;
 $verify$;
 
+-- Even if a package is later quarantined, workspace admins must still be able to revoke and uninstall.
+reset role;
+update public.node_packages
+set status = 'quarantined'
+where id = '30000000-0000-4000-8000-000000000001';
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', false);
+
+do $quarantine$
+begin
+  begin
+    perform public.set_workspace_node_permission(
+      current_setting('test.installation_id')::uuid,
+      'connector.invoke',
+      'grant'
+    );
+    raise exception 'Quarantined package unexpectedly accepted a new permission grant';
+  exception when invalid_parameter_value then
+    null;
+  end;
+end;
+$quarantine$;
+
+select public.set_workspace_node_permission(
+  current_setting('test.installation_id')::uuid,
+  'connector.invoke',
+  'revoke'
+);
+
 select public.set_workspace_node_installation_state(
   current_setting('test.installation_id')::uuid,
   'uninstalled'
