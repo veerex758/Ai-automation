@@ -58,3 +58,21 @@ test("rejects unscoped packages and non-stable package versions", () => {
   assert.throws(() => createNodeAuditEvent({ ...base, packageName: "crm" }), /scoped package/);
   assert.throws(() => createNodeAuditEvent({ ...base, packageVersion: "1.2.3-beta.1" }), /stable package version/);
 });
+
+test("permission grant and revoke events require an explicit capability", () => {
+  const base = {
+    workspaceId: "workspace-123",
+    actorUserId: "user-456",
+    installationId: "install-789",
+    packageName: "@aivanta/crm",
+    packageVersion: "1.2.3",
+  };
+  assert.throws(() => createNodeAuditEvent({
+    ...base,
+    eventType: "node.permission_granted",
+  }), /require a permission name/);
+  assert.throws(() => createNodeAuditEvent({
+    ...base,
+    eventType: "node.permission_revoked",
+  }), /require a permission name/);
+});
