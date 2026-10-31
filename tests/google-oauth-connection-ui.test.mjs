@@ -16,7 +16,7 @@ test("Google OAuth start is authenticated, workspace-bound and requests product-
   assert.match(connect, /gmail\.readonly/);
   assert.match(connect, /spreadsheets\.readonly/);
   assert.match(connect, /access_type: "offline"/);
-  assert.match(connect, /prompt: "consent"/);
+  assert.match(connect, /prompt: "consent select_account"/);
   assert.match(connect, /httpOnly: true/);
 });
 
@@ -40,7 +40,7 @@ test("Google connection metadata is workspace isolated and tokens are service-ro
 
 test("Integrations UI offers distinct Gmail and Sheets OAuth connections and honest status", () => {
   assert.match(ui, /Connect your Google account/);
-  assert.match(ui, /product\+"\?product="/);
+  assert.match(ui, /connect\?product=/);
   assert.match(ui, /Not connected/);
   assert.match(ui, /Connected ·/);
   assert.match(section, /<GoogleOAuthConnections\/>/);
