@@ -186,10 +186,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     // Check workspace-owner/admin write permission before any external Slack delivery.
     // This avoids sending a message and only afterwards discovering that RLS blocked status persistence.
     if (provider === "slack" && confirmSlackDelivery) {
-      const { error: permissionError } = await auth.userClient.from("workspace_integrations").update({
+      const { data: permissionCheck, error: permissionError } = await auth.userClient.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: null, last_test_status: null,
-      }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
-      if (permissionError) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
+      }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
+      if (permissionError || !permissionCheck) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
     }
     try {
       await testProvider(provider, credentials, (integration.metadata ?? {}) as Record<string, unknown>, confirmSlackDelivery);
@@ -221,6 +221,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "http" ? "The HTTPS host responded; this does not prove every API route or scope is authorized." : "Provider accepted the connection check." }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
+    if (code === "INTEGRATION_MANAGE_PERMISSION_REQUIRED") {
+      return NextResponse.json({ error: "Only workspace owners and admins can verify or manage integrations." }, { status: 403 });
+    }
     return NextResponse.json({ error: code.startsWith("CONNECTION_") || code.startsWith("HTTP_HOST_") ? code : "Integration test failed. Check the provider key and permissions." }, { status: 400 });
   }
 }
