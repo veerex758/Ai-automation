@@ -93,10 +93,40 @@ export default function WorkflowBuilderPage() {
     setNotice("Step added. Configure its details before activating the workflow.");
   }
 
+  function getActionConfigurationIssues(): string[] {
+    return steps.filter(step => step.kind === "Action").flatMap(step => {
+      if (!step.actionId) return [`Choose an action type for "${step.title}".`];
+      const action = actionCatalog.find(item => item.id === step.actionId);
+      if (!action) return [`The action configured for "${step.title}" is no longer available.`];
+      return action.fields.flatMap(field => {
+        const value = (step.settings?.[field.name] ?? "").trim();
+        if (field.required && !value) return [`Fill in ${field.label} for "${step.title}".`];
+        if (value.length > field.maxLength) return [`${field.label} for "${step.title}" must be ${field.maxLength} characters or fewer.`];
+        if (field.type === "email" && value && !isValidEmail(value)) return [`Enter a valid ${field.label.toLowerCase()} for "${step.title}".`];
+        if (field.type === "url" && value && !isHttpsUrl(value)) return [`Enter a valid HTTPS URL for "${step.title}".`];
+        return [];
+      });
+    });
+  }
+
   async function saveDraft() {
     if (savingDraft) return;
     if (!name.trim() || name.trim().length > 80) {
       setNotice("Workflow names must be between 1 and 80 characters.");
+      return;
+    }
+
+    if (catalogLoading) {
+      setNotice("The action catalog is still loading. Please wait before saving.");
+      return;
+    }
+    if (catalogError) {
+      setNotice("The action catalog is unavailable. Reload it before saving this workflow.");
+      return;
+    }
+    const actionIssues = getActionConfigurationIssues();
+    if (actionIssues.length) {
+      setNotice("Action configuration needs attention: " + actionIssues.join(" "));
       return;
     }
     if (!validationResult.valid) {
@@ -185,23 +215,7 @@ export default function WorkflowBuilderPage() {
   const validationResult = validateWorkflowDefinition({ name, steps });
 
   function reviewWorkflow() {
-    const actionIssues = steps.filter(step => step.kind === "Action").flatMap(step => {
-      if (!step.actionId) return [`Choose an action type for "${step.title}".`];
-      const action = actionCatalog.find(item => item.id === step.actionId);
-      if (!action) return [`The action configured for "${step.title}" is no longer available.`];
-      return action.fields.flatMap(field => {
-        const value = (step.settings?.[field.name] ?? "").trim();
-        if (field.required && !value) return [`Fill in ${field.label} for "${step.title}".`];
-        if (value.length > field.maxLength) return [`${field.label} for "${step.title}" must be ${field.maxLength} characters or fewer.`];
-        if (field.type === "email" && value && !isValidEmail(value)) {
-          return [`Enter a valid ${field.label.toLowerCase()} for "${step.title}".`];
-        }
-        if (field.type === "url" && value && !isHttpsUrl(value)) {
-          return [`Enter a valid HTTPS URL for "${step.title}".`];
-        }
-        return [];
-      });
-    });
+    const actionIssues = getActionConfigurationIssues();
     if (actionIssues.length) {
       setNotice("Action configuration needs attention: " + actionIssues.join(" "));
       return;
