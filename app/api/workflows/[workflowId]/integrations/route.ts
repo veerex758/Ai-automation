@@ -181,16 +181,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .select("id,metadata").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
     if (error) throw error;
     if (!integration) return NextResponse.json({ error: "Connect this integration first." }, { status: 404 });
-    const admin = createAdminClient();
-    const credentials = await loadSecret(admin, integration.id);
-    // Check workspace-owner/admin write permission before any external Slack delivery.
-    // This avoids sending a message and only afterwards discovering that RLS blocked status persistence.
+    // Check workspace-owner/admin write permission before decrypting credentials or sending Slack.
+    // This avoids privileged secret reads for users who cannot manage the integration.
     if (provider === "slack" && confirmSlackDelivery) {
       const { data: permissionCheck, error: permissionError } = await auth.userClient.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: null, last_test_status: null,
       }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
       if (permissionError || !permissionCheck) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
     }
+    const admin = createAdminClient();
+    const credentials = await loadSecret(admin, integration.id);
     try {
       await testProvider(provider, credentials, (integration.metadata ?? {}) as Record<string, unknown>, confirmSlackDelivery);
     } catch (testError) {
