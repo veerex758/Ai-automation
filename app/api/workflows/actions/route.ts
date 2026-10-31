@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getActionCatalog } from "@/lib/workflows/action-catalog.cjs";
+import { getNodeRegistry } from "@/lib/workflows/node-registry.cjs";
+import { getPublicNodeCatalog } from "@/nodes/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,8 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      actions: getActionCatalog(),
-      executionPolicy: {
-        defaultMode: "dry_run",
-        liveExecutionEnabledByDefault: false,
-        note: "Catalog entries describe available workflow action types, not a guarantee that external services are connected.",
-      },
+      ...getNodeRegistry(),
+      nodes: getPublicNodeCatalog(),
     }, {
       headers: { "Cache-Control": "private, no-store" },
     });

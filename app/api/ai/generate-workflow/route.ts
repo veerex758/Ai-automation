@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
+import { getPublicNodeCatalog } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
     }
 
-    const result = await generateWorkflow({ prompt: body.prompt });
+    const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog: getPublicNodeCatalog() });
     return NextResponse.json(result);
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
