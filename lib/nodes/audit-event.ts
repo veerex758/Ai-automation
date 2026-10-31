@@ -38,7 +38,7 @@ export interface NodeAuditEventRecord {
 
 const SAFE_IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:@/-]{0,254}$/;
 const SHA512_INTEGRITY = /^sha512-[A-Za-z0-9+/]{86}==$/;
-const SCOPED_PACKAGE_NAME = /^@[a-z0-9][a-z0-9._-]{0,213}[\/] [a-z0-9][a-z0-9._-]{0,213}$/;
+const SCOPED_PACKAGE_NAME = new RegExp("^@[a-z0-9][a-z0-9._-]{0,213}/[a-z0-9][a-z0-9._-]{0,213}$");
 const STABLE_SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 
 function requireSafeIdentifier(value: string, label: string): string {
