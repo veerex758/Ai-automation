@@ -9,6 +9,15 @@ type CatalogOperation = { id: string; name: string; description: string; inputSc
 type CatalogNode = { id: string; name: string; category: string; triggers: CatalogOperation[]; actions: CatalogOperation[] };
 type RegistryStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: unknown };
 type RunResult = { run?: { id: string; status: string; mode: string }; steps?: Array<{ step_id: string; title: string; status: string; result: unknown }>; error?: string };
+type ValidationReport = {
+  valid: boolean;
+  ready: boolean;
+  message?: string;
+  issues?: Array<{ stepId: string; code: string; message: string }>;
+  missingConnections?: Array<{ provider: string; label: string; reason: string }>;
+  checks?: { nodeSchemas: boolean; dataMappings: boolean; connections: boolean; executed: false };
+  error?: string;
+};
 
 const starterSteps: RegistryStep[] = [{ id: "trigger-1", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }];
 
@@ -18,6 +27,10 @@ function inputExample(nodeId: string, operationId: string): string {
   if (nodeId === "date_time" && operationId === "calculate_duration") return JSON.stringify({ start: "2026-01-01T00:00:00Z", end: "2026-01-02T00:00:00Z", unit: "hours" }, null, 2);
   if (nodeId === "loop" && operationId === "for_each") return JSON.stringify({ items: [{ email: "lead@example.com" }, { email: "customer@example.com" }], steps: [{ id: "check", nodeId: "logic", operationId: "condition", input: { left: "{{item.email}}", operator: "is_not_empty" } }], stopOnError: true }, null, 2);
   if (nodeId === "http" && operationId === "request") return JSON.stringify({ url: "https://api.example.com/items", method: "GET", auth: "none" }, null, 2);
+  if (nodeId === "gemini" && operationId === "generate_text") return JSON.stringify({ prompt: "Summarize this customer enquiry: {{trigger-1.message}}", model: "gemini-2.5-flash", maxOutputTokens: 800 }, null, 2);
+  if (nodeId === "openai" && operationId === "generate_text") return JSON.stringify({ prompt: "Summarize this customer enquiry: {{trigger-1.message}}", model: "gpt-4o-mini", maxOutputTokens: 800 }, null, 2);
+  if (nodeId === "email" && operationId === "send_email") return JSON.stringify({ to: "owner@example.com", subject: "New workflow result", text: "{{gemini-1.text}}" }, null, 2);
+  if (nodeId === "slack" && operationId === "send_message") return JSON.stringify({ message: "{{gemini-1.text}}" }, null, 2);
   return "{}";
 }
 
@@ -34,6 +47,9 @@ export default function RegistryBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [enquiryMessage, setEnquiryMessage] = useState("I am interested in your service. Could you share pricing and next steps?");
+  const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
@@ -65,7 +81,54 @@ export default function RegistryBuilderPage() {
 
   function updateStep(id: string, patch: Partial<RegistryStep>) {
     setSteps((current) => current.map((step) => step.id === id ? { ...step, ...patch } : step));
-    setRun(null); setNotice("");
+    setRun(null); setNotice(""); setValidationReport(null);
+  }
+
+  function applyQuickSetup() {
+    if (steps.length > 1 && !window.confirm("Replace the current draft nodes with the Enquiry → Gemini → Slack Quick Setup template?")) return;
+    const template: RegistryStep[] = [
+      { id: "trigger-1", nodeId: "manual", operationId: "start", kind: "trigger", input: { message: enquiryMessage.trim() } },
+      { id: "gemini-1", nodeId: "gemini", operationId: "generate_text", kind: "action", input: {
+        prompt: "Summarize this customer enquiry. Identify the customer’s main need and the next action requested:\n\n{{trigger-1.message}}",
+        system: "You are a concise customer-enquiry assistant. Do not invent details. Return a short summary and the next step.",
+        model: "gemini-2.5-flash",
+        maxOutputTokens: 500,
+      } },
+      { id: "slack-1", nodeId: "slack", operationId: "send_message", kind: "action", input: {
+        message: "*New customer enquiry summary*\n{{gemini-1.text}}",
+      } },
+    ];
+    setSteps(template);
+    setSelectedId("trigger-1");
+    setInputText(JSON.stringify(template[0].input, null, 2));
+    setSavedFingerprint(JSON.stringify(starterSteps));
+    setValidationReport(null);
+    setRun(null);
+    setError("");
+    setNotice("Quick Setup draft created. Data is mapped from the manual enquiry to Gemini, then from Gemini’s text to Slack. Validate the draft and save it before running the safe preview.");
+  }
+
+  async function validateSetup() {
+    if (validating || saving || testing) return;
+    setValidating(true); setError(""); setNotice(""); setValidationReport(null);
+    try {
+      const response = await fetch("/api/workflows/" + workflowId + "/registry-validate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ steps }),
+      });
+      const data = await response.json() as ValidationReport;
+      if (!response.ok && !data.missingConnections) throw new Error(data.error || "Could not validate workflow setup.");
+      setValidationReport(data);
+      setNotice(data.message || data.error || (data.ready ? "Setup is ready for a safe preview." : "Validation completed; review the items below."));
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not validate workflow setup."); }
+    finally { setValidating(false); }
+  }
+
+  function mappingLabel(from: RegistryStep, to: RegistryStep): string {
+    const serialized = JSON.stringify(to.input) ?? "";
+    const refs = [...serialized.matchAll(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g)]
+      .map((match) => match[1]).filter((path) => path.startsWith(from.id + "."));
+    return refs.length ? "Maps " + refs.map((path) => path.slice(from.id.length + 1)).join(", ") + " → " + to.nodeId + " input" : "Connected to next step";
   }
 
   function addAction() {
@@ -126,6 +189,7 @@ export default function RegistryBuilderPage() {
       <Link className="workflow-side-brand" href="/"><span><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
       <div className="workflow-side-label">WORKSPACE</div>
       <Link className="workflow-side-link active" href={`/dashboard/workflows/${workflowId}`}>← Visual workflow</Link>
+      <Link className="workflow-side-link" href={`/dashboard/workflows/${workflowId}/connections`}>App connections</Link>
       <Link className="workflow-side-link" href="/dashboard">Dashboard</Link>
       <div className="workflow-side-bottom"><strong>Advanced nodes</strong><small>Registry-backed workflow steps</small></div>
     </aside>
@@ -135,8 +199,9 @@ export default function RegistryBuilderPage() {
         <div className="builder-breadcrumb"><span>{workflowName}</span><b>/</b><strong>Advanced nodes</strong></div>
         <div className="builder-top-actions">
           <span className={`builder-draft ${dirty ? "builder-draft-dirty" : ""}`}>{dirty ? "Unsaved changes" : "Saved"}</span>
-          <button className="builder-validate" disabled={saving || testing || dirty} onClick={() => void test()}>{testing ? "Testing…" : "Run safe preview"}</button>
-          <button className="builder-save" disabled={saving || testing || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save nodes ↗"}</button>
+          <button className="builder-validate" disabled={saving || testing || validating} onClick={() => void validateSetup()}>{validating ? "Validating…" : "Validate setup"}</button>
+          <button className="builder-validate" disabled={saving || testing || validating || dirty} onClick={() => void test()}>{testing ? "Testing…" : "Run safe preview"}</button>
+          <button className="builder-save" disabled={saving || testing || validating || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save nodes ↗"}</button>
         </div>
       </header>
       <div className="builder-layout">
@@ -144,6 +209,36 @@ export default function RegistryBuilderPage() {
           <div className="builder-heading"><div><div className="builder-eyebrow">REGISTRY WORKFLOW DESIGNER</div><h1>{workflowName}</h1><p>Configure registered node operations, save them, and record safe previews in run history.</p></div><span className="builder-mode"><i /> Draft mode</span></div>
           {notice && <div className="builder-notice" role="status">{notice}</div>}
           {error && <div className="builder-error-banner" role="alert">{error}</div>}
+          <section className="builder-panel quick-setup-panel">
+            <div className="panel-header"><div><span className="panel-kicker">FAST TRACK</span><h2>Quick Setup</h2></div><span className="builder-mode"><i /> Draft only</span></div>
+            <p>Start with a connected three-node enquiry workflow. Aivanta maps the enquiry into Gemini, then maps Gemini’s result into Slack. No external action runs while you configure or validate.</p>
+            <label className="integration-field" htmlFor="quick-enquiry-message">Example customer enquiry
+              <textarea id="quick-enquiry-message" rows={3} maxLength={12000} value={enquiryMessage} onChange={(event) => setEnquiryMessage(event.target.value)} placeholder="Paste an example enquiry to use in the manual trigger." />
+            </label>
+            <div className="quick-setup-flow">
+              <div className="quick-setup-chip"><span>01</span><strong>Manual enquiry</strong><small>message</small></div>
+              <div className="quick-setup-arrow">→</div>
+              <div className="quick-setup-chip"><span>02</span><strong>Google Gemini</strong><small>summarize</small></div>
+              <div className="quick-setup-arrow">→</div>
+              <div className="quick-setup-chip"><span>03</span><strong>Slack</strong><small>send summary</small></div>
+            </div>
+            <div className="quick-setup-actions">
+              <button type="button" className="builder-save" disabled={!enquiryMessage.trim() || saving || testing || validating} onClick={applyQuickSetup}>Create connected draft</button>
+              <Link className="builder-back" href={"/dashboard/workflows/" + workflowId + "/connections"}>Manage app connections ↗</Link>
+            </div>
+            {validationReport && <div className="quick-setup-report" role="status">
+              <strong>{validationReport.ready ? "Ready for safe preview" : validationReport.valid ? "Configuration valid — connections need attention" : "Fix validation issues"}</strong>
+              <div className="quick-setup-checks">
+                <span>{validationReport.checks?.nodeSchemas ? "✓" : "!"} Node inputs</span>
+                <span>{validationReport.checks?.dataMappings ? "✓" : "!"} Data mappings</span>
+                <span>{validationReport.checks?.connections ? "✓" : "!"} App connections</span>
+                <span>✓ No execution performed</span>
+              </div>
+              {validationReport.issues?.map((issue, index) => <p className="quick-setup-issue" key={issue.stepId + issue.code + index}><strong>{issue.stepId || "Workflow"}:</strong> {issue.message}</p>)}
+              {validationReport.missingConnections?.map((connection) => <p className="quick-setup-issue" key={connection.provider}><strong>{connection.label}:</strong> {connection.reason} <Link href={"/dashboard/workflows/" + workflowId + "/connections"}>Connect app ↗</Link></p>)}
+              {validationReport.error && <p className="quick-setup-issue">{validationReport.error}</p>}
+            </div>}
+          </section>
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
             <div className="canvas-label"><span>REGISTRY CANVAS</span><span>{steps.length} / 30 steps</span></div>
@@ -157,7 +252,7 @@ export default function RegistryBuilderPage() {
                     <span className="node-icon">{step.kind === "trigger" ? "⚡" : node?.id === "date_time" ? "◷" : node?.id === "loop" ? "↻" : "↗"}</span>
                     <span className="node-copy"><small>{node?.name ?? step.nodeId} · STEP {index + 1}</small><strong>{operation?.name ?? step.operationId}</strong><span>{operation?.description ?? "Registered operation"}</span></span><span className="node-chevron">›</span>
                   </button>
-                  {index < steps.length - 1 && <div className="node-endpoint">↓ Connected to next step</div>}
+                  {index < steps.length - 1 && <div className="node-endpoint">↓ {mappingLabel(step, steps[index + 1])}</div>}
                 </div>;
               })}
             </div>

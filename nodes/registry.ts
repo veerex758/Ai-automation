@@ -1,5 +1,6 @@
 import type { NodeDefinition } from "./types";
 import { openaiNode } from "./openai";
+import { geminiNode } from "./gemini";
 import { webhooksNode } from "./webhooks";
 import { slackNode } from "./slack";
 import { emailNode } from "./email";
@@ -10,8 +11,10 @@ import { httpNode } from "./http";
 import { utilitiesNode } from "./utilities";
 import { dateTimeNode } from "./date-time";
 import { loopNode } from "./loop";
+import { gmailNode } from "./gmail";
+import { googleSheetsNode } from "./google-sheets";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, logicNode, dataNode, httpNode, utilitiesNode, dateTimeNode, loopNode];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode, logicNode, dataNode, httpNode, utilitiesNode, dateTimeNode, loopNode, gmailNode, googleSheetsNode];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);

@@ -127,3 +127,60 @@ test("registry dry-run simulates Slack and Email without calling their providers
   assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated"]);
   assert.equal(calls, 0);
 });
+
+
+test("Quick Setup enquiry maps manual message through Gemini into Slack", async () => {
+  const requests: Array<{ url: string; body: unknown }> = [];
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "trigger-1", nodeId: "manual", operationId: "start", kind: "trigger", input: { message: "I need pricing and next steps." } },
+      { id: "gemini-1", nodeId: "gemini", operationId: "generate_text", kind: "action", input: {
+        prompt: "Summarize this enquiry: {{trigger-1.message}}",
+        model: "gemini-2.5-flash",
+        maxOutputTokens: 500,
+      } },
+      { id: "slack-1", nodeId: "slack", operationId: "send_message", kind: "action", input: {
+        message: "New enquiry summary: {{gemini-1.text}}",
+      } },
+    ],
+    context: {
+      credentials: {
+        gemini: { apiKey: "test-gemini-key" },
+        slack: { webhookUrl: "https://hooks.slack.com/services/T000/B000/secret" },
+      },
+      logger: { info() {}, error() {} },
+      http: { async request(args) {
+        requests.push({ url: args.url, body: args.body });
+        if (args.url.includes("generativelanguage.googleapis.com")) {
+          assert.match(JSON.stringify(args.body), /I need pricing and next steps/);
+          return { status: 200, body: { modelVersion: "gemini-2.5-flash", candidates: [{ content: { parts: [{ text: "Customer requests pricing and a clear next step." }] } }] } };
+        }
+        return { status: 200, body: "ok" };
+      } },
+    },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded"]);
+  assert.equal((result.outputs["trigger-1"] as { message: string }).message, "I need pricing and next steps.");
+  assert.equal((result.outputs["gemini-1"] as { text: string }).text, "Customer requests pricing and a clear next step.");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].url, "https://hooks.slack.com/services/T000/B000/secret");
+  assert.deepEqual(requests[1].body, { text: "New enquiry summary: Customer requests pricing and a clear next step." });
+});
+
+test("Quick Setup safe preview simulates manual, Gemini and Slack without provider calls", async () => {
+  let calls = 0;
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "trigger-1", nodeId: "manual", operationId: "start", kind: "trigger", input: { message: "Example enquiry" } },
+      { id: "gemini-1", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Summarize {{trigger-1.message}}", model: "gemini-2.5-flash", maxOutputTokens: 500 } },
+      { id: "slack-1", nodeId: "slack", operationId: "send_message", kind: "action", input: { message: "{{gemini-1.text}}" } },
+    ],
+    context: { ...context, http: { async request() { calls++; return { status: 200, body: {} }; } } },
+    dryRun: true,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated", "simulated"]);
+  assert.equal(calls, 0);
+});

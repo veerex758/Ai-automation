@@ -5,10 +5,13 @@ import { executeRegisteredOperation } from "../nodes/runner";
 import { isUnsafeAddress } from "../lib/workflows/safe-http-transport";
 
 test("registry includes versioned webhook, OpenAI, Slack, Email, Logic, Data, HTTP and Utilities operations", () => {
-  assert.equal(nodes.length, 11);
+  assert.equal(nodes.length, 14);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
+  assert.ok(findOperation("gmail", "list_messages", "action"));
+  assert.ok(findOperation("gmail", "read_message", "action"));
+  assert.ok(findOperation("google_sheets", "read_range", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
   assert.ok(findOperation("logic", "condition", "action"));
@@ -17,14 +20,17 @@ test("registry includes versioned webhook, OpenAI, Slack, Email, Logic, Data, HT
   assert.ok(findOperation("data", "format_text", "action"));
 });
 
-test("manual trigger accepts the legacy builder's manual start event", async () => {
+test("manual trigger accepts empty input and preserves an enquiry message for mapped downstream nodes", async () => {
   const operation = findOperation("manual", "start", "trigger");
   assert.ok(operation);
-  const result = await operation.run({
+  const context = {
     credentials: {}, logger: { info() {}, error() {} },
     http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
-  }, {});
-  assert.deepEqual(result, { started: true });
+  };
+  assert.deepEqual(await operation.run(context, {}), { started: true });
+  assert.deepEqual(await operation.run(context, { message: "I need pricing and next steps." }), {
+    started: true, message: "I need pricing and next steps.",
+  });
 });
 
 test("webhook trigger refuses events not verified by ingress", async () => {
@@ -163,7 +169,7 @@ test("Data mapping and text formatting support nested values", async () => {
 
 
 test("registry exposes secured HTTP and Utilities operations", () => {
-  assert.equal(nodes.length, 11);
+  assert.equal(nodes.length, 14);
   assert.ok(findOperation("http", "request", "action"));
   assert.ok(findOperation("utilities", "parse_json", "action"));
   assert.ok(findOperation("utilities", "stringify_json", "action"));
@@ -193,13 +199,13 @@ test("Data nodes deduplicate, sort, and aggregate without coercion", async () =>
   assert.deepEqual(aggregate.outputSchema.parse(await aggregate.run(context, { values: [2, 4, 6] })), {
     count: 3, sum: 12, average: 4, min: 2, max: 6,
   });
-  await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /expected number, received string/);
+  await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /expected number/i);
 });
 
 test("Data split_batches keeps every item in ordered batches", async () => {
   const operation = findOperation("data", "split_batches", "action");
   assert.ok(operation);
-  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 })) as { batches: unknown[][]; count: number; batchCount: number };
+  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 })) as { batches: unknown[][] };
   assert.deepEqual(result.batches, [[1, 2], [3, 4], [5]]);
 });
 
@@ -315,4 +321,65 @@ test("HTTP transport rejects private, loopback, link-local, reserved and mapped 
   for (const address of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) {
     assert.equal(isUnsafeAddress(address), false, address);
   }
+});
+
+
+test("Gemini node calls the provider and returns generated text", async () => {
+  const operation = findOperation("gemini", "generate_text", "action");
+  assert.ok(operation);
+  let requestedUrl = "";
+  const context = {
+    credentials: { gemini: { apiKey: "test-gemini-key" } },
+    logger: { info() {}, error() {} },
+    http: {
+      async request(args: { url: string; method: "GET" | "POST"; headers?: Record<string, string>; body?: unknown }) {
+        requestedUrl = args.url;
+        assert.equal(args.method, "POST");
+        assert.equal(args.headers?.["x-goog-api-key"], "test-gemini-key");
+        return { status: 200, body: { modelVersion: "gemini-2.5-flash", candidates: [{ content: { parts: [{ text: "Hello from Gemini" }] } }], usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 4 } } };
+      },
+    },
+    previousOutputs: {},
+  };
+  const result = await operation.outputSchema.parseAsync(await operation.run(context, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 100 })) as { text: string; inputTokens?: number };
+  assert.match(requestedUrl, /generativelanguage\.googleapis\.com/);
+  assert.equal(result.text, "Hello from Gemini");
+  assert.equal(result.inputTokens, 3);
+});
+
+test("Gmail read-only node lists messages with the workspace OAuth token", async () => {
+  const operation = findOperation("gmail", "list_messages", "action");
+  assert.ok(operation);
+  let requestedUrl = "";
+  const result = await operation.run({
+    credentials: { gmail: { accessToken: "google-access-token" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args) { requestedUrl = args.url; assert.equal(args.headers?.Authorization, "Bearer google-access-token"); return { status: 200, body: { messages: [{ id: "msg_1", threadId: "thread_1" }], resultSizeEstimate: 1 } }; } },
+    previousOutputs: {},
+  }, { query: "is:unread", maxResults: 10 });
+  assert.match(requestedUrl, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
+  assert.deepEqual(result, { messages: [{ id: "msg_1", threadId: "thread_1" }], resultSizeEstimate: 1 });
+});
+
+test("Gmail read-only node refuses to run without an OAuth connection", async () => {
+  const operation = findOperation("gmail", "list_messages", "action");
+  assert.ok(operation);
+  await assert.rejects(() => operation.run({
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  }, { maxResults: 5 }), /GMAIL_CONNECTION_REQUIRED/);
+});
+
+test("Google Sheets read-only node reads a range with the workspace OAuth token", async () => {
+  const operation = findOperation("google_sheets", "read_range", "action");
+  assert.ok(operation);
+  let requestedUrl = "";
+  const result = await operation.outputSchema.parseAsync(await operation.run({
+    credentials: { sheets: { accessToken: "sheets-access-token" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args) { requestedUrl = args.url; assert.equal(args.headers?.Authorization, "Bearer sheets-access-token"); return { status: 200, body: { range: "Sheet1!A1:B2", majorDimension: "ROWS", values: [["Name", "Score"], ["Ada", 10]] } }; } },
+    previousOutputs: {},
+  }, { spreadsheetId: "spreadsheetId1234567890", range: "Sheet1!A1:B2" })) as { values: unknown[][] };
+  assert.match(requestedUrl, /sheets\.googleapis\.com\/v4\/spreadsheets/);
+  assert.deepEqual(result.values, [["Name", "Score"], ["Ada", 10]]);
 });

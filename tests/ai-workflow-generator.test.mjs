@@ -48,3 +48,44 @@ test("rejects invalid model names and non-HTTPS provider endpoints in production
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_MODEL: "invalid model!" } }), /AI_CONFIGURATION_ERROR/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_BASE_URL: "http://ai.example.test", NODE_ENV: "production" } }), /AI_CONFIGURATION_ERROR/);
 });
+
+test("uses Gemini OpenAI-compatible endpoint and free-tier model defaults when selected", async () => {
+  let requestedUrl = "";
+  let requestedBody;
+  const result = await generateWorkflow({
+    prompt: "Create a simple manual workflow",
+    env: { AIVANTA_AI_API_KEY: "test-secret", AIVANTA_AI_PROVIDER: "gemini", NODE_ENV: "production" },
+    fetchImpl: async (url, options) => {
+      requestedUrl = url;
+      requestedBody = JSON.parse(options.body);
+      assert.equal(options.headers.Authorization, "Bearer test-secret");
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+    },
+  });
+  assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(requestedBody.model, "gemini-2.5-flash");
+  assert.equal(result.executed, false);
+});
+test("uses the Gemini-specific key when the selected provider is Gemini", async () => {
+  await generateWorkflow({
+    prompt: "Create a simple manual workflow",
+    env: { AIVANTA_AI_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-test-key", OPENAI_API_KEY: "wrong-provider-key", NODE_ENV: "production" },
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer gemini-test-key");
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+    },
+  });
+});
+test("uses the OpenAI-specific key when the selected provider is OpenAI", async () => {
+  await generateWorkflow({
+    prompt: "Create a simple manual workflow",
+    env: { OPENAI_API_KEY: "openai-test-key", GEMINI_API_KEY: "wrong-provider-key", NODE_ENV: "production" },
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer openai-test-key");
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+    },
+  });
+});
+test("rejects unsupported AI provider configuration", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_PROVIDER: "unknown" } }), /AI_CONFIGURATION_ERROR/);
+});

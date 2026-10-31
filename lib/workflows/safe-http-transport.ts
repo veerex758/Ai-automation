@@ -87,7 +87,7 @@ export async function safeHttpsRequest(args: {
   if (serializedBody !== undefined && Buffer.byteLength(serializedBody, "utf8") > MAX_REQUEST_BODY_BYTES) {
     throw new Error("HTTP_BODY_TOO_LARGE");
   }
-  const timeoutMs = Math.min(10000, Math.max(1000, args.timeoutMs ?? 10000));
+  const timeoutMs = Math.min(30000, Math.max(1000, args.timeoutMs ?? 10000));
   const maxResponseBytes = Math.min(DEFAULT_MAX_RESPONSE_BYTES, Math.max(1024, args.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES));
 
   return new Promise((resolve, reject) => {
