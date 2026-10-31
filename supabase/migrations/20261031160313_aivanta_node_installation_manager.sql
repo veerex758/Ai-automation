@@ -235,6 +235,29 @@ create policy workspace_node_permission_grants_admin_update
     )
   );
 
+-- Keep workspace node audit events on a closed vocabulary and prevent secret-bearing
+-- top-level metadata fields from entering the append-only audit stream.
+alter table public.audit_events
+  add constraint audit_events_node_event_shape_check
+  check (
+    event_type not like 'node.%'
+    or (
+      event_type in (
+        'node.installation_created',
+        'node.permission_granted',
+        'node.permission_revoked',
+        'node.installation_disabled',
+        'node.installation_uninstalled'
+      )
+      and resource_type = 'workspace_node_installation'
+      and resource_id is not null
+      and not (metadata ?| array[
+        'access_token','refresh_token','api_key','secret','password',
+        'credentials','encrypted_credentials','authorization'
+      ])
+    )
+  );
+
 -- Existing member audit insert policy is retained; this restrictive policy
 -- requires workspace admin authority for node lifecycle events specifically.
 create policy audit_events_node_insert_admin
