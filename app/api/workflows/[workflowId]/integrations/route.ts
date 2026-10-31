@@ -142,7 +142,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
       integration_id: integrationId, encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
     }, { onConflict: "integration_id" });
     if (secretError) throw secretError;
-    return NextResponse.json({ connected: true, provider, displayName: validated.displayName, tested: false, secretReturned: false }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ saved: true, provider, status: "needs_attention", displayName: validated.displayName, tested: false, secretReturned: false }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     const status = code === "CONNECTION_FIELDS_INVALID" || code === "CONNECTION_SENDER_INVALID" || code === "CONNECTION_WEBHOOK_INVALID" || code === "CONNECTION_HOST_INVALID" ? 400 :
@@ -175,11 +175,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       if (updateError) throw updateError;
       throw testError;
     }
+    if (provider === "slack") {
+      // A Slack incoming webhook has no side-effect-free verification endpoint.
+      // URL syntax validation is not proof that Slack will accept a message.
+      const { error: updateError } = await auth.userClient.from("workspace_integrations").update({
+        status: "needs_attention", last_tested_at: null, last_test_status: null,
+      }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
+      if (updateError) throw updateError;
+      return NextResponse.json({
+        tested: false,
+        provider,
+        status: "needs_attention",
+        note: "Webhook URL format is valid, but delivery is unverified. No Slack message was sent. Keep this connection in needs attention until an explicitly requested workflow action successfully delivers a message.",
+      }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+
     const now = new Date().toISOString();
     const { error: updateError } = await auth.userClient.from("workspace_integrations").update({ status: "connected", last_tested_at: now, last_test_status: "passed" })
       .eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
     if (updateError) throw updateError;
-    return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "slack" ? "Webhook URL validated; no test message was sent." : provider === "http" ? "The HTTPS host responded; this does not prove every API route or scope is authorized." : "Provider accepted the connection check." });
+    return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "http" ? "The HTTPS host responded; this does not prove every API route or scope is authorized." : "Provider accepted the connection check." }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     return NextResponse.json({ error: code.startsWith("CONNECTION_") || code.startsWith("HTTP_HOST_") ? code : "Integration test failed. Check the provider key and permissions." }, { status: 400 });
