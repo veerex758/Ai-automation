@@ -44,5 +44,5 @@ test("integrations UI uses workspace endpoint and confirms Slack delivery", () =
   assert.match(ui, /\/api\/workspace\/integrations/);
   assert.doesNotMatch(ui, /workflowId/);
   assert.match(ui, /window\.confirm/);
-  assert.match(ui, /confirmDeliveryTest\\s*:\\s*true/);
+  assert.match(ui, /confirmDeliveryTest\s*:\s*true/);
 });
