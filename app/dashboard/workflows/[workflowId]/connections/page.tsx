@@ -12,7 +12,7 @@ const providerDescriptions: Record<Provider, string> = {
   openai: "Use OpenAI models for generation, summarization, extraction, and classification.",
   gemini: "Use Google's Gemini API with a key from Google AI Studio.",
   resend: "Send real email through Resend. Live recipients remain separately allowlisted.",
-  slack: "Post messages through a Slack incoming webhook. URL validation never sends a message or proves delivery.",
+  slack: "Post messages through a Slack incoming webhook. Sending a test message is an explicit action that posts to the connected channel.",
   http: "Connect one HTTPS API host. The host must also be allowed by AIVANTA_HTTP_ALLOWED_HOSTS on the server.",
 };
 
@@ -72,10 +72,13 @@ export default function WorkflowConnectionsPage() {
   }
 
   async function test(providerToTest: Provider) {
+    const confirmSlackDelivery = providerToTest === "slack";
+    if (confirmSlackDelivery && !window.confirm("Send a real test message to the connected Slack channel? This will create a message in Slack.")) return;
     setBusyProvider(providerToTest); setError(""); setNotice("");
     try {
       const response = await fetch(`/api/workflows/${workflowId}/integrations`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: providerToTest }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: providerToTest, ...(confirmSlackDelivery ? { confirmSlackDelivery: true } : {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Connection test failed.");
@@ -128,7 +131,7 @@ export default function WorkflowConnectionsPage() {
                   <small>{item.last_test_status === "passed" ? "Test passed" : item.last_test_status === "failed" ? "Test failed" : "Not tested"}{item.last_tested_at ? ` · ${new Date(item.last_tested_at).toLocaleString()}` : ""}</small>
                 </div>
                 <div className="integration-actions"><span className={item.status === "connected" ? "builder-mode" : "builder-draft"}>{item.status}</span>
-                  <button className="builder-validate" disabled={busyProvider !== null} onClick={() => void test(item.provider)}>{busyProvider === item.provider ? "Checking…" : item.provider === "slack" ? "Validate URL" : "Test connection"}</button>
+                  <button className="builder-validate" disabled={busyProvider !== null} onClick={() => void test(item.provider)}>{busyProvider === item.provider ? "Checking…" : item.provider === "slack" ? "Send test message" : "Test connection"}</button>
                   <button className="builder-back" disabled={busyProvider !== null} onClick={() => void disconnect(item.provider)}>Disconnect</button>
                 </div>
               </article>)}
@@ -154,9 +157,9 @@ export default function WorkflowConnectionsPage() {
           <div className="builder-panel"><h2>Important before live runs</h2><ul>
             <li>Live execution remains disabled unless the server explicitly enables it.</li>
             <li>Resend sends only to the server-configured live recipient allowlist.</li>
-            <li>Slack URL validation never sends a message; delivery remains unverified until an explicitly requested workflow action succeeds.</li>
+            <li>Slack verification sends a real test message only after you choose “Send test message” and confirm the action.</li>
             <li>Custom HTTP hosts must also be included in the server-side HTTPS host allowlist.</li>
-            <li>Connection tests and safe previews do not activate a workflow or trigger external side effects.</li>
+            <li>Provider connection checks are read-only except the explicitly confirmed Slack test message; safe previews never trigger external side effects.</li>
           </ul></div>
         </section>
       </div>

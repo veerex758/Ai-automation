@@ -49,7 +49,7 @@ function validateCredentials(provider: Provider, value: unknown): { credentials:
   return { credentials: { apiKey: stringField("apiKey", 4096) }, metadata: { host }, displayName: "HTTP API · " + host };
 }
 
-async function testProvider(provider: Provider, credentials: Credentials, metadata: Record<string, unknown>) {
+async function testProvider(provider: Provider, credentials: Credentials, metadata: Record<string, unknown>, confirmSlackDelivery = false) {
   if (provider === "openai") {
     const result = await safeHttpsRequest({ url: "https://api.openai.com/v1/models/gpt-4o-mini", method: "GET", headers: { Authorization: "Bearer " + credentials.apiKey }, timeoutMs: 8000, maxResponseBytes: 32768 });
     if (result.status < 200 || result.status >= 300) throw new Error(result.status === 401 ? "CONNECTION_AUTH_FAILED" : "CONNECTION_TEST_FAILED");
@@ -66,10 +66,23 @@ async function testProvider(provider: Provider, credentials: Credentials, metada
     return;
   }
   if (provider === "slack") {
-    // Incoming webhooks have no side-effect-free verification endpoint. Validate the exact
-    // provider URL here; never send a test message without an explicit user action.
     const url = new URL(credentials.webhookUrl);
-    if (url.protocol !== "https:" || url.hostname !== "hooks.slack.com") throw new Error("CONNECTION_WEBHOOK_INVALID");
+    if (url.protocol !== "https:" || url.hostname !== "hooks.slack.com" || !url.pathname.startsWith("/services/")) {
+      throw new Error("CONNECTION_WEBHOOK_INVALID");
+    }
+    if (!confirmSlackDelivery) return;
+    // This branch is reached only after the user explicitly confirms the test-message action.
+    const result = await safeHttpsRequest({
+      url: url.toString(),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: { text: "Aivanta connection test: this workspace successfully delivered a test message to Slack." },
+      timeoutMs: 8000,
+      maxResponseBytes: 2048,
+    });
+    if (result.status < 200 || result.status >= 300 || result.body !== "ok") {
+      throw new Error("CONNECTION_TEST_FAILED");
+    }
     return;
   }
   const host = metadata.host;
@@ -160,14 +173,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     try { body = await request.json(); } catch { return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
     if (!isRecord(body) || typeof body.provider !== "string" || !providers.includes(body.provider as Provider)) return NextResponse.json({ error: "Unsupported integration provider." }, { status: 400 });
     const provider = body.provider as Provider;
+    if (provider === "slack" && body.confirmSlackDelivery !== undefined && typeof body.confirmSlackDelivery !== "boolean") {
+      return NextResponse.json({ error: "Invalid Slack delivery confirmation." }, { status: 400 });
+    }
+    const confirmSlackDelivery = provider === "slack" && body.confirmSlackDelivery === true;
     const { data: integration, error } = await auth.userClient.from("workspace_integrations")
       .select("id,metadata").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
     if (error) throw error;
     if (!integration) return NextResponse.json({ error: "Connect this integration first." }, { status: 404 });
+    // Check workspace-owner/admin write permission before decrypting credentials or sending Slack.
+    // This avoids privileged secret reads for users who cannot manage the integration.
+    if (provider === "slack" && confirmSlackDelivery) {
+      const { data: permissionCheck, error: permissionError } = await auth.userClient.from("workspace_integrations").update({
+        status: "needs_attention", last_tested_at: null, last_test_status: null,
+      }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
+      if (permissionError || !permissionCheck) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
+    }
     const admin = createAdminClient();
     const credentials = await loadSecret(admin, integration.id);
     try {
-      await testProvider(provider, credentials, (integration.metadata ?? {}) as Record<string, unknown>);
+      await testProvider(provider, credentials, (integration.metadata ?? {}) as Record<string, unknown>, confirmSlackDelivery);
     } catch (testError) {
       const { error: updateError } = await auth.userClient.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
@@ -175,9 +200,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       if (updateError) throw updateError;
       throw testError;
     }
-    if (provider === "slack") {
-      // A Slack incoming webhook has no side-effect-free verification endpoint.
-      // URL syntax validation is not proof that Slack will accept a message.
+    if (provider === "slack" && !confirmSlackDelivery) {
+      // URL syntax validation is deliberately non-delivering and cannot mark Slack connected.
       const { error: updateError } = await auth.userClient.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: null, last_test_status: null,
       }).eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
@@ -186,7 +210,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         tested: false,
         provider,
         status: "needs_attention",
-        note: "Webhook URL format is valid, but delivery is unverified. No Slack message was sent. Keep this connection in needs attention until an explicitly requested workflow action successfully delivers a message.",
+        note: "Webhook URL format is valid, but delivery is unverified. No Slack message was sent. Use the explicitly labelled Send test message action to verify delivery.",
       }, { headers: { "Cache-Control": "private, no-store" } });
     }
 
@@ -197,6 +221,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "http" ? "The HTTPS host responded; this does not prove every API route or scope is authorized." : "Provider accepted the connection check." }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
+    if (code === "INTEGRATION_MANAGE_PERMISSION_REQUIRED") {
+      return NextResponse.json({ error: "Only workspace owners and admins can verify or manage integrations." }, { status: 403 });
+    }
     return NextResponse.json({ error: code.startsWith("CONNECTION_") || code.startsWith("HTTP_HOST_") ? code : "Integration test failed. Check the provider key and permissions." }, { status: 400 });
   }
 }

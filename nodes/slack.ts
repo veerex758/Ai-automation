@@ -26,7 +26,7 @@ export const slackNode: NodeDefinition = {
         headers: { "Content-Type": "application/json" },
         body: { text: input.message }, timeoutMs: 10000, retries: 0,
       });
-      if (response.status < 200 || response.status >= 300) {
+      if (response.status < 200 || response.status >= 300 || response.body !== "ok") {
         ctx.logger.error("Slack message failed", { status: response.status });
         throw new Error("SLACK_REQUEST_FAILED");
       }
