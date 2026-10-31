@@ -21,10 +21,7 @@ export function isUnsafeAddress(address: string): boolean {
   }
   if (family === 6) {
     const value = address.toLowerCase().split("%")[0];
-    if (value === "::" || value === "::1" || value.startsWith("fc") || value.startsWith("fd") ||
-        /^fe[89ab]/.test(value) || value.startsWith("ff") || value.startsWith("2001:db8:") ||
-        value.startsWith("2002:") || value.startsWith("2001:0:") ||
-        value.startsWith("64:ff9b:") || value.startsWith("64:ff9b::")) return true;
+    // IPv4-mapped IPv6 addresses inherit the IPv4 safety classification.
     const mappedDotted = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
     if (mappedDotted) return isUnsafeAddress(mappedDotted[1]);
     const mappedHex = value.match(/::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
@@ -33,6 +30,20 @@ export function isUnsafeAddress(address: string): boolean {
       const low = Number.parseInt(mappedHex[2], 16);
       return isUnsafeAddress([high >> 8, high & 255, low >> 8, low & 255].join("."));
     }
+
+    // Only global-unicast 2000::/3 is eligible. This rejects unspecified,
+    // loopback, link-local, unique-local, multicast, IPv4-compatible and
+    // other non-global ranges instead of assuming unknown IPv6 is public.
+    const firstHextet = Number.parseInt(value.split(":")[0] || "0", 16);
+    if (!Number.isFinite(firstHextet) || firstHextet < 0x2000 || firstHextet > 0x3fff) return true;
+
+    // Explicitly reject special-purpose/transition/documentation ranges inside
+    // the global-unicast aggregate. 6to4 and NAT64 can otherwise tunnel to
+    // destinations whose embedded IPv4 address was not checked here.
+    if (value.startsWith("2001:0:") || value.startsWith("2001:2:") ||
+        value.startsWith("2001:10:") || value.startsWith("2001:20:") ||
+        value.startsWith("2001:db8:") || value.startsWith("2002:") ||
+        value.startsWith("64:ff9b:")) return true;
     return false;
   }
   return true;
