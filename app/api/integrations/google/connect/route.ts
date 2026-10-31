@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.search = new URLSearchParams({
       client_id: clientId, redirect_uri: redirectUri, response_type: "code",
-      scope: scopes[product].join(" "), access_type: "offline", prompt: "consent",
+      scope: scopes[product].join(" "), access_type: "offline", prompt: "consent select_account",
       include_granted_scopes: "false", state,
     }).toString();
     const response = NextResponse.redirect(url);
