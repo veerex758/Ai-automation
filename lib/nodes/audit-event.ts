@@ -24,7 +24,7 @@ export interface NodeAuditEventRecord {
   workspace_id: string;
   actor_user_id: string;
   event_type: NodeAuditEventType;
-  resource_type: "node_package_version" | "workspace_node_installation";
+  resource_type: "workspace_node_installation";
   resource_id: string;
   metadata: {
     package_name: string;
@@ -37,7 +37,7 @@ export interface NodeAuditEventRecord {
 }
 
 const SAFE_IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:@/-]{0,254}$/;
-const SHA512_INTEGRITY = /^sha512-[A-Za-z0-9+/]{86}==$/;\nconst SCOPED_PACKAGE_NAME = /^@[a-z0-9][a-z0-9._-]{0,213}\\/[a-z0-9][a-z0-9._-]{0,213}$/;
+const SHA512_INTEGRITY = /^sha512-[A-Za-z0-9+/]{86}==$/;\nconst SCOPED_PACKAGE_NAME = /^@[a-z0-9][a-z0-9._-]{0,213}\\/[a-z0-9][a-z0-9._-]{0,213}$/;\nconst STABLE_SEMVER = /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/;
 
 function requireSafeIdentifier(value: string, label: string): string {
   if (!SAFE_IDENTIFIER.test(value)) {
@@ -55,7 +55,7 @@ export function createNodeAuditEvent(input: NodeAuditEventInput): NodeAuditEvent
   const workspaceId = requireSafeIdentifier(input.workspaceId, "workspace id");
   const actorUserId = requireSafeIdentifier(input.actorUserId, "actor id");
   if (!SCOPED_PACKAGE_NAME.test(input.packageName)) {\n    throw new Error("Invalid scoped package name.");\n  }\n  const packageName = input.packageName;
-  const packageVersion = requireSafeIdentifier(input.packageVersion, "package version");
+  if (!STABLE_SEMVER.test(input.packageVersion)) {\n    throw new Error("Invalid stable package version.");\n  }\n  const packageVersion = input.packageVersion;
 
   const installationId = input.installationId
     ? requireSafeIdentifier(input.installationId, "installation id")
