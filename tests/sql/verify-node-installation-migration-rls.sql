@@ -41,23 +41,17 @@ insert into public.node_package_versions (
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', false);
 
-insert into public.workspace_node_installations (
-  id, workspace_id, package_version_id, installed_by
-) values (
-  '50000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000001',
-  '40000000-0000-4000-8000-000000000001',
-  '00000000-0000-4000-8000-000000000001'
-) returning id as test_installation_id \gset
-
-insert into public.workspace_node_permission_grants (
-  installation_id, workspace_id, permission, granted_by
-) values (
-  '50000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000001',
-  'connector.invoke',
-  '00000000-0000-4000-8000-000000000001'
-);
+do $setup$
+declare installation_id uuid;
+begin
+  installation_id := public.create_workspace_node_installation(
+    '10000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000001',
+    array['connector.invoke']::text[]
+  );
+  perform set_config('test.installation_id', installation_id::text, false);
+end;
+$setup$;
 
 do $$
 begin
@@ -65,7 +59,7 @@ begin
     insert into public.workspace_node_permission_grants (
       installation_id, workspace_id, permission, granted_by
     ) values (
-      '50000000-0000-4000-8000-000000000001',
+      current_setting('test.installation_id')::uuid,
       '10000000-0000-4000-8000-000000000001',
       'http.outbound',
       '00000000-0000-4000-8000-000000000001'
@@ -122,22 +116,10 @@ $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', false);
 
-update public.workspace_node_permission_grants
-set status = 'revoked',
-    revoked_by = '00000000-0000-4000-8000-000000000001',
-    revoked_at = now()
-where installation_id = '50000000-0000-4000-8000-000000000001'
-  and permission = 'connector.invoke';
-
-insert into public.audit_events (
-  workspace_id, actor_user_id, event_type, resource_type, resource_id, metadata
-) values (
-  '10000000-0000-4000-8000-000000000001',
-  '00000000-0000-4000-8000-000000000001',
-  'node.permission_revoked',
-  'workspace_node_installation',
-  '50000000-0000-4000-8000-000000000001',
-  '{"permission":"connector.invoke"}'::jsonb
+select public.set_workspace_node_permission(
+  current_setting('test.installation_id')::uuid,
+  'connector.invoke',
+  'revoke'
 );
 
 -- A revoked grant cannot be silently reactivated; a new grant row preserves history.
@@ -146,7 +128,7 @@ declare affected integer;
 begin
   update public.workspace_node_permission_grants
   set status = 'active', revoked_by = null, revoked_at = null
-  where installation_id = '50000000-0000-4000-8000-000000000001'
+  where installation_id = current_setting('test.installation_id')::uuid
     and permission = 'connector.invoke'
     and status = 'revoked';
   get diagnostics affected = row_count;
@@ -156,20 +138,17 @@ begin
 end;
 $$;
 
-insert into public.workspace_node_permission_grants (
-  installation_id, workspace_id, permission, granted_by
-) values (
-  '50000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000001',
+select public.set_workspace_node_permission(
+  current_setting('test.installation_id')::uuid,
   'connector.invoke',
-  '00000000-0000-4000-8000-000000000001'
+  'grant'
 );
 
 do $verify$
 begin
   if not exists (
     select 1 from public.workspace_node_permission_grants
-    where installation_id = '50000000-0000-4000-8000-000000000001'
+    where installation_id = current_setting('test.installation_id')::uuid
       and permission = 'connector.invoke'
       and status = 'revoked'
   ) then
@@ -177,7 +156,7 @@ begin
   end if;
   if not exists (
     select 1 from public.workspace_node_installations
-    where id = '50000000-0000-4000-8000-000000000001'
+    where id = current_setting('test.installation_id')::uuid
       and status = 'disabled'
       and disabled_at is not null
       and uninstalled_at is null
@@ -187,7 +166,7 @@ begin
 
   update public.workspace_node_installations
   set status = 'active', disabled_at = null
-  where id = '50000000-0000-4000-8000-000000000001';
+  where id = current_setting('test.installation_id')::uuid;
   if found then
     raise exception 'Authenticated workspace admin unexpectedly activated an installation without worker approval';
   end if;
@@ -249,5 +228,30 @@ begin
   end if;
 end;
 $verify$;
+
+select public.set_workspace_node_installation_state(
+  current_setting('test.installation_id')::uuid,
+  'uninstalled'
+);
+
+do $uninstall$
+begin
+  if not exists (
+    select 1 from public.workspace_node_installations
+    where id = current_setting('test.installation_id')::uuid
+      and status = 'uninstalled'
+      and uninstalled_at is not null
+  ) then
+    raise exception 'Uninstall state was not persisted';
+  end if;
+  if exists (
+    select 1 from public.workspace_node_permission_grants
+    where installation_id = current_setting('test.installation_id')::uuid
+      and status = 'active'
+  ) then
+    raise exception 'Uninstall did not revoke every active permission grant';
+  end if;
+end;
+$uninstall$;
 
 reset role;
