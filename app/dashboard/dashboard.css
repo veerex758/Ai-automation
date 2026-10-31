@@ -327,3 +327,5 @@
 .activity-run-meta{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap}.activity-run-meta>a{font-size:9px;font-weight:700;color:var(--aivanta-forest)}
 .activity-state{font-size:9px;font-weight:700;border-radius:5px;padding:6px 8px;white-space:nowrap}.state-success{background:#edf2ee;color:#315c4b}.state-failed{background:#f8eeeb;color:#9a5548}
 @media(max-width:720px){.activity-run-card{align-items:flex-start;flex-direction:column;gap:12px;padding:14px}.activity-run-meta{justify-content:flex-start;gap:9px}.integration-directory-tools{align-items:stretch;flex-direction:column}.integration-search{width:100%}}
+
+.activity-state.state-running{background:#f5efe5;color:#806947}.activity-run-card:has(.state-running) .activity-run-indicator{background:#f5efe5;color:#806947}
