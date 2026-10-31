@@ -46,6 +46,12 @@ async function resetFixture() {
         public.workflow_runs
       restart identity cascade
     `);
+    // Each subtest starts from workflow version 1 so a prior version-pinning
+    // assertion cannot leak mutated fixture state into later dispatch tests.
+    await db.query(
+      "update public.workflows set version=1,status='active',definition=$1::jsonb where id=$2",
+      [JSON.stringify({ version: 1, nodes: [] }), ids.workflow],
+    );
   } finally {
     await db.query("reset role").catch(() => {});
     db.release();
