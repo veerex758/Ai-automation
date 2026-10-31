@@ -258,7 +258,7 @@ revoke update on public.workspace_node_installations from authenticated;
 grant update (status, updated_at, disabled_at, uninstalled_at)
   on public.workspace_node_installations to authenticated;
 revoke update on public.workspace_node_permission_grants from authenticated;
-grant update (status, granted_by, revoked_by, revoked_at, updated_at)
+grant update (status, revoked_by, revoked_at, updated_at)
   on public.workspace_node_permission_grants to authenticated;
 
 -- Keep modification timestamps server-generated for lifecycle rows.
