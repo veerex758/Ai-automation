@@ -12,7 +12,7 @@ const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatc
 test("queue enforces workspace-scoped idempotent dispatch and bounded payloads", () => {
   assert.match(migration, /unique \(workspace_id, idempotency_key\)/);
   assert.match(migration, /octet_length\(p_payload::text\) > 16384/);
-  assert.match(migration, /Execution job ownership mismatch/);
+  assert.match(migration, /Execution job ownership or version mismatch/);
 });
 
 test("worker claims are atomic and reclaim expired leases", () => {
