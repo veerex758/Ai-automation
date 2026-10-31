@@ -33,7 +33,8 @@ export default async function ActivityPage() {
     }
   } catch { loadError = "Activity could not be loaded right now. Refresh the page and try again."; }
   const succeeded = runs.filter(run => run.status === "succeeded").length;
-  const failed = runs.filter(run => run.status === "failed").length;\n  const running = runs.filter(run => run.status === "running").length;
+  const failed = runs.filter(run => run.status === "failed").length;
+  const running = runs.filter(run => run.status === "running").length;
   return <main className="app-shell">
     <aside className="sidebar">
       <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span><span>Aivanta</span></Link>
