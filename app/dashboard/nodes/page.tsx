@@ -88,10 +88,10 @@ export default function NodeLibraryPage() {
           </div>
           <section className="community-install-panel">
             <div className="community-install-mark">＋</div>
-            <div><span className="dash-eyebrow">COMMUNITY NODE INSTALLATION</span><h2>Curated community nodes are next</h2><p>We're building publisher verification, package scanning, workspace approvals and isolated execution before enabling third-party installs. No unreviewed package can access your workspace.</p></div>
+            <div><span className="dash-eyebrow">COMMUNITY NODE INSTALLATION</span><h2>Curated community nodes are next</h2><p>We&apos;re building publisher verification, package scanning, workspace approvals and isolated execution before enabling third-party installs. No unreviewed package can access your workspace.</p></div>
             <span className="workflow-status status-draft"><i/>In development</span>
           </section>
-          <div className="section-title-row"><div><h2>Available in your builder</h2><p>These are the live first-party node definitions loaded from Aivanta's trusted registry.</p></div></div>
+          <div className="section-title-row"><div><h2>Available in your builder</h2><p>These are the live first-party node definitions loaded from Aivanta&apos;s trusted registry.</p></div></div>
           <div className="node-library-tools">
             <label className="integration-search"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search nodes and operations" aria-label="Search nodes and operations" /></label>
             <div className="integration-categories" aria-label="Filter node categories">{categories.map((item) => <button key={item} type="button" className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item === "All" ? "All" : categoryLabels[item] || item}</button>)}</div>
@@ -105,7 +105,7 @@ export default function NodeLibraryPage() {
             <div className="node-operation-preview">{[...node.triggers, ...node.actions].slice(0, 3).map((operation) => <span key={operation.id}>{operation.name}</span>)}</div>
             <Link className="section-card-link" href="/dashboard/builder">Use in builder ↗</Link>
           </article>)}</div> : <div className="section-empty-panel"><h3>No matching nodes</h3><p>Try another search or category.</p><button className="subtle-button" type="button" onClick={() => { setSearch(""); setCategory("All"); }}>Clear filters</button></div>}
-          <p className="integration-security-footnote">Node availability is read from the authenticated server registry. A node marked “Built in” is part of Aivanta's application; it is not a separately installed community package.</p>
+          <p className="integration-security-footnote">Node availability is read from the authenticated server registry. A node marked “Built in” is part of Aivanta&apos;s application; it is not a separately installed community package.</p>
         </div>
       </section>
     </main>
