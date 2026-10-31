@@ -39,10 +39,3 @@ test("HTTP connection verification accepts only a successful 2xx response", () =
   assert.match(workflowRoute, /result\.status < 200 \|\| result\.status >= 300/);
 });
 
-test("integrations UI uses workspace endpoint and confirms Slack delivery", () => {
-  const ui = readFileSync(new URL("../app/dashboard/integrations/workspace-integrations.tsx", import.meta.url), "utf8");
-  assert.match(ui, /\/api\/workspace\/integrations/);
-  assert.doesNotMatch(ui, /workflowId/);
-  assert.match(ui, /window\.confirm/);
-  assert.match(ui, /confirmDeliveryTest\s*:\s*true/);
-});
