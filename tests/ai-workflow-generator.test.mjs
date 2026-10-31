@@ -10,7 +10,7 @@ const fakeFetch = (payload, status = 200) => async (_url, options) => {
 test("extracts JSON and optional markdown fences safely", () => {
   const fence = String.fromCharCode(96).repeat(3);
   assert.deepEqual(extractJson(JSON.stringify(validDefinition)), validDefinition);
-  assert.deepEqual(extractJson(fence + "json\\n" + JSON.stringify(validDefinition) + "\\n" + fence), validDefinition);
+  assert.deepEqual(extractJson(fence + "json\n" + JSON.stringify(validDefinition) + "\n" + fence), validDefinition);
   assert.throws(() => extractJson("not json"), /AI_INVALID_JSON/);
 });
 test("rejects empty and oversized prompts before calling provider", async () => {
