@@ -141,20 +141,20 @@ insert into public.audit_events (
 );
 
 -- A revoked grant cannot be silently reactivated; a new grant row preserves history.
-do $
+do $$
+declare affected integer;
 begin
-  begin
-    update public.workspace_node_permission_grants
-    set status = 'active', revoked_by = null, revoked_at = null
-    where installation_id = '50000000-0000-4000-8000-000000000001'
-      and permission = 'connector.invoke'
-      and status = 'revoked';
+  update public.workspace_node_permission_grants
+  set status = 'active', revoked_by = null, revoked_at = null
+  where installation_id = '50000000-0000-4000-8000-000000000001'
+    and permission = 'connector.invoke'
+    and status = 'revoked';
+  get diagnostics affected = row_count;
+  if affected <> 0 then
     raise exception 'Revoked permission was unexpectedly reactivated';
-  exception when insufficient_privilege then
-    null;
-  end;
+  end if;
 end;
-$;
+$$;
 
 insert into public.workspace_node_permission_grants (
   installation_id, workspace_id, permission, granted_by
