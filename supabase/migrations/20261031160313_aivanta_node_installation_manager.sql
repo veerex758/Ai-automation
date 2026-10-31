@@ -103,7 +103,6 @@ create table public.workspace_node_permission_grants (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   revoked_at timestamptz,
-  unique (installation_id, permission),
   foreign key (installation_id, workspace_id)
     references public.workspace_node_installations(id, workspace_id) on delete cascade,
   check (
@@ -112,6 +111,9 @@ create table public.workspace_node_permission_grants (
   )
 );
 
+create unique index workspace_node_permission_grants_one_active_idx
+  on public.workspace_node_permission_grants(installation_id, permission)
+  where status = 'active';
 create index workspace_node_permission_grants_workspace_idx
   on public.workspace_node_permission_grants(workspace_id, installation_id);
 
@@ -218,13 +220,12 @@ create policy workspace_node_permission_grants_admin_insert
 
 create policy workspace_node_permission_grants_admin_update
   on public.workspace_node_permission_grants for update to authenticated
-  using (private.is_workspace_admin(workspace_id))
+  using (private.is_workspace_admin(workspace_id) and status = 'active')
   with check (
     private.is_workspace_admin(workspace_id)
-    and (
-      (status = 'active' and revoked_at is null and revoked_by is null)
-      or (status = 'revoked' and revoked_at is not null and revoked_by = (select auth.uid()))
-    )
+    and status = 'revoked'
+    and revoked_at is not null
+    and revoked_by = (select auth.uid())
     and exists (
       select 1
       from public.workspace_node_installations i
