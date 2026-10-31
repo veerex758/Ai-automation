@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       include_granted_scopes: "false", state,
     }).toString();
     const response = NextResponse.redirect(url);
-    response.cookies.set(COOKIE, state, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/integrations/google", maxAge: 600 });
+    response.cookies.set(COOKIE, state, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 600 });
     return response;
   } catch {
     return NextResponse.json({ error: "Could not start Google authorization." }, { status: 500 });
