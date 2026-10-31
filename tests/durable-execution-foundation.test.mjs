@@ -79,7 +79,7 @@ test("dispatch snapshots the exact workflow version for immutable queued executi
   assert.match(migration, /workflow_definition jsonb not null/);
   assert.match(migration, /select w\.\* into workflow_row[\s\S]*?for share/i);
   assert.match(migration, /workflow_row\.version, workflow_row\.definition/);
-  assert.match(worker, /validateDefinition\(job\.workflow_definition\)/);
+  assert.match(worker, /validateDefinition\(definition\)/);
   assert.doesNotMatch(worker, /from\("workflows"\)/);
 });
 
@@ -87,4 +87,14 @@ test("dispatch snapshots the exact workflow version for immutable queued executi
 test("legacy enqueue RPC also writes the immutable workflow snapshot", () => {
   assert.match(migration, /insert into public\.execution_jobs\s*\(workspace_id, workflow_id, run_id, workflow_version, workflow_definition, idempotency_key, payload, max_attempts\)/);
   assert.match(migration, /run_row\.workflow_version, workflow_row\.definition/);
+});
+
+
+test("durable worker supports registry definitions without network or provider side effects", async () => {
+  const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
+  assert.match(worker, /executeRegisteredWorkflow\(\{ steps, context, dryRun: true \}\)/);
+  assert.match(worker, /DRY_RUN_NETWORK_BLOCKED/);
+  assert.match(worker, /webhook: \{ verified: job\.payload\?\.webhookVerified === true \}/);
+  assert.match(worker, /status: step\.status === "succeeded" \? "simulated" : step\.status/);
+  assert.doesNotMatch(worker, /AIVANTA_LIVE_EXECUTION_ENABLED/);
 });

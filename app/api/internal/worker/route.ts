@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
+import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import type { NodeContext } from "@/nodes/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,20 +52,65 @@ async function tick(request: NextRequest) {
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
     try {
-      // Execute the immutable definition captured atomically at dispatch time,
-      // not the mutable current workflow row.
-      const validated = validateDefinition(job.workflow_definition);
-      if (!validated.definition) throw new Error("INVALID_WORKFLOW_DEFINITION");
-      const input = job.payload && typeof job.payload.input === "object" && job.payload.input !== null
-        ? job.payload.input as Record<string, unknown> : {};
-      const result = runDryRun(validated.definition, input);
-      if (result.sideEffectsPerformed !== false) throw new Error("UNSAFE_EXECUTOR_RESULT");
+      // Execute the immutable definition captured atomically at dispatch time.
+      // Both legacy and registry workflows are dry-run only in this worker.
+      const definition = job.workflow_definition as Record<string, unknown>;
+      let result: { status: string; steps: Array<{ stepId: string; position: number; type: string; title: string; status: string; message: string }> };
+      if (definition.format === "aivanta-registry-v1") {
+        if (!Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
+          throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
+        }
+        const steps = definition.steps as RegisteredWorkflowStep[];
+        if (steps.some((step) => !step || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
+          typeof step.operationId !== "string" || (step.kind !== "trigger" && step.kind !== "action") || !("input" in step))) {
+          throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
+        }
+        const source = job.payload?.source;
+        if (source === "webhook" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "webhooks" || steps[0]?.operationId !== "receive_event")) {
+          throw new Error("INVALID_WEBHOOK_TRIGGER_DEFINITION");
+        }
+        const context: Omit<NodeContext, "previousOutputs"> = {
+          credentials: {},
+          logger: {
+            info(message, meta) { console.info("[queue-node]", message, meta ?? {}); },
+            error(message, meta) { console.error("[queue-node]", message, meta ?? {}); },
+          },
+          http: { async request() { throw new Error("DRY_RUN_NETWORK_BLOCKED"); } },
+          webhook: { verified: job.payload?.webhookVerified === true },
+        };
+        const registryResult = await executeRegisteredWorkflow({ steps, context, dryRun: true });
+        result = {
+          status: registryResult.status,
+          steps: registryResult.steps.map((step, index) => ({
+            stepId: step.stepId,
+            position: index + 1,
+            type: steps[index]?.kind ?? "action",
+            title: (steps[index]?.nodeId + "." + steps[index]?.operationId).slice(0, 80),
+            status: step.status,
+            message: step.error ?? "Registered operation validated; no provider action was executed.",
+          })),
+        };
+      } else {
+        const validated = validateDefinition(definition);
+        if (!validated.definition) throw new Error("INVALID_WORKFLOW_DEFINITION");
+        const input = job.payload && typeof job.payload.input === "object" && job.payload.input !== null
+          ? job.payload.input as Record<string, unknown> : {};
+        const legacyResult = runDryRun(validated.definition, input);
+        if (legacyResult.sideEffectsPerformed !== false) throw new Error("UNSAFE_EXECUTOR_RESULT");
+        result = {
+          status: legacyResult.status,
+          steps: legacyResult.steps.map((step, index) => ({
+            stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+            status: step.status, message: step.message,
+          })),
+        };
+      }
 
       for (const step of result.steps) {
         const { error: checkpointError } = await db.rpc("checkpoint_execution_step", {
           p_job_id: job.id, p_lease_token: job.lease_token,
           p_step_id: step.stepId, p_position: step.position,
-          p_status: step.status === "skipped" ? "skipped" : "succeeded",
+          p_status: step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded",
           p_input: {}, p_output: { message: step.message },
         });
         if (checkpointError) throw new Error("CHECKPOINT_WRITE_FAILED");
@@ -72,7 +119,7 @@ async function tick(request: NextRequest) {
       const stepRows = result.steps.map((step) => ({
         run_id: job.run_id, workspace_id: job.workspace_id, step_id: step.stepId,
         position: step.position, step_type: step.type, title: step.title,
-        status: step.status, result: { message: step.message },
+        status: step.status === "succeeded" ? "simulated" : step.status, result: step.status === "failed" ? { error: step.message } : { message: step.message },
       }));
       const { error: stepsError } = await db.from("workflow_run_steps").upsert(stepRows, { onConflict: "run_id,step_id" });
       if (stepsError) throw new Error("RUN_STEP_PERSISTENCE_FAILED");
