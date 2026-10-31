@@ -7,10 +7,6 @@ type Section = "integrations" | "templates" | "analytics" | "activity" | "billin
 const navigation = [
   ["Dashboard","/dashboard","▦"],["Workflows","/dashboard#workflows","↗"],["Integrations","/dashboard/integrations","⌘"],["AI Agents","/dashboard/ai-assistant","✺"],["Templates","/dashboard/templates","▧"],["Analytics","/dashboard/analytics","▥"],["Activity logs","/dashboard/activity","◷"],["Billing","/dashboard/billing","◇"],["Settings","/dashboard/settings","⚙"],
 ] as const;
-const catalog = [
-  {name:"Slack",symbol:"✳",tone:"violet",description:"Connect a workspace webhook for reviewed team notifications."},
-  {name:"HTTP API",symbol:"↗",tone:"blue",description:"Connect an approved HTTPS API host for controlled requests."},
-];
 const templates = [
   {name:"Lead Capture & Welcome Email",category:"Lead capture",description:"Start from a website form, record lead details, and prepare a welcome message."},
   {name:"Support Ticket Triage",category:"Customer support",description:"Check incoming requests and prepare a support follow-up task."},
