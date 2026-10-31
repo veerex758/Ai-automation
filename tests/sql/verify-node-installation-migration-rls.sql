@@ -1,0 +1,181 @@
+-- Apply this after the migration and fixture setup, using the disposable CI database.
+insert into public.node_publishers (
+  id, slug, display_name, verification_status, verified_at, verified_by
+) values (
+  '20000000-0000-4000-8000-000000000001',
+  'aivanta',
+  'Aivanta',
+  'verified',
+  now(),
+  '00000000-0000-4000-8000-000000000001'
+);
+insert into public.node_packages (
+  id, publisher_id, package_name, display_name
+) values (
+  '30000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '@aivanta/crm',
+  'CRM Connector'
+);
+insert into public.node_package_versions (
+  id, package_id, version, runtime_api_version, entrypoint, manifest,
+  artifact_integrity, publisher_provenance_verified, dependency_scan_status,
+  malware_scan_status, permissions_reviewed_at, review_status, approved_at, approved_by
+) values (
+  '40000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '1.2.3',
+  '1',
+  'dist/index.js',
+  '{"permissions":["connector.invoke"]}'::jsonb,
+  'sha512-' || repeat('A', 86) || '==',
+  true,
+  'passed',
+  'passed',
+  now(),
+  'approved',
+  now(),
+  '00000000-0000-4000-8000-000000000001'
+);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', false);
+
+insert into public.workspace_node_installations (
+  workspace_id, package_version_id, installed_by
+) values (
+  '10000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',
+  '00000000-0000-4000-8000-000000000001'
+) returning id as test_installation_id \gset
+
+insert into public.workspace_node_permission_grants (
+  installation_id, workspace_id, permission, granted_by
+) values (
+  :'test_installation_id',
+  '10000000-0000-4000-8000-000000000001',
+  'connector.invoke',
+  '00000000-0000-4000-8000-000000000001'
+);
+
+do $$
+begin
+  begin
+    insert into public.workspace_node_permission_grants (
+      installation_id, workspace_id, permission, granted_by
+    ) values (
+      :'test_installation_id',
+      '10000000-0000-4000-8000-000000000001',
+      'http.outbound',
+      '00000000-0000-4000-8000-000000000001'
+    );
+    raise exception 'Undeclared capability grant unexpectedly succeeded';
+  exception when insufficient_privilege then
+    null;
+  end;
+end;
+$$;
+
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000003', false);
+
+do $$
+declare visible_count integer;
+begin
+  select count(*) into visible_count
+  from public.workspace_node_installations
+  where workspace_id = '10000000-0000-4000-8000-000000000002';
+  if visible_count <> 0 then
+    raise exception 'Cross-workspace installation rows were visible';
+  end if;
+
+  begin
+    insert into public.workspace_node_installations (
+      workspace_id, package_version_id, installed_by
+    ) values (
+      '10000000-0000-4000-8000-000000000002',
+      '40000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000003'
+    );
+    raise exception 'Non-admin cross-workspace installation unexpectedly succeeded';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  begin
+    insert into public.audit_events (
+      workspace_id, actor_user_id, event_type, resource_type, resource_id, metadata
+    ) values (
+      '10000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000003',
+      'node.permission_revoked',
+      'workspace_node_installation',
+      'install-test',
+      '{}'::jsonb
+    );
+    raise exception 'Non-admin node audit event unexpectedly succeeded';
+  exception when insufficient_privilege then
+    null;
+  end;
+end;
+$$;
+
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', false);
+
+update public.workspace_node_permission_grants
+set status = 'revoked',
+    revoked_by = '00000000-0000-4000-8000-000000000001',
+    revoked_at = now()
+where installation_id = :'test_installation_id'
+  and permission = 'connector.invoke';
+
+insert into public.audit_events (
+  workspace_id, actor_user_id, event_type, resource_type, resource_id, metadata
+) values (
+  '10000000-0000-4000-8000-000000000001',
+  '00000000-0000-4000-8000-000000000001',
+  'node.permission_revoked',
+  'workspace_node_installation',
+  :'test_installation_id',
+  '{"permission":"connector.invoke"}'::jsonb
+);
+
+do $$
+begin
+  if not exists (
+    select 1 from public.workspace_node_permission_grants
+    where installation_id = :'test_installation_id'
+      and permission = 'connector.invoke'
+      and status = 'revoked'
+  ) then
+    raise exception 'Permission revocation did not persist';
+  end if;
+
+  if has_table_privilege('authenticated', 'public.node_platform_audit_events', 'SELECT') then
+    raise exception 'Authenticated users must not read platform audit history';
+  end if;
+
+  if has_table_privilege('service_role', 'public.node_platform_audit_events', 'UPDATE') then
+    raise exception 'Platform audit history must be append-only';
+  end if;
+
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname in (
+        'node_publishers',
+        'node_packages',
+        'node_package_versions',
+        'workspace_node_installations',
+        'workspace_node_permission_grants',
+        'node_platform_audit_events'
+      )
+      and not c.relrowsecurity
+  ) then
+    raise exception 'RLS is not enabled on every node installation table';
+  end if;
+end;
+$$;
+
+reset role;
