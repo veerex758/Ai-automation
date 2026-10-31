@@ -79,6 +79,10 @@ test("Slack action restricts configured webhook hosts and sends the message", as
     credentials: { slack: { webhookUrl: "https://example.com/webhook" } },
     logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
   }, { message: "Test message" }), /SLACK_CONNECTION_INVALID/);
+  await assert.rejects(() => operation.run({
+    credentials: { slack: { webhookUrl: "https://hooks.slack.com/services/T000/B000/secret" } },
+    logger: { info() {}, error() {} }, http: { async request() { return { status: 200, body: "not-ok" }; } }, previousOutputs: {},
+  }, { message: "Test message" }), /SLACK_REQUEST_FAILED/);
 });
 
 test("Email action sends through Resend and returns provider message ID", async () => {
