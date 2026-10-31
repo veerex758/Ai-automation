@@ -45,8 +45,6 @@ export async function resolveNodeWorkspaceAccess(): Promise<NodeWorkspaceAccess>
   };
 }
 
-export function canManageNodeInstallations(role: NodeWorkspaceAccess extends infer T
-  ? T extends { ok: true; role: infer R } ? R : never
-  : never): boolean {
+export function canManageNodeInstallations(role: "owner" | "admin" | "member"): boolean {
   return role === "owner" || role === "admin";
 }
