@@ -184,6 +184,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     const status = code === "CONNECTION_FIELDS_INVALID" || code === "CONNECTION_SENDER_INVALID" || code === "CONNECTION_WEBHOOK_INVALID" || code === "CONNECTION_HOST_INVALID" ? 400 :
+      code === "INTEGRATION_MANAGE_PERMISSION_REQUIRED" ? 403 :
       code === "CREDENTIALS_ENCRYPTION_KEY_MISSING" || code === "CREDENTIALS_ENCRYPTION_KEY_INVALID" || code === "SUPABASE_ADMIN_NOT_CONFIGURED" ? 503 : 500;
     return NextResponse.json({ error: status === 400 || status === 503 ? code : "Could not save this integration securely." }, { status });
   }
