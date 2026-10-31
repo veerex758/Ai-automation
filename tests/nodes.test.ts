@@ -138,7 +138,7 @@ test("Logic filter supports nested fields and preserves matching records", async
   const result = await operation.run({
     credentials: {}, logger: { info() {}, error() {} },
     http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
-  }, { items: [{ customer: { active: true } }, { customer: { active: false } }], field: "customer.active", operator: "equals", value: true });
+  }, { items: [{ customer: { active: true } }, { customer: { active: false } }], field: "customer.active", operator: "equals", value: true }) as { items: Array<{ customer: { active: boolean } }>; count: number };
   assert.deepEqual(result, { items: [{ customer: { active: true } }], count: 1 });
 });
 
@@ -199,7 +199,7 @@ test("Data nodes deduplicate, sort, and aggregate without coercion", async () =>
 test("Data split_batches keeps every item in ordered batches", async () => {
   const operation = findOperation("data", "split_batches", "action");
   assert.ok(operation);
-  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 }));
+  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 })) as { batches: number[][] };
   assert.deepEqual(result.batches, [[1, 2], [3, 4], [5]]);
 });
 
