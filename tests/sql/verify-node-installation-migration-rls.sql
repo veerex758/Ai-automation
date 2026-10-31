@@ -165,7 +165,7 @@ insert into public.workspace_node_permission_grants (
   '00000000-0000-4000-8000-000000000001'
 );
 
-do $
+do $verify$
 begin
   if not exists (
     select 1 from public.workspace_node_permission_grants
