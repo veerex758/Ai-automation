@@ -82,3 +82,9 @@ test("dispatch snapshots the exact workflow version for immutable queued executi
   assert.match(worker, /validateDefinition\(job\.workflow_definition\)/);
   assert.doesNotMatch(worker, /from\("workflows"\)/);
 });
+
+
+test("legacy enqueue RPC also writes the immutable workflow snapshot", () => {
+  assert.match(migration, /insert into public\.execution_jobs\s*\(workspace_id, workflow_id, run_id, workflow_version, workflow_definition, idempotency_key, payload, max_attempts\)/);
+  assert.match(migration, /run_row\.workflow_version, workflow_row\.definition/);
+});

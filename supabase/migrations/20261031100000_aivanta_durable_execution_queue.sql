@@ -83,6 +83,8 @@ create or replace function public.enqueue_execution_job(
 language plpgsql security definer set search_path = ''
 as $$
 declare new_id uuid;
+declare workflow_row public.workflows%rowtype;
+declare run_row public.workflow_runs%rowtype;
 begin
   if p_idempotency_key is null or length(p_idempotency_key) not between 1 and 200
      or p_max_attempts not between 1 and 20
@@ -90,19 +92,20 @@ begin
      or octet_length(p_payload::text) > 16384 then
     raise exception using errcode = '22023', message = 'Invalid execution job request';
   end if;
-  if not exists (
-    select 1 from public.workflows w
-    where w.id = p_workflow_id and w.workspace_id = p_workspace_id
-  ) or not exists (
-    select 1 from public.workflow_runs r
-    where r.id = p_run_id and r.workflow_id = p_workflow_id
-      and r.workspace_id = p_workspace_id and r.status = 'running'
-  ) then
-    raise exception using errcode = '22023', message = 'Execution job ownership mismatch';
+  select * into workflow_row from public.workflows w
+  where w.id = p_workflow_id and w.workspace_id = p_workspace_id
+  for share;
+  select * into run_row from public.workflow_runs r
+  where r.id = p_run_id and r.workflow_id = p_workflow_id
+    and r.workspace_id = p_workspace_id and r.status = 'running'
+  for share;
+  if not found or workflow_row.id is null or run_row.workflow_version <> workflow_row.version then
+    raise exception using errcode = '22023', message = 'Execution job ownership or version mismatch';
   end if;
   insert into public.execution_jobs
-    (workspace_id, workflow_id, run_id, idempotency_key, payload, max_attempts)
-  values (p_workspace_id, p_workflow_id, p_run_id, p_idempotency_key, p_payload, p_max_attempts)
+    (workspace_id, workflow_id, run_id, workflow_version, workflow_definition, idempotency_key, payload, max_attempts)
+  values (p_workspace_id, p_workflow_id, p_run_id, run_row.workflow_version, workflow_row.definition,
+    p_idempotency_key, p_payload, p_max_attempts)
   on conflict (workspace_id, idempotency_key) do update
     set idempotency_key = excluded.idempotency_key
   returning id into new_id;
