@@ -45,3 +45,16 @@ test("rejects suspicious identifiers and malformed artifact integrity", () => {
   assert.throws(() => createNodeAuditEvent({ ...base, workspaceId: "workspace-123\nsecret" }));
   assert.throws(() => createNodeAuditEvent({ ...base, artifactIntegrity: "sha1-not-safe" }));
 });
+
+test("rejects unscoped packages and non-stable package versions", () => {
+  const base = {
+    workspaceId: "workspace-123",
+    actorUserId: "user-456",
+    eventType: "node.installation_created" as const,
+    installationId: "install-789",
+    packageName: "@aivanta/crm",
+    packageVersion: "1.2.3",
+  };
+  assert.throws(() => createNodeAuditEvent({ ...base, packageName: "crm" }), /scoped package/);
+  assert.throws(() => createNodeAuditEvent({ ...base, packageVersion: "1.2.3-beta.1" }), /stable package version/);
+});
