@@ -75,7 +75,7 @@ export default function IntegrationDirectory() {
    const saved=current(item.provider);const connected=saved?.status==="connected";
    return <article className="section-info-card integration-directory-card" key={item.provider}>
     <div className={`workflow-app-icon ${item.provider}`}>{item.provider==="openai"?"◎":item.provider==="gemini"?"✦":item.provider==="resend"?"✉":item.provider==="slack"?"✳":"↗"}</div>
-    <div className="section-card-title"><h3>{item.name}</h3><span className={`workflow-status ${connected?"status-active":"status-draft"}`}><i/>{connected?"Connected":saved?"Needs attention":"Not connected"}</span></div>
+    <div className="section-card-title"><h3>{item.name}</h3><span className={`workflow-status ${connected?"status-active":"status-draft"}`}><i/>{connected?"Connected":saved?"Needs attention":"Setup required"}</span></div>
     <p>{item.description}</p>
     <small>{saved?.last_tested_at? `Last test: ${new Date(saved.last_tested_at).toLocaleString()} · ${saved.last_test_status||"unknown"}`: "No successful connection test recorded."}</small>
     <div className="integration-card-actions"><button className="section-card-link" type="button" onClick={()=>open(item.provider)}>{saved?"Update credentials":"Connect"} ↗</button>{saved&&<><button className="integration-test-button" type="button" disabled={busy} onClick={()=>void test(item.provider)}>Test connection</button><button className="integration-disconnect-button" type="button" disabled={busy} onClick={()=>void disconnect(item.provider)}>Disconnect</button></>}<Link className="integration-builder-link" href="/dashboard/builder">Configure in builder ↗</Link></div>
