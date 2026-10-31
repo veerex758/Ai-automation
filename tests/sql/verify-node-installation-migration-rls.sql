@@ -140,7 +140,32 @@ insert into public.audit_events (
   '{"permission":"connector.invoke"}'::jsonb
 );
 
-do $$
+-- A revoked grant cannot be silently reactivated; a new grant row preserves history.
+do $
+begin
+  begin
+    update public.workspace_node_permission_grants
+    set status = 'active', revoked_by = null, revoked_at = null
+    where installation_id = '50000000-0000-4000-8000-000000000001'
+      and permission = 'connector.invoke'
+      and status = 'revoked';
+    raise exception 'Revoked permission was unexpectedly reactivated';
+  exception when insufficient_privilege then
+    null;
+  end;
+end;
+$;
+
+insert into public.workspace_node_permission_grants (
+  installation_id, workspace_id, permission, granted_by
+) values (
+  '50000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  'connector.invoke',
+  '00000000-0000-4000-8000-000000000001'
+);
+
+do $
 begin
   if not exists (
     select 1 from public.workspace_node_permission_grants
