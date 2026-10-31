@@ -1,4 +1,7 @@
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
+import { decryptCredentialSecret } from "@/lib/credentials/secret-crypto";
+import { redactSensitiveData } from "@/lib/credentials/redact-sensitive";
 import { createClient } from "@/lib/supabase/server";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
@@ -7,6 +10,21 @@ import { safeHttpsRequest } from "@/lib/workflows/safe-http-transport";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+function credentialAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("CREDENTIAL_VAULT_DATABASE_NOT_CONFIGURED");
+  return createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+function credentialProviderForNode(nodeId: string): string | null {
+  if (["openai", "slack", "http"].includes(nodeId)) return nodeId;
+  if (nodeId === "email") return "resend";
+  return null;
+}
 
 function serverContext(): Omit<NodeContext, "previousOutputs"> {
   const credentials: Record<string, Record<string, string>> = {};
@@ -81,6 +99,52 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
       return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
     }
+
+    // Resolve selected credentials strictly inside the workflow's workspace. Never trust a
+    // credential ID without checking workspace, provider, and active status on the server.
+    const credentialIds = steps.filter((step) => isRecord(step) && step.credentialId !== undefined);
+    const credentialAdmin = credentialIds.length ? credentialAdminClient() : null;
+    const resolvedSteps: RegisteredWorkflowStep[] = [];
+    for (const step of steps) {
+      if (!isRecord(step) || step.credentialId === undefined) {
+        resolvedSteps.push(step);
+        continue;
+      }
+      if (typeof step.credentialId !== "string" || !uuid.test(step.credentialId)) {
+        return NextResponse.json({ error: "A selected credential ID is invalid." }, { status: 422 });
+      }
+      const expectedProvider = credentialProviderForNode(step.nodeId);
+      if (!expectedProvider || !credentialAdmin) {
+        return NextResponse.json({ error: "This node does not support workspace credentials." }, { status: 422 });
+      }
+      const { data: credential, error: credentialError } = await credentialAdmin.from("workspace_credentials")
+        .select("id,provider,secret_ciphertext,secret_key_version,status")
+        .eq("id", step.credentialId).eq("workspace_id", workflow.workspace_id)
+        .eq("provider", expectedProvider).eq("status", "active").maybeSingle();
+      if (credentialError) throw credentialError;
+      if (!credential) {
+        return NextResponse.json({ error: "Selected credential is unavailable in this workspace or has been revoked." }, { status: 422 });
+      }
+      if (dryRun) {
+        resolvedSteps.push(step as unknown as RegisteredWorkflowStep);
+        continue;
+      }
+      const encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
+      const activeKeyVersion = process.env.AIVANTA_CREDENTIALS_KEY_VERSION ?? "v1";
+      if (!encodedKey || credential.secret_key_version !== activeKeyVersion) {
+        return NextResponse.json({ error: "Selected credential cannot be decrypted with the active server key version." }, { status: 503 });
+      }
+      const encodedCiphertext = String(credential.secret_ciphertext);
+      const hex = encodedCiphertext.startsWith("\\x") ? encodedCiphertext.slice(2) : encodedCiphertext;
+      if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error("CREDENTIAL_CIPHERTEXT_MALFORMED");
+      const plaintext = decryptCredentialSecret(Buffer.from(hex, "hex"), encodedKey, `${workflow.workspace_id}:${expectedProvider}`);
+      let parsedSecret: unknown;
+      try { parsedSecret = JSON.parse(plaintext); } catch { throw new Error("CREDENTIAL_SECRET_INVALID"); }
+      if (!isRecord(parsedSecret) || Object.values(parsedSecret).some((value) => typeof value !== "string")) {
+        throw new Error("CREDENTIAL_SECRET_INVALID");
+      }
+      resolvedSteps.push({ ...step, credential: parsedSecret as Record<string, string> } as RegisteredWorkflowStep);
+    }
     if (!dryRun) {
       // Until each provider has its own workspace-scoped connection and explicit live-action gate,
       // keep production execution restricted to the existing guarded Resend email action.
@@ -113,8 +177,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
     // -> finalized lifecycle so step inserts remain auditable before completion.
+    const executionContext = serverContext();
     const dryRunExecution = dryRun
-      ? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: true })
+      ? await executeRegisteredWorkflow({ steps: resolvedSteps, context: executionContext, dryRun: true })
       : null;
     const initialStatus = dryRunExecution
       ? (dryRunExecution.status === "succeeded" ? "succeeded" : "failed")
@@ -130,12 +195,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
     if (insertError) throw insertError;
 
-    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: false });
+    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps: resolvedSteps, context: executionContext, dryRun: false });
+    const knownSecrets = [
+      ...resolvedSteps.flatMap((step) => Object.values(step.credential ?? {})),
+      ...Object.values(executionContext.credentials).flatMap((providerCredentials) => Object.values(providerCredentials)),
+    ];
     const rows = execution.steps.map((step, index) => ({
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
       status: step.status === "succeeded" ? "executed" : step.status,
-      result: step.status === "failed" ? { error: step.error } : step.status === "succeeded" ? step.output : { message: step.status === "simulated" ? "No provider action was executed." : step.error },
+      result: redactSensitiveData(step.status === "failed"
+        ? { error: step.error }
+        : step.status === "succeeded"
+          ? step.output
+          : { message: step.status === "simulated" ? "No provider action was executed." : step.error }, knownSecrets),
     }));
     const finalStatus = execution.status === "succeeded" ? "succeeded" : "failed";
     try {
@@ -155,7 +228,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       }
       return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.step_type === "action" && row.status === "executed") }, { status: 201 });
     } catch (error) {
-      console.error("Failed to persist registry workflow history", error);
+      console.error("Failed to persist registry workflow history.");
       if (!dryRun) {
         await supabase.from("workflow_runs").update({
           status: "failed", completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
@@ -168,7 +241,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       }, { status: 500 });
     }
   } catch (error) {
-    console.error("Registry workflow execution failed", error);
+    console.error("Registry workflow execution failed.");
     return NextResponse.json({ error: "Could not complete this workflow run. Check run history before retrying." }, { status: 500 });
   }
 }

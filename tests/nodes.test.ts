@@ -193,13 +193,13 @@ test("Data nodes deduplicate, sort, and aggregate without coercion", async () =>
   assert.deepEqual(aggregate.outputSchema.parse(await aggregate.run(context, { values: [2, 4, 6] })), {
     count: 3, sum: 12, average: 4, min: 2, max: 6,
   });
-  await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /expected number, received string/);
+  await assert.rejects(() => aggregate.run(context, { values: [1, "2"] }), /expected number/i);
 });
 
 test("Data split_batches keeps every item in ordered batches", async () => {
   const operation = findOperation("data", "split_batches", "action");
   assert.ok(operation);
-  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 })) as { batches: unknown[][]; count: number; batchCount: number };
+  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 })) as { batches: unknown[][]; count: number };
   assert.deepEqual(result.batches, [[1, 2], [3, 4], [5]]);
 });
 

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { redactSensitiveData } from "@/lib/credentials/redact-sensitive";
 import { NextResponse, type NextRequest } from "next/server";
 import { decryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
 import { verifyWebhookSignature } from "@/lib/webhooks/verify-signature";
@@ -240,9 +241,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     if (runInsertError) throw runInsertError;
     runId = run.id;
 
+    const nodeContext = executionContext();
+    const knownSecrets = Object.values(nodeContext.credentials).flatMap((providerCredentials) => Object.values(providerCredentials));
     const execution = await executeRegisteredWorkflow({
       steps: executionSteps,
-      context: { ...executionContext(), webhook: { verified: true } },
+      context: { ...nodeContext, webhook: { verified: true } },
       dryRun: false,
     });
     const rows = execution.steps.map((step, index) => ({
@@ -253,11 +256,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       step_type: executionSteps[index]?.kind ?? "action",
       title: (executionSteps[index]?.nodeId + "." + executionSteps[index]?.operationId).slice(0, 80),
       status: step.status === "succeeded" ? "executed" : step.status,
-      result: step.status === "failed"
+      result: redactSensitiveData(step.status === "failed"
         ? { error: step.error }
         : step.status === "succeeded" && executionSteps[index]?.kind === "trigger"
           ? { eventId, eventType, receivedAt: eventInput.receivedAt, payloadSha256 }
-          : step.status === "succeeded" ? (step.output ?? {}) : { message: step.error ?? "Step skipped." },
+          : step.status === "succeeded" ? (step.output ?? {}) : { message: step.error ?? "Step skipped." }, knownSecrets),
     }));
     const finalStatus = execution.status === "succeeded" ? "succeeded" : "failed";
     const { error: stepsError } = await db.from("workflow_run_steps").insert(rows);
@@ -288,7 +291,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
   } catch (error) {
     console.error("[webhook-ingress] event dispatch failed", {
       receiptId: receipt?.id ?? null,
-      code: error instanceof Error ? error.message : "WEBHOOK_DISPATCH_FAILED",
+      code: error instanceof Error && /^[A-Z0-9_]{1,80}$/.test(error.message) ? error.message : "WEBHOOK_DISPATCH_FAILED",
     });
     if (db && runId) {
       await db.from("workflow_runs").update({

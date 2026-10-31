@@ -7,6 +7,10 @@ export type RegisteredWorkflowStep = {
   operationId: string;
   kind: "trigger" | "action";
   input: unknown;
+  /** Optional selected workspace credential ID; resolved and authorized by the server route. */
+  credentialId?: string;
+  /** Server-resolved credential material; never persisted in workflow definitions or returned to clients. */
+  credential?: Record<string, string>;
 };
 
 export type RegisteredStepResult = {
@@ -102,7 +106,11 @@ export async function executeRegisteredWorkflow(args: {
         results.push({ stepId: step.id, status: "simulated" });
         continue;
       }
-      const output = await operation.run({ ...args.context, previousOutputs: outputs }, validatedInput);
+      const provider = step.nodeId === "email" ? "resend" : step.nodeId;
+      const credentials = step.credential
+        ? { ...args.context.credentials, [provider]: { ...(args.context.credentials[provider] ?? {}), ...step.credential } }
+        : args.context.credentials;
+      const output = await operation.run({ ...args.context, credentials, previousOutputs: outputs }, validatedInput);
       outputs[step.id] = operation.outputSchema.parse(output);
       results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
     } catch (error) {
