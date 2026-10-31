@@ -42,8 +42,9 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', false);
 
 insert into public.workspace_node_installations (
-  workspace_id, package_version_id, installed_by
+  id, workspace_id, package_version_id, installed_by
 ) values (
+  '50000000-0000-4000-8000-000000000001',
   '10000000-0000-4000-8000-000000000001',
   '40000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000001'
@@ -52,7 +53,7 @@ insert into public.workspace_node_installations (
 insert into public.workspace_node_permission_grants (
   installation_id, workspace_id, permission, granted_by
 ) values (
-  :'test_installation_id',
+  '50000000-0000-4000-8000-000000000001',
   '10000000-0000-4000-8000-000000000001',
   'connector.invoke',
   '00000000-0000-4000-8000-000000000001'
@@ -64,7 +65,7 @@ begin
     insert into public.workspace_node_permission_grants (
       installation_id, workspace_id, permission, granted_by
     ) values (
-      :'test_installation_id',
+      '50000000-0000-4000-8000-000000000001',
       '10000000-0000-4000-8000-000000000001',
       'http.outbound',
       '00000000-0000-4000-8000-000000000001'
@@ -125,7 +126,7 @@ update public.workspace_node_permission_grants
 set status = 'revoked',
     revoked_by = '00000000-0000-4000-8000-000000000001',
     revoked_at = now()
-where installation_id = :'test_installation_id'
+where installation_id = '50000000-0000-4000-8000-000000000001'
   and permission = 'connector.invoke';
 
 insert into public.audit_events (
@@ -135,7 +136,7 @@ insert into public.audit_events (
   '00000000-0000-4000-8000-000000000001',
   'node.permission_revoked',
   'workspace_node_installation',
-  :'test_installation_id',
+  '50000000-0000-4000-8000-000000000001',
   '{"permission":"connector.invoke"}'::jsonb
 );
 
@@ -143,7 +144,7 @@ do $$
 begin
   if not exists (
     select 1 from public.workspace_node_permission_grants
-    where installation_id = :'test_installation_id'
+    where installation_id = '50000000-0000-4000-8000-000000000001'
       and permission = 'connector.invoke'
       and status = 'revoked'
   ) then
