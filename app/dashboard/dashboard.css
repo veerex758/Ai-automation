@@ -329,3 +329,31 @@
 @media(max-width:720px){.activity-run-card{align-items:flex-start;flex-direction:column;gap:12px;padding:14px}.activity-run-meta{justify-content:flex-start;gap:9px}.integration-directory-tools{align-items:stretch;flex-direction:column}.integration-search{width:100%}}
 
 .activity-state.state-running{background:#f5efe5;color:#806947}.activity-run-card:has(.state-running) .activity-run-indicator{background:#f5efe5;color:#806947}
+
+
+/* Authenticated integration management */
+.workflow-app-icon.openai,.workflow-app-icon.gemini,.workflow-app-icon.resend,.workflow-app-icon.slack,.workflow-app-icon.http{background:#eeece5;color:var(--aivanta-forest)}
+.integration-card-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:13px;padding-top:12px;border-top:1px solid #efede7}
+.integration-card-actions button{border:0;background:transparent;padding:0;color:var(--aivanta-forest);font:700 10px 'DM Sans',sans-serif;cursor:pointer}
+.integration-card-actions .integration-test-button{border:1px solid var(--aivanta-stone);border-radius:6px;padding:7px 9px;color:var(--aivanta-ink)}
+.integration-card-actions .integration-disconnect-button{color:#9b4c43}
+.integration-card-actions button:disabled{opacity:.5;cursor:wait}
+.integration-confirm{display:flex;align-items:flex-start;gap:7px;margin-top:10px;color:var(--aivanta-muted);font-size:9px;line-height:1.5}
+.integration-feedback{padding:11px 13px;border-radius:8px;margin:0 0 13px;font-size:10px;line-height:1.6}
+.integration-feedback.error{background:#fbefed;color:#91463f;border:1px solid #efd4d0}
+.integration-feedback.success{background:#edf4ef;color:#315b43;border:1px solid #d8e7dc}
+.integration-security-footnote{margin:15px 0 0;color:var(--aivanta-muted);font-size:10px;line-height:1.7}
+.integration-modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(24,35,30,.42);backdrop-filter:blur(3px)}
+.integration-modal{position:relative;width:min(100%,480px);max-height:min(90vh,760px);overflow:auto;padding:25px;border:1px solid var(--aivanta-stone);border-radius:14px;background:#fff;box-shadow:0 24px 80px rgba(20,32,26,.2)}
+.integration-modal h2{margin:8px 0;font:700 22px Manrope,sans-serif;color:var(--aivanta-ink)}
+.integration-modal>p{margin:0 0 19px;color:var(--aivanta-muted);font-size:11px;line-height:1.7}
+.integration-modal-close{position:absolute;top:14px;right:15px;width:30px;height:30px;border:1px solid var(--aivanta-stone);border-radius:50%;background:#fff;color:var(--aivanta-ink);font-size:19px;cursor:pointer}
+.integration-form-field{display:flex;flex-direction:column;gap:6px;margin:13px 0}
+.integration-form-field>span{font-size:10px;font-weight:700;color:var(--aivanta-ink)}
+.integration-form-field input{width:100%;height:40px;padding:0 11px;border:1px solid var(--aivanta-stone);border-radius:7px;background:#fff;color:var(--aivanta-ink);font:11px 'DM Sans',sans-serif}
+.integration-form-field input:focus{outline:2px solid rgba(24,59,50,.15);border-color:var(--aivanta-forest)}
+.integration-form-field small{font-size:9px;color:var(--aivanta-muted);line-height:1.5}
+.integration-security-note{padding:11px;border-radius:8px;background:#f7f6f1;color:var(--aivanta-muted);font-size:9px;line-height:1.7}
+.integration-modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
+.integration-modal-actions .create-button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:600px){.integration-modal{padding:20px}.integration-card-actions{gap:11px}}
