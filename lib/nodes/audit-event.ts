@@ -1,14 +1,9 @@
 export const NODE_AUDIT_EVENT_TYPES = [
-  "node.publisher_verified",
-  "node.version_submitted",
-  "node.version_approved",
-  "node.version_rejected",
   "node.installation_created",
   "node.permission_granted",
   "node.permission_revoked",
   "node.installation_disabled",
   "node.installation_uninstalled",
-  "node.package_quarantined",
 ] as const;
 
 export type NodeAuditEventType = (typeof NODE_AUDIT_EVENT_TYPES)[number];
@@ -76,25 +71,16 @@ export function createNodeAuditEvent(input: NodeAuditEventInput): NodeAuditEvent
     throw new Error("Invalid artifact integrity.");
   }
 
-  const workspaceInstallationEvent = input.eventType.startsWith("node.installation_") ||
-    input.eventType.startsWith("node.permission_");
-
-  const resourceId = workspaceInstallationEvent
-    ? installationId
-    : packageName + "@" + packageVersion;
-
-  if (!resourceId) {
-    throw new Error("Installation events require an installation id.");
+  if (!installationId) {
+    throw new Error("Workspace lifecycle events require an installation id.");
   }
 
   return {
     workspace_id: workspaceId,
     actor_user_id: actorUserId,
     event_type: input.eventType,
-    resource_type: workspaceInstallationEvent
-      ? "workspace_node_installation"
-      : "node_package_version",
-    resource_id: resourceId,
+    resource_type: "workspace_node_installation",
+    resource_id: installationId,
     metadata: {
       package_name: packageName,
       package_version: packageVersion,
