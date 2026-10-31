@@ -79,7 +79,7 @@ function executionContext(): Omit<NodeContext, "previousOutputs"> {
           });
           const raw = await response.text();
           let body: unknown = raw;
-          try { body = raw ? JSON.parse(raw) : raw; } catch { body = raw; }
+          try { body = raw ? JSON.parse(raw) : raw; } catch {}
           return { status: response.status, body };
         } finally {
           clearTimeout(timer);
@@ -144,9 +144,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     }
     const verification = verifyWebhookSignature({
       rawBody,
+      signedMetadata: JSON.stringify([eventId, eventType]),
       signatureHeader,
       secret: signingSecret,
-      signedMetadata: JSON.stringify([eventId, eventType]),
       toleranceSeconds: MAX_EVENT_AGE_SECONDS,
     });
     signingSecret = "";
@@ -210,9 +210,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     }
     if (!claim.accepted) {
       const { data: prior, error: priorError } = await db.from("webhook_event_receipts")
-        .select("payload_sha256,event_type,status").eq("id", claim.receipt_id).maybeSingle();
+        .select("payload_sha256,status").eq("id", claim.receipt_id).maybeSingle();
       if (priorError) throw priorError;
-      if (prior && (prior.payload_sha256 !== payloadSha256 || prior.event_type !== eventType)) {
+      if (prior && prior.payload_sha256 !== payloadSha256) {
         return jsonError("This event ID was already used for a different payload.", 409);
       }
       return NextResponse.json({ accepted: true, duplicate: true, receiptStatus: prior?.status ?? "accepted" }, { status: 200 });
