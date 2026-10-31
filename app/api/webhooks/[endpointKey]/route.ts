@@ -144,6 +144,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     }
     const verification = verifyWebhookSignature({
       rawBody,
+      signedMetadata: JSON.stringify([eventId, eventType]),
       signatureHeader,
       secret: signingSecret,
       toleranceSeconds: MAX_EVENT_AGE_SECONDS,
