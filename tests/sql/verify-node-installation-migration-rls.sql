@@ -175,6 +175,23 @@ begin
   ) then
     raise exception 'Permission revocation did not persist';
   end if;
+  if not exists (
+    select 1 from public.workspace_node_installations
+    where id = '50000000-0000-4000-8000-000000000001'
+      and status = 'disabled'
+      and disabled_at is not null
+      and uninstalled_at is null
+  ) then
+    raise exception 'New community installation must remain disabled until isolated worker activation';
+  end if;
+
+  update public.workspace_node_installations
+  set status = 'active', disabled_at = null
+  where id = '50000000-0000-4000-8000-000000000001';
+  if found then
+    raise exception 'Authenticated workspace admin unexpectedly activated an installation without worker approval';
+  end if;
+
 
   if has_table_privilege('authenticated', 'public.node_platform_audit_events', 'SELECT') then
     raise exception 'Authenticated users must not read platform audit history';
