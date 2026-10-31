@@ -133,16 +133,18 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
     const encrypted = encryptCredentials(validated.credentials);
     const admin = createAdminClient();
     const { data: existing, error: existingError } = await auth.userClient.from("workspace_integrations")
-      .select("id").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
+      .select("id,status,display_name,metadata,last_test_status,last_tested_at")
+      .eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
     if (existingError) throw existingError;
     let integrationId: string;
     if (existing?.id) {
       integrationId = existing.id;
-      const { error } = await auth.userClient.from("workspace_integrations").update({
+      const { data: updated, error } = await auth.userClient.from("workspace_integrations").update({
         status: "needs_attention", display_name: validated.displayName, metadata: validated.metadata,
         last_test_status: null, last_tested_at: null,
-      }).eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id);
+      }).eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
       if (error) throw error;
+      if (!updated) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
     } else {
       const { data, error } = await auth.userClient.from("workspace_integrations").insert({
         workspace_id: auth.workflow.workspace_id, provider, status: "needs_attention", display_name: validated.displayName,
@@ -154,11 +156,35 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
     const { error: secretError } = await admin.from("workspace_integration_secrets").upsert({
       integration_id: integrationId, encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
     }, { onConflict: "integration_id" });
-    if (secretError) throw secretError;
+    if (secretError) {
+      // Metadata and encrypted credentials live in separate tables. Restore the previous
+      // metadata (or remove the new metadata row) if the secret write fails, so the API
+      // never reports a partially-saved connection.
+      if (existing) {
+        const { error: rollbackError } = await auth.userClient.from("workspace_integrations").update({
+          status: existing.status,
+          display_name: existing.display_name,
+          metadata: existing.metadata,
+          last_test_status: existing.last_test_status,
+          last_tested_at: existing.last_tested_at,
+        }).eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id);
+        if (rollbackError) {
+          console.error("Integration metadata rollback failed after credential write failure.", { provider, integrationId });
+        }
+      } else {
+        const { error: rollbackError } = await auth.userClient.from("workspace_integrations").delete()
+          .eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id);
+        if (rollbackError) {
+          console.error("New integration metadata cleanup failed after credential write failure.", { provider, integrationId });
+        }
+      }
+      throw secretError;
+    }
     return NextResponse.json({ saved: true, provider, status: "needs_attention", displayName: validated.displayName, tested: false, secretReturned: false }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
     const status = code === "CONNECTION_FIELDS_INVALID" || code === "CONNECTION_SENDER_INVALID" || code === "CONNECTION_WEBHOOK_INVALID" || code === "CONNECTION_HOST_INVALID" ? 400 :
+      code === "INTEGRATION_MANAGE_PERMISSION_REQUIRED" ? 403 :
       code === "CREDENTIALS_ENCRYPTION_KEY_MISSING" || code === "CREDENTIALS_ENCRYPTION_KEY_INVALID" || code === "SUPABASE_ADMIN_NOT_CONFIGURED" ? 503 : 500;
     return NextResponse.json({ error: status === 400 || status === 503 ? code : "Could not save this integration securely." }, { status });
   }
