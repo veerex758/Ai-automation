@@ -91,11 +91,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       signature: {
         header: "X-Aivanta-Signature",
         format: "t=<unix-seconds>,v1=<hex HMAC-SHA256>",
-        signedMessage: "timestamp + '.' + exact raw request body bytes",
+        signedMessage: "timestamp + '.' + JSON.stringify([eventId, eventType]) + '.' + exact raw request body bytes",
         eventIdHeader: "X-Aivanta-Event-Id",
         eventTypeHeader: "X-Aivanta-Event-Type",
       },
-    }, { status: 201 });
+    }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[webhook-provisioning] failed", {
       code: error instanceof Error ? error.message : "WEBHOOK_PROVISIONING_FAILED",
