@@ -37,7 +37,7 @@ export interface NodeAuditEventRecord {
 }
 
 const SAFE_IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:@/-]{0,254}$/;
-const SHA512_INTEGRITY = /^sha512-[A-Za-z0-9+/]{86}==$/;
+const SHA512_INTEGRITY = /^sha512-[A-Za-z0-9+/]{86}==$/;\nconst SCOPED_PACKAGE_NAME = /^@[a-z0-9][a-z0-9._-]{0,213}\\/[a-z0-9][a-z0-9._-]{0,213}$/;
 
 function requireSafeIdentifier(value: string, label: string): string {
   if (!SAFE_IDENTIFIER.test(value)) {
@@ -54,7 +54,7 @@ function requireSafeIdentifier(value: string, label: string): string {
 export function createNodeAuditEvent(input: NodeAuditEventInput): NodeAuditEventRecord {
   const workspaceId = requireSafeIdentifier(input.workspaceId, "workspace id");
   const actorUserId = requireSafeIdentifier(input.actorUserId, "actor id");
-  const packageName = requireSafeIdentifier(input.packageName, "package name");
+  if (!SCOPED_PACKAGE_NAME.test(input.packageName)) {\n    throw new Error("Invalid scoped package name.");\n  }\n  const packageName = input.packageName;
   const packageVersion = requireSafeIdentifier(input.packageVersion, "package version");
 
   const installationId = input.installationId
