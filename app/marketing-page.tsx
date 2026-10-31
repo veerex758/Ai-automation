@@ -8,12 +8,12 @@ const metadata={
  resources:{eyebrow:"LEARN AND BUILD",title:"Resources for your next workflow.",description:"Explore the product, learn the workflow basics, and use the workspace to shape your automation ideas."}
 } as const;
 const featureCards=[
- ["✺","AI workflow generation","Describe the outcome you want and review a proposed workflow draft before applying it."],
- ["▤","Visual workflow builder","Inspect steps, edit configuration, and validate the structure of your workflow."],
- ["⌘","Connected integrations","Prepare workflows for external services with secure connection and authorization requirements."],
- ["♧","AI agents","Use AI-assisted steps with clear boundaries and human review for consequential actions."],
+ ["✺","AI workflow drafting","Describe the outcome you want and review a proposed workflow before applying it."],
+ ["▤","Visual workflow builder","Inspect steps, edit configuration, and validate a workflow before saving it."],
+ ["⌘","Integration catalog","Review supported services, required permissions, and setup steps before connecting an account."],
+ ["♧","Human-reviewed AI","Use AI-assisted planning with clear boundaries; generated steps never execute automatically."],
  ["⬟","Workspace security","Keep access scoped and protect credentials with server-side authorization and least privilege."],
- ["◷","Run history and insights","Understand workflow status and failures as execution records become available."]
+ ["◷","Execution history","Review recorded workflow runs as execution capabilities become available in your workspace."]
 ];
 export default function MarketingPage({section}:{section:Section}) {
  const meta=metadata[section];
