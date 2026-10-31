@@ -434,3 +434,15 @@ body{background:var(--aivanta-ivory);color:var(--aivanta-ink)}
 .reference-footer{background:var(--aivanta-forest-deep);border-color:rgba(255,255,255,.12);color:#c4cbc5}
 :where(a,button,input,textarea,select):focus-visible{outline:2px solid rgba(24,59,50,.55);outline-offset:3px}
 ::selection{background:#d9d0bf;color:var(--aivanta-ink)}
+
+/* Remove neon glow remnants from the approved neutral marketing palette. */
+.reference-eyebrow{color:var(--aivanta-forest)}
+.reference-hero{background:var(--aivanta-ivory)}
+.hero-orb{background:none;filter:none}
+.reference-trust-points{color:#697169}
+.reference-trust-points span>i{border-color:var(--aivanta-champagne);color:var(--aivanta-forest)}
+.marketing-sub-hero{background:var(--aivanta-ivory)}
+.marketing-sub-card{background:var(--aivanta-forest-deep);border-color:rgba(255,255,255,.12)}
+.marketing-sub-card>span{background:#31574b;color:#e7dbc5}
+.marketing-sub-card a{color:#e1d1b2}
+.featured-plan{border-color:var(--aivanta-champagne);box-shadow:none}
