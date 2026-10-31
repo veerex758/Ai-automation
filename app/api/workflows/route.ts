@@ -121,7 +121,16 @@ export async function POST(request: NextRequest) {
 
     const definitionResult = "definition" in body
       ? validateDefinition(body.definition)
-      : { definition: { version: 1, nodes: [] }, error: null };
+      : validateDefinition({
+          version: 1,
+          nodes: [{
+            id: "trigger-1",
+            type: "trigger",
+            title: "When this happens",
+            description: "Choose an event that starts your workflow.",
+            settings: { event: "manual" },
+          }],
+        });
     if (!definitionResult.definition) {
       return NextResponse.json(
         { error: definitionResult.error || "Invalid workflow definition." },
