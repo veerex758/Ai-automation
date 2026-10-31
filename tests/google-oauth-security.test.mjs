@@ -19,6 +19,11 @@ async function loadTypeScript(relativePath) {
 }
 
 const originalKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
+const originalGoogleConfig = {
+  clientId: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  redirectUri: process.env.GOOGLE_REDIRECT_URI,
+};
 const validKey = Buffer.alloc(32, 7).toString("base64");
 
 test("Google credential encryption round-trips and uses fresh IVs", async () => {
@@ -102,7 +107,21 @@ test("Google OAuth configuration requires HTTPS and the exact callback path", as
   assert.equal(getGoogleOAuthConfig().redirectUri, process.env.GOOGLE_REDIRECT_URI);
 });
 
-test("restore the caller's encryption key after this test file", () => {
+test("Google OAuth configuration rejects missing required environment variables", async () => {
+  const { getGoogleOAuthConfig } = await loadTypeScript("../lib/integrations/google-oauth.ts");
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.GOOGLE_REDIRECT_URI;
+  assert.throws(() => getGoogleOAuthConfig(), /not configured/);
+});
+
+test("restore caller environment after this test file", () => {
   if (originalKey === undefined) delete process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
   else process.env.GOOGLE_TOKEN_ENCRYPTION_KEY = originalKey;
+  if (originalGoogleConfig.clientId === undefined) delete process.env.GOOGLE_CLIENT_ID;
+  else process.env.GOOGLE_CLIENT_ID = originalGoogleConfig.clientId;
+  if (originalGoogleConfig.clientSecret === undefined) delete process.env.GOOGLE_CLIENT_SECRET;
+  else process.env.GOOGLE_CLIENT_SECRET = originalGoogleConfig.clientSecret;
+  if (originalGoogleConfig.redirectUri === undefined) delete process.env.GOOGLE_REDIRECT_URI;
+  else process.env.GOOGLE_REDIRECT_URI = originalGoogleConfig.redirectUri;
 });
