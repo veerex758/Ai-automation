@@ -374,12 +374,12 @@ test("Google Sheets read-only node reads a range with the workspace OAuth token"
   const operation = findOperation("google_sheets", "read_range", "action");
   assert.ok(operation);
   let requestedUrl = "";
-  const result = await operation.run({
+  const result = await operation.outputSchema.parseAsync(await operation.run({
     credentials: { sheets: { accessToken: "sheets-access-token" } },
     logger: { info() {}, error() {} },
     http: { async request(args) { requestedUrl = args.url; assert.equal(args.headers?.Authorization, "Bearer sheets-access-token"); return { status: 200, body: { range: "Sheet1!A1:B2", majorDimension: "ROWS", values: [["Name", "Score"], ["Ada", 10]] } }; } },
     previousOutputs: {},
-  }, { spreadsheetId: "spreadsheetId1234567890", range: "Sheet1!A1:B2" });
+  }, { spreadsheetId: "spreadsheetId1234567890", range: "Sheet1!A1:B2" })) as { values: unknown[][] };
   assert.match(requestedUrl, /sheets\.googleapis\.com\/v4\/spreadsheets/);
   assert.deepEqual(result.values, [["Name", "Score"], ["Ada", 10]]);
 });
