@@ -74,6 +74,14 @@ export function createNodeAuditEvent(input: NodeAuditEventInput): NodeAuditEvent
     ? requireSafeIdentifier(input.reasonCode, "reason code")
     : undefined;
 
+  if (
+    (input.eventType === "node.permission_granted" ||
+      input.eventType === "node.permission_revoked") &&
+    !permission
+  ) {
+    throw new Error("Permission lifecycle events require a permission name.");
+  }
+
   if (input.artifactIntegrity && !SHA512_INTEGRITY.test(input.artifactIntegrity)) {
     throw new Error("Invalid artifact integrity.");
   }
