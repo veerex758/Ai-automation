@@ -6,7 +6,7 @@ import "../dashboard.css";
 type Run = { id: string; workflow_id: string; mode: string; status: string; workflow_version: number; started_at: string; completed_at: string | null; duration_ms: number | null; created_at: string };
 type Step = { id: string; run_id: string; status: string };
 function dateLabel(value: string) { return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
-function statusLabel(run: Run) { if (run.mode === "dry_run") return run.status === "succeeded" ? "Dry-run passed" : "Dry-run failed"; return run.status === "succeeded" ? "Live run completed" : "Live run failed"; }
+function statusLabel(run: Run) { if (run.mode === "dry_run") return run.status === "succeeded" ? "Dry-run passed" : "Dry-run failed"; if (run.status === "running") return "Live run in progress"; return run.status === "succeeded" ? "Live run completed" : "Live run failed"; }
 
 export default async function ActivityPage() {
   let runs: Run[] = []; let steps: Step[] = []; const workflowNames = new Map<string, string>();
@@ -33,7 +33,7 @@ export default async function ActivityPage() {
     }
   } catch { loadError = "Activity could not be loaded right now. Refresh the page and try again."; }
   const succeeded = runs.filter(run => run.status === "succeeded").length;
-  const failed = runs.filter(run => run.status === "failed").length;
+  const failed = runs.filter(run => run.status === "failed").length;\n  const running = runs.filter(run => run.status === "running").length;
   return <main className="app-shell">
     <aside className="sidebar">
       <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span><span>Aivanta</span></Link>
@@ -49,13 +49,13 @@ export default async function ActivityPage() {
           <article className="stat-card"><div className="stat-heading">Recorded runs</div><div className="stat-number">{runs.length}</div><div className="stat-bottom">Latest 50 workspace records</div></article>
           <article className="stat-card"><div className="stat-heading">Passed</div><div className="stat-number">{succeeded}</div><div className="stat-bottom">Recorded successful runs</div></article>
           <article className="stat-card"><div className="stat-heading">Failed</div><div className="stat-number">{failed}</div><div className="stat-bottom">Recorded failed runs</div></article>
-          <article className="stat-card"><div className="stat-heading">Workspace scope</div><div className="stat-number">{signedIn ? "On" : "—"}</div><div className="stat-bottom">Authenticated workspace only</div></article>
+          <article className="stat-card"><div className="stat-heading">Live in progress</div><div className="stat-number">{running}</div><div className="stat-bottom">Currently running executions</div></article>
         </div>
         <div className="section-title-row"><div><h2>Recent executions</h2><p>Step results are summarized without exposing inputs, outputs or provider payloads.</p></div><Link className="subtle-button" href="/dashboard">Back to dashboard</Link></div>
         {loadError ? <div className="section-empty-panel" role="alert"><div className="section-empty-icon">!</div><h2>Activity unavailable</h2><p>{loadError}</p>{signedIn&&<Link className="section-card-link" href="/dashboard/activity">Try again ↗</Link>}</div> : runs.length===0 ? <div className="section-empty-panel"><div className="section-empty-icon">◷</div><h2>No recorded activity yet</h2><p>When you test or run a workflow, its recorded history will appear here. A dry-run does not perform external actions.</p><Link className="section-card-link" href="/dashboard/builder">Open workflow builder ↗</Link></div> : <div className="activity-run-list">
           {runs.map(run=>{const runSteps=steps.filter(step=>step.run_id===run.id);return <article className="activity-run-card" key={run.id}>
-            <div className="activity-run-main"><div className="activity-run-indicator">{run.status==="succeeded"?"✓":"!"}</div><div className="activity-run-copy"><strong>{workflowNames.get(run.workflow_id)??"Workflow"}</strong><span>{dateLabel(run.created_at)} · Version {run.workflow_version}</span></div></div>
-            <div className="activity-run-meta"><span className={run.status==="succeeded"?"activity-state state-success":"activity-state state-failed"}>{statusLabel(run)}</span><span>{runSteps.length} {runSteps.length===1?"step":"steps"}</span><span>{run.duration_ms??0} ms</span><Link href={`/dashboard/workflows/${run.workflow_id}`}>Open workflow ↗</Link></div>
+            <div className="activity-run-main"><div className="activity-run-indicator">{run.status==="succeeded"?"✓":run.status==="running"?"…":"!"}</div><div className="activity-run-copy"><strong>{workflowNames.get(run.workflow_id)??"Workflow"}</strong><span>{dateLabel(run.created_at)} · Version {run.workflow_version}</span></div></div>
+            <div className="activity-run-meta"><span className={run.status==="succeeded"?"activity-state state-success":run.status==="running"?"activity-state state-running":"activity-state state-failed"}>{statusLabel(run)}</span><span>{runSteps.length} {runSteps.length===1?"step":"steps"}</span><span>{run.duration_ms??0} ms</span><Link href={`/dashboard/workflows/${run.workflow_id}`}>Open workflow ↗</Link></div>
           </article>})}
         </div>}
       </div>
