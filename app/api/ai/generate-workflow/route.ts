@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { findOperation, getPublicNodeCatalog } from "@/nodes/registry";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -64,15 +65,17 @@ export async function POST(request: NextRequest) {
       }
     }
     if (googleProducts.length) {
-      const { data: googleConnections, error: googleError } = await supabase.from("google_connections").select("product,status,scopes").eq("workspace_id", workspace.id);
+      const admin = createAdminClient();
+      const { data: googleConnections, error: googleError } = await admin.from("google_connections").select("product,status,scopes").eq("workspace_id", workspace.id);
       if (googleError) {
         connectionStatusAvailable = false;
         missingConnections.push(...googleProducts.map((provider) => ({ provider, label: labels[provider] ?? provider, reason: "Google OAuth connection status could not be checked." })));
       } else {
         for (const provider of googleProducts) {
           const product = provider === "gmail" ? "gmail" : "sheets";
-          const row = (googleConnections ?? []).find((item) => item.product === product && item.status === "connected");
-          if (!row) missingConnections.push({ provider, label: labels[provider], reason: "Connect this Google product in the current workspace." });
+          const requiredScope = product === "gmail" ? "https://www.googleapis.com/auth/gmail.readonly" : "https://www.googleapis.com/auth/spreadsheets.readonly";
+          const row = (googleConnections ?? []).find((item) => item.product === product && item.status === "connected" && Array.isArray(item.scopes) && item.scopes.includes(requiredScope));
+          if (!row) missingConnections.push({ provider, label: labels[provider], reason: "Connect this Google product in the current workspace with its read-only permission." });
         }
       }
     }
