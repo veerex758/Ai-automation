@@ -12,7 +12,7 @@ const providerDescriptions: Record<Provider, string> = {
   openai: "Use OpenAI models for generation, summarization, extraction, and classification.",
   gemini: "Use Google's Gemini API with a key from Google AI Studio.",
   resend: "Send real email through Resend. Live recipients remain separately allowlisted.",
-  slack: "Post messages through a Slack incoming webhook. Tests validate the URL without sending a message.",
+  slack: "Post messages through a Slack incoming webhook. URL validation never sends a message or proves delivery.",
   http: "Connect one HTTPS API host. The host must also be allowed by AIVANTA_HTTP_ALLOWED_HOSTS on the server.",
 };
 
@@ -65,7 +65,7 @@ export default function WorkflowConnectionsPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not connect provider.");
       setApiKey(""); setFromEmail(""); setWebhookUrl(""); setHost("");
-      setNotice(`${providerNames[provider]} saved securely but is not active yet. Run the connection test to enable it for workflow execution.`);
+      setNotice(provider === "slack" ? "Slack webhook URL saved securely. Delivery is not verified; URL validation will not send a message." : `${providerNames[provider]} saved securely but is not active yet. Run the connection test to enable it for workflow execution.`);
       await load();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not connect provider."); }
     finally { setSaving(false); }
@@ -128,7 +128,7 @@ export default function WorkflowConnectionsPage() {
                   <small>{item.last_test_status === "passed" ? "Test passed" : item.last_test_status === "failed" ? "Test failed" : "Not tested"}{item.last_tested_at ? ` · ${new Date(item.last_tested_at).toLocaleString()}` : ""}</small>
                 </div>
                 <div className="integration-actions"><span className={item.status === "connected" ? "builder-mode" : "builder-draft"}>{item.status}</span>
-                  <button className="builder-validate" disabled={busyProvider !== null} onClick={() => void test(item.provider)}>{busyProvider === item.provider ? "Testing…" : "Test"}</button>
+                  <button className="builder-validate" disabled={busyProvider !== null} onClick={() => void test(item.provider)}>{busyProvider === item.provider ? "Checking…" : item.provider === "slack" ? "Validate URL" : "Test connection"}</button>
                   <button className="builder-back" disabled={busyProvider !== null} onClick={() => void disconnect(item.provider)}>Disconnect</button>
                 </div>
               </article>)}
@@ -154,7 +154,7 @@ export default function WorkflowConnectionsPage() {
           <div className="builder-panel"><h2>Important before live runs</h2><ul>
             <li>Live execution remains disabled unless the server explicitly enables it.</li>
             <li>Resend sends only to the server-configured live recipient allowlist.</li>
-            <li>Slack connection tests never send a message.</li>
+            <li>Slack URL validation never sends a message; delivery remains unverified until an explicitly requested workflow action succeeds.</li>
             <li>Custom HTTP hosts must also be included in the server-side HTTPS host allowlist.</li>
             <li>Connection tests and safe previews do not activate a workflow or trigger external side effects.</li>
           </ul></div>
