@@ -25,6 +25,7 @@ const kindIcons: Record<StepKind, string> = { Trigger: "◎", Action: "↗", Con
 
 export default function WorkflowBuilderPage() {
   const [name, setName] = useState("Lead capture & follow-up");
+  const [workspaceName, setWorkspaceName] = useState("Your workspace");
   const [steps, setSteps] = useState<BuilderStep[]>(starterSteps);
   const [selected, setSelected] = useState(1);
   const [notice, setNotice] = useState("");
@@ -54,6 +55,14 @@ export default function WorkflowBuilderPage() {
       // Keep the starter workflow when saved browser data is invalid.
     }
     setHydrated(true);
+    let active = true;
+    void fetch("/api/workflows", { cache: "no-store" })
+      .then(async response => {
+        const payload = await response.json() as { workspace?: { name?: string } };
+        if (active && response.ok && typeof payload.workspace?.name === "string") setWorkspaceName(payload.workspace.name);
+      })
+      .catch(() => { /* Keep the safe generic workspace label when unavailable. */ });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -208,7 +217,7 @@ export default function WorkflowBuilderPage() {
     <main className="builder-shell">
       <aside className="builder-sidebar">
         <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
-        <div className="builder-workspace"><span>A</span><div><strong>Acme workspace</strong><small>Free workspace</small></div><b>⌄</b></div>
+        <div className="builder-workspace"><span>A</span><div><strong>{workspaceName}</strong><small>Free workspace</small></div><b>⌄</b></div>
         <div className="builder-nav-label">WORKSPACE</div>
         <Link className="builder-nav-link" href="/dashboard"><span>▦</span>Dashboard</Link>
         <Link className="builder-nav-link active" href="/dashboard/builder"><span>↗</span>Workflows</Link>
