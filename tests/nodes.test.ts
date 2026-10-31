@@ -3,13 +3,17 @@ import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
-test("registry includes versioned webhook, OpenAI, Slack and Email operations", () => {
-  assert.equal(nodes.length, 5);
+test("registry includes versioned webhook, OpenAI, Slack, Email, Logic and Data operations", () => {
+  assert.equal(nodes.length, 7);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
+  assert.ok(findOperation("logic", "condition", "action"));
+  assert.ok(findOperation("logic", "filter_items", "action"));
+  assert.ok(findOperation("data", "map_fields", "action"));
+  assert.ok(findOperation("data", "format_text", "action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
@@ -85,4 +89,43 @@ test("Email action sends through Resend and returns provider message ID", async 
   }, { to: "recipient@example.com", subject: "Test", text: "Test message" });
   assert.equal(requestedUrl, "https://api.resend.com/emails");
   assert.equal((result as { messageId: string }).messageId, "email_test_123");
+});
+
+test("Logic condition compares values without external side effects", async () => {
+  const operation = findOperation("logic", "condition", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  }, { left: 12, operator: "greater_than", right: 8 });
+  assert.deepEqual(result, { result: true });
+});
+
+test("Logic filter supports nested fields and preserves matching records", async () => {
+  const operation = findOperation("logic", "filter_items", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  }, { items: [{ customer: { active: true } }, { customer: { active: false } }], field: "customer.active", operator: "equals", value: true });
+  assert.deepEqual(result, { items: [{ customer: { active: true } }], count: 1 });
+});
+
+test("Data mapping and text formatting support nested values", async () => {
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  };
+  const mapper = findOperation("data", "map_fields", "action");
+  assert.ok(mapper);
+  assert.deepEqual(await mapper.run(context, {
+    data: { customer: { name: "Ada" }, id: 7 },
+    fields: { fullName: "customer.name", customerId: "id", missing: "customer.email" },
+  }), { data: { fullName: "Ada", customerId: 7, missing: null } });
+  const formatter = findOperation("data", "format_text", "action");
+  assert.ok(formatter);
+  assert.deepEqual(await formatter.run(context, {
+    template: "Hello {{customer.name}} (#{{id}})",
+    data: { customer: { name: "Ada" }, id: 7 },
+  }), { text: "Hello Ada (#7)" });
 });
