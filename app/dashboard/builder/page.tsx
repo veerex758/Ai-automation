@@ -16,9 +16,9 @@ type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; tit
 type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
 
 const starterSteps: BuilderStep[] = [
-  { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted" },
-  { id: 2, kind: "Action", title: "Enrich lead details", detail: "Prepare company and contact context" },
-  { id: 3, kind: "Action", title: "Send for review", detail: "Keep a person in control before outreach" },
+  { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted", settings: { event: "webhook" } },
+  { id: 2, kind: "Action", title: "Prepare lead review task", detail: "Create an internal task with the submitted lead details", actionId: "internal.create_task", settings: { message: "Review the new lead details and confirm the next step." } },
+  { id: 3, kind: "Action", title: "Prepare team handoff", detail: "Create a follow-up task for a team member", actionId: "internal.create_task", settings: { message: "Assign an owner and follow up with the new lead." } },
 ];
 
 const kindIcons: Record<StepKind, string> = { Trigger: "◎", Action: "↗", Condition: "◇" };
