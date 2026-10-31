@@ -23,6 +23,14 @@ async function authorizedWorkflow(workflowId: string) {
   return { userClient, user, workflow };
 }
 
+async function requireWorkflowManager(auth: { userClient: Awaited<ReturnType<typeof createClient>>; user: { id: string }; workflow: { workspace_id: string } }) {
+  const { data: membership, error } = await auth.userClient.from("workspace_members")
+    .select("role").eq("workspace_id", auth.workflow.workspace_id).eq("user_id", auth.user.id).maybeSingle();
+  if (error || !membership || !["owner", "admin"].includes(membership.role)) {
+    throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
+  }
+}
+
 function validateCredentials(provider: Provider, value: unknown): { credentials: Credentials; metadata: Record<string, unknown>; displayName: string } {
   if (!isRecord(value)) throw new Error("CONNECTION_FIELDS_INVALID");
   const stringField = (key: string, max = 4096) => {
@@ -111,6 +119,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
     const { workflowId } = await context.params;
     const auth = await authorizedWorkflow(workflowId);
     if ("response" in auth) return auth.response;
+    await requireWorkflowManager(auth);
     if (!process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY) return NextResponse.json({ error: "Credential encryption is not configured on the server. Set AIVANTA_CREDENTIALS_ENCRYPTION_KEY before connecting apps." }, { status: 503 });
     let body: unknown;
     try { body = await request.json(); } catch { return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
@@ -121,16 +130,18 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
     const encrypted = encryptCredentials(validated.credentials);
     const admin = createAdminClient();
     const { data: existing, error: existingError } = await auth.userClient.from("workspace_integrations")
-      .select("id").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
+      .select("id,status,display_name,metadata,last_test_status,last_tested_at")
+      .eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
     if (existingError) throw existingError;
     let integrationId: string;
     if (existing?.id) {
       integrationId = existing.id;
-      const { error } = await auth.userClient.from("workspace_integrations").update({
+      const { data: updated, error } = await auth.userClient.from("workspace_integrations").update({
         status: "needs_attention", display_name: validated.displayName, metadata: validated.metadata,
         last_test_status: null, last_tested_at: null,
-      }).eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id);
+      }).eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
       if (error) throw error;
+      if (!updated) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
     } else {
       const { data, error } = await auth.userClient.from("workspace_integrations").insert({
         workspace_id: auth.workflow.workspace_id, provider, status: "needs_attention", display_name: validated.displayName,
@@ -142,7 +153,20 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ wor
     const { error: secretError } = await admin.from("workspace_integration_secrets").upsert({
       integration_id: integrationId, encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
     }, { onConflict: "integration_id" });
-    if (secretError) throw secretError;
+    if (secretError) {
+      if (existing) {
+        const { error: rollbackError } = await auth.userClient.from("workspace_integrations").update({
+          status: existing.status, display_name: existing.display_name, metadata: existing.metadata,
+          last_test_status: existing.last_test_status, last_tested_at: existing.last_tested_at,
+        }).eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id);
+        if (rollbackError) console.error("Integration metadata rollback failed after credential write failure.", { provider, integrationId });
+      } else {
+        const { error: rollbackError } = await auth.userClient.from("workspace_integrations").delete()
+          .eq("id", integrationId).eq("workspace_id", auth.workflow.workspace_id);
+        if (rollbackError) console.error("New integration metadata cleanup failed after credential write failure.", { provider, integrationId });
+      }
+      throw secretError;
+    }
     return NextResponse.json({ saved: true, provider, displayName: validated.displayName, status: "needs_attention", tested: false, secretReturned: false }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
@@ -165,6 +189,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .select("id,metadata").eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).maybeSingle();
     if (error) throw error;
     if (!integration) return NextResponse.json({ error: "Connect this integration first." }, { status: 404 });
+    await requireWorkflowManager(auth);
     const admin = createAdminClient();
     const credentials = await loadSecret(admin, integration.id);
     try {
@@ -177,13 +202,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       throw testError;
     }
     const now = new Date().toISOString();
-    const { error: updateError } = await auth.userClient.from("workspace_integrations").update({ status: "connected", last_tested_at: now, last_test_status: "passed" })
-      .eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id);
+    const { data: persisted, error: updateError } = await auth.userClient.from("workspace_integrations").update({ status: "connected", last_tested_at: now, last_test_status: "passed" })
+      .eq("id", integration.id).eq("workspace_id", auth.workflow.workspace_id).select("id").maybeSingle();
     if (updateError) throw updateError;
+    if (!persisted) throw new Error("INTEGRATION_MANAGE_PERMISSION_REQUIRED");
     return NextResponse.json({ tested: true, provider, status: "passed", note: provider === "slack" ? "A test message was delivered to the configured Slack webhook." : provider === "http" ? "The configured HTTPS host returned a successful 2xx response; individual API routes and scopes still need their own tests." : "Provider accepted the connection check." });
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
-    return NextResponse.json({ error: code.startsWith("CONNECTION_") || code.startsWith("HTTP_HOST_") ? code : "Integration test failed. Check the provider key and permissions." }, { status: 400 });
+    const status = code === "INTEGRATION_MANAGE_PERMISSION_REQUIRED" ? 403 : code === "SLACK_TEST_REQUIRES_EXPLICIT_DELIVERY" ? 409 : 400;
+    return NextResponse.json({ error: status === 400 || status === 409 ? (code.startsWith("CONNECTION_") || code.startsWith("HTTP_HOST_") || code === "SLACK_TEST_REQUIRES_EXPLICIT_DELIVERY" ? code : "Integration test failed. Check the provider key and permissions.") : "Only workspace owners and admins can manage integrations." }, { status });
   }
 }
 
@@ -192,11 +219,14 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const { workflowId } = await context.params;
     const auth = await authorizedWorkflow(workflowId);
     if ("response" in auth) return auth.response;
+    await requireWorkflowManager(auth);
     const provider = new URL(request.url).searchParams.get("provider") as Provider | null;
     if (!provider || !providers.includes(provider)) return NextResponse.json({ error: "Provide a supported provider." }, { status: 400 });
-    const { error } = await auth.userClient.from("workspace_integrations").delete().eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider);
+    const { data: deleted, error } = await auth.userClient.from("workspace_integrations").delete()
+      .eq("workspace_id", auth.workflow.workspace_id).eq("provider", provider).select("id").maybeSingle();
     if (error) throw error;
-    return NextResponse.json({ disconnected: true, provider });
+    if (!deleted) return NextResponse.json({ error: "Only workspace owners and admins can disconnect integrations." }, { status: 403 });
+    return NextResponse.json({ disconnected: true, provider }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Could not disconnect this integration." }, { status: 500 });
   }
