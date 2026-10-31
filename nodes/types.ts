@@ -1,5 +1,7 @@
 import type { z } from "zod";
 
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
 export type AuthConfig =
   | { type: "none" }
   | { type: "oauth2"; scopes: string[]; refresh: "managed" | "manual" }
@@ -10,7 +12,7 @@ export type NodeContext = {
   credentials: Readonly<Record<string, Readonly<Record<string, string>>>>;
   logger: { info(message: string, meta?: Record<string, unknown>): void; error(message: string, meta?: Record<string, unknown>): void };
   http: {
-    request(args: { url: string; method: "GET" | "POST"; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
+    request(args: { url: string; method: HttpMethod; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
   };
   previousOutputs: Readonly<Record<string, unknown>>;
   webhook?: { verified: boolean };

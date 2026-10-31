@@ -4,6 +4,7 @@ import { request as httpsRequest, type RequestOptions } from "node:https";
 
 const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024;
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export function isUnsafeAddress(address: string): boolean {
   const family = isIP(address);
@@ -43,13 +44,9 @@ function parseResponseBody(raw: string): unknown {
   try { return JSON.parse(raw) as unknown; } catch { return raw; }
 }
 
-/**
- * HTTPS-only transport with DNS pinning, no redirect following, bounded request/
- * response bodies, TLS hostname verification, and an enforced socket timeout.
- */
-export async function safeHttpsRequest(args: {
+async function requestOnce(args: {
   url: string;
-  method: "GET" | "POST";
+  method: HttpMethod;
   headers?: Record<string, string>;
   body?: unknown;
   timeoutMs?: number;
@@ -63,7 +60,8 @@ export async function safeHttpsRequest(args: {
   const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
   if (!hostname || isIP(hostname) || hostname === "localhost" ||
       hostname.endsWith(".localhost") || hostname.endsWith(".local") ||
-      hostname === "metadata.google.internal" || hostname === "host.docker.internal") {
+      hostname === "metadata.google.internal" || hostname === "metadata.google" ||
+      hostname === "host.docker.internal") {
     throw new Error("HTTP_HOST_NOT_ALLOWED");
   }
 
@@ -71,8 +69,6 @@ export async function safeHttpsRequest(args: {
   if (!addresses.length || addresses.some(({ address }) => isUnsafeAddress(address))) {
     throw new Error("HTTP_DNS_TARGET_NOT_PUBLIC");
   }
-  // Pin the socket's DNS result to an address we already validated. This prevents
-  // a second DNS lookup (and DNS rebinding) between validation and connection.
   const pinned = addresses[0];
   const pinnedLookup = ((requestedHost: string, options: { all?: boolean }, callback: (...values: unknown[]) => void) => {
     if (requestedHost.toLowerCase().replace(/\.$/, "") !== hostname) {
@@ -115,14 +111,36 @@ export async function safeHttpsRequest(args: {
         chunks.push(bytes);
       });
       res.on("error", reject);
-      res.on("end", () => {
-        const raw = Buffer.concat(chunks).toString("utf8");
-        resolve({ status: res.statusCode ?? 502, body: parseResponseBody(raw) });
-      });
+      res.on("end", () => resolve({
+        status: res.statusCode ?? 502,
+        body: parseResponseBody(Buffer.concat(chunks).toString("utf8")),
+      }));
     });
     req.on("timeout", () => req.destroy(new Error("HTTP_TIMEOUT")));
     req.on("error", reject);
     if (serializedBody !== undefined) req.write(serializedBody);
     req.end();
   });
+}
+
+/** Public HTTPS transport: validates/pins DNS, refuses redirects, bounds payloads and retries transient responses. */
+export async function safeHttpsRequest(args: {
+  url: string;
+  method: HttpMethod;
+  headers?: Record<string, string>;
+  body?: unknown;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
+  retries?: number;
+}): Promise<{ status: number; body: unknown }> {
+  const retries = Math.min(2, Math.max(0, Math.floor(args.retries ?? 0)));
+  // Never automatically replay a potentially non-idempotent write unless the caller
+  // supplies an idempotency key accepted by the destination API.
+  const replaySafe = args.method === "GET" || Boolean(args.headers && Object.keys(args.headers).some((key) => key.toLowerCase() === "idempotency-key"));
+  const attempts = replaySafe ? retries + 1 : 1;
+  for (let attempt = 0; ; attempt++) {
+    const result = await requestOnce(args);
+    if (attempt >= attempts - 1 || !(result.status === 429 || result.status >= 500)) return result;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * (2 ** attempt), 3000)));
+  }
 }
