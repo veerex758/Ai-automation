@@ -70,9 +70,9 @@ The database layer should separate platform trust from workspace consent. These 
 
 ### Audit trail
 
-Use the existing `audit_events` table for append-only lifecycle events, including `node.publisher_verified`, `node.version_submitted`, `node.version_approved`, `node.version_rejected`, `node.installation_created`, `node.permission_granted`, `node.permission_revoked`, `node.installation_disabled`, `node.installation_uninstalled` and `node.package_quarantined`.
+Use the existing `audit_events` table for append-only workspace lifecycle events only: `node.installation_created`, `node.permission_granted`, `node.permission_revoked`, `node.installation_disabled` and `node.installation_uninstalled`. Platform trust events such as publisher verification, version approval/rejection and package quarantine belong in a separate platform-controlled audit channel with its own reviewer identity and access policy; they must not be written through a workspace member API.
 
-Audit metadata must contain identifiers, version/integrity references and permission names only. It must never contain package secrets, provider credentials, access tokens, encryption keys or raw package payloads. Workspace lifecycle events use the workspace ID and actor ID; platform-only publisher review events require a separate platform reviewer identity and must not be spoofed through a workspace member API.
+Audit metadata must contain identifiers, version/integrity references and permission names only. It must never contain package secrets, provider credentials, access tokens, encryption keys or raw package payloads. Workspace lifecycle events use the workspace ID and authenticated actor ID. The server derives both from the authenticated session and verified workspace membership; neither value is trusted from client-supplied metadata. Platform-only reviewer events are excluded from this workspace audit table.
 
 ### Database security requirements
 
