@@ -1,10 +1,8 @@
 # Supabase setup (Aivanta)
 
-This folder contains version-controlled migrations for Aivanta's dedicated Supabase project. Never run these migrations against another application's project.
+This folder contains version-controlled migrations for Aivanta. The approved staging project is `aivanta-staging` (ref `ygclofqxtztnynkljipj`) and is for read-only verification in this workflow. Do not use legacy project references or run migration repair/reset/apply commands against staging.
 
-- Project ref: `xymbwkegcpjxlgclqiop`
-- API URL: `https://xymbwkegcpjxlgclqiop.supabase.co`
-- Region: `eu-west-1`
+For clean migration replay, use a disposable local Supabase project only. Keep project URLs and credentials in environment configuration rather than hard-coding them in this repository.
 
 ## Migrations
 1. `20261010180000_aivanta_workspace_workflow_foundation.sql` — workspaces, memberships, workflows, workflow versions, audit events, triggers, indexes, and RLS.
@@ -20,3 +18,18 @@ These migrations have been applied to the dedicated project and checked afterwar
 - Workflow execution, OAuth integrations, billing, and authenticated application CRUD are not implemented merely by creating these tables.
 
 Configure the project's URL and publishable key through local/deployment environment variables; keep private credentials in deployment secrets.
+
+
+## Disposable local migration replay
+
+From the repository root, with Docker available and the Supabase CLI installed:
+
+```sh
+npx supabase init                 # only if supabase/config.toml is absent
+npx supabase db start
+npx supabase db reset --local --no-seed
+npx supabase migration list --local
+npx supabase stop --no-backup
+```
+
+This workflow is local-only. Do not run `supabase link`, use `--linked`, push migrations, or repair remote migration history as part of a replay check. The GitHub Actions migration-replay workflow runs the same disposable-local sequence for migration changes.
