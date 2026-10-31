@@ -145,6 +145,7 @@ select public.set_workspace_node_permission(
 );
 
 do $verify$
+declare affected integer;
 begin
   if not exists (
     select 1 from public.workspace_node_permission_grants
@@ -164,10 +165,15 @@ begin
     raise exception 'New community installation must remain disabled until isolated worker activation';
   end if;
 
-  update public.workspace_node_installations
-  set status = 'active', disabled_at = null
-  where id = current_setting('test.installation_id')::uuid;
-  if found then
+  begin
+    update public.workspace_node_installations
+    set status = 'active', disabled_at = null
+    where id = current_setting('test.installation_id')::uuid;
+    get diagnostics affected = row_count;
+  exception when insufficient_privilege then
+    affected := 0;
+  end;
+  if affected <> 0 then
     raise exception 'Authenticated workspace admin unexpectedly activated an installation without worker approval';
   end if;
 
