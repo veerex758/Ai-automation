@@ -16,20 +16,23 @@ type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; tit
 type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
 
 const starterSteps: BuilderStep[] = [
-  { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted" },
-  { id: 2, kind: "Action", title: "Enrich lead details", detail: "Prepare company and contact context" },
-  { id: 3, kind: "Action", title: "Send for review", detail: "Keep a person in control before outreach" },
+  { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted", settings: { event: "webhook" } },
+  { id: 2, kind: "Action", title: "Prepare lead review task", detail: "Create an internal task with the submitted lead details", actionId: "internal.create_task", settings: { message: "Review the new lead details and confirm the next step." } },
+  { id: 3, kind: "Action", title: "Prepare team handoff", detail: "Create a follow-up task for a team member", actionId: "internal.create_task", settings: { message: "Assign an owner and follow up with the new lead." } },
 ];
 
 const kindIcons: Record<StepKind, string> = { Trigger: "◎", Action: "↗", Condition: "◇" };
 
 export default function WorkflowBuilderPage() {
   const [name, setName] = useState("Lead capture & follow-up");
+  const [workspaceName, setWorkspaceName] = useState("Your workspace");
   const [steps, setSteps] = useState<BuilderStep[]>(starterSteps);
   const [selected, setSelected] = useState(1);
   const [notice, setNotice] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [savedWorkflowId, setSavedWorkflowId] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
@@ -52,6 +55,14 @@ export default function WorkflowBuilderPage() {
       // Keep the starter workflow when saved browser data is invalid.
     }
     setHydrated(true);
+    let active = true;
+    void fetch("/api/workflows", { cache: "no-store" })
+      .then(async response => {
+        const payload = await response.json() as { workspace?: { name?: string } };
+        if (active && response.ok && typeof payload.workspace?.name === "string") setWorkspaceName(payload.workspace.name);
+      })
+      .catch(() => { /* Keep the safe generic workspace label when unavailable. */ });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -82,24 +93,8 @@ export default function WorkflowBuilderPage() {
     setNotice("Step added. Configure its details before activating the workflow.");
   }
 
-  function saveDraft() {
-    try {
-      const raw = window.localStorage.getItem("aivanta-workflows");
-      const existing = raw ? JSON.parse(raw) as Array<{ id: number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
-      const next = existing.filter(item => item.name !== name.trim());
-      next.unshift({ id: Date.now(), name: name.trim() || "Untitled workflow", description: `${steps.length} steps · Visual workflow draft`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
-      window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
-      setNotice("Draft saved in this browser. Live integrations and execution are not connected yet.");
-    } catch {
-      setNotice("Unable to save to this browser. Check storage settings and try again.");
-    }
-  }
-
-  const currentStep = steps.find(step => step.id === selected) ?? steps[0];
-  const validationResult = validateWorkflowDefinition({ name, steps });
-
-  function reviewWorkflow() {
-    const actionIssues = steps.filter(step => step.kind === "Action").flatMap(step => {
+  function getActionConfigurationIssues(): string[] {
+    return steps.filter(step => step.kind === "Action").flatMap(step => {
       if (!step.actionId) return [`Choose an action type for "${step.title}".`];
       const action = actionCatalog.find(item => item.id === step.actionId);
       if (!action) return [`The action configured for "${step.title}" is no longer available.`];
@@ -107,15 +102,120 @@ export default function WorkflowBuilderPage() {
         const value = (step.settings?.[field.name] ?? "").trim();
         if (field.required && !value) return [`Fill in ${field.label} for "${step.title}".`];
         if (value.length > field.maxLength) return [`${field.label} for "${step.title}" must be ${field.maxLength} characters or fewer.`];
-        if (field.type === "email" && value && !isValidEmail(value)) {
-          return [`Enter a valid ${field.label.toLowerCase()} for "${step.title}".`];
-        }
-        if (field.type === "url" && value && !isHttpsUrl(value)) {
-          return [`Enter a valid HTTPS URL for "${step.title}".`];
-        }
+        if (field.type === "email" && value && !isValidEmail(value)) return [`Enter a valid ${field.label.toLowerCase()} for "${step.title}".`];
+        if (field.type === "url" && value && !isHttpsUrl(value)) return [`Enter a valid HTTPS URL for "${step.title}".`];
         return [];
       });
     });
+  }
+
+  async function saveDraft() {
+    if (savingDraft) return;
+    if (!name.trim() || name.trim().length > 80) {
+      setNotice("Workflow names must be between 1 and 80 characters.");
+      return;
+    }
+
+    if (catalogLoading) {
+      setNotice("The action catalog is still loading. Please wait before saving.");
+      return;
+    }
+    if (catalogError) {
+      setNotice("The action catalog is unavailable. Reload it before saving this workflow.");
+      return;
+    }
+    const actionIssues = getActionConfigurationIssues();
+    if (actionIssues.length) {
+      setNotice("Action configuration needs attention: " + actionIssues.join(" "));
+      return;
+    }
+    if (!validationResult.valid) {
+      setNotice("Review needed before saving: " + validationResult.issues.map(issue => issue.message).join(" "));
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      const definition = {
+        version: 1,
+        nodes: steps.map((step, index) => {
+          const catalogAction = step.actionId ? actionCatalog.find(action => action.id === step.actionId) : undefined;
+          const settings: Record<string, string> = step.kind === "Trigger"
+            ? { event: step.settings?.event || "manual" }
+            : step.kind === "Condition"
+              ? { field: step.settings?.field || "", operator: step.settings?.operator || "equals", value: step.settings?.value || "" }
+              : {
+                  provider: catalogAction?.provider || "internal",
+                  operation: catalogAction?.operation || "create_task",
+                  ...Object.fromEntries(Object.entries(step.settings || {}).filter(([key, value]) => typeof value === "string" && value.trim())),
+                };
+          return {
+            id: String(step.id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || `step-${index + 1}`,
+            type: step.kind.toLowerCase(),
+            title: step.title.trim(),
+            description: step.detail.trim(),
+            settings,
+          };
+        }),
+      };
+
+      let workflowId = savedWorkflowId;
+      const isNewWorkflow = !workflowId;
+      if (!workflowId) {
+        const createResponse = await fetch("/api/workflows", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            name: name.trim(),
+            description: `${steps.length} steps · Visual workflow draft`,
+            status: "draft",
+            definition,
+          }),
+        });
+        const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
+        if (!createResponse.ok || !created.workflow?.id) {
+          throw new Error(created.error || "Could not create the saved workflow.");
+        }
+        workflowId = created.workflow.id;
+        setSavedWorkflowId(workflowId);
+      }
+
+      if (!isNewWorkflow) {
+      const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ definition }),
+      });
+      const saved = await saveResponse.json() as { success?: boolean; error?: string };
+      if (!saveResponse.ok || !saved.success) {
+        throw new Error(saved.error || "The workflow record was created, but its steps could not be saved. Please retry after checking the workflow list.");
+      }
+      }
+
+      try {
+        const raw = window.localStorage.getItem("aivanta-workflows");
+        const existing = raw ? JSON.parse(raw) as Array<{ id: string | number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
+        const next = existing.filter(item => item.name !== name.trim());
+        next.unshift({ id: workflowId, name: name.trim(), description: `${steps.length} steps · Saved to Aivanta`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
+        window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
+      } catch {
+        // The server save succeeded; local dashboard cache is only a convenience.
+      }
+      setNotice("Workflow draft saved to your Aivanta workspace. It has not been activated or executed.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to save the workflow. Try again.");
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  const currentStep = steps.find(step => step.id === selected) ?? steps[0];
+  const validationResult = validateWorkflowDefinition({ name, steps });
+
+  function reviewWorkflow() {
+    const actionIssues = getActionConfigurationIssues();
     if (actionIssues.length) {
       setNotice("Action configuration needs attention: " + actionIssues.join(" "));
       return;
@@ -130,17 +230,21 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <aside className="builder-sidebar">
-        <Link className="builder-brand" href="/"><span className="builder-brand-mark">a</span>Aivanta<span className="builder-period">.</span></Link>
-        <div className="builder-workspace"><span>A</span><div><strong>Acme workspace</strong><small>Free workspace</small></div><b>⌄</b></div>
+        <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
+        <div className="builder-workspace"><span>A</span><div><strong>{workspaceName}</strong><small>Free workspace</small></div><b>⌄</b></div>
         <div className="builder-nav-label">WORKSPACE</div>
-        <Link className="builder-nav-link" href="/dashboard"><span>⌂</span>Overview</Link>
-        <Link className="builder-nav-link active" href="/dashboard/builder"><span>⌘</span>Workflow builder</Link>
-        <button className="builder-nav-link" onClick={() => setNotice("Integrations are coming in a later release. No external service is connected yet.")}><span>⌁</span>Integrations <small>SOON</small></button>
+        <Link className="builder-nav-link" href="/dashboard"><span>▦</span>Dashboard</Link>
+        <Link className="builder-nav-link active" href="/dashboard/builder"><span>↗</span>Workflows</Link>
+        <Link className="builder-nav-link" href="/dashboard/integrations"><span>⌘</span>Integrations</Link>
+        <Link className="builder-nav-link" href="/dashboard/ai-assistant"><span>✺</span>AI Agents</Link>
+        <Link className="builder-nav-link" href="/dashboard/templates"><span>▧</span>Templates</Link>
+        <Link className="builder-nav-link" href="/dashboard/analytics"><span>▥</span>Analytics</Link>
+        <Link className="builder-nav-link" href="/dashboard/settings"><span>⚙</span>Settings</Link>
         <div className="builder-sidebar-bottom"><div className="builder-help-mark">✳</div><strong>Build with confidence</strong><p>Start with a trigger, add steps, and review your logic before you connect live services.</p><Link href="/dashboard">Back to workspace ↗</Link></div>
       </aside>
 
       <section className="builder-main">
-        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft}>Save draft</button><button className="builder-primary-button" onClick={reviewWorkflow}>Review &amp; activate ↗</button></div></header>
+        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft} disabled={savingDraft}>{savingDraft ? "Saving…" : "Save draft"}</button><button className="builder-secondary-button" onClick={reviewWorkflow}>Test</button><button className="builder-primary-button" disabled title="Activation remains disabled until integrations and execution safeguards are configured">Activate</button></div></header>
         <div className="builder-content">
           <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
@@ -199,7 +303,7 @@ export default function WorkflowBuilderPage() {
                 </div>
                 <div className="canvas-zoom"><button aria-label="Zoom out" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>−</button><span>100%</span><button aria-label="Zoom in" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>＋</button></div>
               </div>
-              <div className="canvas-foot"><span><i /> Draft saved locally on Save draft</span><span>Drag-and-drop connections coming soon</span></div>
+              <div className="canvas-foot"><span><i /> Save draft stores your workflow in your Aivanta workspace</span><span>Drag-and-drop connections coming soon</span></div>
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>

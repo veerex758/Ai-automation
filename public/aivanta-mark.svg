@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="Aivanta">
+  <defs>
+    <linearGradient id="aivanta-ribbon" x1="9" y1="10" x2="56" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B9F86A"/>
+      <stop offset=".42" stop-color="#18D38B"/>
+      <stop offset="1" stop-color="#00AEB7"/>
+    </linearGradient>
+    <linearGradient id="aivanta-depth" x1="14" y1="14" x2="47" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#087E67"/>
+      <stop offset="1" stop-color="#00AEB7"/>
+    </linearGradient>
+  </defs>
+  <path d="M8.5 48.8 25.8 14.5c2.7-5.4 10.1-5.3 12.8.1L55.5 48.8H43.2L33 27.2c-.7-1.5-2.7-1.5-3.4 0L19.4 48.8H8.5Z" fill="url(#aivanta-ribbon)"/>
+  <path d="M10 39.8c7.1 5.8 14.5 6.4 22.1 1.2l8.6-5.9c5.5-3.8 10.6-3.2 15.1 1.2L42.3 49.5c-7.5 5.5-15.3 6.1-22.5 1.7C14.7 48.6 11.4 44.7 10 39.8Z" fill="url(#aivanta-depth)"/>
+  <path d="M11.8 40.8c7 4.6 13.5 4.8 20.3.2l8.5-5.8c5.7-3.9 10.9-3.1 15.2 1.2" stroke="#C8FFE0" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="m51 6 2.1 5.3 5.3 2.1-5.3 2.1L51 21l-2.1-5.5-5.3-2.1 5.3-2.1L51 6Z" fill="#13C9A1"/>
+</svg>

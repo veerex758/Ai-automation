@@ -221,6 +221,20 @@ export default function WorkflowBuilderPage() {
 
   return (
     <main className="builder-shell">
+      <aside className="workflow-side-nav">
+        <Link className="workflow-side-brand" href="/"><span><img src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span>Aivanta</Link>
+        <div className="workflow-side-label">WORKSPACE</div>
+        <Link className="workflow-side-link" href="/dashboard"><span>▦</span>Dashboard</Link>
+        <Link className="workflow-side-link active" href="/dashboard#workflows"><span>↗</span>Workflows</Link>
+        <Link className="workflow-side-link" href="/dashboard/integrations"><span>⌘</span>Integrations</Link>
+        <Link className="workflow-side-link" href="/dashboard/ai-assistant"><span>✺</span>AI Agents</Link>
+        <Link className="workflow-side-link" href="/dashboard/templates"><span>▧</span>Templates</Link>
+        <Link className="workflow-side-link" href="/dashboard/analytics"><span>▥</span>Analytics</Link>
+        <Link className="workflow-side-link" href="/dashboard/activity"><span>◷</span>Activity logs</Link>
+        <Link className="workflow-side-link" href="/dashboard/settings"><span>⚙</span>Settings</Link>
+        <div className="workflow-side-bottom"><span className="workflow-workspace-avatar">A</span><div><strong>Your workspace</strong><small>Draft mode</small></div></div>
+      </aside>
+      <section className="workflow-builder-main">
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
@@ -317,6 +331,7 @@ export default function WorkflowBuilderPage() {
           </section>
         </aside>
       </div>
+      </section>
     </main>
   );
 }
