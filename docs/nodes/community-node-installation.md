@@ -50,3 +50,38 @@ The manifest is a declaration, not authorization. Server-side registry review an
 ## Current implementation boundary
 
 This phase adds and validates the manifest contract only. It does not claim that community packages can already be installed or executed. The current first-party nodes remain compiled into the application and continue to use the existing registry/executor.
+
+
+## Persistence model proposal (not yet migrated)
+
+The database layer should separate platform trust from workspace consent. These are different authorities and must not be collapsed into one status field.
+
+### Platform-owned registry records
+
+- `node_publishers`: publisher identity, verification status, verification evidence reference, verified timestamp and reviewer. Only trusted platform reviewers may change verification state.
+- `node_packages`: canonical scoped package name, publisher reference, display metadata and package-level lifecycle state.
+- `node_package_versions`: immutable package/version pair, manifest JSON, entrypoint, SHA-512 integrity, runtime API version, dependency-scan result, malware-scan result, review decision and reviewer timestamps. A version's artifact identity is immutable after approval; a changed artifact requires a new version/review.
+
+### Workspace-owned consent records
+
+- `workspace_node_installations`: workspace, package-version reference, install state, installed-by actor, timestamps and optional disabled/uninstalled timestamps. Unique active install per workspace/package identity; retain history rather than hard-delete.
+- `workspace_node_permission_grants`: installation reference, one capability per row, granted/revoked state, actor and timestamps. Never infer grants from the package manifest. Newly requested permissions require a new explicit approval.
+- Every query and mutation must be workspace-scoped. Workspace owner/admin membership is required for install, grant, revoke, disable and uninstall. Members may only discover installed node metadata if product policy permits; they cannot mutate it.
+
+### Audit trail
+
+Use the existing `audit_events` table for append-only lifecycle events, including `node.publisher_verified`, `node.version_submitted`, `node.version_approved`, `node.version_rejected`, `node.installation_created`, `node.permission_granted`, `node.permission_revoked`, `node.installation_disabled`, `node.installation_uninstalled` and `node.package_quarantined`.
+
+Audit metadata must contain identifiers, version/integrity references and permission names only. It must never contain package secrets, provider credentials, access tokens, encryption keys or raw package payloads. Workspace lifecycle events use the workspace ID and actor ID; platform-only publisher review events require a separate platform reviewer identity and must not be spoofed through a workspace member API.
+
+### Database security requirements
+
+- Enable RLS on every new table in the exposed `public` schema.
+- Workspace records must be isolated using the existing private workspace membership/admin predicates, not a user-supplied workspace ID alone.
+- Authenticated clients must not write publisher verification, package approval, scan results or quarantine state.
+- Workspace members cannot self-approve publisher or package trust. Platform review operations must use a separately authorized server-side boundary.
+- Permission grants are individual rows, with explicit revocation. Updates must preserve workspace ownership in both `USING` and `WITH CHECK` policies.
+- Audit events are insert-only for authorized server-side lifecycle operations; no workspace client may update or delete audit history.
+- Do not store executable package archives in public storage. Artifact retrieval belongs to a verified, isolated worker pipeline.
+
+This is an architecture proposal only. No tables, policies, grants or migration-history entries have been created or changed in Supabase. The actual migration must be generated with `supabase migration new`, reviewed against the live staging policies, and applied only after explicit authorization.
