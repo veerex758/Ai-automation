@@ -120,7 +120,7 @@ test("If / Else executes only the selected branch and preserves typed references
       id: "never", nodeId: "data", operationId: "format_text",
       input: { template: "Wrong branch", data: {} },
     }],
-  }));
+  })) as { result: boolean; branch: "then" | "else"; outputs: Record<string, unknown> };
   assert.equal(result.result, true);
   assert.equal(result.branch, "then");
   assert.deepEqual(result.outputs.format, { text: "Hello Ada" });
