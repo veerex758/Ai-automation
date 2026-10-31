@@ -201,6 +201,35 @@ begin
   ) then
     raise exception 'RLS is not enabled on every node installation table';
   end if;
+  if (
+    select count(*)
+    from unnest(array[
+      'node_publishers_verified_by_idx',
+      'node_packages_publisher_id_idx',
+      'node_package_versions_approved_by_idx',
+      'node_platform_audit_events_actor_user_id_idx',
+      'workspace_node_installations_package_version_id_idx',
+      'workspace_node_installations_installed_by_idx',
+      'workspace_node_permission_grants_installation_workspace_idx',
+      'workspace_node_permission_grants_granted_by_idx',
+      'workspace_node_permission_grants_revoked_by_idx'
+    ]) expected(index_name)
+    where not exists (
+      select 1 from pg_indexes i where i.schemaname = 'public' and i.indexname = expected.index_name
+    )
+  ) <> 0 then
+    raise exception 'One or more node installation foreign-key indexes are missing';
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'node_platform_audit_events'
+      and policyname = 'node_platform_audit_events_service_role_all'
+      and roles = array['service_role']::name[]
+  ) then
+    raise exception 'Privileged platform audit policy is missing';
+  end if;
 end;
 $verify$;
 
