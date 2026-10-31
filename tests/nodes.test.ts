@@ -169,7 +169,7 @@ test("Data mapping and text formatting support nested values", async () => {
 
 
 test("registry exposes secured HTTP and Utilities operations", () => {
-  assert.equal(nodes.length, 12);
+  assert.equal(nodes.length, 14);
   assert.ok(findOperation("http", "request", "action"));
   assert.ok(findOperation("utilities", "parse_json", "action"));
   assert.ok(findOperation("utilities", "stringify_json", "action"));
