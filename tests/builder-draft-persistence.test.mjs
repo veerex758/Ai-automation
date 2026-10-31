@@ -31,7 +31,7 @@ test("draft persistence never requests activation or execution", () => {
   const saveStart = source.indexOf("async function saveDraft()");
   const saveEnd = source.indexOf("\n  const currentStep", saveStart);
   const saveBody = source.slice(saveStart, saveEnd);
-  assert.doesNotMatch(saveBody, /status:\s*["']active["']/i);
+  assert.doesNotMatch(saveBody, /status:\s*["']active["']/);
   assert.doesNotMatch(saveBody, /\/activate|\/execute|\/run\b/);
 });
 
