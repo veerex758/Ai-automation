@@ -1,5 +1,6 @@
-import DashboardSectionPage from "../section-page";
+import "../dashboard.css";
+import WorkspaceIntegrations from "./workspace-integrations";
 
 export default function Page() {
-  return <DashboardSectionPage section="integrations" />;
+  return <WorkspaceIntegrations />;
 }
