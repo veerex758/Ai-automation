@@ -199,7 +199,7 @@ test("Data nodes deduplicate, sort, and aggregate without coercion", async () =>
 test("Data split_batches keeps every item in ordered batches", async () => {
   const operation = findOperation("data", "split_batches", "action");
   assert.ok(operation);
-  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 }));
+  const result = operation.outputSchema.parse(await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { items: [1, 2, 3, 4, 5], batchSize: 2 })) as { batches: unknown[][]; count: number; batchCount: number };
   assert.deepEqual(result.batches, [[1, 2], [3, 4], [5]]);
 });
 
@@ -270,7 +270,8 @@ test("Date & Time formats timestamps, compares dates, and calculates durations",
   const compare = findOperation("date_time", "compare_dates", "action");
   const duration = findOperation("date_time", "calculate_duration", "action");
   assert.ok(format && compare && duration);
-  assert.equal(format.outputSchema.parse(await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })).value as string, "2026-01-01T00:00:00.000Z");
+  const formatted = format.outputSchema.parse(await format.run(context, { timestamp: "2026-01-01T00:00:00.000Z", style: "iso" })) as { value: string };
+  assert.equal(formatted.value, "2026-01-01T00:00:00.000Z");
   assert.deepEqual(compare.outputSchema.parse(await compare.run(context, { left: "2026-01-01T00:00:00Z", right: "2026-01-02T00:00:00Z" })), {
     comparison: "before", differenceMs: 86400000, differenceSeconds: 86400,
   });
