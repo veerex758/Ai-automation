@@ -226,6 +226,32 @@ begin
   ) then
     raise exception 'Privileged platform audit policy is missing';
   end if;
+  if exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in (
+        'create_workspace_node_installation',
+        'set_workspace_node_permission',
+        'set_workspace_node_installation_state'
+      )
+      and p.prosecdef
+  ) then
+    raise exception 'Node lifecycle RPCs must remain SECURITY INVOKER';
+  end if;
+
+  if has_function_privilege('anon', 'public.create_workspace_node_installation(uuid,uuid,text[])', 'EXECUTE')
+    or has_function_privilege('anon', 'public.set_workspace_node_permission(uuid,text,text)', 'EXECUTE')
+    or has_function_privilege('anon', 'public.set_workspace_node_installation_state(uuid,text)', 'EXECUTE') then
+    raise exception 'Anonymous users must not execute node lifecycle RPCs';
+  end if;
+
+  if not has_function_privilege('authenticated', 'public.create_workspace_node_installation(uuid,uuid,text[])', 'EXECUTE')
+    or not has_function_privilege('authenticated', 'public.set_workspace_node_permission(uuid,text,text)', 'EXECUTE')
+    or not has_function_privilege('authenticated', 'public.set_workspace_node_installation_state(uuid,text)', 'EXECUTE') then
+    raise exception 'Authenticated users must have the intended node lifecycle RPC grants';
+  end if;
 end;
 $verify$;
 
