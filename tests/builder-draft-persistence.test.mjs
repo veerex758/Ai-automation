@@ -4,6 +4,12 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../app/dashboard/builder/page.tsx", import.meta.url), "utf8");
 
+test("starter workflow actions map to configured catalog actions before first save", () => {
+  assert.match(source, /actionId: "internal\.create_task", settings: \{ message: "Review the new lead details/);
+  assert.match(source, /actionId: "internal\.create_task", settings: \{ message: "Assign an owner/);
+  assert.match(source, /settings: \{ event: "webhook" \}/);
+});
+
 test("builder saves a validated draft to the authenticated workflow APIs", () => {
   assert.match(source, /fetch\("\/api\/workflows",\s*\{[\s\S]*?method: "POST"/);
   assert.match(source, /fetch\(`\/api\/workflows\/\$\{workflowId\}\/definition`,\s*\{[\s\S]*?method: "PATCH"/);
