@@ -31,7 +31,8 @@ test("OAuth callback verifies state, workspace, membership and granted scope bef
 });
 
 test("Google connection metadata is workspace isolated and tokens are service-role only", () => {
-  assert.match(migration, /unique\(workspace_id,product\)/);
+  assert.match(migration, /create unique index if not exists google_connections_workspace_product_unique_idx/i);
+  assert.match(migration, /on public\.google_connections\(workspace_id, product\)/i);
   assert.match(migration, /enable row level security/i);
   assert.match(migration, /private\.is_workspace_member\(workspace_id\)/);
   assert.match(migration, /revoke all on public\.google_connections from public, anon, authenticated/i);

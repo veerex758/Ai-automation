@@ -11,9 +11,9 @@ create table if not exists public.google_connections (
   connected_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique(workspace_id,product)
 );
-create index if not exists google_connections_workspace_idx on public.google_connections(workspace_id,product);
+create unique index if not exists google_connections_workspace_product_unique_idx
+  on public.google_connections(workspace_id, product);
 alter table public.google_connections enable row level security;
 create policy "workspace members can read Google connection status"
   on public.google_connections for select to authenticated
