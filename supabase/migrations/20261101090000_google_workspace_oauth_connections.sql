@@ -10,7 +10,7 @@ create table if not exists public.google_connections (
   expires_at timestamptz,
   connected_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 create unique index if not exists google_connections_workspace_product_unique_idx
   on public.google_connections(workspace_id, product);
