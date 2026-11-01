@@ -19,5 +19,6 @@ create policy "workspace members can read Google connection status"
   on public.google_connections for select to authenticated
   using (private.is_workspace_member(workspace_id));
 revoke all on public.google_connections from public, anon, authenticated;
-grant select on public.google_connections to authenticated;
+grant select (product, account_email, status, scopes, expires_at, updated_at)
+  on public.google_connections to authenticated;
 grant all on public.google_connections to service_role;

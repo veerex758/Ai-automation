@@ -36,6 +36,8 @@ test("Google connection metadata is workspace isolated and tokens are service-ro
   assert.match(migration, /enable row level security/i);
   assert.match(migration, /private\.is_workspace_member\(workspace_id\)/);
   assert.match(migration, /revoke all on public\.google_connections from public, anon, authenticated/i);
+  assert.match(migration, /grant select \(product, account_email, status, scopes, expires_at, updated_at\)\s+on public\.google_connections to authenticated/i);
+  assert.doesNotMatch(migration, /grant select on public\.google_connections to authenticated/i);
   assert.match(migration, /grant all on public\.google_connections to service_role/i);
 });
 
