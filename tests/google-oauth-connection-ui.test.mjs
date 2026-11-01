@@ -20,6 +20,11 @@ test("Google OAuth start is authenticated, workspace-bound and requests product-
   assert.match(connect, /httpOnly: true/);
 });
 
+test("OAuth start refuses incomplete Google client configuration", () => {
+  assert.match(connect, /const clientSecret = process\.env\.GOOGLE_CLIENT_SECRET/);
+  assert.match(connect, /if \(!clientId \|\| !clientSecret \|\| !redirectUri/);
+});
+
 test("OAuth callback verifies state, workspace, membership and granted scope before encrypted persistence", () => {
   assert.match(callback, /timingSafeEqual/);
   assert.match(callback, /workspace_changed/);

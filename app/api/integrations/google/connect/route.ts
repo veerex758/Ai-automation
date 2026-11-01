@@ -23,8 +23,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Choose Gmail or Google Sheets." }, { status: 400 });
     }
     const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-    if (!clientId || !redirectUri || !process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY) {
+    if (!clientId || !clientSecret || !redirectUri || !process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY) {
       return NextResponse.json({ error: "Google OAuth is not configured on this environment." }, { status: 503 });
     }
     const supabase = await createClient();
