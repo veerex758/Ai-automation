@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const connect = readFileSync(new URL("../app/api/integrations/google/connect/route.ts", import.meta.url), "utf8");
 const callback = readFileSync(new URL("../app/api/integrations/google/callback/route.ts", import.meta.url), "utf8");
 const status = readFileSync(new URL("../app/api/integrations/google/status/route.ts", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../supabase/migrations/20261101090000_google_workspace_oauth_connections.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../supabase/migrations/20261101071623_20261101090000_google_workspace_oauth_connections.sql", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../app/dashboard/integrations/google-oauth-connections.tsx", import.meta.url), "utf8");
 const section = readFileSync(new URL("../app/dashboard/section-page.tsx", import.meta.url), "utf8");
 
