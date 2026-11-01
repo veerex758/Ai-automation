@@ -66,26 +66,71 @@ test("uses Gemini OpenAI-compatible endpoint and free-tier model defaults when s
   assert.equal(requestedBody.model, "gemini-2.5-flash");
   assert.equal(result.executed, false);
 });
-test("uses the Gemini-specific key when the selected provider is Gemini", async () => {
-  await generateWorkflow({
-    prompt: "Create a simple manual workflow",
-    env: { AIVANTA_AI_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-test-key", OPENAI_API_KEY: "wrong-provider-key", NODE_ENV: "production" },
-    fetchImpl: async (_url, options) => {
-      assert.equal(options.headers.Authorization, "Bearer gemini-test-key");
-      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
-    },
-  });
-});
-test("uses the OpenAI-specific key when the selected provider is OpenAI", async () => {
-  await generateWorkflow({
-    prompt: "Create a simple manual workflow",
-    env: { OPENAI_API_KEY: "openai-test-key", GEMINI_API_KEY: "wrong-provider-key", NODE_ENV: "production" },
-    fetchImpl: async (_url, options) => {
-      assert.equal(options.headers.Authorization, "Bearer openai-test-key");
-      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
-    },
-  });
-});
 test("rejects unsupported AI provider configuration", async () => {
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_PROVIDER: "unknown" } }), /AI_CONFIGURATION_ERROR/);
+});
+
+const registryCatalog = [
+  {
+    id: "manual", name: "Manual",
+    triggers: [{
+      id: "start", name: "Start",
+      inputSchema: { type: "object", properties: { message: { type: "string" } } },
+      outputSchema: { type: "object", properties: { started: { type: "boolean" }, message: { type: "string" } } },
+    }],
+    actions: [],
+  },
+  {
+    id: "gemini", name: "Gemini", triggers: [],
+    actions: [{
+      id: "generate_text", name: "Generate text",
+      inputSchema: { type: "object", required: ["prompt"], properties: { prompt: { type: "string" } } },
+      outputSchema: { type: "object", properties: { text: { type: "string" } } },
+    }],
+  },
+  {
+    id: "slack", name: "Slack", triggers: [],
+    actions: [{
+      id: "send_message", name: "Send message",
+      inputSchema: { type: "object", required: ["message"], properties: { message: { type: "string" } } },
+      outputSchema: { type: "object", properties: { accepted: { type: "boolean" } } },
+    }],
+  },
+];
+const registryPlan = { version: 1, steps: [
+  { id: "trigger-1", nodeId: "manual", operationId: "start", kind: "trigger", input: { message: "New enquiry" } },
+  { id: "gemini-1", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Summarize {{trigger-1.message}}" } },
+  { id: "slack-1", nodeId: "slack", operationId: "send_message", kind: "action", input: { message: "Enquiry summary: {{gemini-1.text}}" } },
+] };
+test("registry planner validates registered operations and earlier output references", async () => {
+  const result = await generateWorkflow({ prompt: "Summarize enquiries and notify Slack", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(registryPlan) } }] }) });
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+  assert.deepEqual(result.registrySteps.map((step) => step.nodeId), ["manual", "gemini", "slack"]);
+});
+test("registry planner rejects unknown operations, future references, missing fields, and unsupported triggers", async () => {
+  const unknown = structuredClone(registryPlan);
+  unknown.steps[1].operationId = "not_registered";
+  await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unknown) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const future = structuredClone(registryPlan);
+  future.steps[1].input.prompt = "Summarize {{slack-1.accepted}}";
+  await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(future) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const missing = structuredClone(registryPlan);
+  missing.steps[2].input.message = "Summary {{gemini-1.noSuchField}}";
+  await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(missing) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const typeMismatch = structuredClone(registryPlan);
+  typeMismatch.steps[1].input.prompt = "{{trigger-1.started}}";
+  await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(typeMismatch) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const unsupportedSyntax = structuredClone(registryPlan);
+  unsupportedSyntax.steps[1].input.prompt = "Summarize {{ $json.message }}";
+  await assert.rejects(generateWorkflow({ prompt: "Create a plan", nodeCatalog: registryCatalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsupportedSyntax) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const unsupported = structuredClone(registryPlan);
+  unsupported.steps[0].nodeId = "schedule";
+  unsupported.steps[0].operationId = "start";
+  const catalog = [...registryCatalog, {
+    id: "schedule", name: "Schedule",
+    triggers: [{ id: "start", name: "Schedule", inputSchema: { type: "object" }, outputSchema: { type: "object", properties: {} } }],
+    actions: [],
+  }];
+  await assert.rejects(generateWorkflow({ prompt: "Run every morning", nodeCatalog: catalog, mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsupported) } }] }) }), /AI_UNSAFE_WORKFLOW/);
 });

@@ -117,7 +117,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       legacyNodes[0].settings.event === "manual" &&
       legacyNodes.slice(1).every((node) => node.type === "action" &&
         ((node.settings.provider === "email" && node.settings.operation === "send_email") ||
-         (node.settings.provider === "slack" && node.settings.operation === "send_message")));
+         (node.settings.provider === "slack" && node.settings.operation === "send_message") ||
+         (node.settings.provider === "webhook" && node.settings.operation === "http_request" && typeof node.settings.url === "string" && node.settings.url.startsWith("https://"))));
     const autoRegistrySteps: RegisteredWorkflowStep[] | null = canBridgeLegacyDefinition
       ? legacyNodes.map((node) => {
           if (node.type === "trigger") {
@@ -131,8 +132,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
               text: node.settings.message?.trim() || node.title,
             } };
           }
-          return { id: node.id, nodeId: "slack", operationId: "send_message", kind: "action", input: {
-            message: node.settings.message?.trim() || node.title,
+          if (provider === "slack") {
+            return { id: node.id, nodeId: "slack", operationId: "send_message", kind: "action", input: {
+              message: node.settings.message?.trim() || node.title,
+            } };
+          }
+          // Legacy HTTP actions become registry requests only when the endpoint is
+          // explicitly HTTPS. The registry executor still enforces the workspace
+          // host allowlist, public-DNS pinning, request limits, and live-action gate.
+          return { id: node.id, nodeId: "http", operationId: "request", kind: "action", input: {
+            url: node.settings.url,
+            method: "POST",
+            body: { message: node.settings.message?.trim() || node.title },
+            auth: "none",
+            timeoutMs: 10000,
+            retries: 1,
           } };
         })
       : null;

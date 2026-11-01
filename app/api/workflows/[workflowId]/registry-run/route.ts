@@ -4,6 +4,7 @@ import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/
 import type { NodeContext } from "@/nodes/types";
 import { safeHttpsRequest } from "@/lib/workflows/safe-http-transport";
 import { loadWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { isSideEffectingHttpMethod } from "@/lib/workflows/execution-side-effects";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -25,6 +26,7 @@ async function serverContext(workspaceId: string): Promise<Omit<NodeContext, "pr
           headers: args.headers,
           body: args.body,
           timeoutMs: args.timeoutMs,
+          retries: args.retries,
         });
       },
     },
@@ -164,13 +166,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       const executedSteps = execution.steps.filter((step) => step.status === "succeeded");
       const externalCallsPerformed = !dryRun && executedSteps.some((step) => {
         const definition = steps.find((candidate) => candidate.id === step.stepId);
-        return Boolean(definition && ["openai", "gemini", "email", "slack", "http"].includes(definition.nodeId));
+        return Boolean(definition && ["openai", "gemini", "email", "slack", "http", "gmail", "google_sheets"].includes(definition.nodeId));
       });
       const sideEffectsPerformed = !dryRun && executedSteps.some((step) => {
         const definition = steps.find((candidate) => candidate.id === step.stepId);
         if (!definition) return false;
         if (definition.nodeId === "email" || definition.nodeId === "slack") return true;
-        if (definition.nodeId === "http" && isRecord(definition.input)) return definition.input.method === "POST";
+        if (definition.nodeId === "http" && isRecord(definition.input)) return isSideEffectingHttpMethod(definition.input.method);
         return false;
       });
       return NextResponse.json({ run: finalized, steps: rows, externalCallsPerformed, sideEffectsPerformed }, { status: 201 });
