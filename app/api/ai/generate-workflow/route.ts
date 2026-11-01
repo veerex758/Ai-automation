@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const workspaceProviders = requiredProviders.filter((provider) => provider !== "gmail" && provider !== "sheets");
     const googleProducts = requiredProviders.filter((provider) => provider === "gmail" || provider === "sheets");
     const labels: Record<string, string> = { openai: "OpenAI", gemini: "Google Gemini", slack: "Slack", resend: "Resend Email", http: "Custom HTTPS API", gmail: "Gmail", sheets: "Google Sheets" };
-    let missingConnections: Array<{ provider: string; label: string; reason: string }> = [];
+    const missingConnections: Array<{ provider: string; label: string; reason: string }> = [];
     let connectionStatusAvailable = true;
     if (workspaceProviders.length) {
       const { data: integrations, error: integrationError } = await supabase.from("workspace_integrations").select("provider,status,last_test_status").eq("workspace_id", workspace.id);
