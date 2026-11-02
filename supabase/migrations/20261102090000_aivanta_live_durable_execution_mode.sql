@@ -30,9 +30,11 @@ declare new_run_id uuid;
 declare new_job_id uuid;
 declare effective_attempts integer;
 begin
-  if p_idempotency_key is null or length(p_idempotency_key) not between 1 and 200
-     or p_max_attempts not between 1 and 20
-     or p_execution_mode not in ('dry_run', 'live')
+  if p_workspace_id is null or p_workflow_id is null or p_workflow_version is null
+     or p_created_by is null or p_idempotency_key is null
+     or length(p_idempotency_key) not between 1 and 200
+     or p_max_attempts is null or p_max_attempts not between 1 and 20
+     or p_execution_mode is null or p_execution_mode not in ('dry_run', 'live')
      or p_payload is null or jsonb_typeof(p_payload) <> 'object'
      or octet_length(p_payload::text) > 16384 then
     raise exception using errcode = '22023', message = 'Invalid execution dispatch request';
