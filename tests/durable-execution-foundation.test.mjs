@@ -10,6 +10,7 @@ const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", impor
 const workerService = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
 const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
+const runPanel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
 
 test("queue enforces workspace-scoped idempotent dispatch and bounded payloads", () => {
   assert.match(migration, /unique \(workspace_id, idempotency_key\)/);
@@ -102,6 +103,13 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
 });
 
+
+test("workflow run panel dispatches live runs through the durable queue and polls status", () => {
+  assert.match(runPanel, /\/dispatch/);
+  assert.match(runPanel, /mode: "live"/);
+  assert.match(runPanel, /\/executions\/\$\{jobId\}/);
+  assert.match(runPanel, /idempotencyKey\.current/);
+});
 
 test("dispatch validates registered definitions and guards legacy live email", () => {
   assert.match(dispatch, /isRegistryDefinition/);
