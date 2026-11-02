@@ -199,7 +199,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
           {sendingLive ? "Running workflow…" : "▶ Run live workflow"}
         </button>
         {liveError && <p className="dry-run-error" role="alert">{liveError}</p>}
-        {liveResult && <div className="live-run-success" role="status"><strong>Durable execution {liveResult.status}</strong><span>Run {liveResult.runId.slice(0, 8)} · {liveResult.attempts} attempt(s) · {liveResult.checkpoints.length} checkpoints</span><p>{liveResult.status === "succeeded" ? "The workflow completed. Its actual step results are saved in run history." : "The workflow stopped and was not automatically replayed. {liveResult.errorCode ? `Error: ${liveResult.errorCode}. ` : ""}Check run history before deciding what to do next."}</p></div>}
+        {liveResult && <div className="live-run-success" role="status"><strong>Durable execution {liveResult.status}</strong><span>Run {liveResult.runId.slice(0, 8)} · {liveResult.attempts} attempt(s) · {liveResult.checkpoints.length} checkpoints</span><p>{liveResult.status === "succeeded" ? "The workflow completed. Its actual step results are saved in run history." : `The workflow stopped and was not automatically replayed. ${liveResult.errorCode ? `Error: ${liveResult.errorCode}. ` : ""}Check run history before deciding what to do next.`}</p></div>}
       </div>
       {result && <div className="dry-run-results" role="status">
         <div className="dry-run-results-heading"><strong>Run passed</strong><span>{version ? `Version ${version} · ` : ""}{result.steps.length} steps</span></div>
