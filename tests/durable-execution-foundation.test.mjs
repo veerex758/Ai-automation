@@ -48,7 +48,7 @@ test("queue tables and RPCs are not exposed to browser roles", () => {
   assert.match(migration, /grant all on public\.execution_jobs, public\.execution_checkpoints, public\.execution_dead_letters to service_role/i);
 });
 
-test("worker authenticates with a server secret and only executes side-effect-free dry-runs", () => {
+test("worker endpoint authenticates requests and legacy previews remain side-effect free", () => {
   assert.match(worker, /timingSafeEqual/);
   assert.match(workerService, /claim_execution_jobs/);
   assert.match(workerService, /sideEffectsPerformed !== false/);
