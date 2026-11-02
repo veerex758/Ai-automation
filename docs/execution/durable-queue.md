@@ -37,8 +37,8 @@ The worker executes legacy workflows and registry workflows in dry-run mode. Reg
 
 ## Registered live execution extension
 
-- Live queue dispatch is available only for saved aivanta-registry-v1 definitions. Legacy definitions remain on their existing path.
-- Supported live operations are manual trigger plus registered OpenAI text generation, Gemini text generation, Slack message, and Resend email actions. Other operations fail closed.
+- Live queue dispatch accepts validated legacy workflow definitions and saved aivanta-registry-v1 definitions. Legacy live support is restricted to one manual-trigger Resend email action; other legacy actions remain unsupported.
+- Supported live operations are one legacy manual-trigger Resend email action, or registry-format manual trigger plus registered OpenAI text generation, Gemini text generation, Slack message, and Resend email actions. Other operations fail closed.
 - Credentials are saved per workspace through /api/integrations/workspace. Only workspace owners/admins can add or replace them. The browser receives connection metadata only; encrypted values are stored in workspace_integration_secrets.
 - AIVANTA_CREDENTIALS_ENCRYPTION_KEY must be a base64-encoded 32-byte key. The encrypted credential envelope uses AES-256-GCM and version v1.
 - Live dispatch requires an authenticated user, an active workflow, an idempotency key, and AIVANTA_LIVE_EXECUTION_ENABLED=true. Email recipients must also be literal addresses on AIVANTA_LIVE_EMAIL_RECIPIENTS.
