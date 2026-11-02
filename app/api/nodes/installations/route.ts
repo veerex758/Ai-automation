@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       return privateJson({ error: "Package metadata does not match its reviewed manifest." }, 409);
     }
 
-    const declaredPermissions = new Set(manifest.permissions);
+    const declaredPermissions = new Set<string>(manifest.permissions);
     if (requestedPermissions.some((permission) => !declaredPermissions.has(permission as string))) {
       return privateJson({ error: "One or more requested capabilities are not declared by this package." }, 400);
     }
