@@ -27,7 +27,7 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -37,11 +37,18 @@ export async function GET() {
       .select("id,provider,status,display_name,last_tested_at,last_test_status,updated_at")
       .eq("workspace_id", workspace.id).order("provider", { ascending: true });
     if (error) throw error;
-    return json({ integrations: (data ?? []).map((item) => ({
-      ...item,
-      label: providers.has(item.provider as WorkspaceCredentialProvider)
-        ? labels[item.provider as WorkspaceCredentialProvider] : "Integration",
-    })) });
+    const recipient = request.nextUrl.searchParams.get("recipient")?.trim().toLowerCase() ?? "";
+    const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
+      .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+    return json({
+      integrations: (data ?? []).map((item) => ({
+        ...item,
+        label: providers.has(item.provider as WorkspaceCredentialProvider)
+          ? labels[item.provider as WorkspaceCredentialProvider] : "Integration",
+      })),
+      liveExecutionEnabled: process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true",
+      emailRecipientAllowed: Boolean(recipient) && allowedRecipients.has(recipient),
+    });
   } catch {
     return json({ error: "Could not load workspace integrations." }, 500);
   }
