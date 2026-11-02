@@ -56,8 +56,10 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
 
+    const rawBody = await request.text();
+    if (Buffer.byteLength(rawBody, "utf8") > 12 * 1024) return json({ error: "Credential request exceeds the 12 KB limit." }, 413);
     let body: unknown;
-    try { body = await request.json(); } catch { return json({ error: "Request body must be valid JSON." }, 400); }
+    try { body = JSON.parse(rawBody); } catch { return json({ error: "Request body must be valid JSON." }, 400); }
     if (!isRecord(body) || typeof body.provider !== "string" || !providers.has(body.provider as WorkspaceCredentialProvider) ||
         !isRecord(body.credentials)) {
       return json({ error: "Provide a supported provider and its credential fields." }, 400);
