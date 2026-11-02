@@ -125,7 +125,7 @@ export async function runDurableWorker() {
 
   const workerId = process.env.AIVANTA_WORKER_ID?.slice(0, 100) || "vercel-worker";
   const { data, error } = await db.rpc("claim_execution_jobs", {
-    p_worker_id: workerId, p_limit: 5, p_lease_seconds: 120,
+    p_worker_id: workerId, p_limit: 1, p_lease_seconds: 120,
   });
   if (error || !Array.isArray(data)) {
     console.error("Aivanta worker could not claim jobs.");
@@ -153,7 +153,9 @@ export async function runDurableWorker() {
           throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
         }
         if (job.execution_mode === "live") {
-          if (steps.some((step) => !liveStepAllowed(step))) throw new Error("LIVE_OPERATION_NOT_ENABLED");
+          if (steps.some((step) => !liveStepAllowed(step)) || steps.filter((step) => step.kind === "action").length > 4) {
+            throw new Error("LIVE_OPERATION_NOT_ENABLED");
+          }
           const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
           const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
             .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
