@@ -283,7 +283,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       created_by: null,
       idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
       started_at: new Date(startedAt).toISOString(),
-      completed_at: new Date(startedAt).toISOString(),
+      completed_at: null,
       duration_ms: 0,
     }).select("id,mode,status,workflow_version,started_at").single();
     if (runInsertError) throw runInsertError;

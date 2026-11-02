@@ -62,6 +62,11 @@ test("endpoint provisioning is authenticated and returns the signing secret only
   assert.match(source, /status: "active"/);
 });
 
+test("running webhook runs do not receive a completion timestamp before finalization", async () => {
+  const source = await readFile(routeUrl, "utf8");
+  assert.match(source, /status: "running",[\\s\\S]*?completed_at: null/);
+});
+
 test("run history does not persist the raw webhook payload in the trigger result", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /payloadSha256/);
