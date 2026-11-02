@@ -101,6 +101,13 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(worker, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
 });
 
+
+test("authenticated dispatch wakes the server-side durable worker after queuing", () => {
+  assert.match(dispatch, /after\(async \(\) =>/);
+  assert.match(dispatch, /runDurableWorker\(\)/);
+  assert.match(dispatch, /queue remains the source of truth/);
+});
+
 test("live queue dispatch is explicit and limited to one attempt", () => {
   assert.match(liveModeMigration, /execution_mode text not null default 'dry_run'/);
   assert.match(liveModeMigration, /case when p_execution_mode = 'live' then 1 else p_max_attempts end/);
