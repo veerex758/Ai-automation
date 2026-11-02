@@ -141,6 +141,7 @@ export async function runDurableWorker() {
       }
 
       let result: { status: string; steps: Array<{ stepId: string; position: number; type: string; title: string; status: string; message: string; output?: unknown }> };
+      const preCheckpointed = new Set<string>();
       if (definition.format === "aivanta-registry-v1") {
         if (!Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
           throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
@@ -197,19 +198,99 @@ export async function runDurableWorker() {
           })),
         };
       } else {
-        if (job.execution_mode === "live") throw new Error("LIVE_LEGACY_WORKFLOW_NOT_SUPPORTED");
         const validated = validateDefinition(definition);
         if (!validated.definition) throw new Error("INVALID_WORKFLOW_DEFINITION");
         const input = isRecord(job.payload?.input) ? job.payload.input : {};
         const legacyResult = runDryRun(validated.definition, input);
         if (legacyResult.sideEffectsPerformed !== false) throw new Error("UNSAFE_EXECUTOR_RESULT");
-        result = {
-          status: legacyResult.status,
-          steps: legacyResult.steps.map((step) => ({
-            stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-            status: step.status, message: step.message,
-          })),
-        };
+
+        if (job.execution_mode !== "live") {
+          result = {
+            status: legacyResult.status,
+            steps: legacyResult.steps.map((step) => ({
+              stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+              status: step.status, message: step.message,
+            })),
+          };
+        } else {
+          const nodes = validated.definition.nodes;
+          const trigger = nodes[0];
+          const actions = nodes.filter((node) => node.type === "action");
+          const emailAction = actions[0];
+          if (trigger?.type !== "trigger" || trigger.settings.event !== "manual" ||
+              actions.length !== 1 || emailAction?.settings.provider !== "email" ||
+              emailAction.settings.operation !== "send_email") {
+            throw new Error("LIVE_LEGACY_OPERATION_NOT_ENABLED");
+          }
+          const recipient = typeof emailAction.settings.recipient === "string"
+            ? emailAction.settings.recipient.trim().toLowerCase() : "";
+          const message = typeof emailAction.settings.message === "string" ? emailAction.settings.message.trim() : "";
+          const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
+            .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+          if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
+            throw new Error("LIVE_EMAIL_RECIPIENT_NOT_ALLOWED");
+          }
+          if (!message) throw new Error("LIVE_EMAIL_MESSAGE_REQUIRED");
+
+          let sentOutput: unknown = undefined;
+          let sendFailed: string | null = null;
+          const emailPreview = legacyResult.steps.find((step) => step.stepId === emailAction.id);
+          if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
+            const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
+            const registrySteps: RegisteredWorkflowStep[] = [
+              { id: trigger.id, nodeId: "manual", operationId: "start", kind: "trigger", input },
+              {
+                id: emailAction.id, nodeId: "email", operationId: "send_email", kind: "action",
+                input: { to: recipient, subject: "Aivanta workflow message", text: message },
+              },
+            ];
+            const liveResult = await executeRegisteredWorkflow({
+              steps: registrySteps,
+              context: executionContext(credentials, false),
+              dryRun: false,
+              onStepStart: async (step, position) => {
+                await persistCheckpoint(db, job, step, position, "started");
+                preCheckpointed.add(step.id);
+              },
+              onStepComplete: async (step, position, completed) => {
+                await persistCheckpoint(db, job, step, position, "succeeded", boundedOutput(completed.output));
+                preCheckpointed.add(step.id);
+              },
+            });
+            const emailResult = liveResult.steps.find((step) => step.stepId === emailAction.id);
+            sentOutput = emailResult?.output;
+            sendFailed = emailResult?.status === "failed" ? emailResult.error ?? "EMAIL_SEND_FAILED" : null;
+          }
+
+          result = {
+            status: legacyResult.status === "succeeded" && !sendFailed ? "succeeded" : "failed",
+            steps: legacyResult.steps.map((step) => {
+              if (step.stepId === trigger.id) return {
+                stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+                status: "succeeded", message: "Manual workflow trigger accepted.",
+              };
+              if (step.stepId === emailAction.id) {
+                if (step.status === "skipped") return {
+                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+                  status: "skipped", message: step.message,
+                };
+                if (sendFailed) return {
+                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+                  status: "failed", message: sendFailed,
+                };
+                return {
+                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+                  status: "succeeded", message: "Resend accepted the workflow email.", output: sentOutput,
+                };
+              }
+              return {
+                stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+                status: step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded",
+                message: step.message,
+              };
+            }),
+          };
+        }
       }
 
       for (const step of result.steps) {
@@ -219,7 +300,7 @@ export async function runDurableWorker() {
         if (registryStep && (job.execution_mode !== "live" || step.status !== "succeeded")) {
           const checkpointStatus = step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded";
           await persistCheckpoint(db, job, registryStep, step.position, checkpointStatus, { message: step.message });
-        } else if (!registryStep) {
+        } else if (!registryStep && !(job.execution_mode === "live" && step.status === "succeeded" && preCheckpointed.has(step.stepId))) {
           const { error: checkpointError } = await db.rpc("checkpoint_execution_step", {
             p_job_id: job.id, p_lease_token: job.lease_token,
             p_step_id: step.stepId, p_position: step.position,
