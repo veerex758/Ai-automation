@@ -13,7 +13,7 @@ This migration introduces a server-owned PostgreSQL queue for Aivanta workflow e
 ## Worker endpoint
 Deploy the Next.js application with a server-only `CRON_SECRET` (or `AIVANTA_WORKER_SECRET`) and Supabase service key. Invoke `POST /api/internal/worker` with `Authorization: Bearer <secret>`. The worker processes at most five jobs per tick.
 
-The worker currently executes **side-effect-free workflow dry-runs only**. The synchronous Resend live-run route is intentionally not redirected into this queue in this foundation change: live external effects need a provider-aware idempotency/reconciliation design before retrying after an uncertain worker crash. Do not enable live email retries through this worker.
+The worker executes legacy workflows and registry workflows in dry-run mode. Registry-format jobs may execute live registered actions only when the dispatch request explicitly sets mode=live and AIVANTA_LIVE_EXECUTION_ENABLED=true. Live jobs are limited to one attempt: if the worker loses its lease or a provider outcome becomes uncertain, the job is not automatically replayed. The legacy synchronous Resend route remains separate.
 
 ## Verification gates before production
 1. Apply the migration to an isolated development database only after the migration-history reconciliation PR is merged and clean replay succeeds.
@@ -28,11 +28,24 @@ The worker currently executes **side-effect-free workflow dry-runs only**. The s
 10. Confirm no real provider side effects are enabled by this worker.
 
 ## Operational limits
-- The worker is invoked by an external scheduler; this PR does not provision a continuously running process.
+- Authenticated manual dispatch schedules an immediate server-side worker wake-up after the dispatch response. The /api/internal/worker endpoint remains available to an external scheduler for queued scheduled jobs, recovery, and maintenance; this repository does not provision a continuously running process.
 - Queue tables and RPCs are service-role only.
 - Dispatch creation and successful run finalization are transactional and lease-checked. A job can be safely retried only if its actions are side-effect-free or individually idempotent. Provider actions remain out of scope for this worker until reconciliation semantics are implemented.
 - Dead-letter replay UI and operator controls are a follow-up.
 
+
+
+## Registered live execution extension
+
+- Live queue dispatch is available only for saved aivanta-registry-v1 definitions. Legacy definitions remain on their existing path.
+- Supported live operations are manual trigger plus registered OpenAI text generation, Gemini text generation, Slack message, and Resend email actions. Other operations fail closed.
+- Credentials are saved per workspace through /api/integrations/workspace. Only workspace owners/admins can add or replace them. The browser receives connection metadata only; encrypted values are stored in workspace_integration_secrets.
+- AIVANTA_CREDENTIALS_ENCRYPTION_KEY must be a base64-encoded 32-byte key. The encrypted credential envelope uses AES-256-GCM and version v1.
+- Live dispatch requires an authenticated user, an active workflow, an idempotency key, and AIVANTA_LIVE_EXECUTION_ENABLED=true. Email recipients must also be literal addresses on AIVANTA_LIVE_EMAIL_RECIPIENTS.
+- Live jobs are forced to max_attempts=1. The worker writes a started checkpoint before each action and a completion checkpoint after the action. An expired lease is never replayed automatically because the provider may already have accepted the request.
+- The authenticated dispatch route wakes the worker with Next.js after() after the queue transaction commits. The queue remains the source of truth if that wake-up fails; the job stays queued.
+- Webhook-triggered live queue execution remains disabled. Scheduled and durable webhook dispatchers continue to use the seven-argument compatibility RPC and are dry-run only.
+- The new migrations are additive and must be applied only after the base queue/integration migrations are merged and clean replay passes. Do not enable live execution before authenticated staging verification of credential save, dispatch, worker, and run history.
 
 ## PostgreSQL failure-injection coverage
 
