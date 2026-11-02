@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
-test("registry includes versioned webhook, OpenAI, Slack and Email operations", () => {
-  assert.equal(nodes.length, 5);
+test("registry includes versioned webhook, OpenAI, Gemini, Slack and Email operations", () => {
+  assert.equal(nodes.length, 6);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
+  assert.ok(findOperation("gemini", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
 });
@@ -53,6 +54,29 @@ test("OpenAI action makes a real Responses API request and validates actual outp
   assert.equal(requestedUrl, "https://api.openai.com/v1/responses");
   assert.equal((result as { text: string }).text, "Hello from provider");
   assert.equal((result as { outputTokens?: number }).outputTokens, 4);
+});
+
+
+test("Gemini action calls the configured workspace model and validates its response", async () => {
+  const operation = findOperation("gemini", "generate_text", "action");
+  assert.ok(operation);
+  let requestedUrl = "";
+  const result = await operation.run({
+    credentials: { gemini: { apiKey: "test-only-key" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args) {
+      requestedUrl = args.url;
+      return { status: 200, body: {
+        candidates: [{ content: { parts: [{ text: "Hello from Gemini" }] } }],
+        usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 5 },
+      } };
+    } },
+    previousOutputs: {},
+  }, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 50 });
+  assert.match(requestedUrl, /generativelanguage\.googleapis\.com/);
+  assert.match(requestedUrl, /key=test-only-key/);
+  assert.equal((result as { text: string }).text, "Hello from Gemini");
+  assert.equal((result as { outputTokens?: number }).outputTokens, 5);
 });
 
 test("Slack action restricts configured webhook hosts and sends the message", async () => {
