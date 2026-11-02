@@ -51,7 +51,7 @@ test("worker authenticates with a server secret and only executes side-effect-fr
   assert.match(worker, /timingSafeEqual/);
   assert.match(workerService, /claim_execution_jobs/);
   assert.match(workerService, /sideEffectsPerformed !== false/);
-  assert.match(workerService, /LIVE_LEGACY_WORKFLOW_NOT_SUPPORTED/);
+  assert.match(workerService, /LIVE_LEGACY_OPERATION_NOT_ENABLED/);
 });
 
 test("dispatch requires an authenticated user and an idempotency key", () => {
@@ -102,6 +102,14 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
 });
 
+
+test("dispatch validates registered definitions and guards legacy live email", () => {
+  assert.match(dispatch, /isRegistryDefinition/);
+  assert.match(dispatch, /findOperation/);
+  assert.match(dispatch, /isLiveRegistryOperationAllowed/);
+  assert.match(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+  assert.match(dispatch, /Durable legacy live execution currently supports one manual-trigger Resend email action/);
+});
 
 test("authenticated dispatch wakes the server-side durable worker after queuing", () => {
   assert.match(dispatch, /after\(async \(\) =>/);
