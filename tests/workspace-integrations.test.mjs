@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const route = readFileSync(new URL("../app/api/integrations/workspace/route.ts", import.meta.url), "utf8");
-const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
+const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/20261102091000_aivanta_workspace_integration_secret_upsert.sql", import.meta.url), "utf8");
 
 test("workspace integration API authenticates and restricts credential management to admins", () => {
