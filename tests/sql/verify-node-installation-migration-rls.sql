@@ -186,6 +186,40 @@ begin
     raise exception 'Platform audit history must be append-only';
   end if;
 
+  if has_table_privilege('anon', 'public.workspace_node_installations', 'SELECT')
+    or has_table_privilege('anon', 'public.workspace_node_installations', 'INSERT')
+    or has_table_privilege('anon', 'public.workspace_node_installations', 'TRUNCATE')
+    or has_table_privilege('anon', 'public.workspace_node_permission_grants', 'SELECT')
+    or has_table_privilege('anon', 'public.workspace_node_permission_grants', 'INSERT')
+    or has_table_privilege('anon', 'public.workspace_node_permission_grants', 'TRUNCATE') then
+    raise exception 'Anonymous role must have no privileges on workspace node tables';
+  end if;
+
+  if has_table_privilege('authenticated', 'public.workspace_node_installations', 'DELETE')
+    or has_table_privilege('authenticated', 'public.workspace_node_installations', 'TRUNCATE')
+    or has_table_privilege('authenticated', 'public.workspace_node_installations', 'TRIGGER')
+    or has_table_privilege('authenticated', 'public.workspace_node_installations', 'REFERENCES')
+    or has_table_privilege('authenticated', 'public.workspace_node_permission_grants', 'DELETE')
+    or has_table_privilege('authenticated', 'public.workspace_node_permission_grants', 'TRUNCATE')
+    or has_table_privilege('authenticated', 'public.workspace_node_permission_grants', 'TRIGGER')
+    or has_table_privilege('authenticated', 'public.workspace_node_permission_grants', 'REFERENCES') then
+    raise exception 'Authenticated role has unnecessary table-level privileges on workspace node tables';
+  end if;
+
+  if not has_table_privilege('authenticated', 'public.workspace_node_installations', 'SELECT')
+    or not has_table_privilege('authenticated', 'public.workspace_node_installations', 'INSERT')
+    or not has_table_privilege('authenticated', 'public.workspace_node_permission_grants', 'SELECT')
+    or not has_table_privilege('authenticated', 'public.workspace_node_permission_grants', 'INSERT') then
+    raise exception 'Authenticated workspace members must retain the intended read and insert grants';
+  end if;
+
+  if not has_column_privilege('authenticated', 'public.workspace_node_installations', 'status', 'UPDATE')
+    or has_column_privilege('authenticated', 'public.workspace_node_installations', 'workspace_id', 'UPDATE')
+    or not has_column_privilege('authenticated', 'public.workspace_node_permission_grants', 'status', 'UPDATE')
+    or has_column_privilege('authenticated', 'public.workspace_node_permission_grants', 'permission', 'UPDATE') then
+    raise exception 'Workspace node updates must remain limited to lifecycle columns';
+  end if;
+
   if exists (
     select 1
     from pg_class c
