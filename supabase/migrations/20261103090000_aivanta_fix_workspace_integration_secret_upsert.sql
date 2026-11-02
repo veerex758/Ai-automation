@@ -1,0 +1,63 @@
+-- Fix PL/pgSQL name collision in the workspace credential upsert RPC.
+-- The previous integration_id variable shadowed the table column in the
+-- INSERT ... ON CONFLICT statement, causing PostgreSQL 42702 at runtime.
+create or replace function public.save_workspace_integration_credentials(
+  p_workspace_id uuid,
+  p_provider text,
+  p_display_name text,
+  p_encrypted_credentials text,
+  p_created_by uuid
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_integration_id uuid;
+begin
+  if p_provider is null or p_provider not in ('openai','gemini','resend','slack','http')
+     or p_display_name is null or length(trim(p_display_name)) not between 1 and 120
+     or p_encrypted_credentials is null or length(p_encrypted_credentials) not between 32 and 65536
+     or p_created_by is null then
+    raise exception using errcode = '22023', message = 'Invalid workspace integration request';
+  end if;
+
+  if not exists (
+    select 1 from public.workspaces w
+    where w.id = p_workspace_id and w.owner_id = p_created_by
+  ) and not exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = p_workspace_id and wm.user_id = p_created_by
+      and wm.role in ('owner','admin')
+  ) then
+    raise exception using errcode = '42501', message = 'Workspace administrator permission required';
+  end if;
+
+  insert into public.workspace_integrations (
+    workspace_id, provider, status, display_name, created_by, updated_at
+  ) values (
+    p_workspace_id, p_provider, 'connected', trim(p_display_name), p_created_by, now()
+  )
+  on conflict (workspace_id, provider) do update
+    set status = 'connected', display_name = excluded.display_name, updated_at = now()
+  returning id into v_integration_id;
+
+  insert into public.workspace_integration_secrets as secrets (
+    integration_id, encrypted_credentials, encryption_version, updated_at
+  ) values (
+    v_integration_id, p_encrypted_credentials, 'v1', now()
+  )
+  on conflict (integration_id) do update
+    set encrypted_credentials = excluded.encrypted_credentials,
+        encryption_version = excluded.encryption_version,
+        updated_at = now();
+
+  return jsonb_build_object(
+    'id', v_integration_id, 'provider', p_provider,
+    'display_name', trim(p_display_name), 'status', 'connected', 'updated_at', now()
+  );
+end;
+$$;
+
+revoke all on function public.save_workspace_integration_credentials(uuid,text,text,text,uuid)
+  from public, anon, authenticated;
+grant execute on function public.save_workspace_integration_credentials(uuid,text,text,text,uuid)
+  to service_role;
