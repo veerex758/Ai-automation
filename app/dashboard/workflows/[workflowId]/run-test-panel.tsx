@@ -13,7 +13,7 @@ type RunStep = {
 };
 type RunResult = { mode: "dry_run"; status: "succeeded"; sideEffectsPerformed: false; steps: RunStep[] };
 type IntegrationStatus = { provider: string; configured: boolean; recipientAllowed: boolean; liveExecutionEnabled: boolean; ready: boolean; missing: string[] };
-type LiveRunResult = { jobId: string; runId: string; status: string; attempts: number; checkpoints: Array<{ step_id: string; step_position: number; status: string }> };
+type LiveRunResult = { jobId: string; runId: string; status: string; attempts: number; errorCode?: string; checkpoints: Array<{ step_id: string; step_position: number; status: string }> };
 type RunHistoryItem = {
   id: string;
   mode: string;
@@ -144,7 +144,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
       if (!response.ok) throw new Error(data.error || "Could not queue this live workflow.");
       const jobId = data.jobId as string;
       const runId = data.runId as string;
-      let finalJob: { status: string; attempts: number } | null = null;
+      let finalJob: { status: string; attempts: number; last_error_code?: string | null } | null = null;
       let checkpoints: LiveRunResult["checkpoints"] = [];
       for (let attempt = 0; attempt < 30; attempt++) {
         await new Promise(resolve => window.setTimeout(resolve, 1000));
@@ -159,7 +159,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
         throw new Error("The workflow is still queued or running. Its job is saved; check run history before trying again.");
       }
       idempotencyKey.current = null;
-      setLiveResult({ jobId, runId, status: finalJob.status, attempts: finalJob.attempts, checkpoints });
+      setLiveResult({ jobId, runId, status: finalJob.status, attempts: finalJob.attempts, errorCode: finalJob.last_error_code ?? undefined, checkpoints });
       await loadHistory();
     } catch (caught) {
       setLiveError(caught instanceof Error ? caught.message : "Could not execute this live run.");
@@ -196,10 +196,10 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
                 ? "This recipient is not on the server-approved allowlist. Ask the workspace administrator to approve it."
                 : `Complete setup: ${integration?.missing?.join(", ") || "workspace integration status unavailable"}.`}</p>
         <button className="builder-run live-run-button" type="button" onClick={() => void runLive()} disabled={sendingLive || hasUnsavedChanges || workflowStatus !== "active" || !integration?.ready}>
-          {sendingLive ? "Sending…" : "✉ Run live email"}
+          {sendingLive ? "Running workflow…" : "▶ Run live workflow"}
         </button>
         {liveError && <p className="dry-run-error" role="alert">{liveError}</p>}
-        {liveResult && <div className="live-run-success" role="status"><strong>Durable execution {liveResult.status}</strong><span>Run {liveResult.runId.slice(0, 8)} · {liveResult.attempts} attempt(s) · {liveResult.checkpoints.length} checkpoints</span><p>{liveResult.status === "succeeded" ? "The workflow completed. Its actual step results are saved in run history." : "The workflow stopped and was not automatically replayed. Check run history and the execution error before deciding what to do next."}</p></div>}
+        {liveResult && <div className="live-run-success" role="status"><strong>Durable execution {liveResult.status}</strong><span>Run {liveResult.runId.slice(0, 8)} · {liveResult.attempts} attempt(s) · {liveResult.checkpoints.length} checkpoints</span><p>{liveResult.status === "succeeded" ? "The workflow completed. Its actual step results are saved in run history." : "The workflow stopped and was not automatically replayed. {liveResult.errorCode ? `Error: ${liveResult.errorCode}. ` : ""}Check run history before deciding what to do next."}</p></div>}
       </div>
       {result && <div className="dry-run-results" role="status">
         <div className="dry-run-results-heading"><strong>Run passed</strong><span>{version ? `Version ${version} · ` : ""}{result.steps.length} steps</span></div>
