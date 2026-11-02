@@ -51,7 +51,8 @@ function WorkspaceIntegrationManager() {
   const [provider, setProvider] = useState<WorkspaceProvider>("gemini");
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);\n  const [testingResend, setTestingResend] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testingResend, setTestingResend] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -66,7 +67,24 @@ function WorkspaceIntegrationManager() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function testResend() {\n    setTestingResend(true);\n    setError("");\n    setNotice("");\n    try {\n      const response = await fetch("/api/integrations/workspace/resend/test", { method: "POST" });\n      const payload = await response.json();\n      if (!response.ok) throw new Error(payload.error ?? "Could not test the Resend connection.");\n      setIntegrations(current => current.map(item => item.provider === "resend" ? { ...item, status: payload.senderDomainVerified ? "connected" : "needs_attention" } : item));\n      setNotice(payload.message ?? "Resend connection checked. No email was sent.");\n    } catch (reason) {\n      setError(reason instanceof Error ? reason.message : "Could not test the Resend connection.");\n    } finally {\n      setTestingResend(false);\n    }\n  }\n\n  async function save(event: FormEvent<HTMLFormElement>) {
+  async function testResend() {
+    setTestingResend(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/workspace/resend/test", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not test the Resend connection.");
+      setIntegrations(current => current.map(item => item.provider === "resend" ? { ...item, status: payload.senderDomainVerified ? "connected" : "needs_attention" } : item));
+      setNotice(payload.message ?? "Resend connection checked. No email was sent.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not test the Resend connection.");
+    } finally {
+      setTestingResend(false);
+    }
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
