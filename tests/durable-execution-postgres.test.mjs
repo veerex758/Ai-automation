@@ -11,6 +11,10 @@ const migration = await readFile(
   new URL("../supabase/migrations/20261031100000_aivanta_durable_execution_queue.sql", import.meta.url),
   "utf8",
 );
+const liveModeMigration = await readFile(
+  new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url),
+  "utf8",
+);
 const ids = {
   workspace: "10000000-0000-4000-8000-000000000001",
   workflow: "20000000-0000-4000-8000-000000000001",
@@ -95,10 +99,33 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] })],
     );
     await setup.query(migration);
+    await setup.query(liveModeMigration);
     ready = true;
   } finally {
     setup.release();
   }
+
+
+  await t.test("live dispatch is explicit, single-attempt, and the legacy RPC stays dry-run", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const dry = await dispatch(db, crypto.randomUUID(), 4);
+      const dryJob = await db.query("select execution_mode,max_attempts from public.execution_jobs where id=$1", [dry.job_id]);
+      assert.equal(dryJob.rows[0].execution_mode, "dry_run");
+      assert.equal(dryJob.rows[0].max_attempts, 4);
+
+      const key = crypto.randomUUID();
+      const live = await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,5,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, key],
+      );
+      const liveResult = live.rows[0].result;
+      const liveJob = await db.query("select execution_mode,max_attempts from public.execution_jobs where id=$1", [liveResult.job_id]);
+      assert.equal(liveJob.rows[0].execution_mode, "live");
+      assert.equal(liveJob.rows[0].max_attempts, 1);
+    } finally { db.release(); }
+  });
 
   await t.test("two competing workers never receive the same job", async () => {
     await resetFixture();
