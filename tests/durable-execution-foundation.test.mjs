@@ -8,6 +8,7 @@ const migration = readFileSync(
 );
 const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
+const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
 
 test("queue enforces workspace-scoped idempotent dispatch and bounded payloads", () => {
   assert.match(migration, /unique \(workspace_id, idempotency_key\)/);
@@ -49,7 +50,7 @@ test("worker authenticates with a server secret and only executes side-effect-fr
   assert.match(worker, /timingSafeEqual/);
   assert.match(worker, /claim_execution_jobs/);
   assert.match(worker, /sideEffectsPerformed !== false/);
-  assert.doesNotMatch(worker, /sendResendEmail|fetch\(/);
+  assert.match(worker, /LIVE_LEGACY_WORKFLOW_NOT_SUPPORTED/);
 });
 
 test("dispatch requires an authenticated user and an idempotency key", () => {
@@ -90,11 +91,21 @@ test("legacy enqueue RPC also writes the immutable workflow snapshot", () => {
 });
 
 
-test("durable worker supports registry definitions without network or provider side effects", async () => {
-  const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
-  assert.match(worker, /executeRegisteredWorkflow\(\{ steps, context, dryRun: true \}\)/);
-  assert.match(worker, /DRY_RUN_NETWORK_BLOCKED/);
-  assert.match(worker, /webhook: \{ verified: job\.payload\?\.webhookVerified === true \}/);
-  assert.match(worker, /status: step\.status === "succeeded" \? "simulated" : step\.status/);
-  assert.doesNotMatch(worker, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+test("durable worker executes registered steps only for explicitly gated live jobs", () => {
+  assert.match(worker, /executeRegisteredWorkflow\(/);
+  assert.match(worker, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
+  assert.match(worker, /workspaceCredentials\(db, job\.workspace_id, requiredProviders\)/);
+  assert.match(worker, /onStepStart/);
+  assert.match(worker, /onStepComplete/);
+  assert.match(worker, /LIVE_OPERATION_NOT_ENABLED/);
+  assert.match(worker, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
+});
+
+test("live queue dispatch is explicit and limited to one attempt", () => {
+  assert.match(liveModeMigration, /execution_mode text not null default 'dry_run'/);
+  assert.match(liveModeMigration, /case when p_execution_mode = 'live' then 1 else p_max_attempts end/);
+  assert.match(liveModeMigration, /p_execution_mode/);
+  assert.match(dispatch, /requestBody\.mode/);
+  assert.match(dispatch, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+  assert.match(dispatch, /p_execution_mode: executionMode/);
 });
