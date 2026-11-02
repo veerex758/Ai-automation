@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     let encrypted: string;
     try {
-      encrypted = encryptWorkspaceCredentials({ [provider]: body.credentials as Record<string, string> });
+      encrypted = encryptWorkspaceCredentials({ [provider]: body.credentials as Record<string, string> }, undefined, `${workspace.id}:${provider}`);
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
       const status = code === "WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED" ||
