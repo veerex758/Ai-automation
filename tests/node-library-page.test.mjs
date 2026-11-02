@@ -23,3 +23,12 @@ test("node library supports search, category filtering and builder navigation", 
   assert.match(page, /setCategory/);
   assert.match(page, /Use in builder/);
 });
+
+test("workspace installation cards expose disable, uninstall, and permission lifecycle actions", () => {
+  assert.match(page, /manageInstallation/);
+  assert.match(page, /permissions\/\${installation\.id}/);
+  assert.match(page, /status: "disabled"/);
+  assert.match(page, /status: "uninstalled"/);
+  assert.match(page, /permission\.status === "active" \? "DELETE" : "POST"/);
+  assert.match(page, /Execution blocked until isolated worker readiness/);
+});
