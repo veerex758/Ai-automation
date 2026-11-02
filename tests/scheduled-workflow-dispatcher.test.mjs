@@ -19,22 +19,24 @@ test("protects the scheduler endpoint with a timing-safe server secret check", (
   assert.ok(route.includes("SUPABASE_SERVICE_ROLE_KEY"));
 });
 
-test("limits the first dispatcher to side-effect-free dry-runs", () => {
+test("durably queues scheduled work for the dry-run worker", () => {
   assert.ok(route.includes("const claimLimit = 10"));
   assert.ok(route.includes("const leaseSeconds = 300"));
-  assert.ok(route.includes("runDryRun"));
+  assert.ok(route.includes('"dispatch_workflow_execution"'));
+  assert.ok(route.includes('"schedule:" + claim.schedule_id'));
+  assert.ok(route.includes('p_payload: { input: {}, source: "schedule"'));
+  assert.ok(!route.includes("runDryRun"));
   assert.ok(!route.includes("sendResendEmail"));
   assert.ok(!route.includes("fetch("));
-  assert.ok(route.includes('result.sideEffectsPerformed !== false'));
 });
 
 test("claims, persists, and finalizes schedules using lease-bound RPCs", () => {
   assert.ok(route.includes('"claim_due_workflow_schedules"'));
-  assert.ok(route.includes('"record_scheduled_workflow_run"'));
+  assert.ok(!route.includes('"record_scheduled_workflow_run"'));
   assert.ok(route.includes('"finish_workflow_schedule_claim"'));
   assert.ok(route.includes("p_lease_token: claim.lease_token"));
   assert.ok(route.includes("INVALID_WORKFLOW_DEFINITION"));
-  assert.ok(route.includes("SCHEDULED_RUN_PERSISTENCE_FAILED"));
+  assert.ok(route.includes("SCHEDULED_QUEUE_DISPATCH_FAILED"));
 });
 
 test("persists scheduled runs atomically and idempotently for the active lease", () => {

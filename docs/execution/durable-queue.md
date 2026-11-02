@@ -37,3 +37,11 @@ The worker currently executes **side-effect-free workflow dry-runs only**. The s
 ## PostgreSQL failure-injection coverage
 
 The CI workflow provisions an isolated PostgreSQL 16 service named `aivanta_test` and runs `tests/durable-execution-postgres.test.mjs` through `npm test`. The suite applies the queue migration to a minimal fixture schema and exercises concurrent `SKIP LOCKED` claims on separate connections, simultaneous duplicate dispatch, abandoned worker lease recovery, retry exhaustion/dead-letter/run failure, and denial of queue-table/RPC access to `anon` and `authenticated`. The integration harness refuses to run destructive setup unless `AIVANTA_TEST_DB=1` and the database name is exactly `aivanta_test`. It does not connect to staging or production.
+
+
+## Trigger queue bridge (guarded)
+
+- The internal scheduler dispatches due scheduled workflows into the durable queue using a schedule-occurrence idempotency key, then releases its schedule lease. The queue worker processes the immutable snapshot as a dry-run and owns retries/dead letters.
+- Verified webhook ingress can opt into durable queueing with the server-only `AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED=true` flag. This path persists a dry-run job and returns a queued receipt; it does **not** perform provider side effects. Duplicate delivery retries the same idempotent queue RPC so a receipt cannot permanently strand an event after a transient dispatch failure.
+- Keep the webhook queue flag disabled until the additive queue migration is applied and authenticated staging acceptance passes. The existing synchronous live webhook path remains separate; it is not claimed to be durably recoverable after uncertain provider acceptance.
+- Queue worker registry definitions are validated and simulated without calling provider code or making network requests. This worker is not a live provider worker.

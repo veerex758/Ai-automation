@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { runDryRun } from "@/lib/workflows/dry-run.cjs";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,7 +87,7 @@ async function dispatchTick(request: NextRequest) {
   }
 
   const claims = data as ScheduleClaim[];
-  let succeeded = 0;
+  let queued = 0;
   let failed = 0;
 
   for (const claim of claims) {
@@ -106,33 +106,26 @@ async function dispatchTick(request: NextRequest) {
         throw new Error(failureCode);
       }
 
-      const startedAt = Date.now();
-      const result = runDryRun(validated.definition, {});
-      const durationMs = Math.min(600000, Math.max(0, Date.now() - startedAt));
-      if (result.status !== "succeeded" || result.sideEffectsPerformed !== false) {
-        throw new Error("SCHEDULED_RUN_FAILED");
-      }
-
-      const { error: persistError } = await supabase.rpc("record_scheduled_workflow_run", {
-        p_schedule_id: claim.schedule_id,
-        p_lease_token: claim.lease_token,
-        p_expected_version: claim.workflow_version,
-        p_duration_ms: durationMs,
-        p_steps: result.steps.map((step) => ({
-          step_id: step.stepId,
-          step_type: step.type,
-          title: step.title,
-          status: step.status,
-          result: {
-            message: step.message,
-            ...(step.conditionMatched === undefined ? {} : { conditionMatched: step.conditionMatched }),
-          },
-        })),
+      // Atomically enqueue the immutable active workflow snapshot. The worker
+      // performs a side-effect-free dry-run and owns retries/dead-letter handling.
+      const scheduledFor = new Date(claim.scheduled_for).toISOString();
+      const idempotencyKey = "schedule:" + claim.schedule_id + ":" + scheduledFor;
+      const { data: dispatch, error: dispatchError } = await supabase.rpc("dispatch_workflow_execution", {
+        p_workspace_id: claim.workspace_id,
+        p_workflow_id: claim.workflow_id,
+        p_workflow_version: claim.workflow_version,
+        p_created_by: null,
+        p_idempotency_key: idempotencyKey,
+        p_payload: { input: {}, source: "schedule", scheduleId: claim.schedule_id, scheduledFor },
+        p_max_attempts: 5,
       });
-      if (persistError) {
-        failureCode = "SCHEDULED_RUN_PERSISTENCE_FAILED";
+      if (dispatchError || !dispatch || typeof dispatch !== "object" ||
+          typeof (dispatch as Record<string, unknown>).job_id !== "string" ||
+          typeof (dispatch as Record<string, unknown>).run_id !== "string") {
+        failureCode = "SCHEDULED_QUEUE_DISPATCH_FAILED";
         throw new Error(failureCode);
       }
+
 
       const finalized = await finishClaim(supabase, claim, true, null);
       if (!finalized) {
@@ -141,7 +134,7 @@ async function dispatchTick(request: NextRequest) {
         failed += 1;
         continue;
       }
-      succeeded += 1;
+      queued += 1;
     } catch {
       try {
         await finishClaim(supabase, claim, false, failureCode);
@@ -156,7 +149,7 @@ async function dispatchTick(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ claimed: claims.length, succeeded, failed });
+  return NextResponse.json({ claimed: claims.length, queued, failed });
 }
 
 export async function GET(request: NextRequest) {
