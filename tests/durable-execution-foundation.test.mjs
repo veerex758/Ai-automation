@@ -49,7 +49,7 @@ test("queue tables and RPCs are not exposed to browser roles", () => {
 
 test("worker authenticates with a server secret and only executes side-effect-free dry-runs", () => {
   assert.match(worker, /timingSafeEqual/);
-  assert.match(worker, /claim_execution_jobs/);
+  assert.match(workerService, /claim_execution_jobs/);
   assert.match(workerService, /sideEffectsPerformed !== false/);
   assert.match(workerService, /LIVE_LEGACY_WORKFLOW_NOT_SUPPORTED/);
 });
