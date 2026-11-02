@@ -44,7 +44,7 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
     if (secretError) throw new Error("WORKSPACE_CREDENTIAL_LOOKUP_FAILED");
     if (!secret || secret.encryption_version !== "v1") throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
     let decrypted: WorkspaceCredentials;
-    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials); }
+    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspaceId}:${provider}`); }
     catch { throw new Error("WORKSPACE_CREDENTIALS_DECRYPT_FAILED"); }
     if (!decrypted[provider]) throw new Error("WORKSPACE_CREDENTIAL_PROVIDER_MISMATCH");
     credentials[provider] = decrypted[provider];
