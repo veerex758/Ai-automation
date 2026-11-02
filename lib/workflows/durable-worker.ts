@@ -287,7 +287,7 @@ export async function runDurableWorker() {
               }
               return {
                 stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                status: step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded",
+                status: step.status === "skipped" ? "skipped" : "succeeded",
                 message: step.message,
               };
             }),
