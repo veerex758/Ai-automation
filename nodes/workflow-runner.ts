@@ -77,15 +77,15 @@ export async function executeRegisteredWorkflow(args: {
       await args.onStepStart?.(step, results.length + 1, validatedInput);
       if (args.dryRun) {
         const simulated: RegisteredStepResult = { stepId: step.id, status: "simulated" };
+        await args.onStepComplete?.(step, results.length + 1, simulated);
         results.push(simulated);
-        await args.onStepComplete?.(step, results.length, simulated);
         continue;
       }
       const output = await operation.run({ ...args.context, previousOutputs: outputs }, validatedInput);
       outputs[step.id] = operation.outputSchema.parse(output);
       const completed: RegisteredStepResult = { stepId: step.id, status: "succeeded", output: outputs[step.id] };
+      await args.onStepComplete?.(step, results.length + 1, completed);
       results.push(completed);
-      await args.onStepComplete?.(step, results.length, completed);
     } catch (error) {
       const code = error instanceof Error ? error.message : "NODE_EXECUTION_FAILED";
       results.push({ stepId: step.id, status: "failed", error: code });
