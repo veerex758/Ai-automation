@@ -129,6 +129,7 @@ test("live queue dispatch is explicit and limited to one attempt", () => {
   assert.match(liveModeMigration, /execution_mode text not null default 'dry_run'/);
   assert.match(liveModeMigration, /case when p_execution_mode = 'live' then 1 else p_max_attempts end/);
   assert.match(liveModeMigration, /p_execution_mode/);
+  assert.match(liveModeMigration, /existing_job\.workflow_id <> p_workflow_id or existing_job\.execution_mode <> p_execution_mode/);
   assert.match(dispatch, /requestBody\.mode/);
   assert.match(dispatch, /AIVANTA_LIVE_EXECUTION_ENABLED/);
   assert.match(dispatch, /p_execution_mode: executionMode/);
