@@ -3,11 +3,44 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDurableWorker } from "@/lib/workflows/durable-worker";
+import { findOperation } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+function isRegistryDefinition(value: unknown): boolean {
+  if (!isRecord(value) || value.format !== "aivanta-registry-v1" ||
+      !Array.isArray(value.steps) || value.steps.length < 1 || value.steps.length > 30) return false;
+  const steps = value.steps;
+  const seen = new Set<string>();
+  if (steps.some((step) => {
+    if (!isRecord(step) || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) ||
+        seen.has(step.id) || typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
+        (step.kind !== "trigger" && step.kind !== "action") || !("input" in step) ||
+        !findOperation(step.nodeId, step.operationId, step.kind)) return true;
+    seen.add(step.id);
+    return false;
+  })) return false;
+  return steps[0] && isRecord(steps[0]) && steps[0].kind === "trigger" &&
+    steps.filter((step) => isRecord(step) && step.kind === "trigger").length === 1;
+}
+
+function isLiveRegistryOperationAllowed(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value.steps)) return false;
+  return value.steps.every((step) => isRecord(step) && (
+    (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") ||
+    (step.kind === "action" && (
+      (step.nodeId === "openai" && step.operationId === "generate_text") ||
+      (step.nodeId === "gemini" && step.operationId === "generate_text") ||
+      (step.nodeId === "slack" && step.operationId === "send_message") ||
+      (step.nodeId === "email" && step.operationId === "send_email")
+    ))
+  ));
+}
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,8 +86,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (workflowError) throw workflowError;
     if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
     if (workflow.status !== "active") return NextResponse.json({ error: "Only active workflows can be dispatched." }, { status: 409 });
-    const validated = validateDefinition(workflow.definition);
-    if (!validated.definition) return NextResponse.json({ error: "Workflow definition is invalid." }, { status: 422 });
+    const registryFormat = isRecord(workflow.definition) && workflow.definition.format === "aivanta-registry-v1";
+    if (registryFormat) {
+      if (!isRegistryDefinition(workflow.definition)) {
+        return NextResponse.json({ error: "Registry workflow definition is invalid." }, { status: 422 });
+      }
+      if (executionMode === "live" && !isLiveRegistryOperationAllowed(workflow.definition)) {
+        return NextResponse.json({ error: "This workflow contains an operation that is not enabled for durable live execution." }, { status: 403 });
+      }
+    } else {
+      const validated = validateDefinition(workflow.definition);
+      if (!validated.definition) return NextResponse.json({ error: "Workflow definition is invalid." }, { status: 422 });
+      if (executionMode === "live") {
+        return NextResponse.json({ error: "Durable live execution currently requires an aivanta-registry-v1 workflow." }, { status: 422 });
+      }
+    }
 
     const db = serviceClient();
     const { data, error } = await db.rpc("dispatch_workflow_execution", {
