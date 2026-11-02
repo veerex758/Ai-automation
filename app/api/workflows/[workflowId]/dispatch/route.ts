@@ -1,7 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { runDurableWorker } from "@/lib/workflows/durable-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +69,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     });
     if (error || !data || typeof data !== "object") throw error ?? new Error("DISPATCH_RESULT_INVALID");
     const result = data as { job_id: string; run_id: string; duplicate: boolean };
+    // Wake the durable worker after the dispatch response is committed. The
+    // queue remains the source of truth; a missed wake-up never loses the job.
+    after(async () => {
+      try {
+        const workerResult = await runDurableWorker();
+        console.info("Aivanta dispatch worker wake-up completed.", workerResult);
+      } catch (workerError) {
+        const errorCode = workerError instanceof Error && /^[A-Z0-9_]{1,64}$/.test(workerError.message)
+          ? workerError.message : "WORKER_WAKEUP_FAILED";
+        console.error("Aivanta dispatch worker wake-up failed.", { errorCode, jobId: result.job_id });
+      }
+    });
     return NextResponse.json({
       jobId: result.job_id, runId: result.run_id,
       status: result.duplicate ? "existing" : "queued",
