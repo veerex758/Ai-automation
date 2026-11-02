@@ -1,4 +1,3 @@
-import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 export type WorkspaceCredentialProvider = "openai" | "gemini" | "resend" | "slack" | "http";
