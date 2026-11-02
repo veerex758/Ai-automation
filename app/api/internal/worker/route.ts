@@ -228,7 +228,7 @@ async function tick(request: NextRequest) {
         const registryStep = definition.format === "aivanta-registry-v1"
           ? (definition.steps as RegisteredWorkflowStep[]).find((item) => item.id === step.stepId)
           : null;
-        if (registryStep && job.execution_mode !== "live") {
+        if (registryStep && (job.execution_mode !== "live" || step.status !== "succeeded")) {
           const checkpointStatus = step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded";
           await persistCheckpoint(db, job, registryStep, step.position, checkpointStatus, { message: step.message });
         } else if (!registryStep) {
