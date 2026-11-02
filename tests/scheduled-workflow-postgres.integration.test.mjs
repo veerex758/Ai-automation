@@ -5,6 +5,8 @@ import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+const testDatabaseEnabled = process.env.AIVANTA_TEST_DB === "1" && Boolean(databaseUrl)
+  && new URL(databaseUrl).pathname === "/aivanta_test";
 const migrationPaths = [
   "../supabase/migrations/20261010194010_aivanta_workflow_run_history.sql",
   "../supabase/migrations/20261010201327_aivanta_live_email_runs.sql",
@@ -17,9 +19,19 @@ const migrationPaths = [
 ];
 
 const bootstrapSql = `
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin bypassrls;
+do $roles$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin bypassrls;
+  end if;
+end;
+$roles$;
 
 create schema auth;
 create table auth.users (id uuid primary key);
@@ -97,7 +109,9 @@ async function insertWorkflowAndSchedule(client, workspaceId, userId) {
   return { workflowId, scheduleId, definition };
 }
 
-test("PostgreSQL executes scheduled claim, persistence, lease, retry, and idempotency flows", { skip: !databaseUrl }, async () => {
+test("PostgreSQL executes scheduled claim, persistence, lease, retry, and idempotency flows", { skip: !testDatabaseEnabled }, async () => {
+  assert.equal(new URL(databaseUrl).pathname, "/aivanta_test",
+    "Refusing destructive PostgreSQL integration setup outside the dedicated aivanta_test database");
   const client = new Client({ connectionString: databaseUrl });
   const secondClient = new Client({ connectionString: databaseUrl });
   await client.connect();

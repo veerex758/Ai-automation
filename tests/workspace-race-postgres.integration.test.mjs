@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+const testDatabaseEnabled = process.env.AIVANTA_TEST_DB === "1" && Boolean(databaseUrl)
+  && new URL(databaseUrl).pathname === "/aivanta_test";
 const migration = readFileSync(
   new URL("../supabase/migrations/20261014010000_aivanta_workspace_race_safe_default.sql", import.meta.url),
   "utf8",
@@ -77,7 +79,9 @@ grant select, insert on public.workspaces to authenticated;
 grant select, insert on public.workspace_members to authenticated;
 `;
 
-test("workspace recovery migration replays and is safe under authenticated concurrent calls", { skip: !databaseUrl }, async () => {
+test("workspace recovery migration replays and is safe under authenticated concurrent calls", { skip: !testDatabaseEnabled }, async () => {
+  assert.equal(new URL(databaseUrl).pathname, "/aivanta_test",
+    "Refusing destructive PostgreSQL integration setup outside the dedicated aivanta_test database");
   const adminUrl = new URL(databaseUrl);
   const databaseName = `aivanta_workspace_test_${process.pid}_${randomUUID().replaceAll("-", "").slice(0, 10)}`;
   const admin = new Client({ connectionString: databaseUrl });

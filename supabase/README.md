@@ -33,3 +33,8 @@ npx supabase stop --no-backup
 ```
 
 This workflow is local-only. Do not run `supabase link`, use `--linked`, push migrations, or repair remote migration history as part of a replay check. The GitHub Actions migration-replay workflow runs the same disposable-local sequence for migration changes.
+
+
+## Durable execution queue
+
+The durable execution queue is an additive migration. Its queue, checkpoint, and dead-letter tables and RPCs are server-role only. The worker currently executes side-effect-free dry-runs; provider side effects must not be retried until provider-specific idempotency and reconciliation are implemented. See [docs/execution/durable-queue.md](../docs/execution/durable-queue.md) for the operational contract and CI PostgreSQL failure-injection coverage.
