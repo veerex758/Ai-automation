@@ -11,7 +11,7 @@ This migration introduces a server-owned PostgreSQL queue for Aivanta workflow e
 - **Monitoring data:** job status, attempt count, availability, lease, worker ID, and safe error code are queryable by trusted server-side operators.
 
 ## Worker endpoint
-Deploy the Next.js application with a server-only `CRON_SECRET` (or `AIVANTA_WORKER_SECRET`) and Supabase service key. Invoke `POST /api/internal/worker` with `Authorization: Bearer <secret>`. The worker processes at most five jobs per tick.
+Deploy the Next.js application with a server-only `CRON_SECRET` (or `AIVANTA_WORKER_SECRET`) and Supabase service key. Invoke `POST /api/internal/worker` with `Authorization: Bearer <secret>`. The worker claims and processes one job per tick so a slow live workflow cannot strand other jobs with already-consumed attempts.
 
 The worker executes legacy workflows and registry workflows in dry-run mode. Registry-format jobs may execute live registered actions only when the dispatch request explicitly sets mode=live and AIVANTA_LIVE_EXECUTION_ENABLED=true. Live jobs are limited to one attempt: if the worker loses its lease or a provider outcome becomes uncertain, the job is not automatically replayed. The legacy synchronous Resend route remains separate.
 
@@ -38,11 +38,11 @@ The worker executes legacy workflows and registry workflows in dry-run mode. Reg
 ## Registered live execution extension
 
 - Live queue dispatch accepts validated legacy workflow definitions and saved aivanta-registry-v1 definitions. Legacy live support is restricted to one manual-trigger Resend email action; other legacy actions remain unsupported.
-- Supported live operations are one legacy manual-trigger Resend email action, or registry-format manual trigger plus registered OpenAI text generation, Gemini text generation, Slack message, and Resend email actions. Other operations fail closed.
+- Supported live operations are one legacy manual-trigger Resend email action, or registry-format manual trigger plus registered OpenAI text generation, Gemini text generation, Slack message, and Resend email actions, with no more than four actions in one live workflow. Other operations fail closed.
 - Credentials are saved per workspace through /api/integrations/workspace. Only workspace owners/admins can add or replace them. The browser receives connection metadata only; encrypted values are stored in workspace_integration_secrets.
 - AIVANTA_CREDENTIALS_ENCRYPTION_KEY must be a base64-encoded 32-byte key. The encrypted credential envelope uses AES-256-GCM and version v1.
 - Live dispatch requires an authenticated user, an active workflow, an idempotency key, and AIVANTA_LIVE_EXECUTION_ENABLED=true. Email recipients must also be literal addresses on AIVANTA_LIVE_EMAIL_RECIPIENTS.
-- Live jobs are forced to max_attempts=1. The worker writes a started checkpoint before each action and a completion checkpoint after the action. An expired lease is never replayed automatically because the provider may already have accepted the request.
+- Live jobs are forced to max_attempts=1, and registry-format live workflows are limited to four actions to keep execution within the 120-second lease. The worker writes a started checkpoint before each action and a completion checkpoint after the action. An expired lease is never replayed automatically because the provider may already have accepted the request.
 - The authenticated dispatch route wakes the worker with Next.js after() after the queue transaction commits. The queue remains the source of truth if that wake-up fails; the job stays queued.
 - Webhook-triggered live queue execution remains disabled. Scheduled and durable webhook dispatchers continue to use the seven-argument compatibility RPC and are dry-run only.
 - The new migrations are additive and must be applied only after the base queue/integration migrations are merged and clean replay passes. Do not enable live execution before authenticated staging verification of credential save, dispatch, worker, and run history.
