@@ -52,6 +52,7 @@ function WorkspaceIntegrationManager() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingResend, setTestingResend] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -65,6 +66,23 @@ function WorkspaceIntegrationManager() {
       .catch(reason => setError(reason instanceof Error ? reason.message : "Could not load workspace integrations."))
       .finally(() => setLoading(false));
   }, []);
+
+  async function testResend() {
+    setTestingResend(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/workspace/resend/test", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not test the Resend connection.");
+      setIntegrations(current => current.map(item => item.provider === "resend" ? { ...item, status: payload.senderDomainVerified ? "connected" : "needs_attention" } : item));
+      setNotice(payload.message ?? "Resend connection checked. No email was sent.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not test the Resend connection.");
+    } finally {
+      setTestingResend(false);
+    }
+  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -106,7 +124,7 @@ function WorkspaceIntegrationManager() {
             : integrations.map(item => (
               <div className="workspace-integration-saved-row" key={item.id}>
                 <div><strong>{item.display_name}</strong><span>{item.provider} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
-                <span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>
+                <div className="workspace-integration-row-actions"><span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>{item.provider === "resend" && <button type="button" onClick={testResend} disabled={testingResend}>{testingResend ? "Testing…" : "Test connection"}</button>}</div>
               </div>
             ))}
         </div>
