@@ -65,6 +65,7 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
 
 function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "openai" && step.operationId === "generate_text") return "openai";
+  if (step.nodeId === "gemini" && step.operationId === "generate_text") return "gemini";
   if (step.nodeId === "slack" && step.operationId === "send_message") return "slack";
   if (step.nodeId === "email" && step.operationId === "send_email") return "resend";
   return null;
