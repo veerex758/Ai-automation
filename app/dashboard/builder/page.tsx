@@ -13,7 +13,7 @@ type ActionField = { name: string; label: string; type: "text" | "email" | "url"
 type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
 type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string> };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
-type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
+type RegistryDraftStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };\ntype GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
 
 const starterSteps: BuilderStep[] = [
   { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted", settings: { event: "webhook" } },
@@ -35,7 +35,7 @@ export default function WorkflowBuilderPage() {
   const [savedWorkflowId, setSavedWorkflowId] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
+  const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);\n  const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
@@ -186,7 +186,7 @@ export default function WorkflowBuilderPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify({ definition, ...(aiRegistrySteps ? { registrySteps: aiRegistrySteps } : {}) }),
       });
       const saved = await saveResponse.json() as { success?: boolean; error?: string };
       if (!saveResponse.ok || !saved.success) {
@@ -256,7 +256,7 @@ export default function WorkflowBuilderPage() {
               setAiGenerating(true); setAiPreview(null); setNotice("");
               try {
                 const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: aiPrompt.trim() }) });
-                const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow };
+                const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow; registrySteps?: RegistryDraftStep[] };
                 if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes)) throw new Error(payload.error || "Could not generate a workflow draft.");
                 setAiPreview(payload.definition);
                 setNotice("AI draft ready. Review the generated steps before applying them to your canvas.");
@@ -281,7 +281,7 @@ export default function WorkflowBuilderPage() {
                   ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
                 };
               });
-              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
+              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("Registry-backed AI draft applied. Save it when ready; no actions have run.");
             }}>Apply draft to canvas ↗</button></div>}
           </section>
           <div className="builder-workspace-grid">
