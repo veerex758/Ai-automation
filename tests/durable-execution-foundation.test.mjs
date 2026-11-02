@@ -7,6 +7,7 @@ const migration = readFileSync(
   "utf8",
 );
 const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
+const workerService = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
 const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
 
@@ -49,8 +50,8 @@ test("queue tables and RPCs are not exposed to browser roles", () => {
 test("worker authenticates with a server secret and only executes side-effect-free dry-runs", () => {
   assert.match(worker, /timingSafeEqual/);
   assert.match(worker, /claim_execution_jobs/);
-  assert.match(worker, /sideEffectsPerformed !== false/);
-  assert.match(worker, /LIVE_LEGACY_WORKFLOW_NOT_SUPPORTED/);
+  assert.match(workerService, /sideEffectsPerformed !== false/);
+  assert.match(workerService, /LIVE_LEGACY_WORKFLOW_NOT_SUPPORTED/);
 });
 
 test("dispatch requires an authenticated user and an idempotency key", () => {
@@ -92,13 +93,13 @@ test("legacy enqueue RPC also writes the immutable workflow snapshot", () => {
 
 
 test("durable worker executes registered steps only for explicitly gated live jobs", () => {
-  assert.match(worker, /executeRegisteredWorkflow\(/);
-  assert.match(worker, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
-  assert.match(worker, /workspaceCredentials\(db, job\.workspace_id, requiredProviders\)/);
-  assert.match(worker, /onStepStart/);
-  assert.match(worker, /onStepComplete/);
-  assert.match(worker, /LIVE_OPERATION_NOT_ENABLED/);
-  assert.match(worker, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
+  assert.match(workerService, /executeRegisteredWorkflow\(/);
+  assert.match(workerService, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
+  assert.match(workerService, /workspaceCredentials\(db, job\.workspace_id, requiredProviders\)/);
+  assert.match(workerService, /onStepStart/);
+  assert.match(workerService, /onStepComplete/);
+  assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
+  assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
 });
 
 
