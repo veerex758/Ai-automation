@@ -13,14 +13,6 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   http: ["apiKey", "username", "password", "baseUrl"],
 };
 
-function keyFromEnvironment(): Buffer {
-  const configured = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
-  if (!configured) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
-  const key = Buffer.from(configured, "base64");
-  if (key.length !== KEY_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID");
-  return key;
-}
-
 function validateCredentials(value: unknown): WorkspaceCredentials {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("WORKSPACE_CREDENTIALS_INVALID");
