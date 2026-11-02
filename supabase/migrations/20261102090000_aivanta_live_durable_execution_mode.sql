@@ -18,7 +18,7 @@ create or replace function public.dispatch_workflow_execution(
   p_workflow_version integer,
   p_created_by uuid,
   p_idempotency_key text,
-  p_payload jsonb default '{}'::jsonb,
+  p_payload jsonb,
   p_max_attempts integer,
   p_execution_mode text
 ) returns jsonb
