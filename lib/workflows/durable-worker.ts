@@ -259,7 +259,9 @@ export async function runDurableWorker() {
             });
             const emailResult = liveResult.steps.find((step) => step.stepId === emailAction.id);
             sentOutput = emailResult?.output;
-            sendFailed = emailResult?.status === "failed" ? emailResult.error ?? "EMAIL_SEND_FAILED" : null;
+            sendFailed = liveResult.status !== "succeeded"
+              ? liveResult.steps.find((step) => step.status === "failed")?.error ?? "LIVE_WORKFLOW_FAILED"
+              : null;
           }
 
           result = {
