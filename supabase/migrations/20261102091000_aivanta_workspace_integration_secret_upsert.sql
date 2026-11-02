@@ -10,7 +10,7 @@ language plpgsql security definer set search_path = ''
 as $$
 declare integration_id uuid;
 begin
-  if p_provider not in ('openai','gemini','resend','slack','http')
+  if p_provider is null or p_provider not in ('openai','gemini','resend','slack','http')
      or p_display_name is null or length(trim(p_display_name)) not between 1 and 120
      or p_encrypted_credentials is null or length(p_encrypted_credentials) not between 32 and 65536
      or p_created_by is null then
