@@ -7,7 +7,10 @@ const migration = readFileSync(
   "utf8",
 );
 const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
+const workerService = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
+const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
+const runPanel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
 
 test("queue enforces workspace-scoped idempotent dispatch and bounded payloads", () => {
   assert.match(migration, /unique \(workspace_id, idempotency_key\)/);
@@ -45,11 +48,11 @@ test("queue tables and RPCs are not exposed to browser roles", () => {
   assert.match(migration, /grant all on public\.execution_jobs, public\.execution_checkpoints, public\.execution_dead_letters to service_role/i);
 });
 
-test("worker authenticates with a server secret and only executes side-effect-free dry-runs", () => {
+test("worker endpoint authenticates requests and legacy previews remain side-effect free", () => {
   assert.match(worker, /timingSafeEqual/);
-  assert.match(worker, /claim_execution_jobs/);
-  assert.match(worker, /sideEffectsPerformed !== false/);
-  assert.doesNotMatch(worker, /sendResendEmail|fetch\(/);
+  assert.match(workerService, /claim_execution_jobs/);
+  assert.match(workerService, /sideEffectsPerformed !== false/);
+  assert.match(workerService, /LIVE_LEGACY_OPERATION_NOT_ENABLED/);
 });
 
 test("dispatch requires an authenticated user and an idempotency key", () => {
@@ -79,7 +82,7 @@ test("dispatch snapshots the exact workflow version for immutable queued executi
   assert.match(migration, /workflow_definition jsonb not null/);
   assert.match(migration, /select w\.\* into workflow_row[\s\S]*?for share/i);
   assert.match(migration, /workflow_row\.version, workflow_row\.definition/);
-  assert.match(worker, /validateDefinition\(definition\)/);
+  assert.match(workerService, /validateDefinition\(definition\)/);
   assert.doesNotMatch(worker, /from\("workflows"\)/);
 });
 
@@ -90,11 +93,47 @@ test("legacy enqueue RPC also writes the immutable workflow snapshot", () => {
 });
 
 
-test("durable worker supports registry definitions without network or provider side effects", async () => {
-  const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
-  assert.match(worker, /executeRegisteredWorkflow\(\{ steps, context, dryRun: true \}\)/);
-  assert.match(worker, /DRY_RUN_NETWORK_BLOCKED/);
-  assert.match(worker, /webhook: \{ verified: job\.payload\?\.webhookVerified === true \}/);
-  assert.match(worker, /status: step\.status === "succeeded" \? "simulated" : step\.status/);
-  assert.doesNotMatch(worker, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+test("durable worker executes registered steps only for explicitly gated live jobs", () => {
+  assert.match(workerService, /executeRegisteredWorkflow\(/);
+  assert.match(workerService, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
+  assert.match(workerService, /workspaceCredentials\(db, job\.workspace_id, requiredProviders\)/);
+  assert.match(workerService, /onStepStart/);
+  assert.match(workerService, /onStepComplete/);
+  assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
+  assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
+  assert.match(workerService, /p_limit: 1/);
+  assert.match(workerService, /length > 4/);
+});
+
+
+test("workflow run panel dispatches live runs through the durable queue and polls status", () => {
+  assert.match(runPanel, /\/dispatch/);
+  assert.match(runPanel, /mode: "live"/);
+  assert.match(runPanel, /\/executions\/\$\{jobId\}/);
+  assert.match(runPanel, /idempotencyKey\.current/);
+});
+
+test("dispatch validates registered definitions and guards legacy live email", () => {
+  assert.match(dispatch, /isRegistryDefinition/);
+  assert.match(dispatch, /findOperation/);
+  assert.match(dispatch, /isLiveRegistryOperationAllowed/);
+  assert.match(dispatch, /length > 4/);
+  assert.match(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+  assert.match(dispatch, /Durable legacy live execution currently supports one manual-trigger Resend email action/);
+});
+
+test("authenticated dispatch wakes the server-side durable worker after queuing", () => {
+  assert.match(dispatch, /after\(async \(\) =>/);
+  assert.match(dispatch, /runDurableWorker\(\)/);
+  assert.match(dispatch, /queue remains the source of truth/);
+});
+
+test("live queue dispatch is explicit and limited to one attempt", () => {
+  assert.match(liveModeMigration, /execution_mode text not null default 'dry_run'/);
+  assert.match(liveModeMigration, /case when p_execution_mode = 'live' then 1 else p_max_attempts end/);
+  assert.match(liveModeMigration, /p_execution_mode/);
+  assert.match(liveModeMigration, /existing_job\.workflow_id <> p_workflow_id or existing_job\.execution_mode <> p_execution_mode/);
+  assert.match(dispatch, /requestBody\.mode/);
+  assert.match(dispatch, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+  assert.match(dispatch, /p_execution_mode: executionMode/);
 });
