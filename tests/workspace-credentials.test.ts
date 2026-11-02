@@ -17,6 +17,21 @@ test("workspace credentials round-trip with provider-scoped fields", () => {
   assert.deepEqual(decryptWorkspaceCredentials(encrypted, key), credentials);
 });
 
+
+test("workspace credentials are cryptographically bound to their workspace and provider", () => {
+  const envelope = encryptWorkspaceCredentials(
+    { slack: { webhookUrl: "https://hooks.slack.com/services/workspace-secret" } },
+    key,
+    "workspace-a:slack",
+  );
+  assert.deepEqual(
+    decryptWorkspaceCredentials(envelope, key, "workspace-a:slack"),
+    { slack: { webhookUrl: "https://hooks.slack.com/services/workspace-secret" } },
+  );
+  assert.throws(() => decryptWorkspaceCredentials(envelope, key, "workspace-b:slack"));
+  assert.throws(() => decryptWorkspaceCredentials(envelope, key, "workspace-a:resend"));
+});
+
 test("workspace credential envelope rejects a wrong key and tampering", () => {
   const encrypted = encryptWorkspaceCredentials({ openai: { apiKey: "secret" } }, key);
   assert.throws(() => decryptWorkspaceCredentials(encrypted, randomBytes(32).toString("base64")));
