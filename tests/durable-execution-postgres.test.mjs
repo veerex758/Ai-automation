@@ -18,6 +18,7 @@ const liveModeMigration = await readFile(
 const ids = {
   workspace: "10000000-0000-4000-8000-000000000001",
   workflow: "20000000-0000-4000-8000-000000000001",
+  workflowOther: "20000000-0000-4000-8000-000000000002",
   user: "30000000-0000-4000-8000-000000000001",
 };
 let ready = false;
@@ -95,8 +96,8 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     `);
     await setup.query("insert into public.workspaces values ($1)", [ids.workspace]);
     await setup.query(
-      "insert into public.workflows (id,workspace_id,version,status,definition) values ($1,$2,1,'active',$3::jsonb)",
-      [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] })],
+      "insert into public.workflows (id,workspace_id,version,status,definition) values ($1,$2,1,'active',$3::jsonb),($4,$2,1,'active',$3::jsonb)",
+      [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] }), ids.workflowOther],
     );
     await setup.query(migration);
     await setup.query(liveModeMigration);
@@ -124,6 +125,22 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       const liveJob = await db.query("select execution_mode,max_attempts from public.execution_jobs where id=$1", [liveResult.job_id]);
       assert.equal(liveJob.rows[0].execution_mode, "live");
       assert.equal(liveJob.rows[0].max_attempts, 1);
+    } finally { db.release(); }
+  });
+
+  await t.test("idempotency keys cannot be reused across workflow IDs or execution modes", async () => {
+    await resetFixture();
+    const db = await client();
+    const key = crypto.randomUUID();
+    try {
+      await dispatch(db, key);
+      await assert.rejects(
+        db.query(
+          "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,5,'live')",
+          [ids.workspace, ids.workflowOther, ids.user, key],
+        ),
+        (error) => error.code === "23505",
+      );
     } finally { db.release(); }
   });
 
