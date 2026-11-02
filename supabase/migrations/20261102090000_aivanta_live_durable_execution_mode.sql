@@ -19,8 +19,8 @@ create or replace function public.dispatch_workflow_execution(
   p_created_by uuid,
   p_idempotency_key text,
   p_payload jsonb default '{}'::jsonb,
-  p_max_attempts integer default 5,
-  p_execution_mode text default 'dry_run'
+  p_max_attempts integer,
+  p_execution_mode text
 ) returns jsonb
 language plpgsql security definer set search_path = ''
 as $$
