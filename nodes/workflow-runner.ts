@@ -50,6 +50,8 @@ export async function executeRegisteredWorkflow(args: {
   steps: RegisteredWorkflowStep[];
   context: Omit<NodeContext, "previousOutputs">;
   dryRun: boolean;
+  onStepStart?: (step: RegisteredWorkflowStep, position: number, input: unknown) => Promise<void>;
+  onStepComplete?: (step: RegisteredWorkflowStep, position: number, result: RegisteredStepResult) => Promise<void>;
 }): Promise<{ status: "succeeded" | "failed"; steps: RegisteredStepResult[]; outputs: Record<string, unknown> }> {
   const outputs: Record<string, unknown> = {};
   const results: RegisteredStepResult[] = [];
@@ -72,13 +74,18 @@ export async function executeRegisteredWorkflow(args: {
     try {
       const input = resolveReferences(step.input, outputs, args.dryRun);
       const validatedInput = operation.inputSchema.parse(input);
+      await args.onStepStart?.(step, results.length + 1, validatedInput);
       if (args.dryRun) {
-        results.push({ stepId: step.id, status: "simulated" });
+        const simulated: RegisteredStepResult = { stepId: step.id, status: "simulated" };
+        results.push(simulated);
+        await args.onStepComplete?.(step, results.length, simulated);
         continue;
       }
       const output = await operation.run({ ...args.context, previousOutputs: outputs }, validatedInput);
       outputs[step.id] = operation.outputSchema.parse(output);
-      results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
+      const completed: RegisteredStepResult = { stepId: step.id, status: "succeeded", output: outputs[step.id] };
+      results.push(completed);
+      await args.onStepComplete?.(step, results.length, completed);
     } catch (error) {
       const code = error instanceof Error ? error.message : "NODE_EXECUTION_FAILED";
       results.push({ stepId: step.id, status: "failed", error: code });
