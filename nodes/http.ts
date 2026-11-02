@@ -27,6 +27,7 @@ const MAX_BODY_BYTES = 32 * 1024;
 
 const FORBIDDEN_HOSTS = new Set(["localhost", "metadata.google.internal", "metadata.google", "host.docker.internal"]);
 const RESERVED_HEADERS = new Set(["authorization", "proxy-authorization", "host", "cookie", "set-cookie", "connection", "content-length", "transfer-encoding", "upgrade"]);
+const FORBIDDEN_AUTH_HEADERS = new Set([...RESERVED_HEADERS].filter((name) => name !== "authorization"));
 
 function validateTarget(rawUrl: string, allowedHostsValue: string | undefined): URL {
   let url: URL;
@@ -118,7 +119,13 @@ export const httpNode: NodeDefinition = {
         const apiKey = apiKeys[url.hostname.toLowerCase()];
         if (typeof apiKey !== "string" || !apiKey) throw new Error("HTTP_CONNECTION_REQUIRED");
         if (input.auth === "bearer") headers.authorization = "Bearer " + apiKey;
-        else headers[input.authHeader ?? "x-api-key"] = apiKey;
+        else {
+          const authHeader = input.authHeader ?? "x-api-key";
+          if (!/^[!#$%&'*+.^_`|~0-9a-z-]+$/i.test(authHeader) || FORBIDDEN_AUTH_HEADERS.has(authHeader.toLowerCase())) {
+            throw new Error("HTTP_HEADER_NOT_ALLOWED");
+          }
+          headers[authHeader] = apiKey;
+        }
       }
 
       const response = await ctx.http.request({

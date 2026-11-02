@@ -60,6 +60,20 @@ test("HTTP node blocks unsafe headers and refuses a body on GET", async () => {
   assert.equal(calls.length, 0);
 });
 
+test("HTTP node rejects reserved auth header overrides", async () => {
+  const { context, calls } = makeContext();
+  await assert.rejects(
+    operation.run(context, {
+      url: "https://api.example.com/data",
+      method: "GET",
+      auth: "apiKey",
+      authHeader: "Host",
+    }),
+    /HTTP_HEADER_NOT_ALLOWED/,
+  );
+  assert.equal(calls.length, 0);
+});
+
 test("continueOnError returns the HTTP response without misrepresenting its ok flag", async () => {
   const { context, calls } = makeContext({ status: 429, body: { error: "rate limited" } });
   const result = await operation.run(context, {

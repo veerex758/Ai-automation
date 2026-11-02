@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isUnsafeAddress } from "../lib/workflows/safe-http-transport";
+import { isHttpMethodRetryable, isUnsafeAddress } from "../lib/workflows/safe-http-transport";
 
 test("IPv4 private, loopback, link-local and reserved targets are rejected", () => {
   for (const address of ["10.0.0.1", "127.0.0.1", "169.254.169.254", "172.16.0.1", "192.168.1.1", "224.0.0.1"]) {
@@ -30,4 +30,12 @@ test("IPv4-mapped IPv6 inherits IPv4 restrictions", () => {
   assert.equal(isUnsafeAddress("::ffff:127.0.0.1"), true);
   assert.equal(isUnsafeAddress("::ffff:7f00:1"), true);
   assert.equal(isUnsafeAddress("::ffff:8.8.8.8"), false);
+});
+
+test("only GET requests are eligible for automatic retries", () => {
+  assert.equal(isHttpMethodRetryable("GET"), true);
+  assert.equal(isHttpMethodRetryable("get"), true);
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    assert.equal(isHttpMethodRetryable(method), false, method);
+  }
 });

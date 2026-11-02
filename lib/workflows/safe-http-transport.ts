@@ -47,6 +47,10 @@ export function isUnsafeAddress(address: string): boolean {
   return true;
 }
 
+export function isHttpMethodRetryable(method: string): boolean {
+  return method.toUpperCase() === "GET";
+}
+
 function parseResponseBody(raw: string): unknown {
   if (!raw) return null;
   try { return JSON.parse(raw) as unknown; } catch { return raw; }
@@ -142,10 +146,9 @@ export async function safeHttpsRequest(args: {
   retries?: number;
 }): Promise<{ status: number; body: unknown }> {
   const retries = Math.min(2, Math.max(0, Math.floor(args.retries ?? 0)));
-  // Never automatically replay a potentially non-idempotent write unless the caller
-  // supplies an idempotency key accepted by the destination API.
-  const replaySafe = args.method === "GET" || Boolean(args.headers && Object.keys(args.headers).some((key) => key.toLowerCase() === "idempotency-key"));
-  const attempts = replaySafe ? retries + 1 : 1;
+  // Only GET is automatically retried. Mutating requests are never replayed
+  // based solely on a caller-supplied header that the destination may ignore.
+  const attempts = isHttpMethodRetryable(args.method) ? retries + 1 : 1;
   for (let attempt = 0; ; attempt++) {
     const result = await requestOnce(args);
     if (attempt >= attempts - 1 || !(result.status === 429 || result.status >= 500)) return result;
