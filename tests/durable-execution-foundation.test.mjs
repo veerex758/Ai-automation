@@ -101,6 +101,8 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /onStepComplete/);
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
   assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
+  assert.match(workerService, /p_limit: 1/);
+  assert.match(workerService, /length > 4/);
 });
 
 
@@ -115,6 +117,7 @@ test("dispatch validates registered definitions and guards legacy live email", (
   assert.match(dispatch, /isRegistryDefinition/);
   assert.match(dispatch, /findOperation/);
   assert.match(dispatch, /isLiveRegistryOperationAllowed/);
+  assert.match(dispatch, /length > 4/);
   assert.match(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
   assert.match(dispatch, /Durable legacy live execution currently supports one manual-trigger Resend email action/);
 });
