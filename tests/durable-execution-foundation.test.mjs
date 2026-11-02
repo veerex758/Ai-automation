@@ -82,7 +82,7 @@ test("dispatch snapshots the exact workflow version for immutable queued executi
   assert.match(migration, /workflow_definition jsonb not null/);
   assert.match(migration, /select w\.\* into workflow_row[\s\S]*?for share/i);
   assert.match(migration, /workflow_row\.version, workflow_row\.definition/);
-  assert.match(worker, /validateDefinition\(definition\)/);
+  assert.match(workerService, /validateDefinition\(definition\)/);
   assert.doesNotMatch(worker, /from\("workflows"\)/);
 });
 
