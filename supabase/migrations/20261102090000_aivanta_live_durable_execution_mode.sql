@@ -82,3 +82,27 @@ revoke all on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid
   from public, anon, authenticated;
 grant execute on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer,text)
   to service_role;
+
+
+-- Preserve the existing seven-argument RPC contract for the scheduler and
+-- verified webhook dispatcher. Those callers remain dry-run-only by default.
+create or replace function public.dispatch_workflow_execution(
+  p_workspace_id uuid,
+  p_workflow_id uuid,
+  p_workflow_version integer,
+  p_created_by uuid,
+  p_idempotency_key text,
+  p_payload jsonb default '{}'::jsonb,
+  p_max_attempts integer default 5
+) returns jsonb
+language sql security definer set search_path = ''
+as $$
+  select public.dispatch_workflow_execution(
+    p_workspace_id, p_workflow_id, p_workflow_version, p_created_by,
+    p_idempotency_key, p_payload, p_max_attempts, 'dry_run'
+  );
+$$;
+revoke all on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer)
+  from public, anon, authenticated;
+grant execute on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer)
+  to service_role;
