@@ -45,6 +45,9 @@ begin
   select * into existing_job from public.execution_jobs
   where workspace_id = p_workspace_id and idempotency_key = p_idempotency_key;
   if found then
+    if existing_job.workflow_id <> p_workflow_id or existing_job.execution_mode <> p_execution_mode then
+      raise exception using errcode = '23505', message = 'Idempotency key already used for a different workflow or execution mode';
+    end if;
     return jsonb_build_object('job_id', existing_job.id, 'run_id', existing_job.run_id, 'duplicate', true);
   end if;
 
