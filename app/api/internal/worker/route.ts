@@ -4,7 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { decryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
-import { executeRegisteredWorkflow, type RegisteredWorkflowStep, type RegisteredStepResult } from "@/nodes/workflow-runner";
+import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
 
 export const runtime = "nodejs";
