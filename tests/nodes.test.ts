@@ -61,11 +61,13 @@ test("Gemini action calls the configured workspace model and validates its respo
   const operation = findOperation("gemini", "generate_text", "action");
   assert.ok(operation);
   let requestedUrl = "";
+  let requestHeaders: Record<string, string> | undefined;
   const result = await operation.run({
     credentials: { gemini: { apiKey: "test-only-key" } },
     logger: { info() {}, error() {} },
     http: { async request(args) {
       requestedUrl = args.url;
+      requestHeaders = args.headers;
       return { status: 200, body: {
         candidates: [{ content: { parts: [{ text: "Hello from Gemini" }] } }],
         usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 5 },
@@ -74,7 +76,8 @@ test("Gemini action calls the configured workspace model and validates its respo
     previousOutputs: {},
   }, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 50 });
   assert.match(requestedUrl, /generativelanguage\.googleapis\.com/);
-  assert.match(requestedUrl, /key=test-only-key/);
+  assert.equal(requestHeaders?.["x-goog-api-key"], "test-only-key");
+  assert.doesNotMatch(requestedUrl, /key=/);
   assert.equal((result as { text: string }).text, "Hello from Gemini");
   assert.equal((result as { outputTokens?: number }).outputTokens, 5);
 });
