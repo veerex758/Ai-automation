@@ -8,6 +8,35 @@ const context = {
   http: { async request() { return { status: 200, body: { output_text: "Generated text", model: "gpt-4o-mini" } }; } },
 };
 
+
+test("registry runner awaits durable start and completion checkpoints around each action", async () => {
+  const events: string[] = [];
+  const result = await executeRegisteredWorkflow({
+    steps: [{ id: "draft", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } }],
+    context,
+    dryRun: false,
+    async onStepStart(step, position) { events.push(`start:${position}:${step.id}`); },
+    async onStepComplete(step, position, completed) {
+      events.push(`complete:${position}:${step.id}:${completed.status}`);
+    },
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, ["start:1:draft", "complete:1:draft:succeeded"]);
+});
+
+test("registry runner does not call a provider when its start checkpoint fails", async () => {
+  let calls = 0;
+  const result = await executeRegisteredWorkflow({
+    steps: [{ id: "draft", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } }],
+    context: { ...context, http: { async request() { calls++; return { status: 200, body: { output_text: "should not execute" } }; } } },
+    dryRun: false,
+    async onStepStart() { throw new Error("CHECKPOINT_WRITE_FAILED"); },
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.steps[0].error, "CHECKPOINT_WRITE_FAILED");
+  assert.equal(calls, 0);
+});
+
 test("registry workflow dry-run validates registered steps without calling providers", async () => {
   let calls = 0;
   const result = await executeRegisteredWorkflow({
