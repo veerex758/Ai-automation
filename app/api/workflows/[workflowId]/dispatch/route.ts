@@ -33,7 +33,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Request must be a JSON object." }, { status: 400 });
-    const input = (body as Record<string, unknown>).input ?? {};
+    const requestBody = body as Record<string, unknown>;
+    const input = requestBody.input ?? {};
+    const executionMode = requestBody.mode ?? "dry_run";
+    if (executionMode !== "dry_run" && executionMode !== "live") {
+      return NextResponse.json({ error: "Mode must be dry_run or live." }, { status: 400 });
+    }
+    if (executionMode === "live" && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
+      return NextResponse.json({ error: "Live execution is disabled by the server." }, { status: 503 });
+    }
     if (!input || typeof input !== "object" || Array.isArray(input) || Buffer.byteLength(JSON.stringify(input), "utf8") > 10240) {
       return NextResponse.json({ error: "Input must be a JSON object no larger than 10 KB." }, { status: 400 });
     }
@@ -55,13 +63,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       p_created_by: user.id,
       p_idempotency_key: idempotencyKey,
       p_payload: { input },
-      p_max_attempts: 5,
+      p_max_attempts: executionMode === "live" ? 1 : 5,
+      p_execution_mode: executionMode,
     });
     if (error || !data || typeof data !== "object") throw error ?? new Error("DISPATCH_RESULT_INVALID");
     const result = data as { job_id: string; run_id: string; duplicate: boolean };
     return NextResponse.json({
       jobId: result.job_id, runId: result.run_id,
       status: result.duplicate ? "existing" : "queued",
+      mode: executionMode,
       duplicate: result.duplicate,
     }, { status: result.duplicate ? 200 : 202 });
   } catch (error) {
