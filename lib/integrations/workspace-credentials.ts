@@ -37,7 +37,7 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
 }
 
 /** Encrypt workspace provider credentials using the versioned AES-256-GCM envelope. */
-export function encryptWorkspaceCredentials(credentials: WorkspaceCredentials, encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY): string {
+export function encryptWorkspaceCredentials(credentials: WorkspaceCredentials, encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY, associatedData?: string): string {
   if (!encodedKey) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
   const validated = validateCredentials(credentials);
   const plaintext = Buffer.from(JSON.stringify(validated), "utf8");
@@ -46,12 +46,13 @@ export function encryptWorkspaceCredentials(credentials: WorkspaceCredentials, e
   if (key.length !== KEY_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID");
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
+  if (associatedData) cipher.setAAD(Buffer.from(associatedData, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   return ["v1", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(".");
 }
 
 /** Decrypt and strictly validate credentials read from workspace_integration_secrets. */
-export function decryptWorkspaceCredentials(envelope: string, encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY): WorkspaceCredentials {
+export function decryptWorkspaceCredentials(envelope: string, encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY, associatedData?: string): WorkspaceCredentials {
   if (!encodedKey) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
   const key = Buffer.from(encodedKey, "base64");
   if (key.length !== KEY_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID");
@@ -69,6 +70,7 @@ export function decryptWorkspaceCredentials(envelope: string, encodedKey = proce
     throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
   }
   const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  if (associatedData) decipher.setAAD(Buffer.from(associatedData, "utf8"));
   decipher.setAuthTag(tag);
   const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   let parsed: unknown;
