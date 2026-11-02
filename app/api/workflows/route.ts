@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";\nimport { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json(
-      { workflow: presentWorkflow(data) },
+      { workflow: presentWorkflow(data), registry: registrySteps ? { format: "aivanta-registry-v1", steps: registrySteps } : null },
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
