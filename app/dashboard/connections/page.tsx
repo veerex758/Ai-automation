@@ -53,6 +53,7 @@ function WorkspaceIntegrationManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingResend, setTestingResend] = useState(false);
+  const [sendingResendTest, setSendingResendTest] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -81,6 +82,22 @@ function WorkspaceIntegrationManager() {
       setError(reason instanceof Error ? reason.message : "Could not test the Resend connection.");
     } finally {
       setTestingResend(false);
+    }
+  }
+
+  async function sendResendTestEmail() {
+    setSendingResendTest(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/workspace/resend/test-email", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not send the Resend test email.");
+      setNotice(payload.message ?? `Resend accepted a test email for ${payload.recipient}.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not send the Resend test email.");
+    } finally {
+      setSendingResendTest(false);
     }
   }
 
@@ -124,7 +141,7 @@ function WorkspaceIntegrationManager() {
             : integrations.map(item => (
               <div className="workspace-integration-saved-row" key={item.id}>
                 <div><strong>{item.display_name}</strong><span>{item.provider} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
-                <div className="workspace-integration-row-actions"><span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>{item.provider === "resend" && <button type="button" onClick={testResend} disabled={testingResend}>{testingResend ? "Testing…" : "Test connection"}</button>}</div>
+                <div className="workspace-integration-row-actions"><span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>{item.provider === "resend" && <><button type="button" onClick={testResend} disabled={testingResend || sendingResendTest}>{testingResend ? "Testing…" : "Test connection"}</button><button type="button" onClick={sendResendTestEmail} disabled={testingResend || sendingResendTest}>{sendingResendTest ? "Sending test…" : "Send test email"}</button></>}</div>
               </div>
             ))}
         </div>
