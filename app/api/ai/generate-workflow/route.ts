@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
-      AI_NOT_CONFIGURED: { status: 503, message: "AI workflow generation is not configured yet. Add the server-side AIVANTA_AI_API_KEY." },
+      AI_NOT_CONFIGURED: { status: 503, message: "AI workflow generation is not configured yet. Configure the server-side API key for the selected provider (OPENAI_API_KEY or GEMINI_API_KEY)." },
       AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid." },
       AI_PROMPT_REQUIRED: { status: 400, message: "Describe the workflow you want to create." },
       AI_PROMPT_TOO_LONG: { status: 400, message: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` },
