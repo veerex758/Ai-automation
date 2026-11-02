@@ -29,9 +29,9 @@ export const geminiNode: NodeDefinition = {
       const apiKey = ctx.credentials.gemini?.apiKey;
       if (!apiKey) throw new Error("GEMINI_CONNECTION_REQUIRED");
       const response = await ctx.http.request({
-        url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model)}:generateContent`,
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: {
           ...(input.system ? { systemInstruction: { parts: [{ text: input.system }] } } : {}),
           contents: [{ role: "user", parts: [{ text: input.prompt }] }],
