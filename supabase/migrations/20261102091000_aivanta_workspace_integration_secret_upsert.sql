@@ -49,7 +49,7 @@ begin
 
   return jsonb_build_object(
     'id', integration_id, 'provider', p_provider,
-    'display_name', trim(p_display_name), 'status', 'connected'
+    'display_name', trim(p_display_name), 'status', 'connected', 'updated_at', now()
   );
 end;
 $$;
