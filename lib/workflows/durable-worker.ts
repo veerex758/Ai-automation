@@ -233,8 +233,9 @@ export async function runDurableWorker() {
           if (!message) throw new Error("LIVE_EMAIL_MESSAGE_REQUIRED");
 
           let sentOutput: unknown = undefined;
-          let sendFailed: string | null = null;
+          let sendFailed: string | null = legacyResult.status === "succeeded" ? null : "WORKFLOW_PREVIEW_FAILED";
           const emailPreview = legacyResult.steps.find((step) => step.stepId === emailAction.id);
+          if (!emailPreview) sendFailed = "EMAIL_PREVIEW_STEP_MISSING";
           if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
             const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
             const registrySteps: RegisteredWorkflowStep[] = [
