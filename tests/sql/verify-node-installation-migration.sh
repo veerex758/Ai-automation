@@ -8,4 +8,5 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610311617
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261031162435_aivanta_node_installation_indexes.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261031162658_aivanta_node_installation_disabled_until_worker.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261031163058_aivanta_node_installation_manager_rpcs.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261102095352_aivanta_node_permission_revocation_after_quarantine.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/sql/verify-node-installation-migration-rls.sql

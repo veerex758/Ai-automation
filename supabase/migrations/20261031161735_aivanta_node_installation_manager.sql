@@ -226,13 +226,13 @@ create policy workspace_node_permission_grants_admin_update
     and status = 'revoked'
     and revoked_at is not null
     and revoked_by = (select auth.uid())
-    -- The permission was validated when granted and its column is immutable.
-    -- Keep revocation available even after the package is quarantined.
     and exists (
       select 1
       from public.workspace_node_installations i
+      join public.node_package_versions v on v.id = i.package_version_id
       where i.id = installation_id
         and i.workspace_id = workspace_node_permission_grants.workspace_id
+        and (v.manifest -> 'permissions') ? permission
     )
   );
 
