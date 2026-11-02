@@ -47,8 +47,9 @@ test("installation state API cannot activate or re-enable community packages", (
 test("permission API exposes explicit grant and revoke operations only", () => {
   const route = read("../app/api/nodes/installations/[installationId]/permissions/route.ts");
   assert.match(route, /set_workspace_node_permission/);
-  assert.match(route, /action: "grant"/);
-  assert.match(route, /action: "revoke"/);
+  assert.match(route, /p_action: action/);
+  assert.match(route, /return changePermission\(request, context, "grant"\)/);
+  assert.match(route, /return changePermission\(request, context, "revoke"\)/);
   assert.match(route, /canManageNodeInstallations\(access\.role\)/);
   assert.match(route, /Cache-Control.*private, no-store/);
 });
