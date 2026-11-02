@@ -156,6 +156,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
         if (finalJob && ["succeeded", "dead_letter"].includes(finalJob.status)) break;
       }
       if (!finalJob || !["succeeded", "dead_letter"].includes(finalJob.status)) {
+        await loadHistory();
         throw new Error("The workflow is still queued or running. Its job is saved; check run history before trying again.");
       }
       idempotencyKey.current = null;
