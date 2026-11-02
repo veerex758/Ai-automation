@@ -98,7 +98,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       const validated = validateDefinition(workflow.definition);
       if (!validated.definition) return NextResponse.json({ error: "Workflow definition is invalid." }, { status: 422 });
       if (executionMode === "live") {
-        return NextResponse.json({ error: "Durable live execution currently requires an aivanta-registry-v1 workflow." }, { status: 422 });
+        const nodes = validated.definition.nodes;
+        const actions = nodes.filter((node) => node.type === "action");
+        const emailAction = actions[0];
+        if (nodes[0]?.type !== "trigger" || nodes[0].settings.event !== "manual" ||
+            actions.length !== 1 || emailAction?.settings.provider !== "email" ||
+            emailAction.settings.operation !== "send_email" || !emailAction.settings.message?.trim()) {
+          return NextResponse.json({ error: "Durable legacy live execution currently supports one manual-trigger Resend email action." }, { status: 422 });
+        }
+        const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
+          .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+        const recipient = emailAction.settings.recipient?.trim().toLowerCase() ?? "";
+        if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
+          return NextResponse.json({ error: "The email recipient must be a literal address on the server allowlist." }, { status: 403 });
+        }
       }
     }
 
