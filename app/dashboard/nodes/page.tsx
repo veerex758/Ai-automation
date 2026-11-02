@@ -82,6 +82,26 @@ export default function NodeLibraryPage() {
   }), [nodes, category, search]);
   const operationCount = nodes.reduce((total, node) => total + node.triggers.length + node.actions.length, 0);
 
+  async function manageInstallation(url: string, method: "PATCH" | "POST" | "DELETE", body?: Record<string, string>) {
+    setInstallationsError("");
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        cache: "no-store",
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Node installation action failed.");
+      const refreshed = await fetch("/api/nodes/installations", { cache: "no-store" });
+      const data = await refreshed.json() as InstallationResponse;
+      if (!refreshed.ok) throw new Error(data.error || "Could not refresh workspace installations.");
+      setInstallations(Array.isArray(data.installations) ? data.installations : []);
+    } catch (caught) {
+      setInstallationsError(caught instanceof Error ? caught.message : "Node installation action failed.");
+    }
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -124,6 +144,11 @@ export default function NodeLibraryPage() {
             <h3>{installation.package?.displayName || installation.package?.name || "Package metadata unavailable"}</h3>
             <p>{installation.package?.name || installation.id}</p>
             <div className="node-operation-preview">{installation.permissions.map((permission) => <span key={permission.id}>{permission.name} · {permission.status}</span>)}</div>
+            {installation.status !== "uninstalled" && <div className="node-installation-actions">
+              {installation.permissions.map((permission) => <button className="subtle-button" type="button" key={permission.id} onClick={() => void manageInstallation(`/api/nodes/installations/${installation.id}/permissions`, permission.status === "active" ? "DELETE" : "POST", { permission: permission.name })}>{permission.status === "active" ? `Revoke ${permission.name}` : `Grant ${permission.name}`}</button>)}
+              <button className="subtle-button" type="button" onClick={() => void manageInstallation(`/api/nodes/installations/${installation.id}`, "PATCH", { status: "disabled" })} disabled={installation.status === "disabled"}>Disable</button>
+              <button className="subtle-button" type="button" onClick={() => void manageInstallation(`/api/nodes/installations/${installation.id}`, "PATCH", { status: "uninstalled" })}>Uninstall</button>
+            </div>}
             <small>{installation.status === "uninstalled" ? "Uninstall retained in history" : "Execution blocked until isolated worker readiness"}</small>
           </article>)}</div> : <div className="section-empty-panel"><h3>No community packages installed</h3><p>First-party nodes are available above. Community package installation remains gated until a reviewed package and isolated worker are ready.</p></div>}
           <div className="section-title-row"><div><h2>Available in your builder</h2><p>These are the live first-party node definitions loaded from Aivanta&apos;s trusted registry.</p></div></div>
