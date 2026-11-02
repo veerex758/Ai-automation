@@ -30,7 +30,8 @@ function isRegistryDefinition(value: unknown): boolean {
 }
 
 function isLiveRegistryOperationAllowed(value: unknown): boolean {
-  if (!isRecord(value) || !Array.isArray(value.steps)) return false;
+  if (!isRecord(value) || !Array.isArray(value.steps) ||
+      value.steps.filter((step) => isRecord(step) && step.kind === "action").length > 4) return false;
   return value.steps.every((step) => isRecord(step) && (
     (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") ||
     (step.kind === "action" && (
