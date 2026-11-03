@@ -9,12 +9,12 @@ test("workflow creation validates and persists an included definition in the sam
   assert.match(route, /import \{ validateDefinition \} from "@\/lib\/workflows\/validate-definition\.cjs";/);
   assert.match(route, /"definition" in body\s*\? validateDefinition\(body\.definition\)/);
   assert.match(route, /status: 422/);
-  assert.match(route, /definition: definitionResult\.definition/);
+  assert.match(route, /definition: definitionToSave/);
 });
 
 test("quick-create and template creation receive a valid manual-trigger starter definition", () => {
   assert.match(route, /: validateDefinition\(\{\s*version: 1,\s*nodes: \[\{\s*id: "trigger-1",\s*type: "trigger",[\s\S]*?settings: \{ event: "manual" \}/);
-  assert.match(route, /definition: definitionResult\.definition/);
+  assert.match(route, /definition: definitionToSave/);
 });
 
 test("builder sends a new workflow definition with creation and only patches existing drafts", () => {
