@@ -278,6 +278,7 @@ export default function WorkflowBuilderPage() {
                   : undefined;
                 return {
                   id: Date.now() + index,
+                  registryBacked: true,
                   kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action",
                   title: node.title,
                   detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · "),
