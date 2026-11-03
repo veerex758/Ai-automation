@@ -9,6 +9,8 @@ test("Google integration SDKs are official packages pinned to exact versions", (
   assert.equal(pkg.dependencies["@googleapis/sheets"], "18.1.2");
   assert.ok(!pkg.dependencies["@googleapis/gmail"].startsWith("^"));
   assert.ok(!pkg.dependencies["@googleapis/sheets"].startsWith("^"));
+  assert.equal(pkg.dependencies["@slack/web-api"], "8.2.0");
+  assert.ok(!pkg.dependencies["@slack/web-api"].startsWith("^"));
 });
 
 test("Aivanta does not add n8n runtime packages as executable dependencies", () => {
