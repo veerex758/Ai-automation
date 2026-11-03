@@ -1,13 +1,21 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import "./dashboard.css";\nimport { nodes } from "@/nodes/registry";
+import "./dashboard.css";
+import { nodes } from "@/nodes/registry";
 
 type Section = "integrations" | "templates" | "analytics" | "activity" | "billing" | "settings";
 const navigation = [
   ["Dashboard","/dashboard","▦"],["Workflows","/dashboard#workflows","↗"],["Integrations","/dashboard/integrations","⌘"],["AI Agents","/dashboard/ai-assistant","✺"],["Templates","/dashboard/templates","▧"],["Analytics","/dashboard/analytics","▥"],["Activity logs","/dashboard/activity","◷"],["Billing","/dashboard/billing","◇"],["Settings","/dashboard/settings","⚙"],
 ] as const;
-const nodeIcon: Record<string, string> = { play: "▶", webhook: "↗", openai: "✳", gemini: "✦", slack: "S", mail: "✉" };\nconst nodeTone: Record<string, string> = { triggers: "blue", ai: "violet", communication: "orange", data: "lime", developer: "blue" };\nconst catalog = nodes.map((node) => ({\n name: node.name, symbol: nodeIcon[node.icon] ?? "◇", tone: nodeTone[node.category] ?? "blue",\n description: [...node.triggers, ...node.actions].map((operation) => operation.name).join(" · ") || "Registered workflow node",\n category: node.category, auth: node.auth.type, operationCount: node.triggers.length + node.actions.length,\n}));\nconst templates = [
+const nodeIcon: Record<string, string> = { play: "▶", webhook: "↗", openai: "✳", gemini: "✦", slack: "S", mail: "✉" };
+const nodeTone: Record<string, string> = { triggers: "blue", ai: "violet", communication: "orange", data: "lime", developer: "blue" };
+const catalog = nodes.map((node) => ({
+ name: node.name, symbol: nodeIcon[node.icon] ?? "◇", tone: nodeTone[node.category] ?? "blue",
+ description: [...node.triggers, ...node.actions].map((operation) => operation.name).join(" · ") || "Registered workflow node",
+ category: node.category, auth: node.auth.type, operationCount: node.triggers.length + node.actions.length,
+}));
+const templates = [
   {name:"Lead Capture & Welcome Email",category:"Lead capture",description:"Start from a website form, record lead details, and prepare a welcome message."},
   {name:"Support Ticket Triage",category:"Customer support",description:"Check incoming requests and prepare a support follow-up task."},
   {name:"Content Approval",category:"Content",description:"Create a simple review flow for submitted content."},
