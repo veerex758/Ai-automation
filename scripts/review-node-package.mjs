@@ -40,6 +40,8 @@ assert.equal(pkg.optionalDependencies, undefined);
 assert.equal(pkg.peerDependencies, undefined);
 
 const source = readEntry("package/dist/index.js");
+// Ignore comments so documentation of a prohibited API is not a false positive.
+const executableSource = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
 const forbidden = [
   /\bprocess\b/,
   /\brequire\s*\(/,
@@ -54,7 +56,7 @@ const forbidden = [
   /\bWebAssembly\b/,
 ];
 for (const pattern of forbidden) {
-  assert.equal(pattern.test(source), false, `Forbidden capability pattern detected: ${pattern}`);
+  assert.equal(pattern.test(executableSource), false, `Forbidden capability pattern detected: ${pattern}`);
 }
 assert.match(source, /export async function execute/);
 
