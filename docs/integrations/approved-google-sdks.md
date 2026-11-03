@@ -1,22 +1,33 @@
-# Approved Google integration SDKs
+# Approved integration SDKs
 
-These are official Google- and Slack-maintained API client packages, not third-party n8n community packages. Aivanta uses its own node definitions, schemas, credential vault, and runner; it does not load n8n node source code.
+Aivanta uses vendor-maintained API clients behind its own node definitions, schemas, credential vault, and runner. It does not load n8n community node source code or execute arbitrary npm package code as workflow nodes.
 
-| Package | Pinned version | License | Purpose |
+## Pinned packages
+
+| Integration | Package | Exact version | License |
 | --- | --- | --- | --- |
-| `@googleapis/gmail` | `22.0.2` | Apache-2.0 | Gmail API client |
-| `@googleapis/sheets` | `18.1.2` | Apache-2.0 | Google Sheets API client |
-| `@slack/web-api` | `8.2.0` | MIT | Slack Web API client |
+| Gmail | `@googleapis/gmail` | `22.0.2` | Apache-2.0 |
+| Google Sheets | `@googleapis/sheets` | `18.1.2` | Apache-2.0 |
+| Slack | `@slack/web-api` | `8.2.0` | MIT |
+| Notion | `@notionhq/client` | `5.28.0` | MIT |
+| HubSpot | `@hubspot/api-client` | `14.0.1` | MIT |
+| Twilio | `twilio` | `6.2.0` | MIT |
+| Shopify | `@shopify/shopify-api` | `15.0.1` | MIT |
+| Stripe | `stripe` | `23.0.1` | MIT |
+| Resend | `resend` | `6.37.0` | MIT |
+| Linear | `@linear/sdk` | `100.0.0` | MIT |
 
-## Review notes
+These versions are exact pins, not floating semver ranges. Package ownership, package identity, and published version metadata were checked against their npm package pages and vendor repositories/documentation. CI must still complete dependency installation, tests, lint, type-check, and build before this change is eligible for merge; a clean install is not a substitute for a full transitive vulnerability review.
 
-- Package ownership/source: Google's `googleapis/google-api-nodejs-client` repository and Slack's `slackapi/node-slack-sdk` repository.
-- Versions are exact pins, not floating semver ranges.
-- npm package metadata reports Apache-2.0 for both packages; the package pages identify Google as publisher/maintainer.
-- The scoped Gmail package reports one runtime dependency (`googleapis-common`); the Sheets package is an official generated Google API client. Slack's SDK is the vendor-supported Web API client.
-- No n8n community package is installed or dynamically loaded.
-- CI dependency installation and vulnerability checks must complete before merge. This change does not connect a Google account or grant OAuth scopes.
+## Security and runtime boundary
 
-## Runtime boundary
+- No n8n runtime or `n8n-nodes-*` package is added.
+- SDKs are server-side integration libraries; do not import credential-bearing clients into browser components.
+- Secrets and OAuth tokens must be read from the workspace credential vault at execution time and must never be logged or returned to clients.
+- Each integration still requires a reviewed native Aivanta adapter, input/output schemas, least-privilege OAuth scopes or API permissions, token refresh/revocation handling, and mocked tests before it is exposed as an executable node.
+- Adding an SDK does not connect an account, grant permissions, or execute an API call.
+- Dropbox is deliberately not included in this batch: the current Dropbox SDK release requires Node.js 22+, while this repository's CI currently runs Node.js 20. We should upgrade and validate the runtime separately before adding it.
 
-Adding these SDKs does not make Gmail or Sheets actions available by itself. Aivanta still needs a reviewed OAuth connection flow, encrypted token storage/refresh, explicit least-privilege scopes, and native node schemas/adapters. Until those are implemented and tested, these packages are dependencies only and no Google API call is made.
+## Rollout
+
+This change only updates the dependency manifest and its package-pin regression test. No credentials, OAuth registrations, database migrations, staging settings, production settings, or Vercel deployments are changed.
