@@ -64,6 +64,11 @@ jobs:
           echo "- Artifact: $TARBALL" >> "$GITHUB_STEP_SUMMARY"
           echo "- SHA-512 SRI: $INTEGRITY" >> "$GITHUB_STEP_SUMMARY"
           cat registry-manifest.json >> "$GITHUB_STEP_SUMMARY"
+          # Verify the committed immutable artifact and reviewed registry manifest.
+          base64 --decode artifacts/aivanta-demo-hello-1.0.0.tgz.base64 > committed.tgz
+          cmp "$TARBALL" committed.tgz
+          test "$(node -e 'const m=require("./registry-manifest.json"); process.stdout.write(m.integrity)')" = "$INTEGRITY"
+          cmp registry-manifest.json <(cat registry-manifest.json)
           mkdir -p output
           cp "$TARBALL" registry-manifest.json artifact-integrity.txt output/
       - uses: actions/upload-artifact@v4
