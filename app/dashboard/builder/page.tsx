@@ -37,7 +37,8 @@ export default function WorkflowBuilderPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
-  const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);\n  const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
+  const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
+  const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
