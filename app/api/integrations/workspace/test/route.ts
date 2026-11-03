@@ -132,7 +132,7 @@ export async function POST(request: Request) {
       last_tested_at: new Date().toISOString(), last_test_status: result.ok ? "passed" : "failed",
     }).eq("id", integration.id).eq("workspace_id", workspace.id);
     if (update.error) throw update.error;
-    return json(result, result.ok ? 200 : result.status === 429 ? 429 : 502);
+    return json(result, result.ok ? 200 : result.status === 409 ? 409 : result.status === 429 ? 429 : 502);
   } catch (error) {
     const timedOut = error instanceof Error && error.name === "AbortError";
     return json({ error: timedOut ? "Provider timed out after 8 seconds." : "Could not complete the integration check." }, timedOut ? 504 : 500);
