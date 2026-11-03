@@ -37,6 +37,18 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
       credentials[field] = secret;
     }
     if (Object.keys(credentials).length === 0) throw new Error("WORKSPACE_CREDENTIALS_INVALID");
+    const requiredFields: Partial<Record<WorkspaceCredentialProvider, readonly string[]>> = {
+      openai: ["apiKey"], gemini: ["apiKey"], resend: ["apiKey", "fromEmail"],
+      notion: ["apiKey"], hubspot: ["accessToken"],
+      twilio: ["accountSid", "authToken", "fromPhone"],
+      shopify: ["shopDomain", "accessToken"], stripe: ["secretKey"], linear: ["apiKey"],
+    };
+    if (requiredFields[provider as WorkspaceCredentialProvider]?.some((field) => !credentials[field])) {
+      throw new Error("WORKSPACE_CREDENTIALS_INVALID");
+    }
+    if (provider === "slack" && !credentials.webhookUrl && !credentials.botToken) {
+      throw new Error("WORKSPACE_CREDENTIALS_INVALID");
+    }
     result[provider] = credentials;
   }
   return result;
