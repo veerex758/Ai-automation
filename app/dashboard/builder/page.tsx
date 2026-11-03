@@ -173,6 +173,7 @@ export default function WorkflowBuilderPage() {
             description: `${steps.length} steps · Visual workflow draft`,
             status: "draft",
             definition,
+            ...(aiRegistrySteps ? { registrySteps: aiRegistrySteps } : {}),
           }),
         });
         const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
