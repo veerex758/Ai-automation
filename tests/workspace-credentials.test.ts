@@ -65,4 +65,6 @@ test("workspace credential vault accepts the additional vendor providers with on
   const encrypted = encryptWorkspaceCredentials(value, key, "workspace-1:integration-set");
   assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-1:integration-set"), value);
   assert.throws(() => encryptWorkspaceCredentials({ notion: { apiKey: "ok", accessToken: "not-allowed" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ twilio: { accountSid: "AC123" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ slack: {} } as never, key));
 });
