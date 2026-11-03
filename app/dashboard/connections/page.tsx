@@ -68,7 +68,8 @@ function WorkspaceIntegrationManager() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testingResend, setTestingResend] = useState(false);\n  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testingResend, setTestingResend] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [sendingResendTest, setSendingResendTest] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
