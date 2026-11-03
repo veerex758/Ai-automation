@@ -21,7 +21,7 @@ const providerPayload = (steps = validSteps) => ({ choices: [{ message: { conten
 test("extracts JSON and optional markdown fences safely", () => {
   const fence = String.fromCharCode(96).repeat(3);
   assert.deepEqual(extractJson(JSON.stringify({ registrySteps: validSteps })), { registrySteps: validSteps });
-  assert.deepEqual(extractJson(fence + "json\\n" + JSON.stringify({ registrySteps: validSteps }) + "\\n" + fence), { registrySteps: validSteps });
+  assert.deepEqual(extractJson(fence + "json" + String.fromCharCode(10) + JSON.stringify({ registrySteps: validSteps }) + String.fromCharCode(10) + fence), { registrySteps: validSteps });
   assert.throws(() => extractJson("not json"), /AI_INVALID_JSON/);
 });
 test("rejects empty and oversized prompts before calling provider", async () => {
