@@ -69,3 +69,27 @@ test("rejects invalid model names and non-HTTPS provider endpoints in production
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_MODEL: "invalid model!" }, nodeCatalog: catalog }), /AI_CONFIGURATION_ERROR/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_BASE_URL: "http://ai.example.test", NODE_ENV: "production" }, nodeCatalog: catalog }), /AI_CONFIGURATION_ERROR/);
 });
+
+test("uses the configured Gemini key and OpenAI-compatible Gemini endpoint", async () => {
+  const geminiEnv = { AIVANTA_AI_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-secret", NODE_ENV: "test" };
+  let requestedUrl = "";
+  const result = await generateWorkflow({
+    prompt: "Qualify a lead with Gemini",
+    env: geminiEnv,
+    nodeCatalog: catalog,
+    fetchImpl: async (url, options) => {
+      requestedUrl = url;
+      assert.equal(options.headers.Authorization, "Bearer gemini-secret");
+      return { ok: true, status: 200, json: async () => providerPayload() };
+    },
+  });
+  assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(result.registrySteps[1].nodeId, "gemini");
+});
+test("does not silently fall back to OpenAI credentials when Gemini is selected", async () => {
+  await assert.rejects(generateWorkflow({
+    prompt: "Create a task",
+    env: { AIVANTA_AI_PROVIDER: "gemini", AIVANTA_AI_API_KEY: "openai-only-key" },
+    nodeCatalog: catalog,
+  }), /AI_NOT_CONFIGURED/);
+});
