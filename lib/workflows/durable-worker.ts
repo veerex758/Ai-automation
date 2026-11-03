@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { decryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
@@ -27,10 +28,62 @@ function client() {
   });
 }
 
+async function googleAccessToken(db: DbClient, workspaceId: string, product: "gmail" | "sheets"): Promise<string> {
+  const { data: connection, error } = await db.from("google_connections")
+    .select("id,encrypted_credentials,expires_at,status,scopes")
+    .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
+    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
+  if (!connection) throw new Error(product === "gmail" ? "GMAIL_CONNECTION_REQUIRED" : "GOOGLE_SHEETS_CONNECTION_REQUIRED");
+  const requiredScope = product === "gmail"
+    ? "https://www.googleapis.com/auth/gmail.readonly"
+    : "https://www.googleapis.com/auth/spreadsheets.readonly";
+  if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
+    throw new Error("GOOGLE_SCOPE_MISMATCH");
+  }
+  let credentials;
+  try { credentials = decryptGoogleCredentials(connection.encrypted_credentials); }
+  catch { throw new Error("GOOGLE_CREDENTIALS_DECRYPT_FAILED"); }
+  const expiry = credentials.expiry_date ?? (connection.expires_at ? new Date(connection.expires_at).getTime() : 0);
+  if (expiry > Date.now() + 60_000) return credentials.access_token;
+  if (!credentials.refresh_token) throw new Error("GOOGLE_REAUTH_REQUIRED");
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error("GOOGLE_OAUTH_NOT_CONFIGURED");
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: credentials.refresh_token, grant_type: "refresh_token" }),
+    cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) {
+    await db.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", connection.id);
+    throw new Error("GOOGLE_REAUTH_REQUIRED");
+  }
+  const token = await response.json() as { access_token?: unknown; expires_in?: unknown; scope?: unknown; token_type?: unknown };
+  if (typeof token.access_token !== "string" || typeof token.expires_in !== "number") throw new Error("GOOGLE_TOKEN_REFRESH_INVALID");
+  const updated = {
+    ...credentials, access_token: token.access_token, expiry_date: Date.now() + token.expires_in * 1000,
+    ...(typeof token.scope === "string" ? { scope: token.scope } : {}),
+    ...(typeof token.token_type === "string" ? { token_type: token.token_type } : {}),
+  };
+  const { error: saveError } = await db.from("google_connections").update({
+    encrypted_credentials: encryptGoogleCredentials(updated),
+    expires_at: new Date(updated.expiry_date).toISOString(),
+    status: "connected", updated_at: new Date().toISOString(),
+  }).eq("id", connection.id).eq("workspace_id", workspaceId);
+  if (saveError) throw new Error("GOOGLE_TOKEN_REFRESH_SAVE_FAILED");
+  return updated.access_token;
+}
+
 async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>): Promise<WorkspaceCredentials> {
   const credentials: WorkspaceCredentials = {};
   for (const provider of providers) {
-    if (!["openai", "gemini", "resend", "slack", "http"].includes(provider)) {
+    if (provider === "gmail" || provider === "sheets") {
+      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, provider) };
+      continue;
+    }
+    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
@@ -55,14 +108,29 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
 function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "openai" && step.operationId === "generate_text") return "openai";
   if (step.nodeId === "gemini" && step.operationId === "generate_text") return "gemini";
-  if (step.nodeId === "slack" && step.operationId === "send_message") return "slack";
+  if (step.nodeId === "slack" && ["send_message", "post_message"].includes(step.operationId)) return "slack";
   if (step.nodeId === "email" && step.operationId === "send_email") return "resend";
+  if (step.nodeId === "gmail" && step.operationId === "list_messages") return "gmail";
+  if (step.nodeId === "google_sheets" && step.operationId === "get_values") return "sheets";
+  if (step.nodeId === "notion" && step.operationId === "create_page") return "notion";
+  if (step.nodeId === "hubspot" && step.operationId === "create_contact") return "hubspot";
+  if (step.nodeId === "twilio" && step.operationId === "send_sms") return "twilio";
+  if (step.nodeId === "shopify" && step.operationId === "list_products") return "shopify";
+  if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
+  if (step.nodeId === "linear" && step.operationId === "create_issue") return "linear";
   return null;
 }
 
+const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
-  return (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") ||
-    (step.kind === "action" && providerForStep(step) !== null);
+  if (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") return true;
+  const provider = step.kind === "action" ? providerForStep(step) : null;
+  if (!provider) return false;
+  if (SERVER_ENABLED_INTEGRATIONS.has(provider) || (step.nodeId === "slack" && step.operationId === "post_message")) {
+    const enabled = new Set((process.env.AIVANTA_LIVE_INTEGRATIONS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+    return enabled.has(provider);
+  }
+  return true;
 }
 
 function boundedOutput(value: unknown): Record<string, unknown> {
@@ -90,7 +158,7 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
           const response = await fetch(args.url, {
             method: args.method,
             headers: args.headers,
-            body: args.body === undefined ? undefined : JSON.stringify(args.body),
+            body: args.body === undefined ? undefined : (typeof args.body === "string" ? args.body : JSON.stringify(args.body)),
             signal: controller.signal,
             redirect: "error",
           });
@@ -155,6 +223,13 @@ export async function runDurableWorker() {
         if (job.execution_mode === "live") {
           if (steps.some((step) => !liveStepAllowed(step)) || steps.filter((step) => step.kind === "action").length > 4) {
             throw new Error("LIVE_OPERATION_NOT_ENABLED");
+          }
+          const smsSteps = steps.filter((step) => step.nodeId === "twilio" && step.operationId === "send_sms");
+          const allowedSmsRecipients = new Set((process.env.AIVANTA_LIVE_SMS_RECIPIENTS ?? "")
+            .split(",").map((item) => item.trim()).filter(Boolean));
+          for (const step of smsSteps) {
+            const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
+            if (!to || to.includes("{{") || !allowedSmsRecipients.has(to)) throw new Error("LIVE_SMS_RECIPIENT_NOT_ALLOWED");
           }
           const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
           const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")

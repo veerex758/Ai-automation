@@ -7,9 +7,10 @@ import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http"]);
+const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"]);
 const labels: Record<WorkspaceCredentialProvider, string> = {
   openai: "OpenAI", gemini: "Gemini", resend: "Resend", slack: "Slack", http: "HTTP API",
+  notion: "Notion", hubspot: "HubSpot", twilio: "Twilio", shopify: "Shopify", stripe: "Stripe", linear: "Linear",
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));

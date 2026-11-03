@@ -10,7 +10,7 @@ test("community node installation records are workspace-scoped and integrity-pin
   assert.ok(migration.includes("unique (workspace_id, package_name)"));
   assert.ok(migration.includes("package_integrity text"));
   assert.ok(migration.includes("package_version text not null check"));
-  assert.ok(migration.includes("[.]0-9]+"));
+  assert.ok(migration.includes("package_version ~ '^[0-9]+[.][0-9]+[.][0-9]+"));
   assert.ok(migration.includes("sha512-"));
   assert.ok(migration.includes("registry = 'https://registry.npmjs.org'"));
 });

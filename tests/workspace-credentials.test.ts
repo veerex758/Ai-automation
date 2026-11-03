@@ -50,3 +50,21 @@ test("workspace credential decryption requires a valid versioned envelope", () =
   assert.throws(() => decryptWorkspaceCredentials("v2.invalid.invalid.invalid", key));
   assert.throws(() => decryptWorkspaceCredentials("v1.a.b.c.extra", key));
 });
+
+
+test("workspace credential vault accepts the additional vendor providers with only declared fields", () => {
+  const value = {
+    notion: { apiKey: "notion-secret" },
+    hubspot: { accessToken: "hubspot-secret" },
+    twilio: { accountSid: "AC123", authToken: "twilio-secret", fromPhone: "+15550001111" },
+    shopify: { shopDomain: "example.myshopify.com", accessToken: "shopify-secret" },
+    stripe: { secretKey: "stripe-secret" },
+    linear: { apiKey: "linear-secret" },
+    slack: { botToken: "slack-bot-secret" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-1:integration-set");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-1:integration-set"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ notion: { apiKey: "ok", accessToken: "not-allowed" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ twilio: { accountSid: "AC123" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ slack: {} } as never, key));
+});
