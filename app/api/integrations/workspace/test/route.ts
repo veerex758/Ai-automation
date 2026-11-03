@@ -54,12 +54,15 @@ async function check(provider: Provider, c: Credentials) {
         break;
       case "twilio": {
         const sid = required(c, "accountSid"), token = required(c, "authToken");
+        if (!/^AC[a-f0-9]{32}$/i.test(sid)) throw new Error("CREDENTIAL_FIELD_INVALID");
         url = "https://api.twilio.com/2010-04-01/Accounts/" + encodeURIComponent(sid) + ".json";
         headers.Authorization = "Basic " + Buffer.from(sid + ":" + token).toString("base64");
         break;
       }
       case "shopify":
-        const shop = required(c, "shopDomain");\n        if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/i.test(shop)) throw new Error("CREDENTIAL_FIELD_INVALID");\n        url = "https://" + shop + "/admin/api/2025-10/shop.json";
+        const shop = required(c, "shopDomain");
+        if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shop)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + shop + "/admin/api/2025-10/shop.json";
         headers["X-Shopify-Access-Token"] = required(c, "accessToken");
         break;
       case "stripe":
