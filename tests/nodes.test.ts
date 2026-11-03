@@ -190,3 +190,34 @@ test("ten vendor integrations execute through validated native registry operatio
   assert.ok(calls.some((call) => call.url === "https://api.stripe.com/v1/customers"));
   assert.ok(calls.some((call) => call.url === "https://api.linear.app/graphql"));
 });
+
+
+test("dry-run simulates all ten vendor integrations without provider calls", async () => {
+  let calls = 0;
+  const steps = [
+    { id: "gmail", nodeId: "gmail", operationId: "list_messages", kind: "action" as const, input: {} },
+    { id: "sheets", nodeId: "google_sheets", operationId: "get_values", kind: "action" as const, input: { spreadsheetId: "abcdefghijklmnopqrstuvwx", range: "Sheet1!A1:B2" } },
+    { id: "slack", nodeId: "slack", operationId: "post_message", kind: "action" as const, input: { channel: "C123", message: "Hello" } },
+    { id: "notion", nodeId: "notion", operationId: "create_page", kind: "action" as const, input: { databaseId: "11111111-1111-4111-8111-111111111111", title: "Draft" } },
+    { id: "hubspot", nodeId: "hubspot", operationId: "create_contact", kind: "action" as const, input: { email: "person@example.com" } },
+    { id: "twilio", nodeId: "twilio", operationId: "send_sms", kind: "action" as const, input: { to: "+15550002222", body: "Draft" } },
+    { id: "shopify", nodeId: "shopify", operationId: "list_products", kind: "action" as const, input: {} },
+    { id: "stripe", nodeId: "stripe", operationId: "create_customer", kind: "action" as const, input: { email: "person@example.com" } },
+    { id: "linear", nodeId: "linear", operationId: "create_issue", kind: "action" as const, input: { teamId: "team_1", title: "Draft issue" } },
+    { id: "resend", nodeId: "email", operationId: "send_email", kind: "action" as const, input: { to: "person@example.com", subject: "Draft", text: "Draft only" } },
+  ];
+  const { executeRegisteredWorkflow } = await import("../nodes/workflow-runner");
+  const result = await executeRegisteredWorkflow({
+    steps,
+    context: {
+      credentials: {},
+      logger: { info() {}, error() {} },
+      http: { async request() { calls++; return { status: 200, body: {} }; } },
+    },
+    dryRun: true,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.steps.length, 10);
+  assert.ok(result.steps.every((step) => step.status === "simulated"));
+  assert.equal(calls, 0);
+});
