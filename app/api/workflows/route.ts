@@ -48,6 +48,17 @@ export async function GET() {
       );
     }
 
+    let definitionToSave: Record<string, unknown> = definitionResult.definition;
+    let registrySteps: unknown = null;
+    if ("registrySteps" in body) {
+      const validatedRegistry = validateRegisteredSteps(body.registrySteps);
+      if (!validatedRegistry.steps) {
+        return NextResponse.json({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
+      }
+      registrySteps = validatedRegistry.steps;
+      definitionToSave = { ...definitionResult.definition, format: "aivanta-registry-v1", steps: validatedRegistry.steps };
+    }
+
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data, error } = await supabase
       .from("workflows")
@@ -146,7 +157,7 @@ export async function POST(request: NextRequest) {
         name,
         description,
         status,
-        definition: definitionResult.definition,
+        definition: definitionToSave,
         created_by: user.id,
       })
       .select("id, name, description, status, updated_at")
