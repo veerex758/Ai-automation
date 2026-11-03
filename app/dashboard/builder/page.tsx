@@ -92,6 +92,7 @@ export default function WorkflowBuilderPage() {
     setSteps(current => [...current, { id, kind, title, detail }]);
     setSelected(id);
     setShowAdd(false);
+    setAiRegistrySteps(null);
     setNotice("Step added. Configure its details before activating the workflow.");
   }
 
