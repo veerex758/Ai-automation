@@ -5,8 +5,12 @@ import { webhooksNode } from "./webhooks";
 import { slackNode } from "./slack";
 import { emailNode } from "./email";
 import { manualNode } from "./manual";
+import { gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode } from "./integrations";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode];
+export const nodes: NodeDefinition[] = [
+  manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
+  gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
+];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
