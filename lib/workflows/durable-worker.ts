@@ -30,11 +30,17 @@ function client() {
 
 async function googleAccessToken(db: DbClient, workspaceId: string, product: "gmail" | "sheets"): Promise<string> {
   const { data: connection, error } = await db.from("google_connections")
-    .select("id,encrypted_credentials,expires_at,status")
+    .select("id,encrypted_credentials,expires_at,status,scopes")
     .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
   if (!connection) throw new Error(product === "gmail" ? "GMAIL_CONNECTION_REQUIRED" : "GOOGLE_SHEETS_CONNECTION_REQUIRED");
+  const requiredScope = product === "gmail"
+    ? "https://www.googleapis.com/auth/gmail.readonly"
+    : "https://www.googleapis.com/auth/spreadsheets.readonly";
+  if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
+    throw new Error("GOOGLE_SCOPE_MISMATCH");
+  }
   let credentials;
   try { credentials = decryptGoogleCredentials(connection.encrypted_credentials); }
   catch { throw new Error("GOOGLE_CREDENTIALS_DECRYPT_FAILED"); }
