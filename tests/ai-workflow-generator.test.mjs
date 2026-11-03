@@ -4,7 +4,7 @@ import { generateWorkflow, extractJson, validateRegistrySteps } from "../lib/wor
 
 const catalog = [
   { id: "manual", name: "Manual", version: 1, auth: { type: "none" }, triggers: [{ id: "start", name: "Start", description: "Manual start", inputSchema: { type: "object", properties: {}, additionalProperties: true } }], actions: [] },
-  { id: "gemini", name: "Gemini", version: 1, auth: { type: "apiKey", credentialKey: "apiKey" }, triggers: [], actions: [{ id: "generate_text", name: "Generate text", description: "Generate text", inputSchema: { type: "object", properties: { prompt: { type: "string", minLength: 1, maxLength: 12000 }, system: { type: "string", maxLength: 4000 }, model: { type: "string" }, maxOutputTokens: { type: "integer", minimum: 1, maximum: 4000 } }, required: ["prompt"], additionalProperties: false }] },
+  { id: "gemini", name: "Gemini", version: 1, auth: { type: "apiKey", credentialKey: "apiKey" }, triggers: [], actions: [{ id: "generate_text", name: "Generate text", description: "Generate text", inputSchema: { type: "object", properties: { prompt: { type: "string", minLength: 1, maxLength: 12000 }, system: { type: "string", maxLength: 4000 }, model: { type: "string" }, maxOutputTokens: { type: "integer", minimum: 1, maximum: 4000 } }, required: ["prompt"], additionalProperties: false } }] },
   { id: "slack", name: "Slack", version: 1, auth: { type: "apiKey", credentialKey: "webhookUrl" }, triggers: [], actions: [{ id: "send_message", name: "Send message", description: "Send message", inputSchema: { type: "object", properties: { message: { type: "string", minLength: 1, maxLength: 4000 } }, required: ["message"], additionalProperties: false } }] },
 ];
 const validSteps = [
