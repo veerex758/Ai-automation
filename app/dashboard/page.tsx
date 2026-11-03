@@ -77,6 +77,7 @@ const navItems = [
   { label: "Dashboard", icon: "▦", href: "/dashboard" },
   { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
   { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
+  { label: "Node library", icon: "◇", href: "/dashboard/nodes" },
   { label: "AI Agents", icon: "✺", href: "/dashboard/ai-assistant" },
   { label: "Templates", icon: "▧", href: "/dashboard/templates" },
   { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
