@@ -29,7 +29,7 @@ type InstalledNode = {
   } | null;
   permissions: { id: string; name: string; status: "active" | "revoked"; revokedAt: string | null }[];
 };
-type InstallationResponse = { installations?: InstalledNode[]; error?: string };
+type InstallationResponse = { installations?: InstalledNode[]; error?: string };\ntype AvailablePackage = { packageVersionId: string; packageName: string; displayName: string; description: string; version: string; runtimeApiVersion: string; publisher: string; permissions: string[] };\ntype PackageResponse = { packages?: AvailablePackage[]; error?: string };
 
 const categoryLabels: Record<string, string> = {
   triggers: "Triggers",
@@ -46,7 +46,7 @@ export default function NodeLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [installations, setInstallations] = useState<InstalledNode[]>([]);
-  const [installationsError, setInstallationsError] = useState("");
+  const [installationsError, setInstallationsError] = useState("");\n  const [availablePackages, setAvailablePackages] = useState<AvailablePackage[]>([]);\n  const [selectedPermissions, setSelectedPermissions] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -54,9 +54,9 @@ export default function NodeLibraryPage() {
       try {
         const [response, installationResponse] = await Promise.all([
           fetch("/api/workflows/actions", { cache: "no-store" }),
-          fetch("/api/nodes/installations", { cache: "no-store" }),
+          fetch("/api/nodes/installations", { cache: "no-store" }),\n          fetch("/api/nodes/packages", { cache: "no-store" }),
         ]);
-        const result = (await response.json()) as CatalogResponse;
+        const packageResponse = await fetch("/api/nodes/packages", { cache: "no-store" });\n        const packageResult = (await packageResponse.json()) as PackageResponse;\n        if (!cancelled && packageResponse.ok) setAvailablePackages(Array.isArray(packageResult.packages) ? packageResult.packages : []);\n        const result = (await response.json()) as CatalogResponse;
         if (!response.ok) throw new Error(result.error || "Could not load the node catalogue.");
         if (!cancelled) setNodes(Array.isArray(result.nodes) ? result.nodes : []);
 
@@ -82,7 +82,7 @@ export default function NodeLibraryPage() {
   }), [nodes, category, search]);
   const operationCount = nodes.reduce((total, node) => total + node.triggers.length + node.actions.length, 0);
 
-  async function manageInstallation(url: string, method: "PATCH" | "POST" | "DELETE", body?: Record<string, string>) {
+  async function manageInstallation(url: string, method: "PATCH" | "POST" | "DELETE", body?: Record<string, unknown>) {
     setInstallationsError("");
     try {
       const response = await fetch(url, {
@@ -136,6 +136,15 @@ export default function NodeLibraryPage() {
             <div><span className="dash-eyebrow">COMMUNITY NODE INSTALLATION</span><h2>Curated packages stay inactive until the sandbox is ready</h2><p>Approved package metadata and workspace permission consent can be stored now. New installations remain disabled; third-party code cannot execute until the isolated worker is deployed and explicitly enabled.</p></div>
             <span className="workflow-status status-draft"><i/>Execution gated</span>
           </section>
+          <div className="section-title-row"><div><h2>Approved community packages</h2><p>Only publisher-verified, platform-reviewed versions can be installed.</p></div></div>
+          {availablePackages.length ? <div className="section-cards-grid node-library-grid">{availablePackages.map((item) => <article className="section-info-card node-library-card" key={item.packageVersionId}>
+            <div className="node-library-card-top"><span className="node-library-icon">＋</span><span className="workflow-status status-active"><i/>Reviewed</span></div>
+            <div className="quick-template-meta"><span>{item.publisher}</span><span>v{item.version}</span></div>
+            <h3>{item.displayName}</h3><p>{item.packageName}</p><p>{item.description}</p>
+            <div className="node-operation-preview">{item.permissions.length ? item.permissions.map((permission) => <label key={permission}><input type="checkbox" checked={(selectedPermissions[item.packageVersionId] ?? []).includes(permission)} onChange={(event) => setSelectedPermissions(current => ({ ...current, [item.packageVersionId]: event.target.checked ? [...(current[item.packageVersionId] ?? []), permission] : (current[item.packageVersionId] ?? []).filter(value => value !== permission) }))} /> {permission}</label>) : <span>No extra capabilities requested</span>}</div>
+            <button className="subtle-button" type="button" onClick={() => void manageInstallation("/api/nodes/installations", "POST", { packageVersionId: item.packageVersionId, permissions: selectedPermissions[item.packageVersionId] ?? [] })}>Install disabled</button>
+            <small>Installation is saved disabled; community code cannot execute yet.</small>
+          </article>)}</div> : <div className="section-empty-panel"><h3>No approved community packages available</h3><p>The registry has no approved package versions yet. A package must pass publisher verification, artifact integrity, dependency and malware review before it can appear here.</p></div>}
           <div className="section-title-row"><div><h2>Workspace installations</h2><p>Persisted community package records and workspace capability consent.</p></div></div>
           {installationsError && <div className="integration-feedback error" role="alert">{installationsError}</div>}
           {installations.length ? <div className="section-cards-grid node-library-grid">{installations.map((installation) => <article className="section-info-card node-library-card" key={installation.id}>
