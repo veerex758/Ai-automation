@@ -41,10 +41,19 @@ async function check(provider: Provider, c: Credentials) {
         url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1";
         headers["x-goog-api-key"] = required(c, "apiKey");
         break;
-      case "slack":
+      case "slack": {
+        // Incoming webhooks are write-only: validating one requires posting a message.
+        // Never send a surprise message from a read-only "Test connection" control.
+        if (!c.botToken?.trim()) {
+          if (c.webhookUrl?.trim()) {
+            return { ok: false, message: "This Slack connection uses an incoming webhook. A safe read-only test is not supported; no message was sent. Use a bot token for connection testing.", status: 409 };
+          }
+          throw new Error("CREDENTIAL_FIELD_MISSING");
+        }
         url = "https://slack.com/api/auth.test";
         headers.Authorization = "Bearer " + required(c, "botToken");
         break;
+      }
       case "notion":
         url = "https://api.notion.com/v1/users/me";
         headers.Authorization = "Bearer " + required(c, "apiKey");
