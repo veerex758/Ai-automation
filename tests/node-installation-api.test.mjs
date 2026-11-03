@@ -53,3 +53,22 @@ test("permission API exposes explicit grant and revoke operations only", () => {
   assert.match(route, /canManageNodeInstallations\(access\.role\)/);
   assert.match(route, /Cache-Control.*private, no-store/);
 });
+
+test("approved package catalogue is authenticated, RLS-scoped and excludes unreviewed versions", () => {
+  const route = read("../app/api/nodes/packages/route.ts");
+  assert.match(route, /resolveNodeWorkspaceAccess\(\)/);
+  assert.match(route, /\.eq\("review_status", "approved"\)/);
+  assert.match(route, /\.eq\("status", "active"\)/);
+  assert.match(route, /\.eq\("verification_status", "verified"\)/);
+  assert.match(route, /Cache-Control.*private, no-store/);
+  assert.doesNotMatch(route, /createAdminClient/);
+});
+
+test("Node Library requires explicit per-capability consent before installing a reviewed package", () => {
+  const page = read("../app/dashboard/nodes/page.tsx");
+  assert.match(page, /fetch\("\/api\/nodes\/packages"/);
+  assert.match(page, /selectedPermissions/);
+  assert.match(page, /packageVersionId: item\.packageVersionId/);
+  assert.match(page, /permissions: selectedPermissions/);
+  assert.match(page, /Install disabled/);
+});
