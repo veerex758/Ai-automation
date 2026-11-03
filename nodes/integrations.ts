@@ -78,7 +78,7 @@ export const sheetsNode: NodeDefinition = {
 };
 
 const notionInput = z.object({
-  databaseId: z.string().uuid(),
+  databaseId: z.string().regex(/^[a-f0-9-]{32,36}$/i),
   title: z.string().trim().min(1).max(200),
   titleProperty: z.string().trim().min(1).max(80).default("Name"),
 }).strict();
