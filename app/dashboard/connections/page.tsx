@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -36,14 +36,30 @@ type WorkspaceIntegration = {
   updated_at: string;
 };
 
-const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{ name: string; label: string; type: string }> }> = {
+const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{ name: string; label: string; type: string; required?: boolean }> }> = {
   openai: { label: "OpenAI", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   gemini: { label: "Google Gemini", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   resend: { label: "Resend email", fields: [
     { name: "apiKey", label: "API key", type: "password" },
     { name: "fromEmail", label: "Verified sender email", type: "email" },
   ] },
-  slack: { label: "Slack", fields: [{ name: "webhookUrl", label: "Incoming webhook URL", type: "password" }] },
+  slack: { label: "Slack", fields: [
+    { name: "botToken", label: "Bot token (chat:write)", type: "password", required: false },
+    { name: "webhookUrl", label: "Incoming webhook URL (optional alternative)", type: "password", required: false },
+  ] },
+  notion: { label: "Notion", fields: [{ name: "apiKey", label: "Internal integration token", type: "password" }] },
+  hubspot: { label: "HubSpot", fields: [{ name: "accessToken", label: "Private app access token", type: "password" }] },
+  twilio: { label: "Twilio", fields: [
+    { name: "accountSid", label: "Account SID", type: "text" },
+    { name: "authToken", label: "Auth token", type: "password" },
+    { name: "fromPhone", label: "Twilio sender number (E.164)", type: "tel" },
+  ] },
+  shopify: { label: "Shopify", fields: [
+    { name: "shopDomain", label: "Shop domain (store.myshopify.com)", type: "text" },
+    { name: "accessToken", label: "Admin API access token", type: "password" },
+  ] },
+  stripe: { label: "Stripe", fields: [{ name: "secretKey", label: "Secret or restricted API key", type: "password" }] },
+  linear: { label: "Linear", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
 };
 
 function WorkspaceIntegrationManager() {
@@ -110,7 +126,7 @@ function WorkspaceIntegrationManager() {
       const response = await fetch("/api/integrations/workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, displayName: providerFields[provider].label, credentials: values }),
+        body: JSON.stringify({ provider, displayName: providerFields[provider].label, credentials: Object.fromEntries(Object.entries(values).filter(([, value]) => value.trim())) }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Could not save this integration.");
@@ -157,7 +173,7 @@ function WorkspaceIntegrationManager() {
               <input
                 type={field.type}
                 autoComplete="off"
-                required
+                required={field.required !== false}
                 value={values[field.name] ?? ""}
                 onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))}
               />
