@@ -119,11 +119,11 @@ export default function WorkflowBuilderPage() {
       return;
     }
 
-    if (catalogLoading) {
+    if (!aiRegistrySteps && catalogLoading) {
       setNotice("The action catalog is still loading. Please wait before saving.");
       return;
     }
-    if (catalogError) {
+    if (!aiRegistrySteps && catalogError) {
       setNotice("The action catalog is unavailable. Reload it before saving this workflow.");
       return;
     }
@@ -346,7 +346,7 @@ export default function WorkflowBuilderPage() {
               <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setAiRegistrySteps(null); setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></> : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
             </aside>
           </div>
-          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> This is an interactive builder prototype. Saving stores a draft in this browser only. No external services run, and activation remains disabled until validation and execution safeguards are available.</p></div>
+          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> AI-generated workflows are saved as validated registry drafts in your Aivanta workspace. Saving never activates or executes them; live execution remains separately gated.</p></div>
         </div>
       </section>
     </main>
