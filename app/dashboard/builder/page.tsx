@@ -37,7 +37,7 @@ export default function WorkflowBuilderPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
-  const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
+  const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);\n  const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
@@ -263,7 +263,7 @@ export default function WorkflowBuilderPage() {
                 const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow; registrySteps?: RegistryDraftStep[] };
                 if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes) || !Array.isArray(payload.registrySteps)) throw new Error(payload.error || "Could not generate a registry-backed workflow draft.");
                 setAiPreview(payload.definition);
-                setAiRegistrySteps(payload.registrySteps);
+                setAiPreviewRegistrySteps(payload.registrySteps);
                 setNotice("AI draft ready. Review the generated steps before applying them to your canvas.");
               } catch (error) { setNotice(error instanceof Error ? error.message : "AI generation failed. Please try again."); }
               finally { setAiGenerating(false); }
@@ -272,7 +272,7 @@ export default function WorkflowBuilderPage() {
               <textarea id="ai-workflow-prompt" value={aiPrompt} maxLength={2000} onChange={event => setAiPrompt(event.target.value)} placeholder="When a new lead arrives, create a task and send a follow-up email…" rows={3} />
               <div className="ai-workflow-form-footer"><small>{aiPrompt.length}/2000 · Generated steps need review</small><button className="builder-primary-button" type="submit" disabled={aiGenerating || !aiPrompt.trim()}>{aiGenerating ? "Generating draft…" : "Generate workflow ✳"}</button></div>
             </form>
-            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => { setAiPreview(null); setAiRegistrySteps(null); }}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
+            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => { setAiPreview(null); setAiPreviewRegistrySteps(null); }}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
               const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => {
                 const action = node.type === "action"
                   ? actionCatalog.find(item => item.provider === node.settings.provider && item.operation === node.settings.operation)
@@ -287,7 +287,7 @@ export default function WorkflowBuilderPage() {
                   ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
                 };
               });
-              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("Registry-backed AI draft applied. Save it when ready; no actions have run.");
+              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiRegistrySteps(aiPreviewRegistrySteps); setAiPreviewRegistrySteps(null); setAiPreview(null); setNotice("Registry-backed AI draft applied. Save it when ready; no actions have run.");
             }}>Apply draft to canvas ↗</button></div>}
           </section>
           <div className="builder-workspace-grid">
