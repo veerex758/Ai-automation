@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
+import type { NodeContext } from "../nodes/types";
 
 test("registry includes versioned webhook, OpenAI, Gemini, Slack and Email operations", () => {
   assert.equal(nodes.length, 14);
@@ -138,7 +139,7 @@ test("shared registry draft validator accepts only registered operations and sch
 
 test("ten vendor integrations execute through validated native registry operations", async () => {
   const calls: Array<{ url: string; method: string; headers?: Record<string, string>; body?: unknown }> = [];
-  const context = {
+  const context: NodeContext = {
     credentials: {
       gmail: { accessToken: "google-gmail-token" },
       sheets: { accessToken: "google-sheets-token" },
