@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";\nimport { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
