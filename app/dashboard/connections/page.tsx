@@ -68,7 +68,7 @@ function WorkspaceIntegrationManager() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testingResend, setTestingResend] = useState(false);
+  const [testingResend, setTestingResend] = useState(false);\n  const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [sendingResendTest, setSendingResendTest] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -99,6 +99,24 @@ function WorkspaceIntegrationManager() {
     } finally {
       setTestingResend(false);
     }
+  }
+
+  async function testProvider(provider: WorkspaceProvider) {
+    setTestingProvider(provider);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/workspace/test", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.message ?? payload.error ?? "Connection check failed.");
+      setIntegrations(current => current.map(item => item.provider === provider ? { ...item, status: "connected" } : item));
+      setNotice(payload.message ?? "Credential authenticated. No workflow was executed.");
+    } catch (reason) {
+      setIntegrations(current => current.map(item => item.provider === provider ? { ...item, status: "needs_attention" } : item));
+      setError(reason instanceof Error ? reason.message : "Could not test this connection.");
+    } finally { setTestingProvider(null); }
   }
 
   async function sendResendTestEmail() {
@@ -157,7 +175,7 @@ function WorkspaceIntegrationManager() {
             : integrations.map(item => (
               <div className="workspace-integration-saved-row" key={item.id}>
                 <div><strong>{item.display_name}</strong><span>{item.provider} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
-                <div className="workspace-integration-row-actions"><span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>{item.provider === "resend" && <><button type="button" onClick={testResend} disabled={testingResend || sendingResendTest}>{testingResend ? "Testing…" : "Test connection"}</button><button type="button" onClick={sendResendTestEmail} disabled={testingResend || sendingResendTest}>{sendingResendTest ? "Sending test…" : "Send test email"}</button></>}</div>
+                <div className="workspace-integration-row-actions"><span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>{item.provider !== "resend" && <button type="button" onClick={() => testProvider(item.provider)} disabled={testingProvider !== null}>{testingProvider === item.provider ? "Testing…" : "Test connection"}</button>}{item.provider === "resend" && <><button type="button" onClick={testResend} disabled={testingResend || sendingResendTest}>{testingResend ? "Testing…" : "Test connection"}</button><button type="button" onClick={sendResendTestEmail} disabled={testingResend || sendingResendTest}>{sendingResendTest ? "Sending test…" : "Send test email"}</button></>}</div>
               </div>
             ))}
         </div>
