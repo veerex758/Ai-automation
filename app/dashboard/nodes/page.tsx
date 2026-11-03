@@ -29,7 +29,9 @@ type InstalledNode = {
   } | null;
   permissions: { id: string; name: string; status: "active" | "revoked"; revokedAt: string | null }[];
 };
-type InstallationResponse = { installations?: InstalledNode[]; error?: string };\ntype AvailablePackage = { packageVersionId: string; packageName: string; displayName: string; description: string; version: string; runtimeApiVersion: string; publisher: string; permissions: string[] };\ntype PackageResponse = { packages?: AvailablePackage[]; error?: string };
+type InstallationResponse = { installations?: InstalledNode[]; error?: string };
+type AvailablePackage = { packageVersionId: string; packageName: string; displayName: string; description: string; version: string; runtimeApiVersion: string; publisher: string; permissions: string[] };
+type PackageResponse = { packages?: AvailablePackage[]; error?: string };
 
 const categoryLabels: Record<string, string> = {
   triggers: "Triggers",
@@ -46,7 +48,9 @@ export default function NodeLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [installations, setInstallations] = useState<InstalledNode[]>([]);
-  const [installationsError, setInstallationsError] = useState("");\n  const [availablePackages, setAvailablePackages] = useState<AvailablePackage[]>([]);\n  const [selectedPermissions, setSelectedPermissions] = useState<Record<string, string[]>>({});
+  const [installationsError, setInstallationsError] = useState("");
+  const [availablePackages, setAvailablePackages] = useState<AvailablePackage[]>([]);
+  const [selectedPermissions, setSelectedPermissions] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -54,9 +58,12 @@ export default function NodeLibraryPage() {
       try {
         const [response, installationResponse] = await Promise.all([
           fetch("/api/workflows/actions", { cache: "no-store" }),
-          fetch("/api/nodes/installations", { cache: "no-store" }),\n          fetch("/api/nodes/packages", { cache: "no-store" }),
+          fetch("/api/nodes/installations", { cache: "no-store" }),
         ]);
-        const packageResponse = await fetch("/api/nodes/packages", { cache: "no-store" });\n        const packageResult = (await packageResponse.json()) as PackageResponse;\n        if (!cancelled && packageResponse.ok) setAvailablePackages(Array.isArray(packageResult.packages) ? packageResult.packages : []);\n        const result = (await response.json()) as CatalogResponse;
+        const packageResponse = await fetch("/api/nodes/packages", { cache: "no-store" });
+        const packageResult = (await packageResponse.json()) as PackageResponse;
+        if (!cancelled && packageResponse.ok) setAvailablePackages(Array.isArray(packageResult.packages) ? packageResult.packages : []);
+        const result = (await response.json()) as CatalogResponse;
         if (!response.ok) throw new Error(result.error || "Could not load the node catalogue.");
         if (!cancelled) setNodes(Array.isArray(result.nodes) ? result.nodes : []);
 
