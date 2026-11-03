@@ -29,6 +29,7 @@ export async function GET() {
       .in("id", packageIds)
       .eq("status", "active");
     if (packageError) throw packageError;
+    if (!packages?.length) return privateJson({ packages: [] });
 
     const publisherIds = [...new Set((packages ?? []).map((item) => item.publisher_id))];
     const { data: publishers, error: publisherError } = await access.supabase
@@ -37,6 +38,7 @@ export async function GET() {
       .in("id", publisherIds)
       .eq("verification_status", "verified");
     if (publisherError) throw publisherError;
+    if (!publishers?.length) return privateJson({ packages: [] });
 
     const packageById = new Map((packages ?? []).map((item) => [item.id, item]));
     const publisherById = new Map((publishers ?? []).map((item) => [item.id, item]));
