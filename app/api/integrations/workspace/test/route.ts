@@ -59,7 +59,7 @@ async function check(provider: Provider, c: Credentials) {
         break;
       }
       case "shopify":
-        url = "https://" + required(c, "shopDomain") + "/admin/api/2025-10/shop.json";
+        const shop = required(c, "shopDomain");\n        if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/i.test(shop)) throw new Error("CREDENTIAL_FIELD_INVALID");\n        url = "https://" + shop + "/admin/api/2025-10/shop.json";
         headers["X-Shopify-Access-Token"] = required(c, "accessToken");
         break;
       case "stripe":
