@@ -9,6 +9,8 @@ test("community node installation records are workspace-scoped and integrity-pin
   assert.ok(migration.includes("workspace_id uuid not null references public.workspaces"));
   assert.ok(migration.includes("unique (workspace_id, package_name)"));
   assert.ok(migration.includes("package_integrity text"));
+  assert.ok(migration.includes("package_version text not null check"));
+  assert.ok(migration.includes("[.]0-9]+"));
   assert.ok(migration.includes("sha512-"));
   assert.ok(migration.includes("registry = 'https://registry.npmjs.org'"));
 });
@@ -18,6 +20,7 @@ test("installation writes are server-only and audit history is not client-readab
   assert.ok(migration.includes("private.is_workspace_member(workspace_id)"));
   assert.ok(migration.includes("revoke insert, update, delete on public.workspace_node_installations from authenticated"));
   assert.ok(migration.includes("revoke all on public.workspace_node_installation_audit from public, anon, authenticated"));
+  assert.ok(migration.includes("before update or delete on public.workspace_node_installation_audit"));
   assert.ok(!/create policy[^;]*workspace_node_installation_audit/i.test(migration));
 });
 
