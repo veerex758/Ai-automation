@@ -29,7 +29,9 @@ async function check(provider: Provider, c: Credentials) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    let url = "", headers: Record<string, string> = {}, method: "GET" | "POST" = "GET", body: string | undefined;
+    let url = "";
+    const headers: Record<string, string> = {};
+    let method: "GET" | "POST" = "GET", body: string | undefined;
     switch (provider) {
       case "openai":
         url = "https://api.openai.com/v1/models";
