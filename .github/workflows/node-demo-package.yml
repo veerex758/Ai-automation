@@ -60,6 +60,8 @@ jobs:
           fs.writeFileSync("registry-manifest.json", JSON.stringify(manifest, null, 2) + "\n");
           fs.writeFileSync("artifact-integrity.txt", integrity + "\n");
           NODE
+          node ../../scripts/review-node-package.mjs "$TARBALL" "$INTEGRITY" > static-review-report.json
+          cat static-review-report.json >> "$GITHUB_STEP_SUMMARY"
           echo "### Aivanta demo package" >> "$GITHUB_STEP_SUMMARY"
           echo "- Package: @aivanta/demo-hello@1.0.0" >> "$GITHUB_STEP_SUMMARY"
           echo "- Artifact: $TARBALL" >> "$GITHUB_STEP_SUMMARY"
@@ -71,7 +73,7 @@ jobs:
           test "$(node -e 'const m=require("./registry-manifest.json"); process.stdout.write(m.integrity)')" = "$INTEGRITY"
           cmp committed-registry-manifest.json registry-manifest.json
           mkdir -p output
-          cp "$TARBALL" registry-manifest.json artifact-integrity.txt output/
+          cp "$TARBALL" registry-manifest.json artifact-integrity.txt static-review-report.json output/
       - uses: actions/upload-artifact@v4
         with:
           name: aivanta-demo-hello-1.0.0-review-candidate
