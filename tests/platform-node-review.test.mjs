@@ -11,8 +11,8 @@ const reviewMigration = readFileSync(
 
 test("platform review access is separate from workspace membership and fails closed", () => {
   assert.match(access, /AIVANTA_PLATFORM_ADMIN_USER_IDS/);
-  assert.match(access, /configuredIds\\.length === 0/);
-  assert.match(access, /!configuredIds\\.includes\\(user\\.id\\)/);
+  assert.match(access, /configuredIds\.length === 0/);
+  assert.match(access, /!configuredIds\.includes\(user\.id\)/);
   assert.doesNotMatch(access, /workspace_members|workspace_admin/);
 });
 
@@ -28,8 +28,8 @@ test("package approval requires every independent review gate", () => {
 });
 
 test("platform reviewer cannot self-assert scan or provenance results through request body", () => {
-  assert.doesNotMatch(route, /input\\.(dependencyScanStatus|malwareScanStatus|publisherProvenanceVerified|permissionsReviewedAt)/);
+  assert.doesNotMatch(route, /input\.(dependencyScanStatus|malwareScanStatus|publisherProvenanceVerified|permissionsReviewedAt)/);
   assert.match(route, /evidenceReference/);
-  assert.match(route, /rpc\\("review_node_registry_resource"/);
+  assert.match(route, /rpc\("review_node_registry_resource"/);
   assert.match(reviewMigration, /node_platform_audit_events/);
 });
