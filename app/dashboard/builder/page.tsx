@@ -257,8 +257,9 @@ export default function WorkflowBuilderPage() {
               try {
                 const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: aiPrompt.trim() }) });
                 const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow; registrySteps?: RegistryDraftStep[] };
-                if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes)) throw new Error(payload.error || "Could not generate a workflow draft.");
+                if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes) || !Array.isArray(payload.registrySteps)) throw new Error(payload.error || "Could not generate a registry-backed workflow draft.");
                 setAiPreview(payload.definition);
+                setAiRegistrySteps(payload.registrySteps);
                 setNotice("AI draft ready. Review the generated steps before applying them to your canvas.");
               } catch (error) { setNotice(error instanceof Error ? error.message : "AI generation failed. Please try again."); }
               finally { setAiGenerating(false); }
