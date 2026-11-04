@@ -4,8 +4,8 @@ import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 import type { NodeContext } from "../nodes/types";
 
-test("registry includes versioned webhook, OpenAI, Gemini, Slack and Email operations", () => {
-  assert.equal(nodes.length, 14);
+test("registry includes versioned provider and data utility operations", () => {
+  assert.equal(nodes.length, 19);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
@@ -21,6 +21,11 @@ test("registry includes versioned webhook, OpenAI, Gemini, Slack and Email opera
   assert.ok(findOperation("shopify", "list_products", "action"));
   assert.ok(findOperation("stripe", "create_customer", "action"));
   assert.ok(findOperation("linear", "create_issue", "action"));
+  assert.ok(findOperation("set_fields", "merge_fields", "action"));
+  assert.ok(findOperation("json_parse", "parse", "action"));
+  assert.ok(findOperation("filter", "filter_items", "action"));
+  assert.ok(findOperation("aggregate", "calculate", "action"));
+  assert.ok(findOperation("date_time", "current_time", "action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
