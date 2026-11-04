@@ -275,7 +275,7 @@ test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up
         return { exitCode: 0, async stdout() { return ""; } };
       },
       async stop() { stopped = true; },
-    };
+    } as never;
   });
   assert.equal(options?.image, "vercel/sandbox/node:24");
   assert.deepEqual(options?.resources, { vcpus: 1 });
@@ -296,7 +296,7 @@ test("JavaScript sandbox is cleaned up when execution fails", async () => {
   await assert.rejects(() => executeJavaScriptInSandbox({ code: "return 1;" }, async () => ({
     async runCommand() { throw new Error("sandbox command timed out"); },
     async stop() { stopped = true; },
-  })), /sandbox command timed out/);
+  } as never)), /sandbox command timed out/);
   assert.equal(stopped, true);
 });
 
@@ -320,6 +320,6 @@ test("JavaScript sandbox caps streamed stdout and still stops the VM", async () 
       return { exitCode: 0, async stdout() { return ""; } };
     },
     async stop() { stopped = true; },
-  })), /JAVASCRIPT_OUTPUT_TOO_LARGE/);
+  } as never)), /JAVASCRIPT_OUTPUT_TOO_LARGE/);
   assert.equal(stopped, true);
 });
