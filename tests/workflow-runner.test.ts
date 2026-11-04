@@ -162,7 +162,7 @@ test("loop metadata executes a downstream registered operation once per source i
   const result = await executeRegisteredWorkflow({
     steps: [
       { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
-      { id: "items", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { items: ["alpha", "beta", "gamma"] } } },
+      { id: "items", nodeId: "loop", operationId: "iterate", kind: "action", input: { items: ["alpha", "beta", "gamma"] } },
       { id: "each", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { value: "{{loop_item}}", index: "{{loop_index}}" } }, loop: { sourceStepId: "items", maxIterations: 10 } },
     ],
     context: { ...context, http: { async request() { calls.push("request"); return { status: 200, body: {} }; } } },
