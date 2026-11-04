@@ -24,7 +24,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Schedule/Cron",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "none",
+    "registryId": "schedule"
   },
   {
     "id": "manual_trigger",
