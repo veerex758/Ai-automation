@@ -84,14 +84,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
     }
     if (!dryRun) {
-      // Until each provider has its own workspace-scoped connection and explicit live-action gate,
-      // keep production execution restricted to the existing guarded Resend email action.
+      // Every provider action is individually gated. Resend email retains its
+      // existing recipient allowlist; all other actions require an exact
+      // node.operation entry in the server-side allowlist.
+      const liveNodeAllowlist = new Set((process.env.AIVANTA_LIVE_NODE_ALLOWLIST ?? "")
+        .split(",").map((item) => item.trim()).filter(Boolean));
       const unsupportedLiveStep = steps.find((step) =>
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
-        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email"))
+        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email") &&
+          !liveNodeAllowlist.has(step.nodeId + "." + step.operationId))
       );
       if (unsupportedLiveStep) {
-        return NextResponse.json({ error: "This registry operation is available in dry-run only until its live integration is explicitly enabled." }, { status: 403 });
+        return NextResponse.json({ error: "This operation is not enabled for live execution. It remains available in dry-run." }, { status: 403 });
       }
       const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
       for (const step of steps) {
@@ -115,8 +119,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
     // -> finalized lifecycle so step inserts remain auditable before completion.
+    const executionContext = dryRun ? null : await serverContext(workflow.workspace_id, steps);
     const dryRunExecution = dryRun
-      ? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: true })
+      ? await executeRegisteredWorkflow({
+          steps,
+          context: {
+            credentials: {},
+            logger: {
+              info(message, meta) { console.info("[registry-node]", message, meta ?? {}); },
+              error(message, meta) { console.error("[registry-node]", message, meta ?? {}); },
+            },
+            http: { async request() { throw new Error("DRY_RUN_NETWORK_REQUEST_BLOCKED"); } },
+          },
+          dryRun: true,
+        })
       : null;
     const initialStatus = dryRunExecution
       ? (dryRunExecution.status === "succeeded" ? "succeeded" : "failed")
@@ -132,7 +148,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
     if (insertError) throw insertError;
 
-    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: false });
+    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: executionContext!, dryRun: false });
     const rows = execution.steps.map((step, index) => ({
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
