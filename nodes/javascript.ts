@@ -1,4 +1,5 @@
 import { Writable } from "node:stream";
+import type { Sandbox as VercelSandbox } from "@vercel/sandbox";
 import { z } from "zod";
 import type { NodeDefinition } from "./types";
 
@@ -13,7 +14,6 @@ const inputSchema = z.object({
   timeoutMs: z.number().int().min(1_000).max(30_000).default(10_000),
 }).strict();
 
-type JavaScriptInput = z.infer<typeof inputSchema>;
 type SandboxOptions = {
   image: string;
   resources: { vcpus: 1 };
@@ -22,13 +22,8 @@ type SandboxOptions = {
   networkPolicy: "deny-all";
   env: Record<string, string>;
 };
-type SandboxHandle = {
-  runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream; stderr: NodeJS.WritableStream }): Promise<{
-    exitCode: number | null;
-    stdout(): Promise<string>;
-  }>;
-  stop(): Promise<unknown>;
-};
+type SandboxHandle = Pick<VercelSandbox, "runCommand" | "stop">;
+type SandboxOptions = Parameters<typeof VercelSandbox.create>[0];
 type SandboxFactory = (options: SandboxOptions) => Promise<SandboxHandle>;
 
 const runnerSource = `
