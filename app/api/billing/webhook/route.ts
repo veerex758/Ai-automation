@@ -4,6 +4,18 @@ import { isValidPaystackSignature, isVerifiedPayment } from "@/lib/billing/payst
 
 export const runtime = "nodejs";
 
+type PaystackChargeSuccess = {
+  event?: string;
+  data?: {
+    id?: unknown;
+    reference?: unknown;
+    status?: unknown;
+    amount?: unknown;
+    currency?: unknown;
+    paid_at?: unknown;
+  };
+};
+
 export async function POST(request: Request) {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret) return NextResponse.json({ error: "Webhook unavailable." }, { status: 503 });
@@ -13,9 +25,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
-  let event: any;
+  let event: PaystackChargeSuccess;
   try {
-    event = JSON.parse(raw);
+    event = JSON.parse(raw) as PaystackChargeSuccess;
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -24,63 +36,37 @@ export async function POST(request: Request) {
   }
 
   try {
+    const reference = event.data.reference;
+    const transactionId = event.data.id;
+    if (typeof reference !== "string" || !Number.isSafeInteger(transactionId) || Number(transactionId) <= 0) {
+      return NextResponse.json({ error: "Invalid payment payload." }, { status: 422 });
+    }
+
     const admin = createAdminClient();
     const { data: payment, error } = await admin.from("billing_payments")
-      .select("*").eq("reference", event.data.reference).maybeSingle();
+      .select("id, reference, amount_minor, currency")
+      .eq("reference", reference)
+      .maybeSingle();
     if (error) return NextResponse.json({ error: "Unable to locate payment." }, { status: 500 });
     if (!payment) return NextResponse.json({ received: true });
 
-    // Validate the signed payload before reserving its idempotency key.
     if (!isVerifiedPayment(event.data, { amountMinor: payment.amount_minor, currency: payment.currency })) {
       return NextResponse.json({ error: "Payment details mismatch." }, { status: 422 });
     }
-    if (payment.status === "success") return NextResponse.json({ received: true, alreadyProcessed: true });
 
-    const eventKey = "charge.success:" + payment.reference;
-    const { error: eventError } = await admin.from("billing_webhook_events").insert({
-      event_key: eventKey,
-      event_type: "charge.success",
-      reference: payment.reference,
+    const paidAt = typeof event.data.paid_at === "string" ? event.data.paid_at : new Date().toISOString();
+    const { error: settlementError } = await admin.rpc("process_paystack_payment", {
+      p_reference: reference,
+      p_event_key: "charge.success:" + reference,
+      p_event_type: "charge.success",
+      p_transaction_id: Number(transactionId),
+      p_paid_at: paidAt,
     });
-    if (eventError?.code === "23505") return NextResponse.json({ received: true, duplicate: true });
-    if (eventError) return NextResponse.json({ error: "Unable to record event." }, { status: 500 });
-
-    const now = new Date();
-    const end = new Date(now.getTime() + 30 * 86400000);
-    const { data: changed, error: paymentError } = await admin.from("billing_payments")
-      .update({
-        status: "success",
-        provider_transaction_id: event.data.id,
-        paid_at: event.data.paid_at || now.toISOString(),
-      })
-      .eq("id", payment.id).neq("status", "success").select("id").maybeSingle();
-
-    if (paymentError) {
-      await admin.from("billing_webhook_events").delete().eq("event_key", eventKey);
-      return NextResponse.json({ error: "Unable to update payment." }, { status: 500 });
+    if (settlementError) {
+      console.error("Atomic Paystack settlement failed:", settlementError);
+      return NextResponse.json({ error: "Payment settlement requires retry." }, { status: 500 });
     }
 
-    if (changed) {
-      const { error: subscriptionError } = await admin.from("workspace_subscriptions").upsert({
-        workspace_id: payment.workspace_id,
-        provider: "paystack",
-        plan_slug: payment.plan_slug,
-        status: "active",
-        currency: payment.currency,
-        amount_minor: payment.amount_minor,
-        current_period_start: now.toISOString(),
-        current_period_end: end.toISOString(),
-        last_payment_id: payment.id,
-      }, { onConflict: "workspace_id" });
-      if (subscriptionError) {
-        await admin.from("billing_payments").update({ status: "pending", provider_transaction_id: null, paid_at: null })
-          .eq("id", payment.id).eq("status", "success");
-        await admin.from("billing_webhook_events").delete().eq("event_key", eventKey);
-        return NextResponse.json({ error: "Entitlement update requires retry." }, { status: 500 });
-      }
-    }
-
-    await admin.from("billing_webhook_events").update({ processed_at: new Date().toISOString() }).eq("event_key", eventKey);
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("Paystack webhook processing failed:", error);
