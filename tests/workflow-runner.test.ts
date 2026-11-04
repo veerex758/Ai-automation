@@ -139,3 +139,19 @@ test("registry dry-run simulates Slack and Email without calling their providers
   assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated"]);
   assert.equal(calls, 0);
 });
+
+test("registry workflow validates and executes explicit branch selection", async () => {
+  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
+  const raw = [
+    { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "approved", operator: "equals", compareTo: "approved" } },
+    { id: "yes", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "approved" } }, branch: { fromStepId: "condition", route: "true" } },
+    { id: "no", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "rejected" } }, branch: { fromStepId: "condition", route: "false" } },
+  ];
+  const validated = validateRegisteredSteps(raw);
+  assert.ok(validated.steps);
+  const result = await executeRegisteredWorkflow({ steps: validated.steps, context, dryRun: false });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded", "skipped"]);
+  assert.equal(validateRegisteredSteps([raw[0], { ...raw[2], branch: { fromStepId: "later", route: "true" } }]).error, "Branch source must be an earlier step.");
+});
