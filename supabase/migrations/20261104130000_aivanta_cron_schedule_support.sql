@@ -80,3 +80,58 @@ revoke all on function public.finish_workflow_cron_schedule_claim(uuid,uuid,bool
   from public, anon, authenticated;
 grant execute on function public.finish_workflow_cron_schedule_claim(uuid,uuid,boolean,timestamptz,text)
   to service_role;
+
+
+-- The scheduler can now claim both legacy schedule triggers and registry-backed
+-- Schedule/Cron trigger steps. Registry schedules require a persisted cron rule.
+create or replace function public.claim_due_workflow_schedules(
+  p_limit integer default 10,
+  p_lease_seconds integer default 300
+)
+returns table (
+  schedule_id uuid, workflow_id uuid, workspace_id uuid, interval_minutes integer,
+  scheduled_for timestamptz, lease_token uuid, workflow_version integer, definition jsonb
+)
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if p_limit < 1 or p_limit > 50 or p_lease_seconds < 30 or p_lease_seconds > 900 then
+    raise exception using errcode = '22023', message = 'Invalid claim parameters';
+  end if;
+  return query
+  with due as (
+    select s.id
+    from public.workflow_schedules s
+    join public.workflows w on w.id = s.workflow_id and w.workspace_id = s.workspace_id
+    where s.enabled = true and s.next_run_at <= now()
+      and (s.lease_until is null or s.lease_until <= now())
+      and w.status = 'active'
+      and (
+        (jsonb_typeof(w.definition->'nodes') = 'array'
+          and w.definition->'nodes'->0->'settings'->>'event' = 'schedule')
+        or
+        (s.cron_expression is not null
+          and w.definition->>'format' = 'aivanta-registry-v1'
+          and jsonb_typeof(w.definition->'steps') = 'array'
+          and w.definition->'steps'->0->>'kind' = 'trigger'
+          and w.definition->'steps'->0->>'nodeId' = 'schedule'
+          and w.definition->'steps'->0->>'operationId' = 'scheduled')
+      )
+    order by s.next_run_at asc, s.id asc
+    for update of s skip locked
+    limit p_limit
+  ), claimed as (
+    update public.workflow_schedules s
+    set lease_token = gen_random_uuid(),
+        lease_until = now() + make_interval(secs => p_lease_seconds)
+    from due where s.id = due.id
+    returning s.id, s.workflow_id, s.workspace_id, s.interval_minutes, s.next_run_at, s.lease_token
+  )
+  select c.id, c.workflow_id, c.workspace_id, c.interval_minutes,
+         c.next_run_at, c.lease_token, w.version, w.definition
+  from claimed c
+  join public.workflows w on w.id = c.workflow_id and w.workspace_id = c.workspace_id;
+end;
+$$;
+revoke all on function public.claim_due_workflow_schedules(integer,integer) from public, anon, authenticated;
+grant execute on function public.claim_due_workflow_schedules(integer,integer) to service_role;
