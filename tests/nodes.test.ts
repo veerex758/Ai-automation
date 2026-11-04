@@ -295,3 +295,41 @@ test("new provider actions use credential vault values and validate successful p
   assert.equal(calls[1].headers?.Authorization, "Bearer test-cloudflare-token");
   assert.equal(calls[2].headers?.Authorization, "Bearer test-coda-token");
 });
+
+
+test("utility nodes perform deterministic bounded transformations", async () => {
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } }, previousOutputs: {} };
+  const dedupe = findOperation("deduplicate", "unique", "action");
+  const sort = findOperation("sort", "sort_array", "action");
+  const split = findOperation("split_batches", "batch", "action");
+  const hash = findOperation("crypto_hash", "sha256", "action");
+  const template = findOperation("template", "render", "action");
+  assert.ok(dedupe && sort && split && hash && template);
+  const unique = await dedupe.run(context, { items: ["a", "b", "a", "c", "b"] }) as { items: string[]; removed: number };
+  assert.deepEqual(unique.items, ["a", "b", "c"]);
+  assert.equal(unique.removed, 2);
+  const sorted = await sort.run(context, { items: [{ rank: 3 }, { rank: 1 }, { rank: 2 }], key: "rank" }) as { items: Array<{ rank: number }> };
+  assert.deepEqual(sorted.items.map(x => x.rank), [1, 2, 3]);
+  const batches = await split.run(context, { items: [1, 2, 3, 4, 5], batchSize: 2 }) as { batches: number[][]; batchCount: number };
+  assert.deepEqual(batches.batches, [[1, 2], [3, 4], [5]]);
+  assert.equal(batches.batchCount, 3);
+  const digest = await hash.run(context, { value: "hello", encoding: "hex" }) as { digest: string };
+  assert.equal(digest.digest, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+  const rendered = await template.run(context, { template: "Hello {{user.name}}", data: { user: { name: "<script>" } } }) as { html: string };
+  assert.equal(rendered.html, "Hello &lt;script&gt;");
+});
+
+test("CSV and XML document helpers reject malformed or unsafe input", async () => {
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } }, previousOutputs: {} };
+  const csv = findOperation("csv", "parse", "action");
+  const xml = findOperation("xml", "parse", "action");
+  assert.ok(csv && xml);
+  const parsed = await csv.run(context, { text: 'name,note\\n"Ada","hello, world"\\n' }) as { rows: string[][]; rowCount: number };
+  assert.deepEqual(parsed.rows, [["name", "note"], ["Ada", "hello, world"]]);
+  assert.equal(parsed.rowCount, 2);
+  await assert.rejects(() => csv.run(context, { text: '"unfinished' }), /CSV_UNCLOSED_QUOTE/);
+  await assert.rejects(() => xml.run(context, { xml: '<!DOCTYPE x [<!ENTITY a "boom">]><x>&a;</x>' }), /XML_DTD_FORBIDDEN/);
+  const root = await xml.run(context, { xml: "<root><item>safe</item></root>" }) as { root: string; text: string };
+  assert.equal(root.root, "root");
+  assert.equal(root.text, "safe");
+});
