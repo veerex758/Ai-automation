@@ -1,7 +1,9 @@
-import { nodes } from "../nodes/registry";
+import { getExecutableNodeCatalog, getPublicNodeCatalog, nodes } from "../nodes/registry";
 import { providerCatalog } from "../nodes/provider-catalog";
 
 const failures: string[] = [];
+if (getPublicNodeCatalog().length !== 100) failures.push("Public provider catalogue must expose all 100 requested providers.");
+if (getExecutableNodeCatalog().length !== nodes.length) failures.push("AI executable catalogue must match the native node registry exactly.");
 const nodeIds = new Set<string>();
 const providerIds = new Set<string>();
 
@@ -36,5 +38,5 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   const operationCount = nodes.reduce((count, node) => count + node.triggers.length + node.actions.length, 0);
-  console.log("Validated " + providerCatalog.length + " provider catalogue entries, " + nodes.length + " executable node definitions and " + operationCount + " operations.");
+  console.log("Validated " + providerCatalog.length + " provider catalogue entries, " + getExecutableNodeCatalog().length + " AI-selectable node definitions and " + operationCount + " operations.");
 }
