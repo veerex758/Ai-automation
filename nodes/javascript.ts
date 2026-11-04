@@ -26,7 +26,7 @@ type SandboxHandle = {
     exitCode: number | null;
     stdout(): Promise<string>;
   }>;
-  stop(): Promise<void>;
+  stop(): Promise<unknown>;
 };
 type SandboxFactory = (options: SandboxOptions) => Promise<SandboxHandle>;
 
@@ -79,7 +79,7 @@ globalThis.console = safeConsole;
 `;
 
 export async function executeJavaScriptInSandbox(
-  args: JavaScriptInput,
+  args: unknown,
   createSandbox: SandboxFactory = async (options) => {
     const { Sandbox: VercelSandbox } = await import("@vercel/sandbox");
     return VercelSandbox.create(options);
