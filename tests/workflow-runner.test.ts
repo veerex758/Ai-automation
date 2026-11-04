@@ -195,3 +195,29 @@ test("loop metadata executes multiple downstream steps per source item", async (
     { data: { label: "item-gamma", index: "2" } },
   ]);
 });
+
+
+test("Wait pauses the runner and resumes after its persisted checkpoint", async () => {
+  const steps = [
+    { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger" as const, input: {} },
+    { id: "delay", nodeId: "wait", operationId: "delay", kind: "action" as const, input: { durationMs: 1000 } },
+    { id: "after", nodeId: "set_fields", operationId: "merge_fields", kind: "action" as const, input: { data: {}, fields: { resumedAt: "{{delay.resumeAt}}" } } },
+  ];
+  const checkpointOutputs: Record<string, unknown> = {};
+  const first = await executeRegisteredWorkflow({
+    steps, context, dryRun: false,
+    async onStepComplete(step, _position, completed) {
+      if (completed.status === "succeeded") checkpointOutputs[step.id] = completed.output;
+    },
+  });
+  assert.equal(first.status, "waiting");
+  assert.ok(typeof first.resumeAt === "string");
+  assert.equal(first.steps.some((step) => step.stepId === "after"), false);
+  const resumed = await executeRegisteredWorkflow({
+    steps, context, dryRun: false,
+    initialOutputs: checkpointOutputs,
+    completedStepIds: ["manual", "delay"],
+  });
+  assert.equal(resumed.status, "succeeded");
+  assert.equal((resumed.outputs.after as { data: { resumedAt: string } }).data.resumedAt, checkpointOutputs.delay && (checkpointOutputs.delay as { resumeAt: string }).resumeAt);
+});
