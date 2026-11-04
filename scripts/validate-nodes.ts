@@ -1,7 +1,18 @@
 import { nodes } from "../nodes/registry";
+import { providerCatalog } from "../nodes/provider-catalog";
 
 const failures: string[] = [];
 const nodeIds = new Set<string>();
+const providerIds = new Set<string>();
+
+if (providerCatalog.length !== 100) failures.push("Provider catalogue must contain exactly 100 entries.");
+for (const provider of providerCatalog) {
+  if (!provider.id || providerIds.has(provider.id)) failures.push("Provider ID is missing or duplicated: " + provider.id);
+  providerIds.add(provider.id);
+  if (!provider.name || !provider.group || !provider.category) failures.push("Provider metadata is incomplete: " + provider.id);
+  if (!["none", "oauth2", "apiKey", "connectionString"].includes(provider.auth)) failures.push("Invalid provider auth metadata: " + provider.id);
+  if (provider.registryId && !nodes.some((node) => node.id === provider.registryId)) failures.push("Provider points to an unknown executable node: " + provider.id);
+}
 
 for (const node of nodes) {
   if (!node.id || nodeIds.has(node.id)) failures.push("Node ID is missing or duplicated: " + node.id);
@@ -24,5 +35,6 @@ if (failures.length) {
   console.error("Node registry validation failed:\n- " + failures.join("\n- "));
   process.exitCode = 1;
 } else {
-  console.log("Validated " + nodes.length + " nodes and " + nodes.reduce((count, node) => count + node.triggers.length + node.actions.length, 0) + " operations.");
+  const operationCount = nodes.reduce((count, node) => count + node.triggers.length + node.actions.length, 0);
+  console.log("Validated " + providerCatalog.length + " provider catalogue entries, " + nodes.length + " executable node definitions and " + operationCount + " operations.");
 }
