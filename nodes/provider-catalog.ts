@@ -39,7 +39,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "HTTP Request",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "apiKey",
+    "registryId": "http_request"
   },
   {
     "id": "if",
