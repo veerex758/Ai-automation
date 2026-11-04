@@ -93,3 +93,22 @@ test("prevents authenticated users from modifying worker-controlled state", () =
   assert.match(migration, /grant update \(interval_minutes, enabled, next_run_at\)/i);
   assert.doesNotMatch(migration, /grant update on public\.workflow_schedules to authenticated/i);
 });
+
+
+const cronMigration = readFileSync(
+  new URL("../supabase/migrations/20261104130000_aivanta_cron_schedule_support.sql", import.meta.url),
+  "utf8",
+);
+const schedulerRoute = readFileSync(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
+const cronApi = readFileSync(new URL("../app/api/workflows/[workflowId]/schedule/route.ts", import.meta.url), "utf8");
+
+test("cron schedules persist timezone and advance to the next calculated occurrence", () => {
+  assert.match(cronMigration, /add column if not exists cron_expression/);
+  assert.match(cronMigration, /add column if not exists timezone/);
+  assert.match(cronMigration, /finish_workflow_cron_schedule_claim/);
+  assert.match(cronMigration, /next_run_at = p_next_run_at/);
+  assert.match(schedulerRoute, /nextCronOccurrence/);
+  assert.match(schedulerRoute, /finish_workflow_cron_schedule_claim/);
+  assert.match(cronApi, /auth\.getUser\(\)/);
+  assert.match(cronApi, /nextCronOccurrence/);
+});
