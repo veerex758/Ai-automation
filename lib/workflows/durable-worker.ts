@@ -125,7 +125,7 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
 
 const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
-  if (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") return true;
+  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled"))) return true;
   if (step.kind === "action" && new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time", "wait.delay"]).has(step.nodeId + "." + step.operationId)) return true;
   const provider = step.kind === "action" ? providerForStep(step) : null;
   if (!provider) return false;
@@ -246,8 +246,11 @@ export async function runDurableWorker() {
         if (source === "webhook" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "webhooks" || steps[0]?.operationId !== "receive_event")) {
           throw new Error("INVALID_WEBHOOK_TRIGGER_DEFINITION");
         }
+        if (source === "schedule" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "schedule" || steps[0]?.operationId !== "scheduled")) {
+          throw new Error("INVALID_SCHEDULE_TRIGGER_DEFINITION");
+        }
         if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (job.execution_mode === "live" && steps[0]?.nodeId === "manual" && isRecord(job.payload?.input)) {
+        if (isRecord(job.payload?.input) && (source === "schedule" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
