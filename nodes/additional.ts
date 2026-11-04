@@ -53,7 +53,7 @@ export const gmailNode: NodeDefinition = {
 export const notionNode: NodeDefinition = {
   id: "notion", name: "Notion", icon: "book-open", category: "data", version: 1,
   auth: { type: "apiKey", credentialKey: "apiKey" }, triggers: [], actions: [{
-    id: "create_page", name: "Create page", description: "Creates a Notion page under a connected parent page or database. parentId is the parent page or database ID; title is the new page title. Requires the integration to have access to the parent.",
+    id: "create_page", name: "Create page", description: "Creates a Notion page under a connected parent page. parentId is the parent page ID; title is the new page title. Requires the integration to have access to the parent page.",
     inputSchema: z.object({ parentId: z.string().uuid(), title: text(200) }).strict(),
     outputSchema: z.object({ pageId: z.string(), url: z.string().url() }).strict(),
     async run(ctx, raw) {
@@ -120,8 +120,8 @@ export const airtableNode: NodeDefinition = {
 
 export const hubspotNode: NodeDefinition = {
   id: "hubspot", name: "HubSpot", icon: "users", category: "data", version: 1,
-  auth: { type: "oauth2", scopes: ["crm.objects.contacts.write"], refresh: "managed" }, triggers: [], actions: [{
-    id: "create_contact", name: "Create contact", description: "Creates a contact in the connected HubSpot CRM portal. email is required; firstName and lastName are optional. The connected app needs CRM contacts write permission. Duplicate email conflicts are returned as errors rather than silently creating duplicates.",
+  auth: { type: "apiKey", credentialKey: "accessToken" }, triggers: [], actions: [{
+    id: "create_contact", name: "Create contact", description: "Creates a contact in the connected HubSpot CRM portal using a private-app access token with crm.objects.contacts.write permission. email is required; firstName and lastName are optional. Duplicate email conflicts are returned as errors rather than silently creating duplicates.",
     inputSchema: z.object({ email: z.string().email(), firstName: z.string().max(100).optional(), lastName: z.string().max(100).optional() }).strict(),
     outputSchema: z.object({ contactId: z.string() }).strict(),
     async run(ctx, raw) {
