@@ -230,3 +230,22 @@ test("dry-run simulates all ten vendor integrations without provider calls", asy
   assert.ok(result.steps.every((step) => step.status === "simulated"));
   assert.equal(calls, 0);
 });
+
+
+test("HTTP Request blocks loopback targets and requires workspace-scoped credentials", async () => {
+  const operation = findOperation("http_request", "request", "action");
+  assert.ok(operation);
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("SHOULD_NOT_USE_GENERIC_HTTP"); } },
+    previousOutputs: {},
+  } as NodeContext;
+  await assert.rejects(
+    () => operation.run(context, { url: "http://127.0.0.1/admin", method: "GET", authMode: "none" }),
+    /HTTP_REQUEST_PRIVATE_HOST_BLOCKED/,
+  );
+  await assert.rejects(
+    () => operation.run(context, { url: "https://example.com/api", method: "GET", authMode: "bearer" }),
+    /HTTP_WORKSPACE_BEARER_CREDENTIAL_REQUIRED/,
+  );
+});
