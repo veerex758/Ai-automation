@@ -153,5 +153,5 @@ test("registry workflow validates and executes explicit branch selection", async
   const result = await executeRegisteredWorkflow({ steps: validated.steps, context, dryRun: false });
   assert.equal(result.status, "succeeded");
   assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded", "skipped"]);
-  assert.equal(validateRegisteredSteps([raw[0], { ...raw[2], branch: { fromStepId: "later", route: "true" } }]).error, "Branch source must be an earlier step.");
+  assert.equal(validateRegisteredSteps([raw[0], { ...raw[2], branch: { fromStepId: "later", route: "true" } }]).error, "Branch source must be an earlier IF or Switch step.");
 });
