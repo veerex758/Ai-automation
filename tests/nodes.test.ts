@@ -4,13 +4,13 @@ import { nodes, findOperation, getPublicNodeCatalog } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
 test("registry includes the original nodes and ten additional registered nodes", () => {
-  assert.equal(nodes.length, 50);
+  assert.equal(nodes.length, 55);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
-  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time", "error_trigger", "sub_workflow", "rate_limiter", "deduplicate", "sort", "split_batches", "crypto_hash", "template", "csv", "excel", "pdf_generate", "pdf_extract", "xml", "markdown_html", "image_resize", "cohere", "together_ai", "replicate", "deepl", "assemblyai", "openai_whisper", "weaviate", "messagebird", "vonage_sms", "brevo", "convertkit", "klaviyo", "lemlist", "customer_io", "mixpanel", "posthog", "segment", "datadog", "google_analytics", "tally"]) {
+  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time", "error_trigger", "sub_workflow", "rate_limiter", "deduplicate", "sort", "split_batches", "crypto_hash", "template", "csv", "excel", "pdf_generate", "pdf_extract", "xml", "markdown_html", "image_resize", "cohere", "together_ai", "replicate", "deepl", "assemblyai", "openai_whisper", "weaviate", "messagebird", "vonage_sms", "brevo", "convertkit", "klaviyo", "lemlist", "customer_io", "mixpanel", "posthog", "segment", "datadog", "google_analytics", "tally", "signal", "matrix", "mattermost", "beehiiv", "activecampaign"]) {
     assert.ok(nodes.some((node) => node.id === id), "missing node: " + id);
     if (id !== "error_trigger") assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
   }
@@ -38,6 +38,11 @@ test("registry includes the original nodes and ten additional registered nodes",
   assert.ok(findOperation("datadog", "submit_log", "action"));
   assert.ok(findOperation("google_analytics", "send_event", "action"));
   assert.ok(findOperation("tally", "get_form", "action"));
+  assert.ok(findOperation("signal", "send_message", "action"));
+  assert.ok(findOperation("matrix", "send_room_message", "action"));
+  assert.ok(findOperation("mattermost", "create_post", "action"));
+  assert.ok(findOperation("beehiiv", "create_subscription", "action"));
+  assert.ok(findOperation("activecampaign", "sync_contact", "action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
