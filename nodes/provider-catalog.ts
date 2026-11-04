@@ -64,7 +64,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Loop",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "none",
+    "registryId": "loop"
   },
   {
     "id": "merge",
