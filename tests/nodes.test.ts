@@ -254,3 +254,57 @@ test("HTTP Request blocks loopback targets and requires workspace-scoped credent
     /HTTP_WORKSPACE_BEARER_CREDENTIAL_REQUIRED/,
   );
 });
+
+
+test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let options: Record<string, unknown> | undefined;
+  let command: { cmd: string; args: string[]; env?: Record<string, string> } | undefined;
+  let stopped = false;
+  const output = JSON.stringify({ ok: true, result: { total: 42 }, logs: ["ran safely"] });
+  const result = await executeJavaScriptInSandbox({
+    code: "return { total: input.left + input.right };",
+    input: { left: 20, right: 22 },
+    timeoutMs: 5000,
+  }, async (received) => {
+    options = received;
+    return {
+      async runCommand(args) {
+        command = args;
+        return { exitCode: 0, async stdout() { return output; } };
+      },
+      async stop() { stopped = true; },
+    };
+  });
+  assert.equal(options?.image, "vercel/sandbox/node:24");
+  assert.deepEqual(options?.resources, { vcpus: 1 });
+  assert.equal(options?.timeout, 5000);
+  assert.equal(options?.persistent, false);
+  assert.equal(options?.networkPolicy, "deny-all");
+  assert.deepEqual(options?.env, {});
+  assert.equal(command?.cmd, "node");
+  assert.ok(command?.args.includes("--permission"));
+  assert.deepEqual(result.result, { total: 42 });
+  assert.deepEqual(result.logs, ["ran safely"]);
+  assert.equal(stopped, true);
+});
+
+test("JavaScript sandbox is cleaned up when execution fails", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let stopped = false;
+  await assert.rejects(() => executeJavaScriptInSandbox({ code: "return 1;" }, async () => ({
+    async runCommand() { throw new Error("sandbox command timed out"); },
+    async stop() { stopped = true; },
+  })), /sandbox command timed out/);
+  assert.equal(stopped, true);
+});
+
+test("JavaScript sandbox rejects oversized inputs before provisioning", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let provisioned = false;
+  await assert.rejects(() => executeJavaScriptInSandbox({ code: "x".repeat(20_001) }, async () => {
+    provisioned = true;
+    throw new Error("must not provision");
+  }), /too_big|too_large|maximum/i);
+  assert.equal(provisioned, false);
+});
