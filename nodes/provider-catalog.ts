@@ -88,7 +88,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Code (JS)",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "none",
+    "registryId": "javascript"
   },
   {
     "id": "set_fields",
