@@ -22,11 +22,8 @@ function fieldMatches(field: string, value: number, min: number, max: number, do
   });
 }
 
-function partsAt(date: Date, timezone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone, minute: "numeric", hour: "numeric", day: "numeric",
-    month: "numeric", weekday: "short", hourCycle: "h23",
-  }).formatToParts(date);
+function partsAt(date: Date, formatter: Intl.DateTimeFormat) {
+  const parts = formatter.formatToParts(date);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return {
     minute: Number(value.minute), hour: Number(value.hour), day: Number(value.day),
@@ -49,13 +46,17 @@ export function nextCronOccurrence(expression: string, timezone: string, after =
   try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(after); }
   catch { throw new Error("CRON_INVALID_TIMEZONE"); }
   const [minute, hour, day, month, weekday] = expression.trim().split(/\s+/);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone, minute: "numeric", hour: "numeric", day: "numeric",
+    month: "numeric", weekday: "short", hourCycle: "h23",
+  });
   const start = Math.floor(after.getTime() / 60000) * 60000 + 60000;
   const limit = start + 366 * 5 * 24 * 60 * 60000;
   const domWildcard = day === "*";
   const dowWildcard = weekday === "*";
   for (let timestamp = start; timestamp <= limit; timestamp += 60000) {
     const date = new Date(timestamp);
-    const parts = partsAt(date, timezone);
+    const parts = partsAt(date, formatter);
     const dayMatches = fieldMatches(day, parts.day, 1, 31);
     const weekdayMatches = fieldMatches(weekday, parts.weekday, 0, 7, true);
     const calendarMatches = domWildcard ? weekdayMatches : dowWildcard ? dayMatches : dayMatches || weekdayMatches;
