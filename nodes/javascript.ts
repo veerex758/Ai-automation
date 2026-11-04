@@ -99,6 +99,7 @@ export async function executeJavaScriptInSandbox(
     env: {},
   });
   const startedAt = Date.now();
+  let completed = false;
   try {
     const command = await sandbox.runCommand({
       cmd: "node",
@@ -121,9 +122,14 @@ export async function executeJavaScriptInSandbox(
     const logs = Array.isArray((payload as Record<string, unknown>).logs)
       ? (payload as { logs: string[] }).logs.filter((line) => typeof line === "string").slice(0, 50)
       : [];
+    completed = true;
     return { result, logs, executionMs: Date.now() - startedAt };
   } finally {
-    try { await sandbox.stop(); } catch { /* best-effort cleanup; never mask execution outcome */ }
+    try {
+      await sandbox.stop();
+    } catch {
+      if (completed) throw new Error("JAVASCRIPT_SANDBOX_CLEANUP_FAILED");
+    }
   }
 }
 
