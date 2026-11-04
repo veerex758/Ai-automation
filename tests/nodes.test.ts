@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { nodes, findOperation, getPublicNodeCatalog } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
-test("registry includes the original nodes and ten additional registered nodes", () => {
+test("registry includes the original nodes and all requested node definitions", () => {
   assert.equal(nodes.length, 71);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
@@ -214,9 +214,9 @@ test("Airtable, HubSpot and Trello actions create records, contacts and cards", 
 });
 
 
-test("public node catalog exposes all ten new operations and JSON schemas to the authenticated builder API", () => {
+test("public node catalog exposes the complete registry and JSON schemas to the authenticated builder API", () => {
   const catalog = getPublicNodeCatalog();
-  assert.equal(catalog.length, 15);
+  assert.equal(catalog.length, 71);
   const expected = [
     ["google_sheets", "append_rows"],
     ["gmail", "send_email"],
