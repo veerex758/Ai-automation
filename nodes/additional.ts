@@ -2,7 +2,6 @@ import { z } from "zod";
 import type { NodeDefinition, NodeContext } from "./types";
 
 const text = (max = 4000) => z.string().trim().min(1).max(max);
-const resultSchema = z.object({ status: z.number().int(), result: z.unknown().optional() }).passthrough();
 function token(ctx: NodeContext, provider: string, key = "accessToken") {
   const value = ctx.credentials[provider]?.[key];
   if (!value) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
@@ -193,5 +192,5 @@ export const dateTimeNode: NodeDefinition = {
 
 export const additionalNodes: NodeDefinition[] = [
   googleSheetsNode, gmailNode, notionNode, discordNode, telegramNode,
-  airtableNode, hubspotNode, trelloNode, httpRequestNode, dateTimeNode,
+  airtableNode, hubspotNode, trelloNode, jsonNode, dateTimeNode,
 ];
