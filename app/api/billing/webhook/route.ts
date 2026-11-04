@@ -4,6 +4,18 @@ import { isValidPaystackSignature, isVerifiedPayment } from "@/lib/billing/payst
 
 export const runtime = "nodejs";
 
+type PaystackWebhookEvent = {
+  event?: string;
+  data?: {
+    reference?: string;
+    status?: string;
+    amount?: number;
+    currency?: string;
+    id?: number;
+    paid_at?: string | null;
+  };
+};
+
 export async function POST(request: Request) {
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret) return NextResponse.json({ error: "Webhook unavailable." }, { status: 503 });
@@ -13,9 +25,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
-  let event: any;
+  let event: PaystackWebhookEvent;
   try {
-    event = JSON.parse(raw);
+    event = JSON.parse(raw) as PaystackWebhookEvent;
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
