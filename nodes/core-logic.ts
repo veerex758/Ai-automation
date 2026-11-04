@@ -91,7 +91,7 @@ export const mergeNode: NodeDefinition = {
             output[key] = value;
           }
         }
-        return { value: output, count: Object.keys(output).length };
+        return { value: Object.fromEntries(Object.entries(output)), count: Object.keys(output).length };
       }
       if (!input.key) throw new Error("MERGE_KEY_REQUIRED");
       const merged = new Map<string | number, Record<string, unknown>>();
@@ -110,7 +110,7 @@ export const mergeNode: NodeDefinition = {
           merged.set(id, existing);
         }
       }
-      const value = Array.from(merged.values());
+      const value = Array.from(merged.values(), (record) => Object.fromEntries(Object.entries(record)));
       return { value, count: value.length };
     },
   }],
