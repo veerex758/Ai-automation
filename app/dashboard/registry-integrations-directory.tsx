@@ -119,7 +119,7 @@ export default function RegistryIntegrationsDirectory() {
   }), [nodes, query]);
 
   const connectedCount = nodes.filter((node) => connectionState(node, workspace, google, statusUnavailable) === "connected").length;
-  const availableCount = nodes.filter((node) => node.executionStatus === "registered").length;
+  const registeredCount = nodes.filter((node) => node.executionStatus === "registered").length;
   const toggle = (id: string) => setExpanded((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
 
   return <section className="registry-integrations" aria-label="Aivanta provider directory">
@@ -147,15 +147,15 @@ export default function RegistryIntegrationsDirectory() {
             <span className={"registry-connection-state state-" + state}>{stateLabel(state)}</span>
           </div>
           <p className="registry-node-summary">
-            {node.executionStatus === "available"
+            {node.executionStatus === "registered"
               ? `${operations.length} registered ${operations.length === 1 ? "operation" : "operations"} · ${node.auth.type === "none" ? "No account credentials" : node.auth.type === "oauth2" ? "OAuth authorization" : node.auth.type === "connectionString" ? "Encrypted connection string" : "Workspace credentials"}`
               : "Provider listed · native adapter and provider security checks not yet enabled"}
           </p>
-          {node.executionStatus === "available" && <div className="registry-operation-preview">
+          {node.executionStatus === "registered" && <div className="registry-operation-preview">
             {operations.slice(0, 2).map((operation) => <span key={operation.kind + operation.id}>{operation.name}</span>)}
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
-          {node.executionStatus === "available" && <button className="registry-expand-button" type="button" aria-expanded={isExpanded} onClick={() => toggle(node.id)}>
+          {node.executionStatus === "registered" && <button className="registry-expand-button" type="button" aria-expanded={isExpanded} onClick={() => toggle(node.id)}>
             {isExpanded ? "Hide operations" : "View operations"} <span>{isExpanded ? "−" : "+"}</span>
           </button>}
           {isExpanded && <div className="registry-operation-list">
