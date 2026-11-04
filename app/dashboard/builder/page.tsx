@@ -374,7 +374,20 @@ export default function WorkflowBuilderPage() {
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
-              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div>{currentStep.kind === "Action" && <section className="action-config-panel" aria-label="Action configuration">
+              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div>{currentStep.kind === "Trigger" && <section className="action-config-panel" aria-label="Trigger configuration">
+                <label htmlFor="trigger-event-select">Trigger type</label>
+                <select id="trigger-event-select" className="settings-input" value={currentStep.settings?.event || "manual"} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? {
+                  ...step,
+                  settings: { ...step.settings, event: event.target.value },
+                  title: event.target.value === "manual" ? "Run manually" : "Receive webhook",
+                  detail: event.target.value === "manual" ? "Starts only when you explicitly run this workflow." : "Webhook activation requires a configured signed endpoint.",
+                } : step))}>
+                  <option value="manual">Manual run (supported)</option>
+                  <option value="webhook">Webhook (setup required)</option>
+                </select>
+                <p className="action-catalog-status">Registered-node dry runs currently support the manual trigger. Webhook trigger setup remains separate.</p>
+              </section>}
+              {currentStep.kind === "Action" && <section className="action-config-panel" aria-label="Action configuration">
                 <label htmlFor="action-catalog-select">Action type</label>
                 {catalogLoading ? <p className="action-catalog-status">Loading supported actions…</p> : catalogError ? <p className="action-catalog-status" role="alert">{catalogError} Refresh the page to retry.</p> : <>
                   <select id="action-catalog-select" className="settings-input" value={currentStep.actionId ?? ""} onChange={event => {
