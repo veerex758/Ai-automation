@@ -46,14 +46,16 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "IF",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "none",
+    "registryId": "if"
   },
   {
     "id": "switch",
     "name": "Switch",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "none",
+    "registryId": "switch"
   },
   {
     "id": "loop",
@@ -67,7 +69,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Merge",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "none",
+    "registryId": "merge"
   },
   {
     "id": "wait_delay",
