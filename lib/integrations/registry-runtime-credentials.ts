@@ -70,7 +70,7 @@ async function getGoogleAccessToken(admin: ReturnType<typeof adminClient>, works
 export async function loadWorkspaceNodeCredentials(workspaceId: string, steps: RegisteredWorkflowStep[]): Promise<Record<string, Record<string, string>>> {
   const requested = new Set(steps.filter((step) => step.kind === "action").map((step) => step.nodeId));
   const credentials: Record<string, Record<string, string>> = {};
-  const apiProviders = ["notion", "discord", "telegram", "airtable", "trello"].filter((provider) => requested.has(provider));
+  const apiProviders = ["notion", "discord", "telegram", "airtable", "trello", "hubspot"].filter((provider) => requested.has(provider));
   const admin = adminClient();
 
   if (apiProviders.length) {
@@ -95,6 +95,5 @@ export async function loadWorkspaceNodeCredentials(workspaceId: string, steps: R
   if (requested.has("gmail")) {
     credentials.gmail = { accessToken: await getGoogleAccessToken(admin, workspaceId, "gmail") };
   }
-  if (requested.has("hubspot")) throw new Error("HUBSPOT_OAUTH_NOT_CONFIGURED");
   return credentials;
 }
