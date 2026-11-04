@@ -12,8 +12,9 @@ test("registry includes the original nodes and ten additional registered nodes",
   assert.ok(findOperation("email", "send_email", "action"));
   for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time", "error_trigger", "sub_workflow", "rate_limiter", "deduplicate", "sort", "split_batches", "crypto_hash", "template", "csv", "excel", "pdf_generate", "pdf_extract", "xml", "markdown_html", "image_resize", "cohere", "together_ai", "replicate", "deepl", "assemblyai", "openai_whisper", "weaviate"]) {
     assert.ok(nodes.some((node) => node.id === id), "missing node: " + id);
-    assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
+    if (id !== "error_trigger") assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
   }
+  assert.ok(findOperation("error_trigger", "catch_error", "trigger"));
   assert.ok(findOperation("google_sheets", "append_rows", "action"));
   assert.ok(findOperation("gmail", "send_email", "action"));
   assert.ok(findOperation("notion", "create_page", "action"));
