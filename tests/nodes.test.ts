@@ -4,13 +4,13 @@ import { nodes, findOperation, getPublicNodeCatalog } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
 test("registry includes the original nodes and ten additional registered nodes", () => {
-  assert.equal(nodes.length, 15);
+  assert.equal(nodes.length, 37);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
-  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time"]) {
+  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time", "error_trigger", "sub_workflow", "rate_limiter", "deduplicate", "sort", "split_batches", "crypto_hash", "template", "csv", "excel", "pdf_generate", "pdf_extract", "xml", "markdown_html", "image_resize", "cohere", "together_ai", "replicate", "deepl", "assemblyai", "openai_whisper", "weaviate"]) {
     assert.ok(nodes.some((node) => node.id === id), "missing node: " + id);
     assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
   }
