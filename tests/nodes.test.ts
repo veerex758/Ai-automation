@@ -5,7 +5,7 @@ import { executeRegisteredOperation } from "../nodes/runner";
 import type { NodeContext } from "../nodes/types";
 
 test("registry includes versioned provider and data utility operations", () => {
-  assert.equal(nodes.length, 23);
+  assert.equal(nodes.length, 24);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
