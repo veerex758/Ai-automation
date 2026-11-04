@@ -211,7 +211,23 @@ export async function runDurableWorker() {
   let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let heartbeatInFlight = false;
     try {
+      heartbeatTimer = setInterval(() => {
+        if (heartbeatInFlight) return;
+        heartbeatInFlight = true;
+        void db.rpc("heartbeat_execution_job", {
+          p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
+        }).then(({ data: renewed, error: heartbeatError }) => {
+          if (heartbeatError || renewed !== true) {
+            console.warn("Aivanta worker heartbeat was not renewed.", { jobId: job.id });
+          }
+        }).catch(() => {
+          console.warn("Aivanta worker heartbeat failed.", { jobId: job.id });
+        }).finally(() => { heartbeatInFlight = false; });
+      }, 30_000);
+      heartbeatTimer.unref?.();
       const definition = job.workflow_definition as Record<string, unknown>;
       if (job.execution_mode === "live" && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         throw new Error("LIVE_EXECUTION_DISABLED");
@@ -450,6 +466,8 @@ export async function runDurableWorker() {
       else if (finished === "dead_letter") deadLettered++;
       else if (finished === "retry_wait") retried++;
       console.error("Aivanta execution job failed.", { jobId: job.id, errorCode: outcome });
+    } finally {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
   }
   return { claimed: data.length, succeeded, retried, deadLettered, leaseLost };
