@@ -108,6 +108,9 @@ export async function executeJavaScriptInSandbox(
       args: ["--permission", "-e", runnerSource, parsed.code, inputJson],
     });
     const stdout = await command.stdout();
+    if (command.exitCode !== 0) {
+      throw new Error("JAVASCRIPT_EXECUTION_FAILED");
+    }
     if (Buffer.byteLength(stdout, "utf8") > MAX_RESULT_BYTES + MAX_LOG_BYTES + 1024) {
       throw new Error("JAVASCRIPT_OUTPUT_TOO_LARGE");
     }
