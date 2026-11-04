@@ -259,7 +259,7 @@ test("HTTP Request blocks loopback targets and requires workspace-scoped credent
 test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up", async () => {
   const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
   let options: Record<string, unknown> | undefined;
-  let command: { cmd: string; args: string[]; env?: Record<string, string> } | undefined;
+  let command: { cmd: string; args: string[]; stdout: NodeJS.WritableStream } | undefined;
   let stopped = false;
   const output = JSON.stringify({ ok: true, result: { total: 42 }, logs: ["ran safely"] });
   const result = await executeJavaScriptInSandbox({
@@ -271,7 +271,8 @@ test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up
     return {
       async runCommand(args) {
         command = args;
-        return { exitCode: 0, async stdout() { return output; } };
+        args.stdout.write(output);
+        return { exitCode: 0, async stdout() { return ""; } };
       },
       async stop() { stopped = true; },
     };
