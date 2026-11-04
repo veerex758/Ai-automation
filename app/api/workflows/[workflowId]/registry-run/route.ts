@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import { executeRegisteredWorkflow } from "@/nodes/workflow-runner";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -77,11 +78,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
       return NextResponse.json({ error: "This endpoint requires a saved aivanta-registry-v1 workflow definition." }, { status: 422 });
     }
-    const steps = definition.steps as RegisteredWorkflowStep[];
-    if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
-      typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
-      return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
+    const validated = validateRegisteredSteps(definition.steps);
+    if (!validated.steps) {
+      return NextResponse.json({ error: validated.error ?? "Registry workflow steps are malformed." }, { status: 422 });
     }
+    const steps = validated.steps;
     if (!dryRun) {
       // Until each provider has its own workspace-scoped connection and explicit live-action gate,
       // keep production execution restricted to the existing guarded Resend email action.
