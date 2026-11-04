@@ -18,6 +18,8 @@ export function validateRegisteredSteps(value: unknown): { steps?: RegisteredWor
         !/^[a-zA-Z0-9_-]{1,40}$/.test((step.branch as Record<string, unknown>).route as string)))) {
       return { error: "Registry steps must have unique IDs, a registered operation, a kind, and input." };
     }
+    const branch = step.branch as { fromStepId: string; route: string } | undefined;
+    if (branch && !seen.has(branch.fromStepId)) return { error: "Branch source must be an earlier step." };
     seen.add(step.id);
     const operation = findOperation(step.nodeId, step.operationId, step.kind);
     if (!operation) return { error: "Unknown registry operation: " + step.nodeId + "." + step.operationId + "." };
