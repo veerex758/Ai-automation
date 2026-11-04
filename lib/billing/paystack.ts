@@ -1,0 +1,4 @@
+import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
+export function createPaymentReference() { return `aivanta_${Date.now().toString(36)}_${randomBytes(12).toString("hex")}`; }
+export function isValidPaystackSignature(raw: string, signature: string | null, secret: string) { if (!signature || !/^[a-f0-9]{128}$/i.test(signature)) return false; const expected = createHmac("sha512", secret).update(raw).digest(); const supplied = Buffer.from(signature, "hex"); return supplied.length === expected.length && timingSafeEqual(supplied, expected); }
+export function isVerifiedPayment(data: {status?: unknown; amount?: unknown; currency?: unknown}, expected: {amountMinor:number; currency:string}) { return data.status === "success" && Number.isSafeInteger(data.amount) && data.amount === expected.amountMinor && data.currency === expected.currency; }
