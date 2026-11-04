@@ -30,7 +30,7 @@ The implementation passes these values only to the Sandbox control-plane SDK. Th
 - Maximum requested session timeout: 30 seconds (default 10 seconds).
 - Node permission model enabled; no application/workspace credentials are passed to the guest.
 - Code and JSON input are bounded before provisioning.
-- Combined stdout/stderr is streamed into a bounded host-side sink; logs and returned JSON are separately bounded.
+- Stdout and stderr use separate bounded host-side streams; output overflow aborts the command, while logs and returned JSON are separately bounded.
 - The sandbox is stopped in a `finally` block. A cleanup failure after successful execution is surfaced as an execution failure.
 - Direct registry-run endpoint does not permit live JavaScript execution. The durable worker checks the explicit JavaScript enablement flag.
 
