@@ -8,6 +8,7 @@ export type RegisteredWorkflowStep = {
   kind: "trigger" | "action";
   input: unknown;
   branch?: { fromStepId: string; route: string };
+  loop?: { sourceStepId: string; itemAs?: string; indexAs?: string; maxIterations?: number };
 };
 
 export type RegisteredStepResult = {
@@ -57,6 +58,7 @@ export async function executeRegisteredWorkflow(args: {
   const outputs: Record<string, unknown> = {};
   const results: RegisteredStepResult[] = [];
   const seen = new Set<string>();
+  const loopOutputs = new Map<string, unknown[]>();
   let checkpointPosition = 0;
 
   for (const step of args.steps) {
@@ -112,11 +114,14 @@ export async function executeRegisteredWorkflow(args: {
         if (items.length > max) throw new Error("WORKFLOW_LOOP_LIMIT_EXCEEDED");
         const aggregate: unknown[] = [];
         for (let index = 0; index < items.length; index++) {
-          const scope = { [step.loop.itemAs ?? "loop_item"]: items[index], [step.loop.indexAs ?? "loop_index"]: index };
+          const iterationContext: Record<string, unknown> = { ...outputs };
+          for (const [priorStepId, priorItems] of loopOutputs) if (priorItems.length > index) iterationContext[priorStepId] = priorItems[index];
+          const scope = { ...iterationContext, [step.loop.itemAs ?? "loop_item"]: items[index], [step.loop.indexAs ?? "loop_index"]: index };
           const iteration = await executeOnce(scope, index);
           if (!iteration.simulated) aggregate.push(iteration.output);
         }
         outputs[step.id] = args.dryRun ? { iterations: items.length, simulated: true } : aggregate;
+        if (!args.dryRun) loopOutputs.set(step.id, aggregate);
         results.push({ stepId: step.id, status: args.dryRun ? "simulated" : "succeeded", output: outputs[step.id] });
         continue;
       }
