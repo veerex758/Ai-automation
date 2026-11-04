@@ -238,3 +238,60 @@ test("public node catalog exposes the complete registry and JSON schemas to the 
     assert.ok(operation.outputSchema && typeof operation.outputSchema === "object");
   }
 });
+
+
+test("high-risk or tenant-hosted connectors fail closed until their security adapters exist", async () => {
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("network must not be reached"); } },
+    previousOutputs: {},
+  };
+  const cases: Array<[string, string, unknown, RegExp]> = [
+    ["signal", "send_message", { recipient: "+2348012345678", message: "hello" }, /SIGNAL_ADAPTER_NOT_CONFIGURED/],
+    ["matrix", "send_room_message", { roomId: "!room:example.org", message: "hello" }, /MATRIX_ADAPTER_NOT_CONFIGURED/],
+    ["mattermost", "create_post", { channelId: "channel_1", message: "hello" }, /MATTERMOST_ADAPTER_NOT_CONFIGURED/],
+    ["activecampaign", "sync_contact", { email: "person@example.com" }, /ACTIVECAMPAIGN_ADAPTER_BLOCKED/],
+    ["elasticsearch", "search", { index: "items", query: { match_all: {} } }, /ELASTICSEARCH_ADAPTER_BLOCKED/],
+    ["docker_ssh", "execute_command", { command: "whoami" }, /DOCKER_SSH_ADAPTER_BLOCKED/],
+    ["confluence", "search_pages", { query: "status" }, /CONFLUENCE_ADAPTER_NOT_ENABLED/],
+    ["obsidian", "read_note", { path: "notes/todo.md" }, /OBSIDIAN_ADAPTER_NOT_ENABLED/],
+  ];
+  for (const [nodeId, operationId, input, expected] of cases) {
+    const operation = findOperation(nodeId, operationId, "action");
+    assert.ok(operation, "missing " + nodeId + "." + operationId);
+    await assert.rejects(() => operation.run(context, input as never), expected);
+  }
+});
+
+test("new provider actions use credential vault values and validate successful provider responses", async () => {
+  const messagebird = findOperation("messagebird", "send_sms", "action");
+  const cloudflare = findOperation("cloudflare", "list_zones", "action");
+  const coda = findOperation("coda", "list_docs", "action");
+  assert.ok(messagebird && cloudflare && coda);
+  const calls: Array<{ url: string; headers?: Record<string, string> }> = [];
+  const context = {
+    credentials: {
+      messagebird: { accessKey: "test-access-key" },
+      cloudflare: { apiToken: "test-cloudflare-token" },
+      coda: { apiToken: "test-coda-token" },
+    },
+    logger: { info() {}, error() {} },
+    http: { async request(args: { url: string; headers?: Record<string, string> }) {
+      calls.push(args);
+      if (args.url.includes("messagebird")) return { status: 200, body: { id: "msg_123", recipients: { items: [{ status: "sent" }] } } };
+      if (args.url.includes("cloudflare")) return { status: 200, body: { success: true, result: [{ id: "zone_1", name: "example.com", status: "active" }] } };
+      return { status: 200, body: { items: [{ id: "doc_1", name: "Runbook" }] } };
+    } },
+    previousOutputs: {},
+  };
+  const sms = await messagebird.run(context, { originator: "Aivanta", recipient: "+2348012345678", body: "Test" });
+  const zones = await cloudflare.run(context, {});
+  const docs = await coda.run(context, { limit: 10 });
+  assert.equal((sms as { messageId: string }).messageId, "msg_123");
+  assert.equal((zones as { zones: unknown[] }).zones.length, 1);
+  assert.equal((docs as { docs: unknown[] }).docs.length, 1);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].headers?.Authorization, "AccessKey test-access-key");
+  assert.equal(calls[1].headers?.Authorization, "Bearer test-cloudflare-token");
+  assert.equal(calls[2].headers?.Authorization, "Bearer test-coda-token");
+});
