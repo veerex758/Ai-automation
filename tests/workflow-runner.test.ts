@@ -175,3 +175,23 @@ test("loop metadata executes a downstream registered operation once per source i
     { data: { value: "gamma", index: "2" } },
   ]);
 });
+
+
+test("loop metadata executes multiple downstream steps per source item", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+      { id: "items", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { items: ["alpha", "beta", "gamma"] } } },
+      { id: "each", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { value: "{{loop_item}}", index: "{{loop_index}}" } }, loop: { sourceStepId: "items", maxIterations: 10 } },
+      { id: "decorate", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { label: "item-{{each.data.value}}", index: "{{each.data.index}}" } }, loop: { sourceStepId: "items", maxIterations: 10 } },
+    ],
+    context,
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.decorate, [
+    { data: { label: "item-alpha", index: "0" } },
+    { data: { label: "item-beta", index: "1" } },
+    { data: { label: "item-gamma", index: "2" } },
+  ]);
+});
