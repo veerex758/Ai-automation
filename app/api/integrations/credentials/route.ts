@@ -7,7 +7,7 @@ import { encryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Provider = "notion" | "discord" | "telegram" | "airtable" | "trello";
+type Provider = "notion" | "discord" | "telegram" | "airtable" | "trello" | "hubspot";
 type Credentials = Record<string, string>;
 
 const noStore = { "Cache-Control": "private, no-store" };
@@ -17,6 +17,7 @@ const providers: Record<Provider, { required: string[]; optional?: string[] }> =
   telegram: { required: ["botToken"] },
   airtable: { required: ["accessToken"] },
   trello: { required: ["apiKey", "token"] },
+  hubspot: { required: ["accessToken"] },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -59,6 +60,8 @@ async function verifyProvider(provider: Provider, credentials: Credentials): Pro
   } else if (provider === "airtable") {
     url = "https://api.airtable.com/v0/meta/whoami";
     headers.Authorization = "Bearer " + credentials.accessToken;
+  } else if (provider === "hubspot") {
+    url = "https://api.hubapi.com/oauth/v1/access-tokens/" + encodeURIComponent(credentials.accessToken);
   } else {
     const target = new URL("https://api.trello.com/1/members/me");
     target.searchParams.set("key", credentials.apiKey);
@@ -82,6 +85,11 @@ async function verifyProvider(provider: Provider, credentials: Credentials): Pro
   }
   if (provider === "discord") return typeof payload.username === "string" ? payload.username : "Discord bot";
   if (provider === "notion") return typeof payload.name === "string" ? payload.name : "Notion integration";
+  if (provider === "hubspot") {
+    const scopes = Array.isArray(payload.scopes) ? payload.scopes : [];
+    if (!scopes.includes("crm.objects.contacts.write")) throw new Error("PROVIDER_AUTH_REJECTED");
+    return typeof payload.hub_id === "number" ? "HubSpot portal " + payload.hub_id : "HubSpot portal";
+  }
   if (provider === "airtable") return typeof payload.id === "string" ? "Airtable account" : "Airtable";
   return typeof payload.username === "string" ? payload.username : "Trello account";
 }
