@@ -7,6 +7,7 @@ export type RegisteredWorkflowStep = {
   operationId: string;
   kind: "trigger" | "action";
   input: unknown;
+  branch?: { fromStepId: string; route: string };
 };
 
 export type RegisteredStepResult = {
@@ -64,6 +65,20 @@ export async function executeRegisteredWorkflow(args: {
       return { status: "failed", steps: results, outputs };
     }
     seen.add(step.id);
+    if (step.branch) {
+      const source = outputs[step.branch.fromStepId];
+      if (!source || typeof source !== "object" || !Object.prototype.hasOwnProperty.call(source, "route")) {
+        results.push({ stepId: step.id, status: "failed", error: "WORKFLOW_BRANCH_SOURCE_NOT_FOUND" });
+        for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
+        return { status: "failed", steps: results, outputs };
+      }
+      if ((source as Record<string, unknown>).route !== step.branch.route) {
+        const skipped: RegisteredStepResult = { stepId: step.id, status: "skipped", error: "BRANCH_NOT_SELECTED" };
+        await args.onStepComplete?.(step, results.length + 1, skipped);
+        results.push(skipped);
+        continue;
+      }
+    }
     const operation = findOperation(step.nodeId, step.operationId, step.kind);
     if (!operation) {
       results.push({ stepId: step.id, status: "failed", error: "NODE_OPERATION_NOT_FOUND" });
