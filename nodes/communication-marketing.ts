@@ -16,18 +16,18 @@ function ok(status: number, provider: string) {
 
 export const communicationMarketingNodes: NodeDefinition[] = [
   {
-    id: "mattermost", name: "Mattermost", icon: "message-square", category: "communication", version: 1,
-    auth: { type: "apiKey", credentialKey: "accessToken" }, triggers: [], actions: [{
-      id: "create_post", name: "Create channel post", description: "Posts a message to a Mattermost channel using a connected personal access token. This is an external side effect.",
-      inputSchema: z.object({ channelId: required(100), message: required(16000) }).strict(),
-      outputSchema: z.object({ postId: z.string(), channelId: z.string() }).strict(),
+    id: "messagebird", name: "MessageBird", icon: "message-circle", category: "communication", version: 1,
+    auth: { type: "apiKey", credentialKey: "accessKey" }, triggers: [], actions: [{
+      id: "send_sms", name: "Send SMS", description: "Sends an SMS through MessageBird using a connected access key. The originator must be approved for the destination. External side effect.",
+      inputSchema: z.object({ originator: required(11), recipient: z.string().regex(/^\+?[1-9]\d{6,14}$/), body: required(1600) }).strict(),
+      outputSchema: z.object({ messageId: z.string(), status: z.string() }).strict(),
       async run(ctx, raw) {
-        const i = z.object({ channelId: required(100), message: required(16000) }).strict().parse(raw);
-        const r = await ctx.http.request({ url: "https://mattermost.com/api/v4/posts", method: "POST", headers: { ...headers(secret(ctx, "mattermost", "accessToken")), "X-Requested-With": "XMLHttpRequest" }, body: { channel_id: i.channelId, message: i.message }, timeoutMs: 12000, retries: 0 });
-        ok(r.status, "mattermost");
-        const b = r.body as { id?: string; channel_id?: string };
-        if (!b.id) throw new Error("MATTERMOST_INVALID_RESPONSE");
-        return { postId: b.id, channelId: b.channel_id ?? i.channelId };
+        const i = z.object({ originator: required(11), recipient: z.string().regex(/^\+?[1-9]\d{6,14}$/), body: required(1600) }).strict().parse(raw);
+        const r = await ctx.http.request({ url: "https://rest.messagebird.com/messages", method: "POST", headers: { Authorization: "AccessKey " + secret(ctx, "messagebird", "accessKey"), "Content-Type": "application/json" }, body: { originator: i.originator, recipients: [i.recipient.replace(/^\+/, "")], body: i.body }, timeoutMs: 15000, retries: 0 });
+        ok(r.status, "messagebird");
+        const b = r.body as { id?: string; recipients?: { items?: Array<{ status?: string }> } };
+        if (!b.id) throw new Error("MESSAGEBIRD_INVALID_RESPONSE");
+        return { messageId: b.id, status: b.recipients?.items?.[0]?.status ?? "accepted" };
       },
     }],
   },
