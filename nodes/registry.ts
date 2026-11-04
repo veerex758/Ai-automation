@@ -48,6 +48,7 @@ export function getPublicNodeCatalog() {
     const implementation = entry.registryId ? implementations.get(entry.registryId) : undefined;
     return {
       id: entry.id,
+      registryNodeId: implementation?.id ?? null,
       name: entry.name,
       icon: implementation?.icon ?? "plug",
       category: entry.category,
@@ -63,5 +64,7 @@ export function getPublicNodeCatalog() {
 
 /** Returns only registered definitions for AI planning and execution validation. */
 export function getExecutableNodeCatalog() {
-  return getPublicNodeCatalog().filter((node) => node.executionStatus === "registered");
+  return getPublicNodeCatalog()
+    .filter((node) => node.executionStatus === "registered")
+    .map((node) => ({ ...node, id: node.registryNodeId ?? node.id }));
 }
