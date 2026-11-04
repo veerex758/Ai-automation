@@ -119,10 +119,11 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "shopify" && step.operationId === "list_products") return "shopify";
   if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
   if (step.nodeId === "linear" && step.operationId === "create_issue") return "linear";
+  if (step.nodeId === "http_request" && step.operationId === "request") return "http";
   return null;
 }
 
-const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"]);
+const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") return true;
   if (step.kind === "action" && new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time"]).has(step.nodeId + "." + step.operationId)) return true;
