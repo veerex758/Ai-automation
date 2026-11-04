@@ -57,6 +57,7 @@ export async function executeRegisteredWorkflow(args: {
   const outputs: Record<string, unknown> = {};
   const results: RegisteredStepResult[] = [];
   const seen = new Set<string>();
+  let checkpointPosition = 0;
 
   for (const step of args.steps) {
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id)) {
@@ -74,7 +75,7 @@ export async function executeRegisteredWorkflow(args: {
       }
       if ((source as Record<string, unknown>).route !== step.branch.route) {
         const skipped: RegisteredStepResult = { stepId: step.id, status: "skipped", error: "BRANCH_NOT_SELECTED" };
-        await args.onStepComplete?.(step, results.length + 1, skipped);
+        await args.onStepComplete?.(step, ++checkpointPosition, skipped);
         results.push(skipped);
         continue;
       }
@@ -92,14 +93,15 @@ export async function executeRegisteredWorkflow(args: {
         const input = resolveReferences(step.input, localOutputs, args.dryRun);
         const validatedInput = operation.inputSchema.parse(input);
         const checkpointStep = iteration === undefined ? step : { ...step, id: step.id + "__loop_" + (iteration + 1) };
-        await args.onStepStart?.(checkpointStep, results.length + 1, validatedInput);
+        const position = ++checkpointPosition;
+        await args.onStepStart?.(checkpointStep, position, validatedInput);
         if (args.dryRun) {
-          await args.onStepComplete?.(checkpointStep, results.length + 1, { stepId: checkpointStep.id, status: "simulated" });
+          await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated" });
           return { simulated: true as const };
         }
         const output = await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput);
         const parsed = operation.outputSchema.parse(output);
-        await args.onStepComplete?.(checkpointStep, results.length + 1, { stepId: checkpointStep.id, status: "succeeded", output: parsed });
+        await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "succeeded", output: parsed });
         return { simulated: false as const, output: parsed };
       };
       if (step.loop) {
