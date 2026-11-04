@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getPublicNodeCatalog, nodes } from "../nodes/registry";
+import { getExecutableNodeCatalog, getPublicNodeCatalog, nodes } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
 test("the integrations directory contains all 100 requested providers exactly once", () => {
@@ -21,9 +21,11 @@ test("only native registry implementations are marked as registered", () => {
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
 
-test("the AI execution registry exposes schema-backed handlers only", () => {
-  const catalog = getPublicNodeCatalog();
-  for (const item of catalog.filter((node) => node.executionStatus === "registered")) {
+test("AI workflow generation receives only registered, schema-backed operations", () => {
+  const catalog = getExecutableNodeCatalog();
+  assert.equal(catalog.length, 19);
+  assert.ok(catalog.every((node) => node.executionStatus === "registered"));
+  for (const item of catalog) {
     assert.ok(item.triggers.every((operation) => operation.inputSchema && operation.outputSchema));
     assert.ok(item.actions.every((operation) => operation.inputSchema && operation.outputSchema));
   }
