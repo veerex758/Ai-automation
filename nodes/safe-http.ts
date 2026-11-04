@@ -63,10 +63,10 @@ export async function performSafeHttpRequest(input: {
   for (const key of Object.keys(headers)) {
     if (/^(host|connection|content-length|transfer-encoding)$/i.test(key)) throw new Error("HTTP_REQUEST_HEADER_NOT_ALLOWED");
   }
-  const transport = url.protocol === "https:" ? httpsRequest : httpRequest;
+  const transport = (url.protocol === "https:" ? httpsRequest : httpRequest) as typeof httpRequest;
   return new Promise((resolve, reject) => {
     const req = transport({
-      protocol: url.protocol, hostname: url.hostname, port: url.port || undefined,
+      protocol: url.protocol, hostname: url.hostname.replace(/^\\[|\\]$/g, ""), port: url.port || undefined,
       path: url.pathname + url.search, method: input.method, headers,
       servername: isIP(url.hostname.replace(/^\[|\]$/g, "")) ? undefined : url.hostname,
       lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
