@@ -83,7 +83,14 @@ export async function executeJavaScriptInSandbox(
   args: unknown,
   createSandbox: SandboxFactory = async (options) => {
     const { Sandbox: VercelSandbox } = await import("@vercel/sandbox");
-    return VercelSandbox.create(options);
+    const credentials = process.env.VERCEL_TOKEN && process.env.VERCEL_TEAM_ID && process.env.VERCEL_PROJECT_ID
+      ? {
+          token: process.env.VERCEL_TOKEN,
+          teamId: process.env.VERCEL_TEAM_ID,
+          projectId: process.env.VERCEL_PROJECT_ID,
+        }
+      : {};
+    return VercelSandbox.create({ ...options, ...credentials });
   },
 ) {
   const parsed = inputSchema.parse(args);
