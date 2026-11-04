@@ -25,7 +25,10 @@ test("registry includes versioned provider and data utility operations", () => {
   assert.ok(findOperation("json_parse", "parse", "action"));
   assert.ok(findOperation("filter", "filter_items", "action"));
   assert.ok(findOperation("aggregate", "calculate", "action"));
-  assert.ok(findOperation("date_time", "current_time", "action"));\n  assert.ok(findOperation("if", "evaluate", "action"));\n  assert.ok(findOperation("switch", "select_route", "action"));\n  assert.ok(findOperation("merge", "merge_inputs", "action"));
+  assert.ok(findOperation("date_time", "current_time", "action"));
+  assert.ok(findOperation("if", "evaluate", "action"));
+  assert.ok(findOperation("switch", "select_route", "action"));
+  assert.ok(findOperation("merge", "merge_inputs", "action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
