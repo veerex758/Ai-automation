@@ -111,7 +111,7 @@ export default function RegistryIntegrationsDirectory() {
         const operations = [...node.triggers.map((operation) => ({ ...operation, kind: "Trigger" })), ...node.actions.map((operation) => ({ ...operation, kind: "Action" }))];
         return <article className="registry-node-card" key={node.id}>
           <div className="registry-node-heading"><BrandMark node={node} /><div className="registry-node-name"><h3>{node.name}</h3><span>{node.category} · v{node.version}</span></div>
-            <span className={"registry-connection-state state-" + state}>{state === "connected" ? "Connected" : state === "not-connected" ? (connectionRequired(node) ? "Not connected" : "No connection needed") : "Status unavailable"}</span>
+            <span className={"registry-connection-state state-" + state}>{!connectionRequired(node) ? "No connection needed" : state === "connected" ? "Connected" : state === "not-connected" ? "Not connected" : "Status unavailable"}</span>
           </div>
           <p className="registry-node-summary">{operations.length} available {operations.length === 1 ? "operation" : "operations"} · {node.auth.type === "none" ? "No credentials required" : node.auth.type === "oauth2" ? "Google authorization" : "Workspace credentials"}</p>
           <div className="registry-operation-preview">{operations.slice(0, 2).map((operation) => <span key={operation.id}>{operation.name}</span>)}{operations.length > 2 && <span>+{operations.length - 2} more</span>}</div>
