@@ -25,6 +25,7 @@ test("AI workflow generation receives only registered, schema-backed operations"
   const catalog = getExecutableNodeCatalog();
   assert.equal(catalog.length, 19);
   assert.ok(catalog.every((node) => node.executionStatus === "registered"));
+  assert.deepEqual(new Set(catalog.map((node) => node.id)), new Set(nodes.map((node) => node.id)));
   for (const item of catalog) {
     assert.ok(item.triggers.every((operation) => operation.inputSchema && operation.outputSchema));
     assert.ok(item.actions.every((operation) => operation.inputSchema && operation.outputSchema));
