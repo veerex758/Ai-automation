@@ -129,7 +129,9 @@ export async function executeRegisteredWorkflow(args: {
         }
         outputs[step.id] = args.dryRun ? { iterations: items.length, simulated: true } : aggregate;
         if (!args.dryRun) loopOutputs.set(step.id, aggregate);
-        results.push({ stepId: step.id, status: args.dryRun ? "simulated" : "succeeded", output: outputs[step.id] });
+        const loopCompleted: RegisteredStepResult = { stepId: step.id, status: args.dryRun ? "simulated" : "succeeded", output: outputs[step.id] };
+        if (!args.dryRun) await args.onStepComplete?.(step, ++checkpointPosition, loopCompleted);
+        results.push(loopCompleted);
         continue;
       }
       const once = await executeOnce({});
