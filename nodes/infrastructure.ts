@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { NodeDefinition } from "./types";
 
 const required = (max = 4000) => z.string().trim().min(1).max(max);
-function secret(ctx: { credentials: Record<string, Record<string, string>> }, provider: string, field: string) {
+function secret(ctx: { credentials: Readonly<Record<string, Readonly<Record<string, string>>>> }, provider: string, field: string) {
   const value = ctx.credentials[provider]?.[field];
   if (!value) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
