@@ -157,19 +157,21 @@ export const trelloNode: NodeDefinition = {
   }],
 };
 
-export const httpRequestNode: NodeDefinition = {
-  id: "http_request", name: "HTTP Request", icon: "globe", category: "developer", version: 1,
+export const jsonNode: NodeDefinition = {
+  id: "json", name: "JSON Tools", icon: "braces", category: "data", version: 1,
   auth: { type: "none" }, triggers: [], actions: [{
-    id: "request", name: "Send HTTP request", description: "Makes a controlled HTTPS GET or POST request to an external API. Only public DNS hostnames are accepted; localhost, private, loopback, link-local and literal IP destinations are rejected. Do not place secrets in URLs; use headers. Runtime egress controls must also block private and metadata IP ranges after DNS resolution.",
-    inputSchema: z.object({ url: z.string().url().max(2000), method: z.enum(["GET", "POST"]).default("GET"), headers: z.record(z.string(), z.string()).optional(), body: z.unknown().optional() }).strict(),
-    outputSchema: z.object({ status: z.number().int(), body: z.unknown() }).strict(),
-    async run(ctx, raw) {
-      const i = z.object({ url: z.string().url().max(2000), method: z.enum(["GET", "POST"]).default("GET"), headers: z.record(z.string(), z.string()).optional(), body: z.unknown().optional() }).strict().parse(raw);
-      const u = new URL(i.url);
-      const host = u.hostname.toLowerCase();
-      if (u.protocol !== "https:" || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) throw new Error("HTTP_DESTINATION_NOT_ALLOWED");
-      const r = await ctx.http.request({ url: u.toString(), method: i.method, headers: i.headers, body: i.method === "POST" ? i.body : undefined, timeoutMs: 15000, retries: 0 });
-      return { status: r.status, body: r.body };
+    id: "parse", name: "Parse JSON", description: "Parses a JSON string into structured workflow data and optionally selects a nested object property path. Invalid JSON and missing paths return explicit errors. No external request or credential is required.",
+    inputSchema: z.object({ json: text(50000), path: z.array(z.string().min(1).max(100)).max(20).optional() }).strict(),
+    outputSchema: z.object({ value: z.unknown(), compactJson: z.string() }).strict(),
+    async run(_ctx, raw) {
+      const i = z.object({ json: text(50000), path: z.array(z.string().min(1).max(100)).max(20).optional() }).strict().parse(raw);
+      let value: unknown;
+      try { value = JSON.parse(i.json); } catch { throw new Error("JSON_INVALID_INPUT"); }
+      for (const part of i.path ?? []) {
+        if (!value || typeof value !== "object" || !Object.prototype.hasOwnProperty.call(value, part)) throw new Error("JSON_PATH_NOT_FOUND");
+        value = (value as Record<string, unknown>)[part];
+      }
+      return { value, compactJson: JSON.stringify(value) };
     },
   }],
 };
