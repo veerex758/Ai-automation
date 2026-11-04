@@ -110,12 +110,13 @@ async function dispatchTick(request: NextRequest) {
     let nextRunAt: string | undefined;
     try {
       const { data: scheduleConfig, error: scheduleConfigError } = await supabase.from("workflow_schedules")
-        .select("cron_expression,timezone").eq("id", claim.schedule_id).maybeSingle();
+        .select("cron_expression,timezone,created_by").eq("id", claim.schedule_id).maybeSingle();
       if (scheduleConfigError) throw new Error("SCHEDULE_CONFIG_LOOKUP_FAILED");
       if (scheduleConfig?.cron_expression) {
         cronSchedule = true;
         nextRunAt = nextCronOccurrence(scheduleConfig.cron_expression, scheduleConfig.timezone ?? "UTC");
       }
+      if (typeof scheduleConfig?.created_by !== "string") throw new Error("SCHEDULE_CREATOR_NOT_FOUND");
       const rawDefinition = claim.definition as Record<string, unknown> | null;
       let registrySchedule = false;
       let scheduledInput: Record<string, unknown> = {};
@@ -154,7 +155,7 @@ async function dispatchTick(request: NextRequest) {
         p_workspace_id: claim.workspace_id,
         p_workflow_id: claim.workflow_id,
         p_workflow_version: claim.workflow_version,
-        p_created_by: null,
+        p_created_by: scheduleConfig.created_by,
         p_idempotency_key: idempotencyKey,
         p_payload: { input: scheduledInput, source: "schedule", scheduleId: claim.schedule_id, scheduledFor },
         p_max_attempts: 5,
