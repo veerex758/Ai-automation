@@ -16,14 +16,14 @@ test("only native registry implementations are marked as registered", () => {
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
   assert.equal(registered.length, nodes.length);
-  assert.equal(registered.length, 19);
+  assert.equal(registered.length, 22);
   assert.equal(comingSoon.length, 100 - nodes.length);
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
 
 test("AI workflow generation receives only registered, schema-backed operations", () => {
   const catalog = getExecutableNodeCatalog();
-  assert.equal(catalog.length, 19);
+  assert.equal(catalog.length, 22);
   assert.ok(catalog.every((node) => node.executionStatus === "registered"));
   assert.deepEqual(new Set(catalog.map((node) => node.id)), new Set(nodes.map((node) => node.id)));
   for (const item of catalog) {
@@ -32,7 +32,40 @@ test("AI workflow generation receives only registered, schema-backed operations"
   }
 });
 
-const context = {
+
+test("IF returns deterministic true and false branch labels", async () => {
+  const result = await executeRegisteredOperation({ nodeId: "if", operationId: "evaluate", kind: "action", context,
+    input: { value: 12, operator: "greater_than", compareTo: 10 } });
+  assert.deepEqual(result, { matched: true, route: "true" });
+});
+
+test("Switch selects the first exact matching route or its default", async () => {
+  const result = await executeRegisteredOperation({ nodeId: "switch", operationId: "select_route", kind: "action", context,
+    input: { value: "paid", cases: [{ value: "new", route: "new_lead" }, { value: "paid", route: "paid_customer" }], defaultRoute: "other" } });
+  assert.deepEqual(result, { route: "paid_customer", matchedCase: 1 });
+});
+
+test("Merge supports bounded append and safe object merging", async () => {
+  const appended = await executeRegisteredOperation({ nodeId: "merge", operationId: "merge_inputs", kind: "action", context,
+    input: { mode: "append", inputs: [[1, 2], [3]] } });
+  assert.deepEqual(appended, { value: [1, 2, 3], count: 3 });
+  const objects = await executeRegisteredOperation({ nodeId: "merge", operationId: "merge_inputs", kind: "action", context,
+    input: { mode: "merge_objects", inputs: [{ name: "Ada" }, { role: "admin" }] } });
+  assert.deepEqual(objects, { value: { name: "Ada", role: "admin" }, count: 2 });
+});
+
+test("workflow runner skips steps whose IF branch is not selected", async () => {
+  const result = await executeRegisteredWorkflow({ context, dryRun: false, steps: [
+    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: 1, operator: "equals", compareTo: 2 } },
+    { id: "truePath", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { selected: "true" } }, branch: { fromStepId: "condition", route: "true" } },
+    { id: "falsePath", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { selected: "false" } }, branch: { fromStepId: "condition", route: "false" } },
+  ] });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.steps[1].status, "skipped");
+  assert.equal(result.steps[2].status, "succeeded");
+});
+
+\nconst context = {
   credentials: {},
   logger: { info() {}, error() {} },
   http: { async request() { throw new Error("Network access is not expected in data utility tests."); } },
