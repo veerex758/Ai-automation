@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaidPlan } from "@/lib/billing/paystack";
-import BillingClient from "./billing-client";
+import BillingClient, { type BillingPayment, type WorkspaceSubscription } from "./billing-client";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +12,8 @@ export default async function Page() {
   if (!user) return <p>Sign in to manage billing.</p>;
 
   const workspace = await getOrCreateDefaultWorkspace(client);
-  let subscription = null;
-  let payments: any[] = [];
+  let subscription: WorkspaceSubscription | null = null;
+  let payments: BillingPayment[] = [];
   try {
     const admin = createAdminClient();
     const [subscriptionResult, paymentsResult] = await Promise.all([
