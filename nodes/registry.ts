@@ -13,12 +13,13 @@ import { httpRequestNode } from "./http-request";
 import { waitNode } from "./wait";
 import { scheduleNode } from "./schedule";
 import { loopNode } from "./loop";
+import { javascriptNode } from "./javascript";
 
 /** Only these definitions have validated schemas and executable server handlers. */
 export const nodes: NodeDefinition[] = [
   manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
   gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
-  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode,
+  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode,
 ];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
