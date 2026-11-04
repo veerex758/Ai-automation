@@ -56,8 +56,9 @@ export async function executeRegisteredWorkflow(args: {
   completedStepIds?: string[];
   onStepStart?: (step: RegisteredWorkflowStep, position: number, input: unknown) => Promise<void>;
   onStepComplete?: (step: RegisteredWorkflowStep, position: number, result: RegisteredStepResult) => Promise<void>;
-}): Promise<{ status: "succeeded" | "failed"; steps: RegisteredStepResult[]; outputs: Record<string, unknown> }> {
-  const outputs: Record<string, unknown> = {};
+}): Promise<{ status: "succeeded" | "failed" | "waiting"; steps: RegisteredStepResult[]; outputs: Record<string, unknown>; resumeAt?: string }> {
+  const outputs: Record<string, unknown> = { ...(args.initialOutputs ?? {}) };
+  const completedStepIds = new Set(args.completedStepIds ?? []);
   const results: RegisteredStepResult[] = [];
   const seen = new Set<string>();
   const loopOutputs = new Map<string, unknown[]>();
