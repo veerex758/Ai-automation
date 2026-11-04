@@ -18,7 +18,7 @@ function isPublicAddress(address: string): boolean {
     const ip = address.toLowerCase().split("%")[0];
     // Only globally-routable 2000::/3 addresses; reject documentation and transition ranges.
     return ip.startsWith("2") || ip.startsWith("3")
-      ? !ip.startsWith("2001:db8:") && !ip.startsWith("2001:10:") && !ip.startsWith("2002:")
+      ? !ip.startsWith("2001:db8:") && !ip.startsWith("2001:10:") && !ip.startsWith("2002:") && !ip.startsWith("3fff:")
       : false;
   }
   return false;
@@ -61,7 +61,7 @@ export async function performSafeHttpRequest(input: {
   if (body && Buffer.byteLength(body, "utf8") > 65536) throw new Error("HTTP_REQUEST_BODY_TOO_LARGE");
   const headers = { ...input.headers };
   for (const key of Object.keys(headers)) {
-    if (/^(host|connection|content-length|transfer-encoding)$/i.test(key)) throw new Error("HTTP_REQUEST_HEADER_NOT_ALLOWED");
+    if (/^(host|connection|content-length|transfer-encoding|cookie|proxy-authorization)$/i.test(key)) throw new Error("HTTP_REQUEST_HEADER_NOT_ALLOWED");
   }
   const transport = (url.protocol === "https:" ? httpsRequest : httpRequest) as typeof httpRequest;
   return new Promise((resolve, reject) => {
@@ -82,14 +82,16 @@ export async function performSafeHttpRequest(input: {
         let parsed: unknown = raw;
         try { parsed = raw ? JSON.parse(raw) : null; } catch { /* text response */ }
         const responseHeaders: Record<string, string> = {};
+        const allowedResponseHeaders = new Set(["content-type", "content-length", "etag", "last-modified", "cache-control", "x-request-id"]);
         for (const [key, value] of Object.entries(response.headers)) {
-          if (typeof value === "string") responseHeaders[key] = value.slice(0, 1000);
+          if (allowedResponseHeaders.has(key.toLowerCase()) && typeof value === "string") responseHeaders[key.toLowerCase()] = value.slice(0, 1000);
         }
         resolve({ status: response.statusCode ?? 0, body: parsed, headers: responseHeaders });
       });
     });
-    req.setTimeout(input.timeoutMs, () => req.destroy(new Error("HTTP_REQUEST_TIMEOUT")));
-    req.on("error", reject);
+    const timer = setTimeout(() => req.destroy(new Error("HTTP_REQUEST_TIMEOUT")), input.timeoutMs);
+    req.on("error", (error) => { clearTimeout(timer); reject(error); });
+    req.on("close", () => clearTimeout(timer));
     if (body !== undefined) req.write(body);
     req.end();
   });
