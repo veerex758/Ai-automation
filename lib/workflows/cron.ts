@@ -2,6 +2,7 @@ const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function fieldMatches(field: string, value: number, min: number, max: number, dow = false): boolean {
   return field.split(",").some((part) => {
+    if (!part || part.split("/").length > 2) throw new Error("CRON_INVALID_FIELD");
     const [base, stepText] = part.split("/");
     const step = stepText === undefined ? 1 : Number(stepText);
     if (!Number.isInteger(step) || step < 1) throw new Error("CRON_INVALID_STEP");
@@ -9,7 +10,7 @@ function fieldMatches(field: string, value: number, min: number, max: number, do
     if (base !== "*") {
       const range = base.split("-");
       if (range.length === 1) {
-        start = end = Number(range[0]);
+        start = Number(range[0]); end = stepText === undefined ? start : max;
       } else if (range.length === 2) {
         start = Number(range[0]); end = Number(range[1]);
       } else throw new Error("CRON_INVALID_FIELD");
