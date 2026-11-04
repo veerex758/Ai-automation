@@ -52,6 +52,8 @@ export async function executeRegisteredWorkflow(args: {
   steps: RegisteredWorkflowStep[];
   context: Omit<NodeContext, "previousOutputs">;
   dryRun: boolean;
+  initialOutputs?: Record<string, unknown>;
+  completedStepIds?: string[];
   onStepStart?: (step: RegisteredWorkflowStep, position: number, input: unknown) => Promise<void>;
   onStepComplete?: (step: RegisteredWorkflowStep, position: number, result: RegisteredStepResult) => Promise<void>;
 }): Promise<{ status: "succeeded" | "failed"; steps: RegisteredStepResult[]; outputs: Record<string, unknown> }> {
