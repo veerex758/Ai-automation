@@ -155,3 +155,23 @@ test("registry workflow validates and executes explicit branch selection", async
   assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded", "skipped"]);
   assert.equal(validateRegisteredSteps([raw[0], { ...raw[2], branch: { fromStepId: "later", route: "true" } }]).error, "Branch source must be an earlier IF or Switch step.");
 });
+
+
+test("loop metadata executes a downstream registered operation once per source item", async () => {
+  const calls: string[] = [];
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+      { id: "items", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { items: ["alpha", "beta", "gamma"] } } },
+      { id: "each", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { value: "{{loop_item}}", index: "{{loop_index}}" } }, loop: { sourceStepId: "items", maxIterations: 10 } },
+    ],
+    context: { ...context, http: { async request() { calls.push("request"); return { status: 200, body: {} }; } } },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.each, [
+    { data: { value: "alpha", index: "0" } },
+    { data: { value: "beta", index: "1" } },
+    { data: { value: "gamma", index: "2" } },
+  ]);
+});
