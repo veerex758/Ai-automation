@@ -153,5 +153,7 @@ test("durable waits release leases, retain attempt count, and resume from due qu
   assert.match(workerService, /execution_checkpoints/);
   assert.match(workerService, /completedStepIds/);
   assert.match(workerService, /heartbeat_execution_job/);
+  assert.match(workerService, /AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true"/);
+  assert.match(workerService, /step\.nodeId === "javascript"/);
   assert.match(workerService, /pause_execution_job/);
 });
