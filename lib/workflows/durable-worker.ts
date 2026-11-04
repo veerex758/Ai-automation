@@ -125,6 +125,7 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
 const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") return true;
+  if (step.kind === "action" && new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time"]).has(step.nodeId + "." + step.operationId)) return true;
   const provider = step.kind === "action" ? providerForStep(step) : null;
   if (!provider) return false;
   if (SERVER_ENABLED_INTEGRATIONS.has(provider) || (step.nodeId === "slack" && step.operationId === "post_message")) {
