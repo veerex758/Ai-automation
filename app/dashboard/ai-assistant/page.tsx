@@ -20,7 +20,6 @@ export default function AIAssistantPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [pendingWorkflowId, setPendingWorkflowId] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("Your workspace");
 
   useEffect(() => {
@@ -41,8 +40,9 @@ export default function AIAssistantPage() {
     if (!requestText || loading) return;
     const conversation = [...messages, { role: "user" as const, content: requestText }];
     const originalRequest = messages.find(message => message.role === "user")?.content;
+    const currentOperations = (registrySteps || []).map(step => `${step.nodeId}.${step.operationId}`).join(", ");
     const providerPrompt = originalRequest && draft
-      ? `Original workflow request: ${originalRequest}\nCurrent workflow draft: ${JSON.stringify(registrySteps || draft)}\nRefinement request: ${requestText}\nReturn the complete revised workflow, not just the changes.`
+      ? `Original request: ${originalRequest.slice(0, 650)}. Current registered steps: ${currentOperations.slice(0, 500)}. Refinement: ${requestText}. Return the complete revised workflow.`
       : requestText;
     if (providerPrompt.length > 2000) {
       setError("This refinement is too long. Shorten the request and try again.");
@@ -77,25 +77,20 @@ export default function AIAssistantPage() {
     setSavingDraft(true);
     setError("");
     try {
-      let workflowId = pendingWorkflowId;
-      if (!workflowId) {
-        const createResponse = await fetch("/api/workflows", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Accept": "application/json" },
-          body: JSON.stringify({ name: messages.find(message => message.role === "user")?.content.slice(0, 80) || "AI workflow draft", description: summary }),
-        });
-        const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
-        if (!createResponse.ok || !created.workflow?.id) throw new Error(created.error || "Could not create a workspace draft.");
-        workflowId = created.workflow.id;
-        setPendingWorkflowId(workflowId);
-      }
-      const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`, {
-        method: "PATCH",
+      const createResponse = await fetch("/api/workflows", {
+        method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ definition: draft, registrySteps }),
+        body: JSON.stringify({
+          name: messages.find(message => message.role === "user")?.content.slice(0, 80) || "AI workflow draft",
+          description: summary.slice(0, 500),
+          status: "draft",
+          definition: draft,
+          registrySteps,
+        }),
       });
-      const saved = await saveResponse.json() as { success?: boolean; error?: string };
-      if (!saveResponse.ok || !saved.success) throw new Error(saved.error || "The workflow record exists, but its validated steps could not be saved. Retry to finish saving.");
+      const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
+      if (!createResponse.ok || !created.workflow?.id) throw new Error(created.error || "Could not save the validated workspace draft.");
+      const workflowId = created.workflow.id;
       router.push(`/dashboard/workflows/${workflowId}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save this draft. It has not been executed.");
