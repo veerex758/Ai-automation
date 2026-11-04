@@ -78,7 +78,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Wait/Delay",
     "category": "core",
     "group": "Core and logic",
-    "auth": "none"
+    "auth": "none",
+    "registryId": "wait"
   },
   {
     "id": "code_js",
