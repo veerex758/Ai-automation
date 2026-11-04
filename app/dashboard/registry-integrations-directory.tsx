@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 type Operation = { id: string; name: string; description: string };
 type RegistryNode = {
   id: string; name: string; icon: string; category: string; group: string; version: number;
-  executionStatus: "available" | "coming_soon";
+  executionStatus: "registered" | "coming_soon";
   auth: { type: "none" | "oauth2" | "apiKey" | "connectionString" };
   triggers: Operation[]; actions: Operation[];
 };
@@ -43,7 +43,7 @@ const providerForNode: Record<string, string> = {
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 
 function connectionState(node: RegistryNode, workspace: ConnectionRecord[], google: ConnectionRecord[], failed: boolean): ConnectionState {
-  if (node.executionStatus !== "available") return "coming-soon";
+  if (node.executionStatus !== "registered") return "coming-soon";
   if (node.id === "webhook_trigger") return "setup-required";
   if (!connectionRequired(node)) return "no-connection";
   if (failed) return "unverified";
@@ -119,14 +119,14 @@ export default function RegistryIntegrationsDirectory() {
   }), [nodes, query]);
 
   const connectedCount = nodes.filter((node) => connectionState(node, workspace, google, statusUnavailable) === "connected").length;
-  const availableCount = nodes.filter((node) => node.executionStatus === "available").length;
+  const availableCount = nodes.filter((node) => node.executionStatus === "registered").length;
   const toggle = (id: string) => setExpanded((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
 
   return <section className="registry-integrations" aria-label="Aivanta provider directory">
     <div className="registry-directory-toolbar">
       <div>
         <strong>{nodes.length} providers</strong>
-        <span>{availableCount} execution-ready · {connectedCount} verified connections</span>
+        <span>{registeredCount} registered adapters · {connectedCount} verified connections</span>
       </div>
       <label className="registry-search">
         <span aria-hidden="true">⌕</span>
@@ -149,7 +149,7 @@ export default function RegistryIntegrationsDirectory() {
           <p className="registry-node-summary">
             {node.executionStatus === "available"
               ? `${operations.length} registered ${operations.length === 1 ? "operation" : "operations"} · ${node.auth.type === "none" ? "No account credentials" : node.auth.type === "oauth2" ? "OAuth authorization" : node.auth.type === "connectionString" ? "Encrypted connection string" : "Workspace credentials"}`
-              : "Provider listed · execution adapter and security checks not yet enabled"}
+              : "Provider listed · native adapter and provider security checks not yet enabled"}
           </p>
           {node.executionStatus === "available" && <div className="registry-operation-preview">
             {operations.slice(0, 2).map((operation) => <span key={operation.kind + operation.id}>{operation.name}</span>)}
@@ -168,7 +168,7 @@ export default function RegistryIntegrationsDirectory() {
       {filtered.length === 0 && <div className="registry-state-panel">No provider or operation matches “{query}”.</div>}
     </div>}
     <p className="registry-directory-note">
-      All 100 requested providers are listed. “Coming soon” means no native execution adapter is registered yet; it is not a working connection. Only registry-backed operations can be selected by the AI planner or execution engine. A connected label requires a saved workspace connection and a successful provider test.
+      All 100 requested providers are listed. “Coming soon” means no native execution adapter is registered yet; it is not a working connection. The AI planner can select only registered operations; live execution remains subject to provider credentials, approval, and execution gates. A connected label requires a saved workspace connection and a successful provider test.
     </p>
   </section>;
 }
