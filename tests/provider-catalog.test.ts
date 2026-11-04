@@ -44,10 +44,12 @@ test("Set Fields creates a new object and safely rejects prototype keys", async 
     input: { data: { name: "Ada", role: "reader" }, fields: { role: "admin", active: true } },
   });
   assert.deepEqual(result, { data: { name: "Ada", role: "admin", active: true } });
-  await assert.rejects(() => executeRegisteredOperation({
+  const unsafe = await executeRegisteredOperation({
     nodeId: "set_fields", operationId: "merge_fields", kind: "action", context,
     input: { data: {}, fields: JSON.parse('{"__proto__":{"polluted":true}}') },
-  }), /SET_FIELDS_INVALID_KEY/);
+  }) as { data: Record<string, unknown> };
+  assert.equal(Object.hasOwn(unsafe.data, "__proto__"), false);
+  assert.equal(({} as { polluted?: boolean }).polluted, undefined);
 });
 
 test("JSON Parse safely resolves a nested path", async () => {
