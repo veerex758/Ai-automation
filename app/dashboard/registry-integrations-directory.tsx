@@ -17,23 +17,22 @@ type CatalogPayload = { nodes?: RegistryNode[]; error?: string };
 type WorkspacePayload = { integrations?: ConnectionRecord[]; error?: string };
 type GooglePayload = { connections?: ConnectionRecord[]; error?: string };
 
-const brand: Record<string, { short: string; tone: string }> = {
-  manual: { short: "▶", tone: "manual" },
-  webhooks: { short: "↗", tone: "webhooks" },
-  openai: { short: "◎", tone: "openai" },
-  gemini: { short: "✦", tone: "gemini" },
-  slack: { short: "#", tone: "slack" },
-  email: { short: "R", tone: "resend" },
-  gmail: { short: "M", tone: "gmail" },
-  google_sheets: { short: "▦", tone: "sheets" },
-  notion: { short: "N", tone: "notion" },
-  hubspot: { short: "H", tone: "hubspot" },
-  twilio: { short: "T", tone: "twilio" },
-  shopify: { short: "S", tone: "shopify" },
-  stripe: { short: "S", tone: "stripe" },
-  linear: { short: "L", tone: "linear" },
+const officialBrandAssets: Record<string, { slug: string; label: string }> = {
+  openai: { slug: "openai", label: "OpenAI" },
+  gemini: { slug: "googlegemini", label: "Google Gemini" },
+  slack: { slug: "slack", label: "Slack" },
+  email: { slug: "resend", label: "Resend" },
+  gmail: { slug: "gmail", label: "Gmail" },
+  google_sheets: { slug: "googlesheets", label: "Google Sheets" },
+  notion: { slug: "notion", label: "Notion" },
+  hubspot: { slug: "hubspot", label: "HubSpot" },
+  twilio: { slug: "twilio", label: "Twilio" },
+  shopify: { slug: "shopify", label: "Shopify" },
+  stripe: { slug: "stripe", label: "Stripe" },
+  linear: { slug: "linear", label: "Linear" },
 };
 const providerForNode: Record<string, string> = {
+
   gmail: "google:gmail", google_sheets: "google:sheets",
   email: "resend", webhooks: "webhooks", manual: "manual",
 };
@@ -54,8 +53,21 @@ function connectionState(node: RegistryNode, workspace: ConnectionRecord[], goog
 }
 
 function BrandMark({ node }: { node: RegistryNode }) {
-  const mark = brand[node.id] ?? { short: node.name.slice(0, 1).toUpperCase(), tone: "generic" };
-  return <span className={"integration-brand-mark brand-" + mark.tone} aria-hidden="true">{mark.short}</span>;
+  const asset = officialBrandAssets[node.id];
+  if (asset) {
+    return <span className="integration-brand-mark official-brand-mark">
+      <img
+        src={`https://cdn.simpleicons.org/${asset.slug}`}
+        alt={`${asset.label} logo`}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+      />
+    </span>;
+  }
+  return <span className={"integration-brand-mark registry-native-mark native-" + node.id} aria-hidden="true">
+    {node.id === "manual" ? "▶" : node.id === "webhooks" ? "↗" : node.name.slice(0, 1).toUpperCase()}
+  </span>;
 }
 
 export default function RegistryIntegrationsDirectory() {
