@@ -13,13 +13,14 @@ type Connection = {
   expires_at: string | null;
 };
 type WorkspaceIntegration = { id: string; provider: string; status: string; display_name: string; last_test_status: string | null };
-type CredentialProvider = "notion" | "discord" | "telegram" | "airtable" | "trello";
+type CredentialProvider = "notion" | "discord" | "telegram" | "airtable" | "trello" | "hubspot";
 const credentialOptions: Record<CredentialProvider, { label: string; fields: Array<{ key: string; label: string; placeholder: string }> }> = {
   notion: { label: "Notion", fields: [{ key: "apiKey", label: "Internal integration secret", placeholder: "ntn_…" }] },
   discord: { label: "Discord", fields: [{ key: "botToken", label: "Bot token", placeholder: "Discord bot token" }] },
   telegram: { label: "Telegram", fields: [{ key: "botToken", label: "Bot token", placeholder: "123456:…" }] },
   airtable: { label: "Airtable", fields: [{ key: "accessToken", label: "Personal access token", placeholder: "pat…" }] },
   trello: { label: "Trello", fields: [{ key: "apiKey", label: "API key", placeholder: "Trello API key" }, { key: "token", label: "API token", placeholder: "Trello API token" }] },
+  hubspot: { label: "HubSpot", fields: [{ key: "accessToken", label: "Private-app access token", placeholder: "pat-…" }] },
 };
 
 const statusMessages: Record<string, string> = {
