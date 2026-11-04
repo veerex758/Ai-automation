@@ -138,6 +138,9 @@ export async function executeRegisteredWorkflow(args: {
       if (once.simulated) { results.push({ stepId: step.id, status: "simulated" }); continue; }
       outputs[step.id] = once.output;
       results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
+      if (step.nodeId === "wait" && step.operationId === "delay" && once.output && typeof once.output === "object" && typeof (once.output as Record<string, unknown>).resumeAt === "string") {
+        return { status: "waiting", steps: results, outputs, resumeAt: (once.output as Record<string, unknown>).resumeAt as string };
+      }
     } catch (error) {
       const code = error instanceof Error ? error.message : "NODE_EXECUTION_FAILED";
       results.push({ stepId: step.id, status: "failed", error: code });
