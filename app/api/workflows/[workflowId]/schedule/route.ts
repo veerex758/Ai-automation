@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { nextCronOccurrence, validateCronExpression } from "@/lib/workflows/cron";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,10 +22,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (workflowError) throw workflowError;
     if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
     if (workflow.status !== "active") return NextResponse.json({ error: "Activate the workflow before scheduling it." }, { status: 409 });
-    const validated = validateDefinition(workflow.definition);
-    if (!validated.definition || validated.definition.nodes[0]?.type !== "trigger" ||
-        validated.definition.nodes[0]?.settings.event !== "schedule") {
-      return NextResponse.json({ error: "This schedule endpoint requires a valid Schedule trigger." }, { status: 422 });
+    const rawDefinition = workflow.definition as Record<string, unknown> | null;
+    if (rawDefinition?.format === "aivanta-registry-v1") {
+      const registry = validateRegisteredSteps(rawDefinition.steps);
+      if (!registry.steps || registry.steps[0]?.nodeId !== "schedule" || registry.steps[0]?.operationId !== "scheduled") {
+        return NextResponse.json({ error: "This schedule endpoint requires a registry Schedule/Cron trigger." }, { status: 422 });
+      }
+    } else {
+      const validated = validateDefinition(workflow.definition);
+      if (!validated.definition || validated.definition.nodes[0]?.type !== "trigger" ||
+          validated.definition.nodes[0]?.settings.event !== "schedule") {
+        return NextResponse.json({ error: "This schedule endpoint requires a valid Schedule trigger." }, { status: 422 });
+      }
     }
 
     let body: unknown;
