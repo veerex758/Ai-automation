@@ -71,17 +71,18 @@ export async function loadWorkspaceNodeCredentials(workspaceId: string, steps: R
   const requested = new Set(steps.filter((step) => step.kind === "action").map((step) => step.nodeId));
   const credentials: Record<string, Record<string, string>> = {};
   const apiProviders = ["notion", "discord", "telegram", "airtable", "trello", "hubspot"].filter((provider) => requested.has(provider));
-  const admin = adminClient();
+  let admin: ReturnType<typeof adminClient> | null = null;
+  const getAdmin = () => admin ?? (admin = adminClient());
 
   if (apiProviders.length) {
-    const { data: integrations, error } = await admin.from("workspace_integrations")
+    const { data: integrations, error } = await getAdmin().from("workspace_integrations")
       .select("id,provider,status").eq("workspace_id", workspaceId).in("provider", apiProviders);
     if (error) throw new Error("WORKSPACE_CREDENTIAL_LOOKUP_FAILED");
     const byProvider = new Map((integrations ?? []).map((item) => [item.provider, item]));
     for (const provider of apiProviders) {
       const integration = byProvider.get(provider);
       if (!integration || integration.status !== "connected") throw new Error("WORKSPACE_CREDENTIAL_MISSING:" + provider);
-      const { data: secret, error: secretError } = await admin.from("workspace_integration_secrets")
+      const { data: secret, error: secretError } = await getAdmin().from("workspace_integration_secrets")
         .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
       if (secretError || !secret || secret.encryption_version !== "v1") throw new Error("WORKSPACE_CREDENTIAL_MISSING:" + provider);
       try { credentials[provider] = decryptWorkspaceCredentials(secret.encrypted_credentials); }
@@ -90,10 +91,10 @@ export async function loadWorkspaceNodeCredentials(workspaceId: string, steps: R
   }
 
   if (requested.has("google_sheets")) {
-    credentials.google_sheets = { accessToken: await getGoogleAccessToken(admin, workspaceId, "sheets") };
+    credentials.google_sheets = { accessToken: await getGoogleAccessToken(getAdmin(), workspaceId, "sheets") };
   }
   if (requested.has("gmail")) {
-    credentials.gmail = { accessToken: await getGoogleAccessToken(admin, workspaceId, "gmail") };
+    credentials.gmail = { accessToken: await getGoogleAccessToken(getAdmin(), workspaceId, "gmail") };
   }
   return credentials;
 }
