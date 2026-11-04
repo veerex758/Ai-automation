@@ -221,3 +221,21 @@ test("Wait pauses the runner and resumes after its persisted checkpoint", async 
   assert.equal(resumed.status, "succeeded");
   assert.equal((resumed.outputs.after as { data: { resumedAt: string } }).data.resumedAt, checkpointOutputs.delay && (checkpointOutputs.delay as { resumeAt: string }).resumeAt);
 });
+
+
+test("Schedule/Cron trigger passes its persisted event context to downstream steps", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "schedule", nodeId: "schedule", operationId: "scheduled", kind: "trigger", input: {
+        scheduledAt: "2026-11-04T09:15:00.000Z", timezone: "Africa/Lagos", cronExpression: "15 10 * * *",
+      } },
+      { id: "capture", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: {
+        data: {}, fields: { startedAt: "{{schedule.scheduledAt}}", timezone: "{{schedule.timezone}}" },
+      } },
+    ],
+    context,
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.capture, { data: { startedAt: "2026-11-04T09:15:00.000Z", timezone: "Africa/Lagos" } });
+});
