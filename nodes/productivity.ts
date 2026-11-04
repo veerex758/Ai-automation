@@ -33,7 +33,7 @@ export const productivityNodes: NodeDefinition[] = [
     id: "confluence", name: "Confluence", icon: "book-open", category: "data", version: 1,
     auth: { type: "connectionString", credentialKey: "cloudUrl" }, triggers: [], actions: [{
       id: "search_pages", name: "Search pages", description: "Confluence tenant URLs are customer-controlled. This action is gated until the outbound HTTP gateway validates DNS/IP ranges, blocks redirects and pins approved tenant hosts.",
-      inputSchema: z.object({ query: required(1000) }).strict(), outputSchema: z.object({ pages: z.array(z.record(z.string(), z.unknown())) }).strict(), run: blocked("confluence"),
+      inputSchema: z.object({ query: required(1000) }).strict(), outputSchema: z.object({ pages: z.array(z.record(z.string(), z.json())) }).strict(), run: blocked("confluence"),
     }],
   },
   {
@@ -47,14 +47,14 @@ export const productivityNodes: NodeDefinition[] = [
     id: "evernote", name: "Evernote", icon: "notebook", category: "data", version: 1,
     auth: { type: "oauth2", scopes: ["notes.read"], refresh: "managed" }, triggers: [], actions: [{
       id: "search_notes", name: "Search notes", description: "Evernote API compatibility and OAuth availability must be verified against the current account/API program before enabling this connector.",
-      inputSchema: z.object({ query: required(1000) }).strict(), outputSchema: z.object({ notes: z.array(z.record(z.string(), z.unknown())) }).strict(), run: blocked("evernote"),
+      inputSchema: z.object({ query: required(1000) }).strict(), outputSchema: z.object({ notes: z.array(z.record(z.string(), z.json())) }).strict(), run: blocked("evernote"),
     }],
   },
   {
     id: "basecamp", name: "Basecamp", icon: "briefcase-business", category: "data", version: 1,
     auth: { type: "connectionString", credentialKey: "accountUrl" }, triggers: [], actions: [{
       id: "list_projects", name: "List projects", description: "Basecamp account URLs are tenant-controlled. This action remains disabled pending SSRF-safe outbound routing and verified account-specific API behavior.",
-      inputSchema: z.object({}).strict(), outputSchema: z.object({ projects: z.array(z.record(z.string(), z.unknown())) }).strict(), run: blocked("basecamp"),
+      inputSchema: z.object({}).strict(), outputSchema: z.object({ projects: z.array(z.record(z.string(), z.json())) }).strict(), run: blocked("basecamp"),
     }],
   },
 ];
