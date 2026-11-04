@@ -21,7 +21,8 @@ export function validateRegisteredSteps(value: unknown): { steps?: RegisteredWor
     }
     const branch = branchValue as { fromStepId: string; route: string } | undefined;
     if (branch) {
-      const sourceStep = steps.find((item) => item.id === branch.fromStepId);\n      if (!sourceStep || !["if", "switch"].includes(sourceStep.nodeId)) return { error: "Branch source must be an earlier IF or Switch step." };
+      const sourceStep = steps.find((item) => item.id === branch.fromStepId);
+      if (!sourceStep || !["if", "switch"].includes(sourceStep.nodeId)) return { error: "Branch source must be an earlier IF or Switch step." };
     }
     const operation = findOperation(step.nodeId, step.operationId, step.kind);
     if (!operation) return { error: "Unknown registry operation: " + step.nodeId + "." + step.operationId + "." };
