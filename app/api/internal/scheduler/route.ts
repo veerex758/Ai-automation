@@ -167,7 +167,10 @@ async function dispatchTick(request: NextRequest) {
       }
 
 
-      const finalized = await finishClaim(supabase, claim, true, null, cronSchedule, nextRunAt);
+      const finalizedNextRunAt = cronSchedule && scheduleConfig?.cron_expression
+        ? nextCronOccurrence(scheduleConfig.cron_expression, scheduleConfig.timezone ?? "UTC")
+        : nextRunAt;
+      const finalized = await finishClaim(supabase, claim, true, null, cronSchedule, finalizedNextRunAt);
       if (!finalized) {
         // The durable run record is idempotent. If this lease expired, a later
         // worker can safely observe the existing record and finish the schedule.
