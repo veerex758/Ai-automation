@@ -93,3 +93,17 @@ test("does not silently fall back to OpenAI credentials when Gemini is selected"
     nodeCatalog: catalog,
   }), /AI_NOT_CONFIGURED/);
 });
+
+test("validates IF/Switch branch metadata and preserves it in generated drafts", async () => {
+  const branchSteps = [
+    ...validSteps,
+    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: true, operator: "equals", compareTo: true } },
+    { id: "yes", nodeId: "slack", operationId: "send_message", kind: "action", input: { message: "yes" }, branch: { fromStepId: "condition", route: "true" } },
+  ];
+  const extendedCatalog = [...catalog, { id: "if", name: "IF", version: 1, auth: { type: "none" }, triggers: [], actions: [{ id: "evaluate", name: "Evaluate", description: "Evaluate condition", inputSchema: { type: "object", properties: { value: {}, operator: { type: "string", enum: ["equals"] }, compareTo: {} }, required: ["value", "operator"], additionalProperties: false } }] }];
+  const validated = validateRegistrySteps(branchSteps, extendedCatalog);
+  assert.deepEqual(validated.at(-1).branch, { fromStepId: "condition", route: "true" });
+  assert.equal(validateRegistrySteps([...validSteps, { ...branchSteps[3], branch: { fromStepId: "later", route: "true" } }], extendedCatalog), null);
+  const result = await generateWorkflow({ prompt: "If true send a Slack message", env, nodeCatalog: extendedCatalog, fetchImpl: fakeFetch(providerPayload(branchSteps)) });
+  assert.deepEqual(result.registrySteps.at(-1).branch, { fromStepId: "condition", route: "true" });
+});
