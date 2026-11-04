@@ -1,0 +1,5 @@
+"use client";
+import {useEffect,useState} from "react";
+import Link from "next/link";
+import {useSearchParams} from "next/navigation";
+export default function VerifyPage(){const params=useSearchParams();const [message,setMessage]=useState("Verifying payment securely…");const [error,setError]=useState(false);useEffect(()=>{const reference=params.get("reference");if(!reference){setError(true);setMessage("Payment reference is missing.");return}let cancelled=false;fetch("/api/billing/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reference})}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||"Verification failed.");return d}).then(()=>{if(!cancelled)setMessage("Payment verified. Your workspace plan is updated.")}).catch(e=>{if(!cancelled){setError(true);setMessage(e.message||"Verification failed.")}});return()=>{cancelled=true}},[params]);return <main className="dashboard-content"><h1>{error?"Payment not confirmed":"Payment verification"}</h1><p role="status">{message}</p><Link href="/dashboard/billing">Return to billing</Link></main>}
