@@ -37,7 +37,7 @@ export const commerceNodes: NodeDefinition[] = [
       outputSchema: z.object({ saleId: z.string(), email: z.string().email().optional(), refunded: z.boolean().optional() }).strict(),
       async run(ctx, raw) {
         const i = z.object({ saleId: required(200) }).strict().parse(raw);
-        const r = await ctx.http.request({ url: "https://api.gumroad.com/v2/sales/" + encodeURIComponent(i.saleId), method: "POST", headers: { Accept: "application/json" }, body: { access_token: secret(ctx, "gumroad", "accessToken") }, timeoutMs: 12000, retries: 0 });
+        const r = await ctx.http.request({ url: "https://api.gumroad.com/v2/sales", method: "POST", headers: { Accept: "application/json" }, body: { access_token: secret(ctx, "gumroad", "accessToken"), sale_id: i.saleId }, timeoutMs: 12000, retries: 0 });
         ok(r.status, "gumroad");
         const b = r.body as { success?: boolean; sale?: { id?: string; email?: string; refunded?: boolean } };
         if (!b.success || !b.sale?.id) throw new Error("GUMROAD_SALE_NOT_FOUND");
