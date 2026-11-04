@@ -7,11 +7,13 @@ import { emailNode } from "./email";
 import { manualNode } from "./manual";
 import { gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode } from "./integrations";
 import { providerCatalog } from "./provider-catalog";
+import { dataNodes } from "./data";
 
 /** Only these definitions have validated schemas and executable server handlers. */
 export const nodes: NodeDefinition[] = [
   manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
   gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
+  ...dataNodes,
 ];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
