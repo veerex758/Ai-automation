@@ -109,6 +109,10 @@ test("cron schedules persist timezone and advance to the next calculated occurre
   assert.match(cronMigration, /next_run_at = p_next_run_at/);
   assert.match(schedulerRoute, /nextCronOccurrence/);
   assert.match(schedulerRoute, /finish_workflow_cron_schedule_claim/);
+  assert.match(schedulerRoute, /validateRegisteredSteps/);
+  assert.match(schedulerRoute, /registrySchedule/);
+  assert.match(cronMigration, /nodeId.*schedule/);
   assert.match(cronApi, /auth\.getUser\(\)/);
   assert.match(cronApi, /nextCronOccurrence/);
+  assert.match(cronApi, /validateRegisteredSteps/);
 });
