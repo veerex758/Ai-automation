@@ -15,7 +15,7 @@ const inputSchema = z.object({
 }).strict();
 
 type SandboxHandle = Pick<VercelSandbox, "runCommand" | "stop">;
-type SandboxOptions = Parameters<typeof VercelSandbox.create>[0];
+type SandboxOptions = Parameters<typeof import("@vercel/sandbox").Sandbox.create>[0];
 type SandboxFactory = (options: SandboxOptions) => Promise<SandboxHandle>;
 
 const runnerSource = `
