@@ -23,7 +23,7 @@ type SandboxOptions = {
   env: Record<string, string>;
 };
 type SandboxHandle = {
-  runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream }): Promise<{
+  runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream; stderr: NodeJS.WritableStream }): Promise<{
     exitCode: number | null;
     stdout(): Promise<string>;
   }>;
@@ -125,6 +125,7 @@ export async function executeJavaScriptInSandbox(
       cmd: "node",
       args: ["--permission", "-e", runnerSource, parsed.code, inputJson],
       stdout: outputSink,
+      stderr: outputSink,
     });
     if (outputTooLarge) throw new Error("JAVASCRIPT_OUTPUT_TOO_LARGE");
     const stdout = Buffer.concat(outputChunks).toString("utf8");
