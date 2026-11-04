@@ -255,6 +255,7 @@ test("high-risk or tenant-hosted connectors fail closed until their security ada
     ["docker_ssh", "execute_command", { command: "whoami" }, /DOCKER_SSH_ADAPTER_BLOCKED/],
     ["confluence", "search_pages", { query: "status" }, /CONFLUENCE_ADAPTER_NOT_ENABLED/],
     ["obsidian", "read_note", { path: "notes/todo.md" }, /OBSIDIAN_ADAPTER_NOT_ENABLED/],
+    ["weaviate", "query", { endpoint: "https://cluster.example.com", query: "{ Get { Article { title } } }" }, /WEAVIATE_ADAPTER_BLOCKED/],
   ];
   for (const [nodeId, operationId, input, expected] of cases) {
     const operation = findOperation(nodeId, operationId, "action");
