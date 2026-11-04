@@ -18,7 +18,7 @@ export const infrastructureNodes: NodeDefinition[] = [
     auth: { type: "apiKey", credentialKey: "searchApiKey" }, triggers: [], actions: [{
       id: "search_index", name: "Search index", description: "Searches an Algolia index using a search-only API key. This action is read-only; use an index-scoped search key.",
       inputSchema: z.object({ applicationId: required(100), indexName: required(200), query: z.string().max(1000), hitsPerPage: z.number().int().min(1).max(100).default(20) }).strict(),
-      outputSchema: z.object({ hits: z.array(z.record(z.string(), z.unknown())), nbHits: z.number().int().nonnegative() }).strict(),
+      outputSchema: z.object({ hits: z.array(z.record(z.string(), z.json())), nbHits: z.number().int().nonnegative() }).strict(),
       async run(ctx, raw) {
         const i = z.object({ applicationId: required(100), indexName: required(200), query: z.string().max(1000), hitsPerPage: z.number().int().min(1).max(100).default(20) }).strict().parse(raw);
         if (!/^[A-Z0-9]+$/i.test(i.applicationId)) throw new Error("ALGOLIA_INVALID_APPLICATION_ID");
@@ -50,21 +50,21 @@ export const infrastructureNodes: NodeDefinition[] = [
     id: "neon", name: "Neon", icon: "database", category: "data", version: 1,
     auth: { type: "apiKey", credentialKey: "apiKey" }, triggers: [], actions: [{
       id: "list_projects", name: "List projects", description: "Neon project API adapter is intentionally gated pending account-scoped pagination and response-contract tests.",
-      inputSchema: z.object({}).strict(), outputSchema: z.object({ projects: z.array(z.record(z.string(), z.unknown())) }).strict(), run: blocked("neon"),
+      inputSchema: z.object({}).strict(), outputSchema: z.object({ projects: z.array(z.record(z.string(), z.json())) }).strict(), run: blocked("neon"),
     }],
   },
   {
     id: "planetscale", name: "PlanetScale", icon: "database", category: "data", version: 1,
     auth: { type: "apiKey", credentialKey: "serviceToken" }, triggers: [], actions: [{
       id: "list_databases", name: "List databases", description: "PlanetScale API adapter is gated pending organization scoping and account-specific response tests.",
-      inputSchema: z.object({ organization: required(100) }).strict(), outputSchema: z.object({ databases: z.array(z.record(z.string(), z.unknown())) }).strict(), run: blocked("planetscale"),
+      inputSchema: z.object({ organization: required(100) }).strict(), outputSchema: z.object({ databases: z.array(z.record(z.string(), z.json())) }).strict(), run: blocked("planetscale"),
     }],
   },
   {
     id: "elasticsearch", name: "Elasticsearch", icon: "database", category: "data", version: 1,
     auth: { type: "connectionString", credentialKey: "clusterUrl" }, triggers: [], actions: [{
       id: "search", name: "Search", description: "Elasticsearch cluster URLs are tenant-controlled. This action remains disabled until the outbound gateway enforces SSRF-safe DNS/IP validation, redirect blocking and host pinning.",
-      inputSchema: z.object({ index: required(255), query: z.record(z.string(), z.unknown()) }).strict(), outputSchema: z.object({ hits: z.array(z.record(z.string(), z.unknown())) }).strict(), run: blocked("elasticsearch"),
+      inputSchema: z.object({ index: required(255), query: z.record(z.string(), z.json()) }).strict(), outputSchema: z.object({ hits: z.array(z.record(z.string(), z.json())) }).strict(), run: blocked("elasticsearch"),
     }],
   },
   {
