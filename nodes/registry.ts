@@ -54,7 +54,7 @@ export function getPublicNodeCatalog() {
       group: entry.group,
       version: implementation?.version ?? 1,
       auth: implementation?.auth ?? { type: entry.auth },
-      executionStatus: implementation ? "available" as const : "coming_soon" as const,
+      executionStatus: implementation ? "registered" as const : "coming_soon" as const,
       triggers: implementation?.triggers.map(publicOperation) ?? [],
       actions: implementation?.actions.map(publicOperation) ?? [],
     };
