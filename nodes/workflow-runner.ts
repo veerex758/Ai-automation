@@ -87,20 +87,41 @@ export async function executeRegisteredWorkflow(args: {
     }
 
     try {
-      const input = resolveReferences(step.input, outputs, args.dryRun);
-      const validatedInput = operation.inputSchema.parse(input);
-      await args.onStepStart?.(step, results.length + 1, validatedInput);
-      if (args.dryRun) {
-        const simulated: RegisteredStepResult = { stepId: step.id, status: "simulated" };
-        await args.onStepComplete?.(step, results.length + 1, simulated);
-        results.push(simulated);
+      const executeOnce = async (scope: Record<string, unknown>, iteration?: number) => {
+        const localOutputs = { ...outputs, ...scope };
+        const input = resolveReferences(step.input, localOutputs, args.dryRun);
+        const validatedInput = operation.inputSchema.parse(input);
+        const checkpointStep = iteration === undefined ? step : { ...step, id: step.id + "__loop_" + (iteration + 1) };
+        await args.onStepStart?.(checkpointStep, results.length + 1, validatedInput);
+        if (args.dryRun) {
+          await args.onStepComplete?.(checkpointStep, results.length + 1, { stepId: checkpointStep.id, status: "simulated" });
+          return { simulated: true as const };
+        }
+        const output = await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput);
+        const parsed = operation.outputSchema.parse(output);
+        await args.onStepComplete?.(checkpointStep, results.length + 1, { stepId: checkpointStep.id, status: "succeeded", output: parsed });
+        return { simulated: false as const, output: parsed };
+      };
+      if (step.loop) {
+        const source = outputs[step.loop.sourceStepId];
+        const items = Array.isArray(source) ? source : source && typeof source === "object" && Array.isArray((source as Record<string, unknown>).items) ? (source as { items: unknown[] }).items : null;
+        if (!items) throw new Error("WORKFLOW_LOOP_SOURCE_NOT_ARRAY");
+        const max = Math.min(100, Math.max(1, step.loop.maxIterations ?? 100));
+        if (items.length > max) throw new Error("WORKFLOW_LOOP_LIMIT_EXCEEDED");
+        const aggregate: unknown[] = [];
+        for (let index = 0; index < items.length; index++) {
+          const scope = { [step.loop.itemAs ?? "loop_item"]: items[index], [step.loop.indexAs ?? "loop_index"]: index };
+          const iteration = await executeOnce(scope, index);
+          if (!iteration.simulated) aggregate.push(iteration.output);
+        }
+        outputs[step.id] = args.dryRun ? { iterations: items.length, simulated: true } : aggregate;
+        results.push({ stepId: step.id, status: args.dryRun ? "simulated" : "succeeded", output: outputs[step.id] });
         continue;
       }
-      const output = await operation.run({ ...args.context, previousOutputs: outputs }, validatedInput);
-      outputs[step.id] = operation.outputSchema.parse(output);
-      const completed: RegisteredStepResult = { stepId: step.id, status: "succeeded", output: outputs[step.id] };
-      await args.onStepComplete?.(step, results.length + 1, completed);
-      results.push(completed);
+      const once = await executeOnce({});
+      if (once.simulated) { results.push({ stepId: step.id, status: "simulated" }); continue; }
+      outputs[step.id] = once.output;
+      results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
     } catch (error) {
       const code = error instanceof Error ? error.message : "NODE_EXECUTION_FAILED";
       results.push({ stepId: step.id, status: "failed", error: code });
