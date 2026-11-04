@@ -37,7 +37,7 @@ export const commerceNodes: NodeDefinition[] = [
       outputSchema: z.object({ saleId: z.string(), email: z.string().email().optional(), refunded: z.boolean().optional() }).strict(),
       async run(ctx, raw) {
         const i = z.object({ saleId: required(200) }).strict().parse(raw);
-        const r = await ctx.http.request({ url: "https://api.gumroad.com/v2/sales/" + encodeURIComponent(i.saleId), method: "GET", headers: { Accept: "application/json" }, body: { access_token: secret(ctx, "gumroad", "accessToken") }, timeoutMs: 12000, retries: 0 });
+        const r = await ctx.http.request({ url: "https://api.gumroad.com/v2/sales/" + encodeURIComponent(i.saleId), method: "POST", headers: { Accept: "application/json" }, body: { access_token: secret(ctx, "gumroad", "accessToken") }, timeoutMs: 12000, retries: 0 });
         ok(r.status, "gumroad");
         const b = r.body as { success?: boolean; sale?: { id?: string; email?: string; refunded?: boolean } };
         if (!b.success || !b.sale?.id) throw new Error("GUMROAD_SALE_NOT_FOUND");
@@ -81,11 +81,11 @@ export const commerceNodes: NodeDefinition[] = [
     id: "plaid", name: "Plaid", icon: "landmark", category: "data", version: 1,
     auth: { type: "apiKey", credentialKey: "secret" }, triggers: [], actions: [{
       id: "get_accounts", name: "Get linked accounts", description: "Reads account metadata from Plaid for a previously linked Item. Requires client ID, secret and an access token; never expose access tokens to workflow outputs or logs.",
-      inputSchema: z.object({ accessToken: required(500) }).strict(),
+      inputSchema: z.object({}).strict(),
       outputSchema: z.object({ accounts: z.array(z.object({ accountId: z.string(), name: z.string().optional(), type: z.string().optional(), subtype: z.string().optional() })) }).strict(),
       async run(ctx, raw) {
-        const i = z.object({ accessToken: required(500) }).strict().parse(raw);
-        const r = await ctx.http.request({ url: "https://production.plaid.com/accounts/get", method: "POST", headers: { "Content-Type": "application/json" }, body: { client_id: secret(ctx, "plaid", "clientId"), secret: secret(ctx, "plaid", "secret"), access_token: i.accessToken }, timeoutMs: 15000, retries: 0 });
+        z.object({}).strict().parse(raw);
+        const r = await ctx.http.request({ url: "https://production.plaid.com/accounts/get", method: "POST", headers: { "Content-Type": "application/json" }, body: { client_id: secret(ctx, "plaid", "clientId"), secret: secret(ctx, "plaid", "secret"), access_token: secret(ctx, "plaid", "accessToken") }, timeoutMs: 15000, retries: 0 });
         ok(r.status, "plaid");
         const b = r.body as { accounts?: Array<{ account_id?: string; name?: string; type?: string; subtype?: string }> };
         if (!Array.isArray(b.accounts)) throw new Error("PLAID_INVALID_RESPONSE");
