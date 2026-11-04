@@ -33,10 +33,10 @@ export const analyticsNodes: NodeDefinition[] = [
     id: "posthog", name: "PostHog", icon: "chart-line", category: "data", version: 1,
     auth: { type: "apiKey", credentialKey: "projectApiKey" }, triggers: [], actions: [{
       id: "capture_event", name: "Capture event", description: "Captures an event in PostHog's US cloud endpoint using a project API key. EU/self-hosted deployments require a separately reviewed regional adapter.",
-      inputSchema: z.object({ event: text(200), distinctId: text(200), properties: z.record(z.string(), z.unknown()).default({}) }).strict(),
+      inputSchema: z.object({ event: text(200), distinctId: text(200), properties: z.record(z.string(), z.json()).default({}) }).strict(),
       outputSchema: z.object({ accepted: z.boolean() }).strict(),
       async run(ctx, raw) {
-        const i = z.object({ event: text(200), distinctId: text(200), properties: z.record(z.string(), z.unknown()).default({}) }).strict().parse(raw);
+        const i = z.object({ event: text(200), distinctId: text(200), properties: z.record(z.string(), z.json()).default({}) }).strict().parse(raw);
         const r = await ctx.http.request({ url: "https://us.i.posthog.com/i/v1/capture/", method: "POST", headers: { "Content-Type": "application/json" }, body: { api_key: key(ctx, "posthog", "projectApiKey"), event: i.event, distinct_id: i.distinctId, properties: i.properties }, timeoutMs: 12000, retries: 0 });
         success(r.status, "posthog");
         return { accepted: true };
@@ -47,10 +47,10 @@ export const analyticsNodes: NodeDefinition[] = [
     id: "segment", name: "Segment", icon: "chart-pie", category: "data", version: 1,
     auth: { type: "apiKey", credentialKey: "writeKey" }, triggers: [], actions: [{
       id: "track_event", name: "Track event", description: "Sends a Segment Track event with a connected source write key. Keep event properties free of unnecessary personal or sensitive data.",
-      inputSchema: z.object({ userId: text(200).optional(), anonymousId: text(200).optional(), event: text(200), properties: z.record(z.string(), z.unknown()).default({}) }).strict().refine(v => Boolean(v.userId || v.anonymousId), "userId or anonymousId is required"),
+      inputSchema: z.object({ userId: text(200).optional(), anonymousId: text(200).optional(), event: text(200), properties: z.record(z.string(), z.json()).default({}) }).strict().refine(v => Boolean(v.userId || v.anonymousId), "userId or anonymousId is required"),
       outputSchema: z.object({ accepted: z.boolean() }).strict(),
       async run(ctx, raw) {
-        const i = z.object({ userId: text(200).optional(), anonymousId: text(200).optional(), event: text(200), properties: z.record(z.string(), z.unknown()).default({}) }).strict().refine(v => Boolean(v.userId || v.anonymousId)).parse(raw);
+        const i = z.object({ userId: text(200).optional(), anonymousId: text(200).optional(), event: text(200), properties: z.record(z.string(), z.json()).default({}) }).strict().refine(v => Boolean(v.userId || v.anonymousId)).parse(raw);
         const r = await ctx.http.request({ url: "https://api.segment.io/v1/track", method: "POST", headers: { Authorization: basic(key(ctx, "segment", "writeKey")), "Content-Type": "application/json" }, body: { userId: i.userId, anonymousId: i.anonymousId, event: i.event, properties: i.properties }, timeoutMs: 12000, retries: 0 });
         success(r.status, "segment");
         return { accepted: true };
