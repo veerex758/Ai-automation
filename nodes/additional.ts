@@ -20,7 +20,7 @@ export const googleSheetsNode: NodeDefinition = {
     inputSchema: z.object({ spreadsheetId: text(200), range: text(300), values: z.array(z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).min(1)).min(1).max(500) }).strict(),
     outputSchema: z.object({ updatedRange: z.string(), updatedRows: z.number().int().nonnegative() }).strict(),
     async run(ctx, raw) {
-      const i = thisInputGoogle.parse(raw); const t = token(ctx, "google");
+      const i = thisInputGoogle.parse(raw); const t = token(ctx, "google_sheets");
       const r = await ctx.http.request({ url: "https://sheets.googleapis.com/v4/spreadsheets/" + encodeURIComponent(i.spreadsheetId) + "/values/" + encodeURIComponent(i.range) + ":append?valueInputOption=USER_ENTERED", method: "POST", headers: jsonHeaders(t), body: { values: i.values }, timeoutMs: 15000, retries: 0 });
       assertOk(r.status, "google_sheets");
       const b = r.body as { updates?: { updatedRange?: string; updatedRows?: number } };
@@ -41,7 +41,7 @@ export const gmailNode: NodeDefinition = {
       const i = z.object({ to: z.string().email().max(254), subject: text(200), body: text(10000) }).strict().parse(raw);
       const mime = ["To: " + i.to, "Subject: " + i.subject, "MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", i.body].join("\r\n");
       const encoded = Buffer.from(mime, "utf8").toString("base64url");
-      const r = await ctx.http.request({ url: "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", method: "POST", headers: jsonHeaders(token(ctx, "google")), body: { raw: encoded }, timeoutMs: 15000, retries: 0 });
+      const r = await ctx.http.request({ url: "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", method: "POST", headers: jsonHeaders(token(ctx, "gmail")), body: { raw: encoded }, timeoutMs: 15000, retries: 0 });
       assertOk(r.status, "gmail");
       const b = r.body as { id?: string; threadId?: string };
       if (!b.id) throw new Error("GMAIL_INVALID_RESPONSE");
