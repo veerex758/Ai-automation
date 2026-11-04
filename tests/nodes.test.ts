@@ -8,6 +8,9 @@ test("registry includes versioned provider and data utility operations", () => {
   assert.equal(nodes.length, 25);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
+  assert.ok(findOperation("http_request", "request", "action"));
+  assert.ok(findOperation("wait", "delay", "action"));
+  assert.ok(findOperation("schedule", "scheduled", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("gemini", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
