@@ -11,7 +11,7 @@ test("the integrations directory contains all 100 requested providers exactly on
   assert.ok(catalog.some((node) => node.name === "Twilio Voice"));
 });
 
-test("only native registry implementations are marked execution-ready", () => {
+test("only native registry implementations are marked as registered", () => {
   const catalog = getPublicNodeCatalog();
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
