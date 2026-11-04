@@ -17,10 +17,12 @@ test("quick-create and template creation receive a valid manual-trigger starter 
   assert.match(route, /definition: definitionResult\.definition/);
 });
 
-test("builder sends a new workflow definition with creation and only patches existing drafts", () => {
+test("builder creates a workflow first, then patches new and existing drafts with the saved definition and optional registry plan", () => {
   assert.match(builder, /const isNewWorkflow = !workflowId;/);
   assert.match(builder, /status: "draft",\s*definition,/);
-  assert.match(builder, /if \(!isNewWorkflow\)\s*\{\s*const saveResponse = await fetch\(\`\/api\/workflows\/\$\{workflowId\}\/definition\`/);
+  assert.match(builder, /const saveResponse = await fetch\(\`\/api\/workflows\/\$\{workflowId\}\/definition\`/);
+  assert.match(builder, /registrySteps \? \{ registrySteps \} : \{\}/);
+  assert.doesNotMatch(builder, /if \(!isNewWorkflow\)\s*\{\s*const saveResponse/);
   assert.match(builder, /Workflow draft saved to your Aivanta workspace/);
   assert.match(builder, /It has not been activated or executed/);
 });
