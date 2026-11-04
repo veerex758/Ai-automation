@@ -107,7 +107,7 @@ export async function executeJavaScriptInSandbox(
         const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         if (outputBytes + bytes.length > outputLimit) {
           outputTooLarge = true;
-          callback();
+          callback(new Error("JAVASCRIPT_OUTPUT_TOO_LARGE"));
           return;
         }
         outputChunks.push(bytes);
@@ -120,19 +120,26 @@ export async function executeJavaScriptInSandbox(
       write(chunk, _encoding, callback) {
         const size = Buffer.byteLength(chunk);
         if (stderrBytes + size > outputLimit) {
-          callback();
+          outputTooLarge = true;
+          callback(new Error("JAVASCRIPT_OUTPUT_TOO_LARGE"));
           return;
         }
         stderrBytes += size;
         callback();
       },
     });
-    const command = await sandbox.runCommand({
-      cmd: "node",
-      args: ["--permission", "-e", runnerSource, parsed.code, inputJson],
-      stdout: outputSink,
-      stderr: stderrSink,
-    });
+    let command: Awaited<ReturnType<SandboxHandle["runCommand"]>>;
+    try {
+      command = await sandbox.runCommand({
+        cmd: "node",
+        args: ["--permission", "-e", runnerSource, parsed.code, inputJson],
+        stdout: outputSink,
+        stderr: stderrSink,
+      });
+    } catch (error) {
+      if (outputTooLarge) throw new Error("JAVASCRIPT_OUTPUT_TOO_LARGE");
+      throw error;
+    }
     if (outputTooLarge) throw new Error("JAVASCRIPT_OUTPUT_TOO_LARGE");
     const stdout = Buffer.concat(outputChunks).toString("utf8");
     let payload: unknown;
