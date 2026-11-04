@@ -9,7 +9,7 @@ type RegistryNode = {
   auth: { type: "none" | "oauth2" | "apiKey" | "connectionString" };
   triggers: Operation[]; actions: Operation[];
 };
-type ConnectionState = "connected" | "not-connected" | "unverified" | "coming-soon" | "no-connection";
+type ConnectionState = "connected" | "not-connected" | "unverified" | "coming-soon" | "no-connection" | "setup-required";
 type ConnectionRecord = {
   provider: string; status?: string | null; last_test_status?: string | null;
   last_tested_at?: string | null; account_email?: string | null; product?: string;
@@ -44,6 +44,7 @@ const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 
 function connectionState(node: RegistryNode, workspace: ConnectionRecord[], google: ConnectionRecord[], failed: boolean): ConnectionState {
   if (node.executionStatus !== "available") return "coming-soon";
+  if (node.id === "webhook_trigger") return "setup-required";
   if (!connectionRequired(node)) return "no-connection";
   if (failed) return "unverified";
   if (node.id === "gmail" || node.id === "google_sheets") {
@@ -75,6 +76,7 @@ function stateLabel(state: ConnectionState) {
     case "unverified": return "Status unavailable";
     case "coming-soon": return "Coming soon";
     case "no-connection": return "No account connection";
+    case "setup-required": return "Endpoint setup required";
   }
 }
 
