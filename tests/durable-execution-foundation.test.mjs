@@ -147,6 +147,7 @@ const waitMigration = readFileSync(
 test("durable waits release leases, retain attempt count, and resume from due queue state", () => {
   assert.match(waitMigration, /'waiting'/);
   assert.match(waitMigration, /status = 'waiting' then j\.attempts else j\.attempts \+ 1 end/);
+  assert.match(waitMigration, /j\.status = 'waiting' or j\.attempts < j\.max_attempts/);
   assert.match(waitMigration, /create or replace function public\.pause_execution_job/i);
   assert.match(waitMigration, /lease_token = p_lease_token and lease_until > now\(\)/);
   assert.match(workerService, /execution_checkpoints/);
