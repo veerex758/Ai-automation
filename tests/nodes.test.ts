@@ -325,7 +325,7 @@ test("CSV and XML document helpers reject malformed or unsafe input", async () =
   const csv = findOperation("csv", "parse", "action");
   const xml = findOperation("xml", "parse", "action");
   assert.ok(csv && xml);
-  const parsed = await csv.run(context, { text: 'name,note\\n"Ada","hello, world"\\n' }) as { rows: string[][]; rowCount: number };
+  const parsed = await csv.run(context, { text: 'name,note\n"Ada","hello, world"\n' }) as { rows: string[][]; rowCount: number };
   assert.deepEqual(parsed.rows, [["name", "note"], ["Ada", "hello, world"]]);
   assert.equal(parsed.rowCount, 2);
   await assert.rejects(() => csv.run(context, { text: '"unfinished' }), /CSV_UNCLOSED_QUOTE/);
