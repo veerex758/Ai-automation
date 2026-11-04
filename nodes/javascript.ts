@@ -118,7 +118,12 @@ export async function executeJavaScriptInSandbox(
     let stderrBytes = 0;
     const stderrSink = new Writable({
       write(chunk, _encoding, callback) {
-        stderrBytes += Buffer.byteLength(chunk);
+        const size = Buffer.byteLength(chunk);
+        if (stderrBytes + size > outputLimit) {
+          callback();
+          return;
+        }
+        stderrBytes += size;
         callback();
       },
     });
