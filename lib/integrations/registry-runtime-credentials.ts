@@ -45,12 +45,15 @@ async function getGoogleAccessToken(admin: ReturnType<typeof adminClient>, works
       throw new Error("GOOGLE_TOKEN_REFRESH_INVALID_RESPONSE");
     }
     const raw = payload as Record<string, unknown>;
+    const expiresIn = typeof raw.expires_in === "number" ? raw.expires_in : undefined;
+    const tokenType = typeof raw.token_type === "string" ? raw.token_type : undefined;
+    const scope = typeof raw.scope === "string" ? raw.scope : undefined;
     credentials = {
       ...credentials,
       access_token: raw.access_token,
-      ...(typeof raw.expires_in === "number" ? { expiry_date: Date.now() + raw.expires_in * 1000 } : {}),
-      ...(typeof raw.token_type === "string" ? { token_type: raw.token_type } : {}),
-      ...(typeof raw.scope === "string" ? { scope: raw.scope } : {}),
+      ...(expiresIn !== undefined ? { expiry_date: Date.now() + expiresIn * 1000 } : {}),
+      ...(tokenType ? { token_type: tokenType } : {}),
+      ...(scope ? { scope } : {}),
     };
     const { error: updateError } = await admin.from("google_connections").update({
       encrypted_credentials: encryptGoogleCredentials(credentials),
