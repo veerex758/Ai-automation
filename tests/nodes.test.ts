@@ -309,3 +309,17 @@ test("JavaScript sandbox rejects oversized inputs before provisioning", async ()
   }), /too_big|too_large|maximum/i);
   assert.equal(provisioned, false);
 });
+
+
+test("JavaScript sandbox caps streamed stdout and still stops the VM", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let stopped = false;
+  await assert.rejects(() => executeJavaScriptInSandbox({ code: "return 1;" }, async () => ({
+    async runCommand(args) {
+      args.stdout.write("x".repeat(50_000));
+      return { exitCode: 0, async stdout() { return ""; } };
+    },
+    async stop() { stopped = true; },
+  })), /JAVASCRIPT_OUTPUT_TOO_LARGE/);
+  assert.equal(stopped, true);
+});
