@@ -41,7 +41,7 @@ export const gmailNode: NodeDefinition = {
     async run(ctx, raw) {
       const i = z.object({ to: z.string().email().max(254), subject: text(200), body: text(10000) }).strict().parse(raw);
       const mime = ["To: " + i.to, "Subject: " + i.subject, "MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", i.body].join("\r\n");
-      const encoded = btoa(unescape(encodeURIComponent(mime))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      const encoded = Buffer.from(mime, "utf8").toString("base64url");
       const r = await ctx.http.request({ url: "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", method: "POST", headers: jsonHeaders(token(ctx, "google")), body: { raw: encoded }, timeoutMs: 15000, retries: 0 });
       assertOk(r.status, "gmail");
       const b = r.body as { id?: string; threadId?: string };
@@ -141,7 +141,7 @@ export const hubspotNode: NodeDefinition = {
 
 export const trelloNode: NodeDefinition = {
   id: "trello", name: "Trello", icon: "kanban", category: "data", version: 1,
-  auth: { type: "apiKey", credentialKey: "token" }, triggers: [], actions: [{
+  auth: { type: "apiKey", credentialKey: "apiKey" }, triggers: [], actions: [{
     id: "create_card", name: "Create card", description: "Creates a Trello card on a selected list. listId and name are required; description is optional. Uses a connected Trello API key and token stored server-side. This creates a real card.",
     inputSchema: z.object({ listId: text(100), name: text(200), description: z.string().max(10000).optional() }).strict(),
     outputSchema: z.object({ cardId: z.string(), url: z.string().url() }).strict(),
