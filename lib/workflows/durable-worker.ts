@@ -217,15 +217,20 @@ export async function runDurableWorker() {
       heartbeatTimer = setInterval(() => {
         if (heartbeatInFlight) return;
         heartbeatInFlight = true;
-        void db.rpc("heartbeat_execution_job", {
-          p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
-        }).then(({ data: renewed, error: heartbeatError }) => {
-          if (heartbeatError || renewed !== true) {
-            console.warn("Aivanta worker heartbeat was not renewed.", { jobId: job.id });
+        void (async () => {
+          try {
+            const { data: renewed, error: heartbeatError } = await db.rpc("heartbeat_execution_job", {
+              p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
+            });
+            if (heartbeatError || renewed !== true) {
+              console.warn("Aivanta worker heartbeat was not renewed.", { jobId: job.id });
+            }
+          } catch {
+            console.warn("Aivanta worker heartbeat failed.", { jobId: job.id });
+          } finally {
+            heartbeatInFlight = false;
           }
-        }).catch(() => {
-          console.warn("Aivanta worker heartbeat failed.", { jobId: job.id });
-        }).finally(() => { heartbeatInFlight = false; });
+        })();
       }, 30_000);
       heartbeatTimer.unref?.();
       const definition = job.workflow_definition as Record<string, unknown>;
