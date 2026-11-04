@@ -333,3 +333,13 @@ test("CSV and XML document helpers reject malformed or unsafe input", async () =
   assert.equal(root.root, "root");
   assert.equal(root.text, "safe");
 });
+
+
+test("Error Trigger normalizes runner error events without side effects", async () => {
+  const operation = findOperation("error_trigger", "catch_error", "trigger");
+  assert.ok(operation);
+  const occurredAt = new Date().toISOString();
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } }, previousOutputs: {} };
+  const result = await operation.run(context, { workflowId: "wf_1", stepId: "step_2", error: "Provider timeout", code: "PROVIDER_TIMEOUT", occurredAt });
+  assert.deepEqual(result, { workflowId: "wf_1", stepId: "step_2", error: "Provider timeout", code: "PROVIDER_TIMEOUT", occurredAt });
+});
