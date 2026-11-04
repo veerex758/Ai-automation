@@ -12,8 +12,10 @@ import { communicationMarketingNodes } from "./communication-marketing";
 import { crmMarketingNodes } from "./crm-marketing";
 import { analyticsNodes } from "./analytics";
 import { analyticsExtraNodes } from "./analytics-extra";
+import { messagingDirectoryNodes } from "./messaging-directory";
+import { emailMarketingExtraNodes } from "./email-marketing-extra";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes, ...communicationMarketingNodes, ...crmMarketingNodes, ...analyticsNodes, ...analyticsExtraNodes];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes, ...communicationMarketingNodes, ...crmMarketingNodes, ...analyticsNodes, ...analyticsExtraNodes, ...messagingDirectoryNodes, ...emailMarketingExtraNodes];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
