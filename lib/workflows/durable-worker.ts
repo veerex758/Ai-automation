@@ -252,8 +252,20 @@ export async function runDurableWorker() {
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
         const context = executionContext(credentials, job.payload?.webhookVerified === true);
+        const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
+          .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
+        if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
+        const workflowStepIds = new Set(steps.map((step) => step.id));
+        const initialOutputs: Record<string, unknown> = {};
+        const completedStepIds: string[] = [];
+        for (const checkpoint of savedCheckpoints as Array<{ step_id: string; output: unknown }>) {
+          if (workflowStepIds.has(checkpoint.step_id)) {
+            initialOutputs[checkpoint.step_id] = checkpoint.output;
+            completedStepIds.push(checkpoint.step_id);
+          }
+        }
         const registryResult = await executeRegisteredWorkflow({
-          steps, context, dryRun: job.execution_mode !== "live",
+          steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
           ...(job.execution_mode === "live" ? {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
@@ -262,6 +274,16 @@ export async function runDurableWorker() {
             ),
           } : {}),
         });
+        if (registryResult.status === "waiting") {
+          const remainingMs = Math.max(1000, Date.parse(registryResult.resumeAt ?? "") - Date.now());
+          const { data: paused, error: pauseError } = await db.rpc("pause_execution_job", {
+            p_job_id: job.id, p_lease_token: job.lease_token,
+            p_delay_seconds: Math.min(2592000, Math.ceil(remainingMs / 1000)),
+          });
+          if (pauseError || paused !== true) throw new Error("EXECUTION_PAUSE_FAILED");
+          retried++;
+          continue;
+        }
         result = {
           status: registryResult.status,
           steps: registryResult.steps.map((step, index) => ({
