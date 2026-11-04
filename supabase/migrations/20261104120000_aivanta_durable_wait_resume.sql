@@ -51,7 +51,7 @@ begin
     select j.id from public.execution_jobs j
     where ((j.status in ('queued','retry_wait','waiting') and j.available_at <= now())
        or (j.status = 'running' and j.lease_until < now()))
-      and j.attempts < j.max_attempts
+      and (j.status = 'waiting' or j.attempts < j.max_attempts)
     order by j.available_at, j.created_at
     for update skip locked
     limit p_limit
@@ -86,8 +86,7 @@ begin
       lease_token = null, lease_until = null,
       last_error_code = null
   where id = p_job_id and status = 'running'
-    and lease_token = p_lease_token and lease_until > now()
-    and attempts < max_attempts;
+    and lease_token = p_lease_token and lease_until > now();
   get diagnostics affected = row_count;
   return affected = 1;
 end;
