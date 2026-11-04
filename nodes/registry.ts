@@ -11,12 +11,13 @@ import { dataNodes } from "./data";
 import { ifNode, switchNode, mergeNode } from "./core-logic";
 import { httpRequestNode } from "./http-request";
 import { waitNode } from "./wait";
+import { scheduleNode } from "./schedule";
 
 /** Only these definitions have validated schemas and executable server handlers. */
 export const nodes: NodeDefinition[] = [
   manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
   gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
-  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode,
+  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode,
 ];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
