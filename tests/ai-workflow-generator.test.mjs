@@ -107,3 +107,20 @@ test("validates IF/Switch branch metadata and preserves it in generated drafts",
   const result = await generateWorkflow({ prompt: "If true send a Slack message", env, nodeCatalog: extendedCatalog, fetchImpl: fakeFetch(providerPayload(branchSteps)) });
   assert.deepEqual(result.registrySteps.at(-1).branch, { fromStepId: "condition", route: "true" });
 });
+
+
+test("validates and preserves bounded Loop metadata in generated drafts", async () => {
+  const loop = { sourceStepId: "start", itemAs: "lead", indexAs: "leadIndex", maxIterations: 25 };
+  const loopSteps = [validSteps[0], { ...validSteps[1], input: { prompt: "Qualify {{lead}}" }, loop }];
+  const validated = validateRegistrySteps(loopSteps, catalog);
+  assert.deepEqual(validated.at(-1).loop, loop);
+  assert.equal(validateRegistrySteps([validSteps[0], { ...validSteps[1], loop: { sourceStepId: "missing", maxIterations: 10 } }], catalog), null);
+  assert.equal(validateRegistrySteps([validSteps[0], { ...validSteps[1], loop: { sourceStepId: "start", maxIterations: 101 } }], catalog), null);
+  const result = await generateWorkflow({
+    prompt: "For each lead, qualify it with Gemini",
+    env,
+    nodeCatalog: catalog,
+    fetchImpl: fakeFetch(providerPayload(loopSteps)),
+  });
+  assert.deepEqual(result.registrySteps.at(-1).loop, loop);
+});
