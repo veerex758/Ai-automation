@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { NodeDefinition } from "./types";
+import type { NodeDefinition, NodeContext } from "./types";
 
 const required = (max = 5000) => z.string().trim().min(1).max(max);
-function credential(ctx: { credentials: Record<string, Record<string, string>> }, provider: string, name: string) {
+function credential(ctx: NodeContext, provider: string, name: string) {
   const value = ctx.credentials[provider]?.[name];
   if (!value) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
