@@ -66,7 +66,7 @@ export async function performSafeHttpRequest(input: {
   const transport = (url.protocol === "https:" ? httpsRequest : httpRequest) as typeof httpRequest;
   return new Promise((resolve, reject) => {
     const req = transport({
-      protocol: url.protocol, hostname: url.hostname.replace(/^\[|\]$/g, ""), port: url.port || undefined,
+      hostname: url.hostname.replace(/^\[|\]$/g, ""), port: url.port || undefined,
       path: url.pathname + url.search, method: input.method, headers,
       lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
     }, (response) => {
