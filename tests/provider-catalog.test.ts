@@ -13,17 +13,17 @@ test("the integrations directory contains all 100 requested providers exactly on
 
 test("only native registry implementations are marked execution-ready", () => {
   const catalog = getPublicNodeCatalog();
-  const ready = catalog.filter((node) => node.executionStatus === "available");
+  const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
-  assert.equal(ready.length, nodes.length);
-  assert.equal(ready.length, 19);
+  assert.equal(registered.length, nodes.length);
+  assert.equal(registered.length, 19);
   assert.equal(comingSoon.length, 100 - nodes.length);
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
 
 test("the AI execution registry exposes schema-backed handlers only", () => {
   const catalog = getPublicNodeCatalog();
-  for (const item of catalog.filter((node) => node.executionStatus === "available")) {
+  for (const item of catalog.filter((node) => node.executionStatus === "registered")) {
     assert.ok(item.triggers.every((operation) => operation.inputSchema && operation.outputSchema));
     assert.ok(item.actions.every((operation) => operation.inputSchema && operation.outputSchema));
   }
