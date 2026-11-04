@@ -257,3 +257,57 @@
 .stat-card,.section-info-card,.workflow-table-card{box-shadow:0 2px 10px rgba(23,48,28,.025);transition:border-color .16s ease,box-shadow .16s ease}
 .stat-card:hover,.section-info-card:hover,.workflow-table-card:hover{border-color:#d4e2ca;box-shadow:0 8px 24px rgba(23,48,28,.055)}
 @media(prefers-reduced-motion:reduce){.side-link,.stat-card,.section-info-card,.workflow-table-card{transition:none}}
+
+
+/* Registry-backed integrations directory */
+.registry-integrations{min-width:0}
+.registry-directory-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 15px}
+.registry-directory-toolbar>div{display:flex;flex-direction:column;gap:4px}
+.registry-directory-toolbar>div strong{font:700 12px Manrope,sans-serif;color:#23392b}
+.registry-directory-toolbar>div span{font-size:9px;color:#819087}
+.registry-search{display:flex;align-items:center;gap:8px;width:min(360px,48%);height:38px;padding:0 11px;border:1px solid #e1e9df;border-radius:8px;background:#fff;color:#849287}
+.registry-search>span{font-size:19px}
+.registry-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#263b2d;font:10px 'DM Sans',sans-serif}
+.registry-search:focus-within{border-color:#a8df70;box-shadow:0 0 0 3px rgba(184,255,88,.13)}
+.registry-node-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.registry-node-card{min-width:0;padding:17px;border:1px solid #e3ebe1;border-radius:11px;background:#fff;box-shadow:0 2px 10px rgba(23,48,28,.025)}
+.registry-node-heading{display:flex;align-items:center;gap:11px;min-width:0}
+.integration-brand-mark{display:grid;place-items:center;flex:0 0 39px;width:39px;height:39px;border-radius:11px;background:#f1f4ef;color:#26392c;font:800 19px Manrope,sans-serif}
+.brand-manual{background:#edf4e8;color:#537b38}.brand-webhooks{background:#edf3f8;color:#477b9d}
+.brand-openai{background:#eaf3f0;color:#176b59}.brand-gemini{background:#f0effb;color:#7462bd}
+.brand-slack{background:#f4eff9;color:#6c4aa2}.brand-resend{background:#f1f1ef;color:#262b27}
+.brand-gmail{background:#fff0ed;color:#c74e42}.brand-sheets{background:#eaf5e9;color:#34834d}
+.brand-notion{background:#f1f1ef;color:#161916}.brand-hubspot{background:#fff0e8;color:#d66b37}
+.brand-twilio{background:#fff0f0;color:#d13b42}.brand-shopify{background:#f1f6e8;color:#648b36}
+.brand-stripe{background:#f0effb;color:#6356a5}.brand-linear{background:#f0effb;color:#6252a8}
+.brand-generic{background:#eef2ed;color:#536b56}
+.registry-node-name{flex:1;min-width:0}
+.registry-node-name h3{margin:0 0 4px;font:700 14px Manrope,sans-serif;color:#1b2e23}
+.registry-node-name>span{font-size:9px;color:#87948a;text-transform:capitalize}
+.registry-connection-state{flex:0 0 auto;padding:6px 8px;border-radius:6px;font-size:8px;font-weight:700;white-space:nowrap}
+.registry-connection-state.state-connected{background:#eaf6e4;color:#3e7839}
+.registry-connection-state.state-not-connected{background:#f1f3f0;color:#6d7b70}
+.registry-connection-state.state-unverified{background:#fff3e2;color:#9a682c}
+.registry-node-summary{margin:13px 0 9px;font-size:10px;color:#718075}
+.registry-operation-preview{display:flex;flex-wrap:wrap;gap:6px}
+.registry-operation-preview span{padding:5px 7px;border:1px solid #e8ede6;border-radius:5px;background:#fafbf9;color:#5b6c5f;font-size:8px}
+.registry-expand-button{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:13px;padding:9px 0 0;border:0;border-top:1px solid #edf1eb;background:transparent;color:#416c39;font:700 9px 'DM Sans',sans-serif;text-align:left;cursor:pointer}
+.registry-expand-button span{font-size:15px}
+.registry-operation-list{display:flex;flex-direction:column;gap:9px;margin-top:12px}
+.registry-operation{padding:10px;border:1px solid #edf1eb;border-radius:7px;background:#fbfcfa}
+.registry-operation>div{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.registry-operation>div>span{font-size:8px;font-weight:700;color:#658449;text-transform:uppercase;letter-spacing:.4px}
+.registry-operation strong{font-size:10px;color:#293d30}
+.registry-operation code{margin-left:auto;color:#849188;font-size:8px}
+.registry-operation p{margin:7px 0 0;color:#77847a;font-size:9px;line-height:1.65}
+.registry-state-panel{padding:24px;border:1px dashed #d5e0d2;border-radius:10px;background:#fff;color:#718075;font-size:11px;line-height:1.7}
+.registry-directory-note{margin:14px 0 0;color:#879389;font-size:9px;line-height:1.7}
+@media(max-width:720px){.registry-directory-toolbar{align-items:stretch;flex-direction:column}.registry-search{width:100%}.registry-node-grid{grid-template-columns:1fr}.registry-node-card{padding:14px}.registry-node-heading{gap:8px}.integration-brand-mark{flex-basis:35px;width:35px;height:35px}.registry-connection-state{font-size:7px;padding:5px 6px}}
+
+
+/* Brand artwork: render vendor marks as SVG assets, not invented initials. */
+.integration-brand-mark.official-brand-mark{background:#fff;border:1px solid #edf0eb;padding:8px;box-sizing:border-box}
+.integration-brand-mark.official-brand-mark img{display:block;width:100%;height:100%;object-fit:contain}
+.integration-brand-mark.registry-native-mark{font-size:19px}
+.native-manual{background:#edf4e8;color:#537b38}
+.native-webhooks{background:#edf3f8;color:#477b9d}
