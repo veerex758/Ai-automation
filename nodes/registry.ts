@@ -5,8 +5,11 @@ import { slackNode } from "./slack";
 import { emailNode } from "./email";
 import { manualNode } from "./manual";
 import { additionalNodes } from "./additional";
+import { utilityLogicNodes } from "./utility-logic";
+import { fileDocumentNodes } from "./file-document";
+import { aiProviderNodes } from "./ai-providers";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
