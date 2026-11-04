@@ -100,3 +100,80 @@ test("Email action sends through Resend and returns provider message ID", async 
   assert.equal(requestedUrl, "https://api.resend.com/emails");
   assert.equal((result as { messageId: string }).messageId, "email_test_123");
 });
+
+
+test("JSON tools parse structured data and safely select a property path", async () => {
+  const operation = findOperation("json", "parse", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { json: JSON.stringify({ contact: { email: "person@example.com" } }), path: ["contact", "email"] });
+  assert.equal((result as { value: string }).value, "person@example.com");
+  await assert.rejects(() => operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { json: "{bad" }), /JSON_INVALID_INPUT/);
+});
+
+test("Date & Time node returns a valid timezone-aware formatted result", async () => {
+  const operation = findOperation("date_time", "current_time", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { timezone: "Africa/Lagos" }) as { iso: string; local: string; timezone: string };
+  assert.equal(new Date(result.iso).toISOString(), result.iso);
+  assert.equal(result.timezone, "Africa/Lagos");
+  assert.ok(result.local.length > 0);
+  await assert.rejects(() => operation.run({ credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} }, { timezone: "Not/AZone" }), /DATE_TIME_INVALID_TIMEZONE/);
+});
+
+test("Google Sheets action appends rows using the connected Google token", async () => {
+  const operation = findOperation("google_sheets", "append_rows", "action");
+  assert.ok(operation);
+  let requestUrl = "";
+  const result = await operation.run({ credentials: { google: { accessToken: "test-token" } }, logger: { info() {}, error() {} }, http: { async request(args) { requestUrl = args.url; return { status: 200, body: { updates: { updatedRange: "Sheet1!A1:B2", updatedRows: 2 } } }; } }, previousOutputs: {} }, { spreadsheetId: "sheet123", range: "Sheet1!A1", values: [["a", "b"], ["c", "d"]] }) as { updatedRows: number };
+  assert.match(requestUrl, /sheets.googleapis.com/);
+  assert.equal(result.updatedRows, 2);
+});
+
+test("Gmail action sends through the authenticated Gmail API", async () => {
+  const operation = findOperation("gmail", "send_email", "action");
+  assert.ok(operation);
+  let requestBody: unknown;
+  const result = await operation.run({ credentials: { google: { accessToken: "test-token" } }, logger: { info() {}, error() {} }, http: { async request(args) { requestBody = args.body; return { status: 200, body: { id: "gmail_msg_1", threadId: "thread_1" } }; } }, previousOutputs: {} }, { to: "person@example.com", subject: "Hello", body: "Test" }) as { messageId: string };
+  assert.equal(result.messageId, "gmail_msg_1");
+  assert.equal(typeof (requestBody as { raw: string }).raw, "string");
+});
+
+test("Notion action creates a page and returns its provider URL", async () => {
+  const operation = findOperation("notion", "create_page", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { notion: { apiKey: "test-token" } }, logger: { info() {}, error() {} }, http: { async request() { return { status: 200, body: { id: "00000000-0000-4000-8000-000000000001", url: "https://www.notion.so/example" } }; } }, previousOutputs: {} }, { parentId: "00000000-0000-4000-8000-000000000002", title: "New page" }) as { pageId: string };
+  assert.equal(result.pageId, "00000000-0000-4000-8000-000000000001");
+});
+
+test("Discord and Telegram actions send messages through their bot APIs", async () => {
+  const discord = findOperation("discord", "send_message", "action");
+  const telegram = findOperation("telegram", "send_message", "action");
+  assert.ok(discord && telegram);
+  let calls = 0;
+  const http = { async request(args: { url: string }) { calls++; return args.url.includes("discord.com") ? { status: 200, body: { id: "discord_msg", channel_id: "123456" } } : { status: 200, body: { ok: true, result: { message_id: 42, chat: { id: 123 } } } }; } };
+  const base = { logger: { info() {}, error() {} }, http, previousOutputs: {} };
+  const d = await discord.run({ ...base, credentials: { discord: { botToken: "test" } } }, { channelId: "123456", message: "hello" }) as { messageId: string };
+  const t = await telegram.run({ ...base, credentials: { telegram: { botToken: "test" } } }, { chatId: "123", message: "hello" }) as { messageId: number };
+  assert.equal(d.messageId, "discord_msg");
+  assert.equal(t.messageId, 42);
+  assert.equal(calls, 2);
+});
+
+test("Airtable, HubSpot and Trello actions create records, contacts and cards", async () => {
+  const airtable = findOperation("airtable", "create_record", "action");
+  const hubspot = findOperation("hubspot", "create_contact", "action");
+  const trello = findOperation("trello", "create_card", "action");
+  assert.ok(airtable && hubspot && trello);
+  const http = { async request(args: { url: string }) {
+    if (args.url.includes("airtable.com")) return { status: 200, body: { id: "rec_1", createdTime: "2026-11-04T00:00:00.000Z" } };
+    if (args.url.includes("hubapi.com")) return { status: 200, body: { id: "contact_1" } };
+    return { status: 200, body: { id: "card_1", url: "https://trello.com/c/card_1" } };
+  } };
+  const base = { logger: { info() {}, error() {} }, http, previousOutputs: {} };
+  const a = await airtable.run({ ...base, credentials: { airtable: { accessToken: "test" } } }, { baseId: "app123", tableName: "Contacts", fields: { Name: "Test" } }) as { recordId: string };
+  const h = await hubspot.run({ ...base, credentials: { hubspot: { accessToken: "test" } } }, { email: "person@example.com" }) as { contactId: string };
+  const t = await trello.run({ ...base, credentials: { trello: { apiKey: "key", token: "token" } } }, { listId: "list123", name: "New task" }) as { cardId: string };
+  assert.equal(a.recordId, "rec_1");
+  assert.equal(h.contactId, "contact_1");
+  assert.equal(t.cardId, "card_1");
+});
