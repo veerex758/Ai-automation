@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { Sandbox } from "@vercel/sandbox";
 import type { NodeDefinition } from "./types";
 
 const MAX_CODE_BYTES = 20_000;
