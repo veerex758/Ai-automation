@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { nextCronOccurrence } from "@/lib/workflows/cron";
 
 
 export const runtime = "nodejs";
@@ -50,7 +51,19 @@ async function finishClaim(
   claim: ScheduleClaim,
   succeeded: boolean,
   errorCode: string | null,
+  cronSchedule = false,
+  nextRunAt?: string,
 ): Promise<boolean> {
+  if (cronSchedule) {
+    const { data, error } = await supabase.rpc("finish_workflow_cron_schedule_claim", {
+      p_schedule_id: claim.schedule_id,
+      p_lease_token: claim.lease_token,
+      p_succeeded: succeeded,
+      p_next_run_at: nextRunAt ?? null,
+      p_error_code: errorCode,
+    });
+    return !error && data === true;
+  }
   const { data, error } = await supabase.rpc("finish_workflow_schedule_claim", {
     p_schedule_id: claim.schedule_id,
     p_lease_token: claim.lease_token,
@@ -92,7 +105,16 @@ async function dispatchTick(request: NextRequest) {
 
   for (const claim of claims) {
     let failureCode = "SCHEDULED_RUN_FAILED";
+    let cronSchedule = false;
+    let nextRunAt: string | undefined;
     try {
+      const { data: scheduleConfig, error: scheduleConfigError } = await supabase.from("workflow_schedules")
+        .select("cron_expression,timezone").eq("id", claim.schedule_id).maybeSingle();
+      if (scheduleConfigError) throw new Error("SCHEDULE_CONFIG_LOOKUP_FAILED");
+      if (scheduleConfig?.cron_expression) {
+        cronSchedule = true;
+        nextRunAt = nextCronOccurrence(scheduleConfig.cron_expression, scheduleConfig.timezone ?? "UTC");
+      }
       const validated = validateDefinition(claim.definition);
       if (!validated.definition) {
         failureCode = "INVALID_WORKFLOW_DEFINITION";
@@ -127,7 +149,7 @@ async function dispatchTick(request: NextRequest) {
       }
 
 
-      const finalized = await finishClaim(supabase, claim, true, null);
+      const finalized = await finishClaim(supabase, claim, true, null, cronSchedule, nextRunAt);
       if (!finalized) {
         // The durable run record is idempotent. If this lease expired, a later
         // worker can safely observe the existing record and finish the schedule.
@@ -137,7 +159,7 @@ async function dispatchTick(request: NextRequest) {
       queued += 1;
     } catch {
       try {
-        await finishClaim(supabase, claim, false, failureCode);
+        await finishClaim(supabase, claim, false, failureCode, cronSchedule);
       } catch {
         // The lease expires and can be retried if the database is temporarily unavailable.
       }
