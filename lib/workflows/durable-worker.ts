@@ -5,6 +5,7 @@ import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integr
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
 
 
@@ -212,14 +213,9 @@ export async function runDurableWorker() {
       let result: { status: string; steps: Array<{ stepId: string; position: number; type: string; title: string; status: string; message: string; output?: unknown }> };
       const preCheckpointed = new Set<string>();
       if (definition.format === "aivanta-registry-v1") {
-        if (!Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
-          throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
-        }
-        let steps = definition.steps as RegisteredWorkflowStep[];
-        if (steps.some((step) => !step || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
-          typeof step.operationId !== "string" || (step.kind !== "trigger" && step.kind !== "action") || !("input" in step))) {
-          throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
-        }
+        const validated = validateRegisteredSteps(definition.steps);
+        if (!validated.steps) throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
+        let steps: RegisteredWorkflowStep[] = validated.steps;
         if (job.execution_mode === "live") {
           if (steps.some((step) => !liveStepAllowed(step)) || steps.filter((step) => step.kind === "action").length > 4) {
             throw new Error("LIVE_OPERATION_NOT_ENABLED");
