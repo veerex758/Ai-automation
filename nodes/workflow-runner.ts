@@ -67,7 +67,7 @@ export async function executeRegisteredWorkflow(args: {
     seen.add(step.id);
     if (step.branch) {
       const source = outputs[step.branch.fromStepId];
-      if (!source || typeof source !== "object" || !Object.prototype.hasOwnProperty.call(source, "route")) {
+      if ((!source || typeof source !== "object" || !Object.prototype.hasOwnProperty.call(source, "route")) && args.dryRun) {\n        const simulated: RegisteredStepResult = { stepId: step.id, status: "simulated" };\n        await args.onStepComplete?.(step, results.length + 1, simulated);\n        results.push(simulated);\n        continue;\n      }\n      if (!source || typeof source !== "object" || !Object.prototype.hasOwnProperty.call(source, "route")) {
         results.push({ stepId: step.id, status: "failed", error: "WORKFLOW_BRANCH_SOURCE_NOT_FOUND" });
         for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
         return { status: "failed", steps: results, outputs };
