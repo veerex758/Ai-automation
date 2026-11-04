@@ -3,13 +3,27 @@ import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
-test("registry includes versioned webhook, OpenAI, Slack and Email operations", () => {
-  assert.equal(nodes.length, 5);
+test("registry includes the original nodes and ten additional registered nodes", () => {
+  assert.equal(nodes.length, 15);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
+  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time"]) {
+    assert.ok(nodes.some((node) => node.id === id), "missing node: " + id);
+    assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
+  }
+  assert.ok(findOperation("google_sheets", "append_rows", "action"));
+  assert.ok(findOperation("gmail", "send_email", "action"));
+  assert.ok(findOperation("notion", "create_page", "action"));
+  assert.ok(findOperation("discord", "send_message", "action"));
+  assert.ok(findOperation("telegram", "send_message", "action"));
+  assert.ok(findOperation("airtable", "create_record", "action"));
+  assert.ok(findOperation("hubspot", "create_contact", "action"));
+  assert.ok(findOperation("trello", "create_card", "action"));
+  assert.ok(findOperation("json", "parse", "action"));
+  assert.ok(findOperation("date_time", "current_time", "action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
