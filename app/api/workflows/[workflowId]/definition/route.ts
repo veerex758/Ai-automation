@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { getPublicNodeCatalog } from "@/nodes/registry";
 import { findOperation, getPublicNodeCatalog } from "@/nodes/registry";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
