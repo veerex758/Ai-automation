@@ -137,6 +137,11 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
 }
 
 function boundedOutput(value: unknown): Record<string, unknown> {
+  if (Array.isArray(value)) {
+    try {
+      if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return { __aivantaArray: value };
+    } catch { /* omit unserializable loop output */ }
+  }
   if (isRecord(value)) {
     try {
       if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return value;
@@ -260,7 +265,8 @@ export async function runDurableWorker() {
         const completedStepIds: string[] = [];
         for (const checkpoint of savedCheckpoints as Array<{ step_id: string; output: unknown }>) {
           if (workflowStepIds.has(checkpoint.step_id)) {
-            initialOutputs[checkpoint.step_id] = checkpoint.output;
+            initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
+              ? checkpoint.output.__aivantaArray : checkpoint.output;
             completedStepIds.push(checkpoint.step_id);
           }
         }
