@@ -124,7 +124,7 @@ test("Google Sheets action appends rows using the connected Google token", async
   const operation = findOperation("google_sheets", "append_rows", "action");
   assert.ok(operation);
   let requestUrl = "";
-  const result = await operation.run({ credentials: { google: { accessToken: "test-token" } }, logger: { info() {}, error() {} }, http: { async request(args) { requestUrl = args.url; return { status: 200, body: { updates: { updatedRange: "Sheet1!A1:B2", updatedRows: 2 } } }; } }, previousOutputs: {} }, { spreadsheetId: "sheet123", range: "Sheet1!A1", values: [["a", "b"], ["c", "d"]] }) as { updatedRows: number };
+  const result = await operation.run({ credentials: { google_sheets: { accessToken: "test-token" } }, logger: { info() {}, error() {} }, http: { async request(args) { requestUrl = args.url; return { status: 200, body: { updates: { updatedRange: "Sheet1!A1:B2", updatedRows: 2 } } }; } }, previousOutputs: {} }, { spreadsheetId: "sheet123", range: "Sheet1!A1", values: [["a", "b"], ["c", "d"]] }) as { updatedRows: number };
   assert.match(requestUrl, /sheets.googleapis.com/);
   assert.equal(result.updatedRows, 2);
 });
@@ -133,7 +133,7 @@ test("Gmail action sends through the authenticated Gmail API", async () => {
   const operation = findOperation("gmail", "send_email", "action");
   assert.ok(operation);
   let requestBody: unknown;
-  const result = await operation.run({ credentials: { google: { accessToken: "test-token" } }, logger: { info() {}, error() {} }, http: { async request(args) { requestBody = args.body; return { status: 200, body: { id: "gmail_msg_1", threadId: "thread_1" } }; } }, previousOutputs: {} }, { to: "person@example.com", subject: "Hello", body: "Test" }) as { messageId: string };
+  const result = await operation.run({ credentials: { gmail: { accessToken: "test-token" } }, logger: { info() {}, error() {} }, http: { async request(args) { requestBody = args.body; return { status: 200, body: { id: "gmail_msg_1", threadId: "thread_1" } }; } }, previousOutputs: {} }, { to: "person@example.com", subject: "Hello", body: "Test" }) as { messageId: string };
   assert.equal(result.messageId, "gmail_msg_1");
   assert.equal(typeof (requestBody as { raw: string }).raw, "string");
 });
