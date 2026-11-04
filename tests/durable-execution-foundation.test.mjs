@@ -137,3 +137,19 @@ test("live queue dispatch is explicit and limited to one attempt", () => {
   assert.match(dispatch, /AIVANTA_LIVE_EXECUTION_ENABLED/);
   assert.match(dispatch, /p_execution_mode: executionMode/);
 });
+
+
+const waitMigration = readFileSync(
+  new URL("../supabase/migrations/20261104120000_aivanta_durable_wait_resume.sql", import.meta.url),
+  "utf8",
+);
+
+test("durable waits release leases, retain attempt count, and resume from due queue state", () => {
+  assert.match(waitMigration, /'waiting'/);
+  assert.match(waitMigration, /status = 'waiting' then j\.attempts else j\.attempts \+ 1 end/);
+  assert.match(waitMigration, /create or replace function public\.pause_execution_job/i);
+  assert.match(waitMigration, /lease_token = p_lease_token and lease_until > now\(\)/);
+  assert.match(workerService, /execution_checkpoints/);
+  assert.match(workerService, /completedStepIds/);
+  assert.match(workerService, /pause_execution_job/);
+});
