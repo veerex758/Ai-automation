@@ -14,14 +14,6 @@ const inputSchema = z.object({
   timeoutMs: z.number().int().min(1_000).max(30_000).default(10_000),
 }).strict();
 
-type SandboxOptions = {
-  image: string;
-  resources: { vcpus: 1 };
-  timeout: number;
-  persistent: false;
-  networkPolicy: "deny-all";
-  env: Record<string, string>;
-};
 type SandboxHandle = Pick<VercelSandbox, "runCommand" | "stop">;
 type SandboxOptions = Parameters<typeof VercelSandbox.create>[0];
 type SandboxFactory = (options: SandboxOptions) => Promise<SandboxHandle>;
@@ -123,11 +115,18 @@ export async function executeJavaScriptInSandbox(
         callback();
       },
     });
+    let stderrBytes = 0;
+    const stderrSink = new Writable({
+      write(chunk, _encoding, callback) {
+        stderrBytes += Buffer.byteLength(chunk);
+        callback();
+      },
+    });
     const command = await sandbox.runCommand({
       cmd: "node",
       args: ["--permission", "-e", runnerSource, parsed.code, inputJson],
       stdout: outputSink,
-      stderr: outputSink,
+      stderr: stderrSink,
     });
     if (outputTooLarge) throw new Error("JAVASCRIPT_OUTPUT_TOO_LARGE");
     const stdout = Buffer.concat(outputChunks).toString("utf8");
