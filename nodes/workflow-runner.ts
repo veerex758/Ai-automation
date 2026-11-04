@@ -104,7 +104,7 @@ export async function executeRegisteredWorkflow(args: {
       };
       if (step.loop) {
         const source = outputs[step.loop.sourceStepId];
-        const items = Array.isArray(source) ? source : source && typeof source === "object" && Array.isArray((source as Record<string, unknown>).items) ? (source as { items: unknown[] }).items : null;
+        const items = Array.isArray(source) ? source : source && typeof source === "object" && Array.isArray((source as Record<string, unknown>).items) ? (source as { items: unknown[] }).items : source && typeof source === "object" && (source as Record<string, unknown>).data && typeof (source as Record<string, unknown>).data === "object" && Array.isArray(((source as { data: Record<string, unknown> }).data).items) ? ((source as { data: { items: unknown[] } }).data.items) : null;
         if (!items) throw new Error("WORKFLOW_LOOP_SOURCE_NOT_ARRAY");
         const max = Math.min(100, Math.max(1, step.loop.maxIterations ?? 100));
         if (items.length > max) throw new Error("WORKFLOW_LOOP_LIMIT_EXCEEDED");
