@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nodes, findOperation } from "../nodes/registry";
+import { nodes, findOperation, getPublicNodeCatalog } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
 test("registry includes the original nodes and ten additional registered nodes", () => {
@@ -176,4 +176,30 @@ test("Airtable, HubSpot and Trello actions create records, contacts and cards", 
   assert.equal(a.recordId, "rec_1");
   assert.equal(h.contactId, "contact_1");
   assert.equal(t.cardId, "card_1");
+});
+
+
+test("public node catalog exposes all ten new operations and JSON schemas to the authenticated builder API", () => {
+  const catalog = getPublicNodeCatalog();
+  assert.equal(catalog.length, 15);
+  const expected = [
+    ["google_sheets", "append_rows"],
+    ["gmail", "send_email"],
+    ["notion", "create_page"],
+    ["discord", "send_message"],
+    ["telegram", "send_message"],
+    ["airtable", "create_record"],
+    ["hubspot", "create_contact"],
+    ["trello", "create_card"],
+    ["json", "parse"],
+    ["date_time", "current_time"],
+  ];
+  for (const [nodeId, operationId] of expected) {
+    const node = catalog.find((item) => item.id === nodeId);
+    assert.ok(node, "catalog missing " + nodeId);
+    const operation = node.actions.find((item) => item.id === operationId);
+    assert.ok(operation, "catalog missing operation " + nodeId + "." + operationId);
+    assert.ok(operation.inputSchema && typeof operation.inputSchema === "object");
+    assert.ok(operation.outputSchema && typeof operation.outputSchema === "object");
+  }
 });
