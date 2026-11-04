@@ -8,8 +8,9 @@ import { additionalNodes } from "./additional";
 import { utilityLogicNodes } from "./utility-logic";
 import { fileDocumentNodes } from "./file-document";
 import { aiProviderNodes } from "./ai-providers";
+import { communicationMarketingNodes } from "./communication-marketing";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes, ...communicationMarketingNodes];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
