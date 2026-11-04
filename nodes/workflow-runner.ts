@@ -63,6 +63,7 @@ export async function executeRegisteredWorkflow(args: {
   const seen = new Set<string>();
   const loopOutputs = new Map<string, unknown[]>();
   let checkpointPosition = 0;
+  let loopExecutionCount = 0;
 
   for (const step of args.steps) {
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id)) {
@@ -124,6 +125,8 @@ export async function executeRegisteredWorkflow(args: {
         for (let index = 0; index < items.length; index++) {
           const iterationContext: Record<string, unknown> = { ...outputs };
           for (const [priorStepId, priorItems] of loopOutputs) if (priorItems.length > index) iterationContext[priorStepId] = priorItems[index];
+          loopExecutionCount++;
+          if (loopExecutionCount > 500) throw new Error("WORKFLOW_LOOP_EXECUTION_BUDGET_EXCEEDED");
           const scope = { ...iterationContext, [step.loop.itemAs ?? "loop_item"]: items[index], [step.loop.indexAs ?? "loop_index"]: index };
           const iteration = await executeOnce(scope, index);
           if (!iteration.simulated) aggregate.push(iteration.output);
