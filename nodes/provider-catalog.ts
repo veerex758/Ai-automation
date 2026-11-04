@@ -86,6 +86,7 @@ export const providerCatalog: ProviderCatalogEntry[] = [
   {
     "id": "set_fields",
     "name": "Set Fields",
+    "registryId": "set_fields",
     "category": "data",
     "group": "Data utilities",
     "auth": "none"
@@ -93,6 +94,7 @@ export const providerCatalog: ProviderCatalogEntry[] = [
   {
     "id": "json_parse",
     "name": "JSON Parse",
+    "registryId": "json_parse",
     "category": "data",
     "group": "Data utilities",
     "auth": "none"
@@ -100,6 +102,7 @@ export const providerCatalog: ProviderCatalogEntry[] = [
   {
     "id": "filter",
     "name": "Filter",
+    "registryId": "filter",
     "category": "data",
     "group": "Data utilities",
     "auth": "none"
@@ -107,6 +110,7 @@ export const providerCatalog: ProviderCatalogEntry[] = [
   {
     "id": "aggregate",
     "name": "Aggregate",
+    "registryId": "aggregate",
     "category": "data",
     "group": "Data utilities",
     "auth": "none"
@@ -114,6 +118,7 @@ export const providerCatalog: ProviderCatalogEntry[] = [
   {
     "id": "date_time",
     "name": "Date/Time",
+    "registryId": "date_time",
     "category": "data",
     "group": "Data utilities",
     "auth": "none"
