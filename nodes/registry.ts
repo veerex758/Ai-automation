@@ -60,3 +60,8 @@ export function getPublicNodeCatalog() {
     };
   });
 }
+
+/** Returns only registered definitions for AI planning and execution validation. */
+export function getExecutableNodeCatalog() {
+  return getPublicNodeCatalog().filter((node) => node.executionStatus === "registered");
+}
