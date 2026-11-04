@@ -86,7 +86,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!dryRun) {
       // Until each provider has its own workspace-scoped connection and explicit live-action gate,
       // keep production execution restricted to the existing guarded Resend email action.
-      const safeInternalActions = new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time"]);
+      const safeInternalActions = new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time", "loop.iterate"]);
       const unsupportedLiveStep = steps.find((step) =>
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
         (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email") && !safeInternalActions.has(step.nodeId + "." + step.operationId))
