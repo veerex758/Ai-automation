@@ -152,5 +152,6 @@ test("durable waits release leases, retain attempt count, and resume from due qu
   assert.match(waitMigration, /lease_token = p_lease_token and lease_until > now\(\)/);
   assert.match(workerService, /execution_checkpoints/);
   assert.match(workerService, /completedStepIds/);
+  assert.match(workerService, /heartbeat_execution_job/);
   assert.match(workerService, /pause_execution_job/);
 });
