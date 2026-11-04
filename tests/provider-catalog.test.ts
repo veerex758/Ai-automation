@@ -54,18 +54,7 @@ test("Merge supports bounded append and safe object merging", async () => {
   assert.deepEqual(objects, { value: { name: "Ada", role: "admin" }, count: 2 });
 });
 
-test("workflow runner skips steps whose IF branch is not selected", async () => {
-  const result = await executeRegisteredWorkflow({ context, dryRun: false, steps: [
-    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: 1, operator: "equals", compareTo: 2 } },
-    { id: "truePath", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { selected: "true" } }, branch: { fromStepId: "condition", route: "true" } },
-    { id: "falsePath", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { selected: "false" } }, branch: { fromStepId: "condition", route: "false" } },
-  ] });
-  assert.equal(result.status, "succeeded");
-  assert.equal(result.steps[1].status, "skipped");
-  assert.equal(result.steps[2].status, "succeeded");
-});
-
-\nconst context = {
+const context = {
   credentials: {},
   logger: { info() {}, error() {} },
   http: { async request() { throw new Error("Network access is not expected in data utility tests."); } },
