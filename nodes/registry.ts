@@ -66,5 +66,5 @@ export function getPublicNodeCatalog() {
 export function getExecutableNodeCatalog() {
   return getPublicNodeCatalog()
     .filter((node) => node.executionStatus === "registered")
-    .map((node) => ({ ...node, id: node.registryNodeId ?? node.id }));
+    .map(({ registryNodeId, ...node }) => ({ ...node, id: registryNodeId ?? node.id }));
 }
