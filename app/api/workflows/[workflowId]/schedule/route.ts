@@ -77,9 +77,10 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-    const { error } = await supabase.from("workflow_schedules")
-      .update({ enabled: false }).eq("workflow_id", workflowId);
+    const { data, error } = await supabase.from("workflow_schedules")
+      .update({ enabled: false }).eq("workflow_id", workflowId).select("id").maybeSingle();
     if (error) throw error;
+    if (!data) return NextResponse.json({ error: "Schedule not found or currently leased by the scheduler." }, { status: 409 });
     return NextResponse.json({ success: true, enabled: false });
   } catch (error) {
     console.error("Aivanta cron schedule disable failed.", error);
