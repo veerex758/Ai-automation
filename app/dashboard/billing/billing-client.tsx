@@ -2,7 +2,23 @@
 import { useState } from "react";
 
 type Plan = { slug: string; name: string; description: string; amountMinor: number; currency: string };
-export default function BillingClient({ plans, subscription, payments }: { plans: Plan[]; subscription: any; payments: any[] }) {
+export type WorkspaceSubscription = {
+  plan_slug: string;
+  status: string;
+  current_period_end: string;
+};
+export type BillingPayment = {
+  id: string;
+  plan_slug: string;
+  currency: string;
+  amount_minor: number;
+  status: string;
+};
+export default function BillingClient({ plans, subscription, payments }: {
+  plans: Plan[];
+  subscription: WorkspaceSubscription | null;
+  payments: BillingPayment[];
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
