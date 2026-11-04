@@ -103,7 +103,6 @@ export async function executeJavaScriptInSandbox(
     const command = await sandbox.runCommand({
       cmd: "node",
       args: ["--permission", "-e", runnerSource, parsed.code, inputJson],
-      env: {},
     });
     const stdout = await command.stdout();
     if (Buffer.byteLength(stdout, "utf8") > MAX_RESULT_BYTES + MAX_LOG_BYTES + 1024) {
