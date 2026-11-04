@@ -32,6 +32,15 @@ type SandboxHandle = {
 type SandboxFactory = (options: SandboxOptions) => Promise<SandboxHandle>;
 
 const runnerSource = `
+const rawStdoutWrite = process.stdout.write.bind(process.stdout);
+let stdoutBytes = 0;
+process.stdout.write = (chunk, ...args) => {
+  const size = Buffer.byteLength(typeof chunk === "string" ? chunk : chunk.toString());
+  if (stdoutBytes + size > 40000) return true;
+  stdoutBytes += size;
+  return rawStdoutWrite(chunk, ...args);
+};
+process.stderr.write = () => true;
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const code = process.argv[1];
 const input = JSON.parse(process.argv[2]);
