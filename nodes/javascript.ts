@@ -1,3 +1,4 @@
+import { Writable } from "node:stream";
 import { z } from "zod";
 import type { NodeDefinition } from "./types";
 
@@ -22,7 +23,7 @@ type SandboxOptions = {
   env: Record<string, string>;
 };
 type SandboxHandle = {
-  runCommand(args: { cmd: string; args: string[]; env?: Record<string, string> }): Promise<{
+  runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream }): Promise<{
     exitCode: number | null;
     stdout(): Promise<string>;
   }>;
@@ -103,17 +104,30 @@ export async function executeJavaScriptInSandbox(
   const startedAt = Date.now();
   let completed = false;
   try {
+    const outputChunks: Buffer[] = [];
+    let outputBytes = 0;
+    let outputTooLarge = false;
+    const outputLimit = MAX_RESULT_BYTES + MAX_LOG_BYTES + 1024;
+    const outputSink = new Writable({
+      write(chunk, _encoding, callback) {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        if (outputBytes + bytes.length > outputLimit) {
+          outputTooLarge = true;
+          callback();
+          return;
+        }
+        outputChunks.push(bytes);
+        outputBytes += bytes.length;
+        callback();
+      },
+    });
     const command = await sandbox.runCommand({
       cmd: "node",
       args: ["--permission", "-e", runnerSource, parsed.code, inputJson],
+      stdout: outputSink,
     });
-    const stdout = await command.stdout();
-    if (command.exitCode !== 0) {
-      throw new Error("JAVASCRIPT_EXECUTION_FAILED");
-    }
-    if (Buffer.byteLength(stdout, "utf8") > MAX_RESULT_BYTES + MAX_LOG_BYTES + 1024) {
-      throw new Error("JAVASCRIPT_OUTPUT_TOO_LARGE");
-    }
+    if (outputTooLarge) throw new Error("JAVASCRIPT_OUTPUT_TOO_LARGE");
+    const stdout = Buffer.concat(outputChunks).toString("utf8");
     let payload: unknown;
     try { payload = JSON.parse(stdout); }
     catch { throw new Error("JAVASCRIPT_SANDBOX_INVALID_OUTPUT"); }
@@ -123,6 +137,7 @@ export async function executeJavaScriptInSandbox(
         : "JAVASCRIPT_EXECUTION_FAILED";
       throw new Error(message);
     }
+    if (command.exitCode !== 0) throw new Error("JAVASCRIPT_EXECUTION_FAILED");
     const result = (payload as Record<string, unknown>).result ?? null;
     const logs = Array.isArray((payload as Record<string, unknown>).logs)
       ? (payload as { logs: string[] }).logs.filter((line) => typeof line === "string").slice(0, 50)
