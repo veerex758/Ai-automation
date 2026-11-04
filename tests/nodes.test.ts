@@ -4,13 +4,13 @@ import { nodes, findOperation, getPublicNodeCatalog } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
 test("registry includes the original nodes and ten additional registered nodes", () => {
-  assert.equal(nodes.length, 55);
+  assert.equal(nodes.length, 71);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
-  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time", "error_trigger", "sub_workflow", "rate_limiter", "deduplicate", "sort", "split_batches", "crypto_hash", "template", "csv", "excel", "pdf_generate", "pdf_extract", "xml", "markdown_html", "image_resize", "cohere", "together_ai", "replicate", "deepl", "assemblyai", "openai_whisper", "weaviate", "messagebird", "vonage_sms", "brevo", "convertkit", "klaviyo", "lemlist", "customer_io", "mixpanel", "posthog", "segment", "datadog", "google_analytics", "tally", "signal", "matrix", "mattermost", "beehiiv", "activecampaign"]) {
+  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time", "error_trigger", "sub_workflow", "rate_limiter", "deduplicate", "sort", "split_batches", "crypto_hash", "template", "csv", "excel", "pdf_generate", "pdf_extract", "xml", "markdown_html", "image_resize", "cohere", "together_ai", "replicate", "deepl", "assemblyai", "openai_whisper", "weaviate", "messagebird", "vonage_sms", "brevo", "convertkit", "klaviyo", "lemlist", "customer_io", "mixpanel", "posthog", "segment", "datadog", "google_analytics", "tally", "signal", "matrix", "mattermost", "beehiiv", "activecampaign", "bigcommerce", "gumroad", "wise", "coinbase", "plaid", "algolia", "cloudflare", "neon", "planetscale", "elasticsearch", "docker_ssh", "coda", "confluence", "obsidian", "evernote", "basecamp"]) {
     assert.ok(nodes.some((node) => node.id === id), "missing node: " + id);
     if (id !== "error_trigger") assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
   }
@@ -43,6 +43,22 @@ test("registry includes the original nodes and ten additional registered nodes",
   assert.ok(findOperation("mattermost", "create_post", "action"));
   assert.ok(findOperation("beehiiv", "create_subscription", "action"));
   assert.ok(findOperation("activecampaign", "sync_contact", "action"));
+  assert.ok(findOperation("bigcommerce", "create_product", "action"));
+  assert.ok(findOperation("gumroad", "verify_sale", "action"));
+  assert.ok(findOperation("wise", "list_profiles", "action"));
+  assert.ok(findOperation("coinbase", "list_accounts", "action"));
+  assert.ok(findOperation("plaid", "get_accounts", "action"));
+  assert.ok(findOperation("algolia", "search_index", "action"));
+  assert.ok(findOperation("cloudflare", "list_zones", "action"));
+  assert.ok(findOperation("neon", "list_projects", "action"));
+  assert.ok(findOperation("planetscale", "list_databases", "action"));
+  assert.ok(findOperation("elasticsearch", "search", "action"));
+  assert.ok(findOperation("docker_ssh", "execute_command", "action"));
+  assert.ok(findOperation("coda", "list_docs", "action"));
+  assert.ok(findOperation("confluence", "search_pages", "action"));
+  assert.ok(findOperation("obsidian", "read_note", "action"));
+  assert.ok(findOperation("evernote", "search_notes", "action"));
+  assert.ok(findOperation("basecamp", "list_projects", "action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
