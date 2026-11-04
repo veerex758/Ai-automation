@@ -71,6 +71,10 @@ export async function executeRegisteredWorkflow(args: {
       return { status: "failed", steps: results, outputs };
     }
     seen.add(step.id);
+    if (completedStepIds.has(step.id)) {
+      results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
+      continue;
+    }
     if (step.branch) {
       const source = outputs[step.branch.fromStepId];
       if (!source || typeof source !== "object" || !Object.prototype.hasOwnProperty.call(source, "route")) {
