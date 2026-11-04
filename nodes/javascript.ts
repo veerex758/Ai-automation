@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Sandbox } from "@vercel/sandbox";
+import type { Sandbox } from "@vercel/sandbox";
 import type { NodeDefinition } from "./types";
 
 const MAX_CODE_BYTES = 20_000;
@@ -81,7 +81,10 @@ globalThis.console = safeConsole;
 
 export async function executeJavaScriptInSandbox(
   args: JavaScriptInput,
-  createSandbox: SandboxFactory = async (options) => Sandbox.create(options),
+  createSandbox: SandboxFactory = async (options) => {
+    const { Sandbox: VercelSandbox } = await import("@vercel/sandbox");
+    return VercelSandbox.create(options);
+  },
 ) {
   const parsed = inputSchema.parse(args);
   const inputJson = JSON.stringify(parsed.input);
