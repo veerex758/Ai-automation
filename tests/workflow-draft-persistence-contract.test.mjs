@@ -7,7 +7,7 @@ const builder = readFileSync(new URL("../app/dashboard/builder/page.tsx", import
 
 test("workflow creation validates and persists an included definition in the same insert", () => {
   assert.match(route, /import \{ validateDefinition \} from "@\/lib\/workflows\/validate-definition\.cjs";/);
-  assert.match(route, /"definition" in body\s*\? validateDefinition\(body\.definition\)/);
+  assert.match(route, /"definition" in body\s*\? validateDefinition\(body\.definition, getPublicNodeCatalog\(\)\)/);
   assert.match(route, /status: 422/);
   assert.match(route, /definition: definitionResult\.definition/);
 });
