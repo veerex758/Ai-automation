@@ -156,3 +156,23 @@ end;
 $$;
 revoke all on function public.dispatch_execution_error_event(uuid) from public,anon,authenticated;
 grant execute on function public.dispatch_execution_error_event(uuid) to service_role;
+
+
+-- Persisting a failure and fanning it out are one transaction. If enqueueing
+-- any subscriber fails, the event insert rolls back and the worker retry can
+-- safely attempt the operation again.
+create or replace function public.record_and_dispatch_execution_error_event(
+  p_job_id uuid,p_lease_token uuid,p_step_id text,p_error_code text,p_safe_message text,p_attempt integer
+) returns integer
+language plpgsql security definer set search_path = ''
+as $$
+declare event_id uuid;
+begin
+  event_id := public.record_execution_error_event(
+    p_job_id,p_lease_token,p_step_id,p_error_code,p_safe_message,p_attempt
+  );
+  return public.dispatch_execution_error_event(event_id);
+end;
+$$;
+revoke all on function public.record_and_dispatch_execution_error_event(uuid,uuid,text,text,text,integer) from public,anon,authenticated;
+grant execute on function public.record_and_dispatch_execution_error_event(uuid,uuid,text,text,text,integer) to service_role;
