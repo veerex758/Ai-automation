@@ -341,7 +341,7 @@ export async function runDurableWorker() {
             // Persist and enqueue subscribers in one database transaction. A
             // failure rolls back both, allowing the durable job retry to retry
             // delivery without losing an event between two RPC calls.
-            if (source !== "error_trigger") {
+            if (job.execution_mode === "live" && source !== "error_trigger") {
               const { error: eventError } = await db.rpc("record_and_dispatch_execution_error_event", {
                 p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
                 p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
