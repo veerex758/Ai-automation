@@ -201,7 +201,7 @@ grant execute on function public.dispatch_execution_error_event(uuid) to service
 create or replace function public.dispatch_pending_execution_error_events(p_limit integer default 25)
 returns integer
 language plpgsql security definer set search_path = ''
-as $
+as $$
 declare
   event_id uuid;
   processed integer := 0;
