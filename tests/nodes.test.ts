@@ -5,7 +5,7 @@ import { executeRegisteredOperation } from "../nodes/runner";
 import type { NodeContext } from "../nodes/types";
 
 test("registry includes versioned provider and data utility operations", () => {
-  assert.equal(nodes.length, 47);
+  assert.equal(nodes.length, 67);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("http_request", "request", "action"));
@@ -34,8 +34,8 @@ test("registry includes versioned provider and data utility operations", () => {
   assert.ok(findOperation("if", "evaluate", "action"));
   assert.ok(findOperation("switch", "select_route", "action"));
   assert.ok(findOperation("merge", "merge_inputs", "action"));
-  assert.equal(nodes.filter(n => n.id.startsWith("")).length, 47);
-  for (const id of ["deduplicate","sort","split_batches","crypto_hash","template","csv_parse","csv_stringify","markdown_html","text_transform","regex","array_ops","object_ops","math","uuid","base64","date_add","date_format","error_trigger","rate_limiter"]) assert.ok(findOperation(id, id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":"check","action"));
+  assert.equal(nodes.length, 67);
+  for (const id of ["deduplicate","sort","split_batches","crypto_hash","template","csv_parse","csv_stringify","markdown_html","text_transform","regex","array_ops","object_ops","math","uuid","base64","date_add","date_format","error_trigger","rate_limiter","json_encode"]) assert.ok(findOperation(id, id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":"check","action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
