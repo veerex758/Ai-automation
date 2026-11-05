@@ -180,12 +180,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     // Inbound events must not bypass the same live-action policy as manual runs.
     const unsupportedLiveStep = steps.find((step) =>
       (step.kind === "trigger" && !(step.nodeId === "webhooks" && step.operationId === "receive_event")) ||
-      (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email")));
+      (step.kind === "action" && !((step.nodeId === "email" && step.operationId === "send_email") || (step.nodeId === "gemini" && step.operationId === "qualify_real_estate_lead"))));
     if (unsupportedLiveStep) return jsonError("This workflow contains an action that is not enabled for live webhook execution.", 403);
     if (steps.some((step) => step.kind === "action") && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
       return jsonError("Live workflow execution is disabled by the server.", 503);
     }
-    const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
+    if (steps.some((step) => step.nodeId === "gemini") && !process.env.GEMINI_API_KEY) return jsonError("Gemini is not configured for live execution.", 503);\n    if (steps.some((step) => step.nodeId === "email") && (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL)) return jsonError("Resend is not configured for live execution.", 503);\n    const hourAgo = new Date(Date.now() - 3600000).toISOString();\n    const { count: hourlyRuns, error: usageError } = await db.from("workflow_runs").select("id", { count: "exact", head: true })\n      .eq("workflow_id", workflow.id).eq("mode", "live").gte("created_at", hourAgo);\n    if (usageError) throw usageError;\n    if ((hourlyRuns ?? 0) >= 100) return jsonError("This workflow reached its hourly usage limit. Try again later.", 429);\n    const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
       .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
     for (const step of steps) {
       if (step.nodeId === "email" && step.operationId === "send_email") {
