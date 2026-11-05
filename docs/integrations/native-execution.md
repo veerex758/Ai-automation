@@ -20,6 +20,10 @@ The native registry exposes ten vendor integrations through Aivanta-owned schema
 - Dry-run validates registered schemas and never calls a provider.
 - Live jobs still require the global `AIVANTA_LIVE_EXECUTION_ENABLED=true` switch.
 - New providers (Gmail, Sheets, Notion, HubSpot, Twilio, Shopify, Stripe, Linear, and Slack bot-token messaging) additionally require their lowercase provider key in `AIVANTA_LIVE_INTEGRATIONS`.
+- The 20 additional provider-pack adapters (Claude, Mistral, Groq, Perplexity, Discord, Telegram, WhatsApp Business, SendGrid, Mailgun, Postmark, GitHub, GitLab, Sentry, Vercel, Calendly, Zendesk, Freshdesk, SerpAPI, OpenWeather, and RSS Feed) are mapped into the durable worker. Each requires its exact lowercase node ID in `AIVANTA_LIVE_INTEGRATIONS`; the global live-execution switch is still mandatory.
+- Provider-pack live actions resolve only the matching workspace credential record before execution. RSS Feed is credential-free but remains explicitly gated as `rss_feed`.
+- The 20 adapters have provider-specific mocked contract tests for endpoint/response handling, credential failures, rate limits, and exact opt-in gates. These tests do not claim that real external accounts or credentials have been live-tested.
+- Live durable jobs retain the queue's single-attempt rule. Provider actions are not automatically retried after an uncertain outcome; do not treat this as exactly-once delivery for providers that do not offer idempotency keys.
 - Twilio recipients must also be literal E.164 values in `AIVANTA_LIVE_SMS_RECIPIENTS`.
 - Email recipients remain protected by `AIVANTA_LIVE_EMAIL_RECIPIENTS`.
 - No live integration is enabled by this code change. Environment flags must be reviewed and configured separately.
