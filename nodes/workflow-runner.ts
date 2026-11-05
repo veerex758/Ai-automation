@@ -23,6 +23,25 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
   return value;
 }
 
+function validateLoopBody(outerOutputs: Record<string, unknown>, input: { items: unknown[]; bodySteps: Array<{ id: string; nodeId: string; operationId: string; input: unknown }> }) {
+  for (let index = 0; index < input.items.length; index++) {
+    const local: Record<string, unknown> = { ...outerOutputs, item: "[dry-run item]", index };
+    const seen = new Set<string>();
+    for (const body of input.bodySteps) {
+      if (body.nodeId === "loop" || !/^[a-zA-Z0-9_-]{1,64}$/.test(body.id) || seen.has(body.id) ||
+        body.id === "item" || body.id === "index" || Object.prototype.hasOwnProperty.call(outerOutputs, body.id)) {
+        throw new Error("LOOP_BODY_INVALID_OR_NESTED_LOOP");
+      }
+      seen.add(body.id);
+      const operation = findOperation(body.nodeId, body.operationId, "action");
+      if (!operation) throw new Error("LOOP_BODY_OPERATION_NOT_FOUND");
+      const resolved = resolveReferences(body.input, local, true);
+      operation.inputSchema.parse(resolved);
+      local[body.id] = "[dry-run output]";
+    }
+  }
+}
+
 async function runLoop(ctx: Omit<NodeContext, "previousOutputs">, outerOutputs: Record<string, unknown>, input: { items: unknown[]; bodySteps: Array<{ id: string; nodeId: string; operationId: string; input: unknown }> }) {
   const iterations: Array<{ item: unknown; index: number; outputs: Record<string, unknown> }> = [];
   for (let index = 0; index < input.items.length; index++) {
@@ -65,7 +84,13 @@ export async function executeRegisteredWorkflow(args: { steps: RegisteredWorkflo
     try {
       const input = resolveReferences(step.input, outputs, args.dryRun);
       const validated = operation.inputSchema.parse(input);
-      if (args.dryRun) { results.push({ stepId: step.id, status: "simulated" }); continue; }
+      if (args.dryRun) {
+        if (step.nodeId === "loop" && step.operationId === "each") {
+          validateLoopBody(outputs, validated as { items: unknown[]; bodySteps: Array<{ id: string; nodeId: string; operationId: string; input: unknown }> });
+        }
+        results.push({ stepId: step.id, status: "simulated" });
+        continue;
+      }
       const output = step.nodeId === "loop" && step.operationId === "each"
         ? await runLoop(args.context, outputs, validated as { items: unknown[]; bodySteps: Array<{ id: string; nodeId: string; operationId: string; input: unknown }> })
         : await operation.run({ ...args.context, previousOutputs: outputs }, validated);
