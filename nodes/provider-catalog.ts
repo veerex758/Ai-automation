@@ -671,49 +671,56 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "X/Twitter",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "x_twitter"
   },
   {
     "id": "linkedin",
     "name": "LinkedIn",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "linkedin"
   },
   {
     "id": "facebook_pages",
     "name": "Facebook Pages",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "facebook_pages"
   },
   {
     "id": "instagram",
     "name": "Instagram",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "instagram"
   },
   {
     "id": "tiktok",
     "name": "TikTok",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "tiktok"
   },
   {
     "id": "mailchimp",
     "name": "Mailchimp",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "mailchimp"
   },
   {
     "id": "typeform",
     "name": "Typeform",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "typeform"
   },
   {
     "id": "calendly",
