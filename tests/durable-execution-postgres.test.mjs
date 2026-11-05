@@ -19,6 +19,10 @@ const utilityMigration = await readFile(
   new URL("../supabase/migrations/20261105045346_aivanta_utility_execution_hardening.sql", import.meta.url),
   "utf8",
 );
+const utilityIndexesMigration = await readFile(
+  new URL("../supabase/migrations/20261105045900_aivanta_utility_execution_indexes.sql", import.meta.url),
+  "utf8",
+);
 const ids = {
   workspace: "10000000-0000-4000-8000-000000000001",
   workflow: "20000000-0000-4000-8000-000000000001",
@@ -110,6 +114,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     await setup.query(migration);
     await setup.query(liveModeMigration);
     await setup.query(utilityMigration);
+    await setup.query(utilityIndexesMigration);
     ready = true;
   } finally {
     setup.release();
