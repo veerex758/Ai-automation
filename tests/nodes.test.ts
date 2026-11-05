@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nodes, findOperation, getPublicNodeCatalog } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
+import { executeRegisteredWorkflow } from "../nodes/workflow-runner";
 
 test("registry includes the original nodes and all requested node definitions", () => {
   assert.equal(nodes.length, 71);
