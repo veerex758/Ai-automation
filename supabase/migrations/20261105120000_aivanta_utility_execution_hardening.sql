@@ -6,6 +6,8 @@ create table if not exists public.execution_rate_limit_hits (
 );
 create index if not exists execution_rate_limit_hits_lookup_idx
   on public.execution_rate_limit_hits(workspace_id,key_hash,hit_at);
+create index if not exists execution_rate_limit_hits_expiry_idx
+  on public.execution_rate_limit_hits(hit_at);
 alter table public.execution_rate_limit_hits enable row level security;
 revoke all on public.execution_rate_limit_hits from public,anon,authenticated;
 grant all on public.execution_rate_limit_hits to service_role;
@@ -28,6 +30,15 @@ begin
     raise exception using errcode='22023',message='Invalid rate limit request';
   end if;
   key_digest := md5(p_key);
+  -- Opportunistically prune a bounded number of expired rows so one-off keys
+  -- cannot grow the shared limiter table without limit.
+  delete from public.execution_rate_limit_hits
+  where ctid in (
+    select ctid from public.execution_rate_limit_hits
+    where hit_at <= now_at - interval '1 hour'
+    order by hit_at
+    limit 500
+  );
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_workspace_id::text || ':' || key_digest,0));
   delete from public.execution_rate_limit_hits
     where workspace_id=p_workspace_id and key_hash=key_digest
