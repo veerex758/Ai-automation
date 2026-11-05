@@ -112,10 +112,10 @@ test("native executable inventory has one authoritative count, separate from dir
   assert.equal(executable.length, 94);
   assert.equal(new Set(nodes.map((node) => node.id)).size, 94);
 
-  // The 100-entry provider directory is a different inventory. Its 59
+  // The 100-entry provider directory is a different inventory. Its 74
   // mapped entries do not include the 20 internal utility-pack nodes.
   assert.equal(catalog.length, 100);
-  assert.equal(registered.length, 65);
+  assert.equal(registered.length, 74);
   assert.equal(comingSoon.length, 26);
   assert.equal(new Set(registered.map((node) => node.registryNodeId)).size, 74);
   assert.ok(registered.every((node) => nodes.some((implementation) => implementation.id === node.registryNodeId)));
