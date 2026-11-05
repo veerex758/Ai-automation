@@ -172,3 +172,20 @@ test("workspace credential vault accepts payment and support provider fields", (
   assert.throws(() => encryptWorkspaceCredentials({ paypal: { clientId: "id", clientSecret: "secret" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ square: { accessToken: "token" } } as never, key));
 });
+
+
+test("workspace credential vault accepts social and marketing provider fields", () => {
+  const value = {
+    x_twitter: { accessToken: "x-token" },
+    linkedin: { accessToken: "linkedin-token" },
+    facebook_pages: { pageAccessToken: "facebook-page-token" },
+    instagram: { accessToken: "instagram-token", igUserId: "ig-user-1" },
+    tiktok: { accessToken: "tiktok-token" },
+    mailchimp: { apiKey: "mailchimp-us20" },
+    typeform: { accessToken: "typeform-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-marketing:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-marketing:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ instagram: { accessToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ facebook_pages: { pageAccessToken: "token", apiKey: "extra" } } as never, key));
+});
