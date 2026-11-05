@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -60,6 +60,10 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   ] },
   stripe: { label: "Stripe", fields: [{ name: "secretKey", label: "Secret or restricted API key", type: "password" }] },
   linear: { label: "Linear", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  elevenlabs: { label: "ElevenLabs", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  stability_ai: { label: "Stability AI", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  hugging_face: { label: "Hugging Face", fields: [{ name: "apiKey", label: "Access token", type: "password" }] },
+  pinecone: { label: "Pinecone", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "indexHost", label: "Index host (HTTPS Pinecone host)", type: "url" }] },
 };
 
 function WorkspaceIntegrationManager() {
