@@ -260,7 +260,7 @@ test("HTTP Request blocks loopback targets and requires workspace-scoped credent
 
 test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up", async () => {
   const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
-  let options: Record<string, unknown> | undefined;
+  let options: unknown;
   let command: { cmd: string; args: string[]; stdout: NodeJS.WritableStream } | undefined;
   let stopped = false;
   const output = JSON.stringify({ ok: true, result: { total: 42 }, logs: ["ran safely"] });
@@ -271,7 +271,7 @@ test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up
   }, async (received) => {
     options = received;
     return {
-      async runCommand(args) {
+      async runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream }) {
         command = args;
         args.stdout.write(output);
         return { exitCode: 0, async stdout() { return ""; } };
@@ -279,12 +279,12 @@ test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up
       async stop() { stopped = true; },
     } as never;
   });
-  assert.equal(options?.image, "vercel/sandbox/node:24");
-  assert.deepEqual(options?.resources, { vcpus: 1 });
-  assert.equal(options?.timeout, 5000);
-  assert.equal(options?.persistent, false);
-  assert.equal(options?.networkPolicy, "deny-all");
-  assert.deepEqual(options?.env, {});
+  assert.equal((options as { image?: unknown }).image, "vercel/sandbox/node:24");
+  assert.deepEqual((options as { resources?: unknown }).resources, { vcpus: 1 });
+  assert.equal((options as { timeout?: unknown }).timeout, 5000);
+  assert.equal((options as { persistent?: unknown }).persistent, false);
+  assert.equal((options as { networkPolicy?: unknown }).networkPolicy, "deny-all");
+  assert.deepEqual((options as { env?: unknown }).env, {});
   assert.equal(command?.cmd, "node");
   assert.ok(command?.args.includes("--permission"));
   assert.deepEqual(result.result, { total: 42 });
