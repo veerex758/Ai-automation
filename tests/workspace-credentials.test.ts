@@ -83,3 +83,17 @@ test("workspace credential vault accepts the additional vendor providers with on
   assert.throws(() => encryptWorkspaceCredentials({ twilio: { accountSid: "AC123" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ slack: {} } as never, key));
 });
+
+
+test("workspace credential vault accepts the first four catalogue AI providers", () => {
+  const value = {
+    elevenlabs: { apiKey: "eleven-secret" },
+    stability_ai: { apiKey: "stability-secret" },
+    hugging_face: { apiKey: "hf-secret" },
+    pinecone: { apiKey: "pinecone-secret", indexHost: "https://index.svc.us-east1-gcp.pinecone.io" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-ai:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-ai:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ pinecone: { apiKey: "key" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ elevenlabs: { apiKey: "key", endpoint: "https://untrusted.test" } } as never, key));
+});
