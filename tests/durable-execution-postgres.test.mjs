@@ -441,6 +441,7 @@ test.after(async () => {
         await db.query("drop function if exists public.finish_execution_job(uuid,uuid,boolean,text,text,text)");
         await db.query("drop function if exists public.consume_execution_rate_limit(uuid,text,integer,integer)");
         await db.query("drop function if exists public.record_execution_error_event(uuid,uuid,text,text,text,integer)");
+        await db.query("drop function if exists public.dispatch_pending_execution_error_events(integer)");
         await db.query("drop function if exists public.dispatch_execution_error_event(uuid)");
         await db.query("drop function if exists public.record_and_dispatch_execution_error_event(uuid,uuid,text,text,text,integer)");
       } finally {
