@@ -292,7 +292,7 @@ export default function WorkflowBuilderPage() {
             <code>{webhookDetails.url}</code>
             <p><strong>Signing secret — shown once</strong></p>
             <code>{webhookDetails.signingSecret}</code>
-            <p>Store this secret securely in your website/server integration. Do not share it publicly.</p>
+            <p>Store this secret securely in your website/server integration. Do not share it publicly. Send X-Aivanta-Event-Id, X-Aivanta-Event-Type and X-Aivanta-Signature headers. The signature format is t=&lt;unix-seconds&gt;,v1=&lt;hex HMAC-SHA256&gt; over timestamp + '.' + JSON.stringify([eventId, eventType]) + '.' + the exact raw JSON body bytes.</p>
           </section>}
           <section className="ai-workflow-panel" aria-labelledby="ai-workflow-heading">
             <div className="ai-workflow-copy"><span className="builder-ai-badge">✳ AI ASSISTANT</span><h2 id="ai-workflow-heading">Describe it. We’ll draft it.</h2><p>Explain the workflow in plain English. Review the draft before applying it; nothing executes automatically.</p></div>
