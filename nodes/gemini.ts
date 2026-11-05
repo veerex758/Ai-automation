@@ -90,6 +90,11 @@ export const geminiNode: NodeDefinition = {
   auth: { type: "apiKey", credentialKey: "apiKey" },
   triggers: [],
   actions: [{
+    id: "qualify_real_estate_lead",
+    name: "Qualify real-estate lead",
+    description: "Extracts and scores a real-estate enquiry using Gemini structured JSON. Missing facts remain null and are listed; it never invents lead details. External AI processing may incur provider charges.",
+    inputSchema: leadInputSchema, outputSchema: leadOutputSchema, run: qualifyLead,
+  }, {
     id: "generate_text",
     name: "Generate text",
     description: "Calls the Google Gemini API to draft, summarize, extract or classify text. prompt is the task; system optionally constrains tone or format. Returns generated text and available token usage. This action makes an external API call and may incur provider charges.",
