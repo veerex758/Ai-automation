@@ -34,7 +34,7 @@ test("registry includes versioned provider and data utility operations", () => {
   assert.ok(findOperation("if", "evaluate", "action"));
   assert.ok(findOperation("switch", "select_route", "action"));
   assert.ok(findOperation("merge", "merge_inputs", "action"));
-  assert.equal(nodes.length, 67);
+  assert.equal(nodes.length, 118);
   for (const id of ["deduplicate","sort","split_batches","crypto_hash","template","csv_parse","csv_stringify","markdown_html","text_transform","regex","array_ops","object_ops","math","uuid","base64","date_add","date_format","error_trigger","rate_limiter","json_encode"]) assert.ok(findOperation(id, id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":id==="json_encode"?"encode":"check","action"));
 });
 
