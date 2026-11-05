@@ -87,12 +87,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       // keep production execution restricted to the existing guarded Resend email action.
       const unsupportedLiveStep = steps.find((step) =>
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
-        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email"))
+        (step.kind === "action" && !((step.nodeId === "email" && step.operationId === "send_email") || (step.nodeId === "gemini" && step.operationId === "qualify_real_estate_lead")) )
       );
       if (unsupportedLiveStep) {
         return NextResponse.json({ error: "This registry operation is available in dry-run only until its live integration is explicitly enabled." }, { status: 403 });
       }
-      const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+      if (steps.some((step) => step.nodeId === "gemini") && !process.env.GEMINI_API_KEY) return NextResponse.json({ error: "Gemini is not configured for live execution." }, { status: 503 });\n      if (steps.some((step) => step.nodeId === "email") && (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL)) return NextResponse.json({ error: "Resend is not configured for live execution." }, { status: 503 });\n      const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
       for (const step of steps) {
         if (step.nodeId === "email" && step.operationId === "send_email") {
           const rawTo = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
