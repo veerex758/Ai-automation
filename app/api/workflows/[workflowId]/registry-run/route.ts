@@ -12,13 +12,13 @@ function collectExecutableSteps(steps: RegisteredWorkflowStep[]): RegisteredWork
   const collected: RegisteredWorkflowStep[] = [];
   for (const step of steps) {
     collected.push(step);
-    if (step.nodeId !== "loop" || !isRecord(step.input) || !Array.isArray(step.input.bodySteps)) continue;
+    if (step.nodeId !== "iterate" || !isRecord(step.input) || !Array.isArray(step.input.bodySteps)) continue;
     for (const nested of step.input.bodySteps) {
       if (!isRecord(nested) || typeof nested.id !== "string" || typeof nested.nodeId !== "string" ||
         typeof nested.operationId !== "string" || !("input" in nested)) {
         throw new Error("LOOP_BODY_INVALID");
       }
-      if (nested.nodeId === "loop") throw new Error("LOOP_BODY_INVALID_OR_NESTED_LOOP");
+      if (nested.nodeId === "iterate") throw new Error("LOOP_BODY_INVALID_OR_NESTED_LOOP");
       collected.push({ id: nested.id, nodeId: nested.nodeId, operationId: nested.operationId, kind: "action", input: nested.input });
     }
   }
