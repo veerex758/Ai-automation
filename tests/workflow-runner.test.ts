@@ -127,8 +127,8 @@ test("Loop executes its registered downstream actions once per item with isolate
     context: {
       ...context,
       http: { async request(args) {
-        const body = args.body as { input?: Array<{ content?: Array<{ text?: string }> }> };
-        const prompt = body.input?.[0]?.content?.[0]?.text ?? "";
+        const body = args.body as { input?: string };
+        const prompt = body.input ?? "";
         prompts.push(prompt);
         return { status: 200, body: { output_text: "result:" + prompt, model: "test-model" } };
       } },
