@@ -7,8 +7,8 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom";
+const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"]);
+type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -147,6 +147,49 @@ async function check(provider: Provider, c: Credentials) {
         url = "https://api.intercom.io/me";
         headers.Authorization = "Bearer " + required(c, "accessToken");
         headers["Intercom-Version"] = "2.11";
+        break;
+      case "jira": {
+        const site = required(c, "siteUrl");
+        let parsed: URL; try { parsed = new URL(site); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".atlassian.net") || parsed.username || parsed.password) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/rest/api/3/myself";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "email") + ":" + required(c, "apiToken")).toString("base64");
+        break;
+      }
+      case "asana":
+        url = "https://app.asana.com/api/1.0/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "trello": {
+        const trello = new URL("https://api.trello.com/1/members/me");
+        trello.searchParams.set("key", required(c, "apiKey")); trello.searchParams.set("token", required(c, "token"));
+        url = trello.toString();
+        break;
+      }
+      case "clickup":
+        url = "https://api.clickup.com/api/v2/user";
+        headers.Authorization = required(c, "token");
+        break;
+      case "monday":
+        url = "https://api.monday.com/v2"; method = "POST";
+        headers.Authorization = required(c, "apiToken"); headers["Content-Type"] = "application/json";
+        body = JSON.stringify({ query: "{ me { id name } }" });
+        break;
+      case "todoist":
+        url = "https://api.todoist.com/rest/v2/projects";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "airtable":
+        url = "https://api.airtable.com/v0/meta/whoami";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "bitbucket":
+        url = "https://api.bitbucket.org/2.0/user";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "netlify":
+        url = "https://api.netlify.com/api/v1/user";
+        headers.Authorization = "Bearer " + required(c, "token");
         break;
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
