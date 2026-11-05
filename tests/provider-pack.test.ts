@@ -233,3 +233,52 @@ test("Intercom creates a contact and returns the provider ID", async () => {
     { email: "ada@example.test", name: "Ada Lovelace" });
   assert.deepEqual(result, { contactId: "intercom-1" });
 });
+
+
+test("Google Drive lists bounded file metadata using its dedicated read-only token", async () => {
+  const operation = findOperation("google_drive", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { google_drive: { accessToken: "drive-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /drive\/v3\/files/); assert.equal(args.headers.Authorization, "Bearer drive-token"); return { status: 200, body: { files: [{ id: "file-1", name: "Brief", mimeType: "text/plain" }] } }; } }, previousOutputs: {} }, { pageSize: 10 });
+  assert.deepEqual(result, { files: [{ id: "file-1", name: "Brief", mimeType: "text/plain" }] });
+});
+
+test("Google Calendar lists events without granting write scopes", async () => {
+  const operation = findOperation("google_calendar", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { google_calendar: { accessToken: "calendar-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /calendar\/v3\/calendars\/primary\/events/); return { status: 200, body: { items: [{ id: "event-1", summary: "Review", start: { dateTime: "2026-11-05T10:00:00Z" }] } }; } }, previousOutputs: {} }, { maxResults: 5 });
+  assert.deepEqual(result, { events: [{ id: "event-1", summary: "Review", start: { dateTime: "2026-11-05T10:00:00Z" } }] });
+});
+
+test("Google Docs reads document metadata only", async () => {
+  const operation = findOperation("google_docs", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { google_docs: { accessToken: "docs-token" } }, logger: { info() {}, error() {} },
+    http: { async request() { return { status: 200, body: { documentId: "document-123456", title: "Aivanta Plan", revisionId: "rev-1", body: { content: [{}, {}] } } }; } }, previousOutputs: {} }, { documentId: "document-123456" });
+  assert.deepEqual(result, { documentId: "document-123456", title: "Aivanta Plan", revisionId: "rev-1", bodyElementCount: 2 });
+});
+
+test("Google Forms reads form title and question count", async () => {
+  const operation = findOperation("google_forms", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { google_forms: { accessToken: "forms-token" } }, logger: { info() {}, error() {} },
+    http: { async request() { return { status: 200, body: { formId: "form-123456789", info: { title: "Lead form" }, items: [{}, {}] } }; } }, previousOutputs: {} }, { formId: "form-123456789" });
+  assert.deepEqual(result, { formId: "form-123456789", title: "Lead form", questionCount: 2 });
+});
+
+test("YouTube searches bounded video metadata", async () => {
+  const operation = findOperation("youtube", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { youtube: { accessToken: "youtube-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /youtube\/v3\/search/); return { status: 200, body: { items: [{ id: { videoId: "video-1" }, snippet: { title: "Workflow design", channelTitle: "Aivanta" } }] } }; } }, previousOutputs: {} }, { query: "workflow", maxResults: 5 });
+  assert.deepEqual(result, { videos: [{ videoId: "video-1", title: "Workflow design", channelTitle: "Aivanta" }] });
+});
+
+test("Google Contacts lists bounded people metadata", async () => {
+  const operation = findOperation("google_contacts", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { google_contacts: { accessToken: "contacts-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /people\/v1\/people\/me\/connections/); return { status: 200, body: { connections: [{ resourceName: "people/1", names: [{ displayName: "Ada Lovelace" }], emailAddresses: [{ value: "ada@example.test" }] }] } }; } }, previousOutputs: {} }, { pageSize: 10 });
+  assert.deepEqual(result, { people: [{ resourceName: "people/1", displayName: "Ada Lovelace", email: "ada@example.test" }] });
+});
