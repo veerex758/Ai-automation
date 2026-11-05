@@ -183,7 +183,7 @@ test("Error Trigger dispatches active same-workspace subscribers through the dur
   assert.match(utilityMigration, /create or replace function public\.finish_execution_job/);
   assert.match(utilityMigration, /p_error_step_id text default null/);
   assert.match(workerService, /db\.rpc\("dispatch_pending_execution_error_events"/);
-  assert.match(workerService, /p_error_step_id: workflowErrorEvent\?\.stepId/);
+  assert.match(workerService, /p_error_step_id: workflowErrorEvent\.current\?\.stepId/);
   assert.match(utilityMigration, /dispatch_workflow_execution/);
   assert.match(utilityMigration, /'live'/);
   assert.match(workerService, /db\.rpc\("record_and_dispatch_execution_error_event"/);
