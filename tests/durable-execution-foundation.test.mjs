@@ -181,6 +181,7 @@ test("Error Trigger dispatches active same-workspace subscribers through the dur
   assert.match(utilityMigration, /'live'/);
   assert.match(workerService, /db\.rpc\("record_and_dispatch_execution_error_event"/);
   assert.match(workerService, /source !== "error_trigger"/);
+  assert.match(workerService, /job\.execution_mode === "live" && source !== "error_trigger"/);
   assert.match(workerService, /source === "error_trigger"/);
   assert.match(workerService, /step\.nodeId === "error_trigger"/);
 });
