@@ -11,7 +11,7 @@ This inventory separates executable workflow definitions from the provider direc
 | Provider directory mapped to native implementations | 74 | Directory entries whose `registryId` resolves to a native registry definition |
 | Provider directory not yet mapped | 26 | Directory entries with no native implementation; displayed as `coming_soon` |
 | Internal utility-pack nodes | 20 | Executable utility definitions included in the 94-node registry but not represented as separate provider-directory entries |
-| Provider-pack nodes | 20 | Executable provider adapters included in the 85-node registry |
+| Provider-pack nodes | 20 | Executable provider adapters included in the 94-node registry |
 | Catalogue AI provider nodes | 4 | ElevenLabs, Stability AI, Hugging Face and Pinecone; each has a schema-backed action |
 | CRM and messaging catalogue nodes | 8 | Microsoft Teams, Salesforce, Pipedrive, Zoho CRM, Freshsales, Close, Apollo and Intercom |
 | Google read-only catalogue nodes | 6 | Drive, Calendar, Docs, Forms, YouTube and Contacts |
