@@ -152,28 +152,32 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Claude",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "claude"
   },
   {
     "id": "mistral",
     "name": "Mistral",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "mistral"
   },
   {
     "id": "groq",
     "name": "Groq",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "groq"
   },
   {
     "id": "perplexity",
     "name": "Perplexity",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "perplexity"
   },
   {
     "id": "elevenlabs",
@@ -274,21 +278,24 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Discord",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "discord"
   },
   {
     "id": "telegram",
     "name": "Telegram",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "telegram"
   },
   {
     "id": "whatsapp_business",
     "name": "WhatsApp Business",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "whatsapp_business"
   },
   {
     "id": "twilio_sms",
@@ -318,21 +325,24 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "SendGrid",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "sendgrid"
   },
   {
     "id": "mailgun",
     "name": "Mailgun",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "mailgun"
   },
   {
     "id": "postmark",
     "name": "Postmark",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "postmark"
   },
   {
     "id": "hubspot",
@@ -461,14 +471,16 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "GitHub",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "github"
   },
   {
     "id": "gitlab",
     "name": "GitLab",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "gitlab"
   },
   {
     "id": "bitbucket",
@@ -482,14 +494,16 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Sentry",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "sentry"
   },
   {
     "id": "vercel",
     "name": "Vercel",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "vercel"
   },
   {
     "id": "netlify",
@@ -673,21 +687,24 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Calendly",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "calendly"
   },
   {
     "id": "zendesk",
     "name": "Zendesk",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "zendesk"
   },
   {
     "id": "freshdesk",
     "name": "Freshdesk",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "freshdesk"
   },
   {
     "id": "zoom",
@@ -722,20 +739,23 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "RSS Feed",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "rss_feed"
   },
   {
     "id": "serpapi",
     "name": "SerpAPI",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "serpapi"
   },
   {
     "id": "openweather",
     "name": "OpenWeather",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "openweather"
   }
 ];
