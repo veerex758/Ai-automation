@@ -439,3 +439,59 @@ test("DocuSign lists envelopes from a validated account API host", async () => {
     { fromDate: "2026-11-01T00:00:00Z" });
   assert.deepEqual(result, { envelopes: [{ envelopeId: "env-1", status: "sent", emailSubject: "Agreement" }] });
 });
+
+
+test("X/Twitter publishes a bounded text post", async () => {
+  const operation = findOperation("x_twitter", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { x_twitter: { accessToken: "x-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer x-token"); return { status: 201, body: { data: { id: "tweet-1", text: "Hello" } } }; } }, previousOutputs: {} }, { text: "Hello" });
+  assert.deepEqual(result, { postId: "tweet-1", text: "Hello" });
+});
+
+test("LinkedIn reads the connected member profile", async () => {
+  const operation = findOperation("linkedin", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { linkedin: { accessToken: "linkedin-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.url, "https://api.linkedin.com/v2/userinfo"); return { status: 200, body: { sub: "member-1", name: "Ada Lovelace", email: "ada@example.test" } }; } }, previousOutputs: {} }, {});
+  assert.deepEqual(result, { memberId: "member-1", name: "Ada Lovelace", email: "ada@example.test" });
+});
+
+test("Facebook Pages publishes a text post using a page token", async () => {
+  const operation = findOperation("facebook_pages", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { facebook_pages: { pageAccessToken: "page-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer page-token"); return { status: 200, body: { id: "page_1_post_2" } }; } }, previousOutputs: {} }, { pageId: "123456", message: "Hello page" });
+  assert.deepEqual(result, { postId: "page_1_post_2" });
+});
+
+test("Instagram creates and publishes an image media container", async () => {
+  const operation = findOperation("instagram", "execute", "action"); assert.ok(operation);
+  let calls = 0;
+  const result = await operation.run({ credentials: { instagram: { accessToken: "ig-token", igUserId: "ig-user-1" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { calls++; if (calls === 1) return { status: 200, body: { id: "container-1" } }; assert.equal(args.body.creation_id, "container-1"); return { status: 200, body: { id: "media-1" } }; } }, previousOutputs: {} },
+    { imageUrl: "https://cdn.example.test/post.jpg", caption: "Aivanta update" });
+  assert.equal(calls, 2);
+  assert.deepEqual(result, { mediaId: "media-1" });
+});
+
+test("TikTok lists bounded video metadata", async () => {
+  const operation = findOperation("tiktok", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { tiktok: { accessToken: "tiktok-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer tiktok-token"); return { status: 200, body: { data: { videos: [{ id: "video-1", title: "Automation", create_time: 1793865600 }] } } }; } }, previousOutputs: {} },
+    { maxCount: 5 });
+  assert.deepEqual(result, { videos: [{ id: "video-1", title: "Automation", createTime: 1793865600 }] });
+});
+
+test("Mailchimp adds an audience member using the API key's server region", async () => {
+  const operation = findOperation("mailchimp", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { mailchimp: { apiKey: "test-us20" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /^https:\/\/us20\.api\.mailchimp\.com/); return { status: 200, body: { id: "member-1", email_address: "ada@example.test", status: "subscribed" } }; } }, previousOutputs: {} },
+    { listId: "list-1", email: "ada@example.test", status: "subscribed" });
+  assert.deepEqual(result, { memberId: "member-1", email: "ada@example.test", status: "subscribed" });
+});
+
+test("Typeform reads form metadata and field count", async () => {
+  const operation = findOperation("typeform", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { typeform: { accessToken: "typeform-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer typeform-token"); return { status: 200, body: { id: "form-1", title: "Lead intake", fields: [{}, {}, {}] } }; } }, previousOutputs: {} },
+    { formId: "form-1" });
+  assert.deepEqual(result, { formId: "form-1", title: "Lead intake", questionCount: 3 });
+});
