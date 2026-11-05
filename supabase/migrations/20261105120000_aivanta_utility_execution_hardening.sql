@@ -90,7 +90,7 @@ declare event_id uuid;
 declare safe_code text;
 begin
   select * into job_row from public.execution_jobs
-    where id=p_job_id and status='running' and lease_token=p_lease_token for update;
+    where id=p_job_id and status='running' and lease_token=p_lease_token and lease_until > now() for update;
   if not found then raise exception using errcode='22023',message='Execution lease is not valid'; end if;
   safe_code := case when p_error_code ~ '^[A-Z0-9_]{1,64}$' then p_error_code else 'NODE_EXECUTION_FAILED' end;
   if p_step_id is null or length(p_step_id) not between 1 and 64
