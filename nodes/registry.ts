@@ -72,23 +72,31 @@ export function getPublicNodeCatalog() {
 
 /** Returns only registered definitions for AI planning and execution validation. */
 export function getExecutableNodeCatalog() {
-  const catalog = getPublicNodeCatalog()
-    .filter((node) => node.executionStatus === "registered")
-    .map(({ registryNodeId, ...node }) => ({ ...node, id: registryNodeId ?? node.id }));
-  const represented = new Set(catalog.map((node) => node.id));
-  const internalNodes = nodes
-    .filter((node) => !represented.has(node.id))
-    .map((node) => ({
-      id: node.id,
-      name: node.name,
-      icon: node.icon,
-      category: node.category,
-      group: node.category,
-      version: node.version,
-      auth: node.auth,
-      executionStatus: "registered" as const,
-      triggers: node.triggers.map(publicOperation),
-      actions: node.actions.map(publicOperation),
-    }));
-  return [...catalog, ...internalNodes];
+  // Build the AI-facing catalogue from the native registry itself so every
+  // executable node appears exactly once, including internal utility nodes.
+  // Provider metadata is an optional presentation layer, never the source of
+  // truth for executable membership or cardinality.
+  const providerEntries = new Map(
+    getPublicNodeCatalog()
+      .filter((entry) => entry.executionStatus === "registered" && entry.registryNodeId)
+      .map((entry) => [entry.registryNodeId as string, entry]),
+  );
+
+  return nodes.map((node) => {
+    const providerEntry = providerEntries.get(node.id);
+    return providerEntry
+      ? { ...providerEntry, id: node.id }
+      : {
+          id: node.id,
+          name: node.name,
+          icon: node.icon,
+          category: node.category,
+          group: node.category,
+          version: node.version,
+          auth: node.auth,
+          executionStatus: "registered" as const,
+          triggers: node.triggers.map(publicOperation),
+          actions: node.actions.map(publicOperation),
+        };
+  });
 }
