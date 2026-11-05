@@ -135,7 +135,7 @@ test("Loop executes its registered downstream actions once per item with isolate
     },
     dryRun: false,
   });
-  assert.equal(result.status, "succeeded");
+  assert.equal(result.status, "succeeded", JSON.stringify(result));
   assert.deepEqual(prompts, ["Summarize alpha", "Summarize beta"]);
   const loopOutput = result.outputs.batch as { iterations: number; results: Array<{ index: number; outputs: Record<string, unknown> }> };
   assert.equal(loopOutput.iterations, 2);
