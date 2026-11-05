@@ -239,3 +239,51 @@ test("Schedule/Cron trigger passes its persisted event context to downstream ste
   assert.equal(result.status, "succeeded");
   assert.deepEqual(result.outputs.capture, { data: { startedAt: "2026-11-04T09:15:00.000Z", timezone: "Africa/Lagos" } });
 });
+
+
+test("Split in Batches drives each downstream step once per batch in order",async()=>{
+ const result=await executeRegisteredWorkflow({
+  steps:[
+   {id:"source",nodeId:"split_batches",operationId:"split",kind:"action",input:{items:[1,2,3,4,5],batchSize:2}},
+   {id:"process",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{source.batches}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+  ],
+  context,dryRun:false,
+ });
+ assert.equal(result.status,"succeeded");
+ assert.deepEqual(result.outputs.process,[[1,2],[3,4],[5]]);
+});
+
+test("Split in Batches supports chained downstream batch steps with matching batch scope",async()=>{
+ const result=await executeRegisteredWorkflow({
+  steps:[
+   {id:"source",nodeId:"split_batches",operationId:"split",kind:"action",input:{items:[1,2,3,4],batchSize:2}},
+   {id:"first",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{source.batches}}",operation:"reverse"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+   {id:"second",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{first}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+  ],
+  context,dryRun:false,
+ });
+ assert.equal(result.status,"succeeded");
+ assert.deepEqual(result.outputs.first,[[2,1],[4,3]]);
+ assert.deepEqual(result.outputs.second,[[2,1],[4,3]]);
+});
+
+test("workflow runner emits a normalized error event once when an operation fails",async()=>{
+ const events:Array<{code:string;stepId:string}>=[];
+ const result=await executeRegisteredWorkflow({
+  steps:[{id:"bad",nodeId:"math",operationId:"calculate",kind:"action",input:{a:1,b:0,operation:"div"}}],
+  context,dryRun:false,
+  async onWorkflowError(event){events.push(event)},
+ });
+ assert.equal(result.status,"failed");
+ assert.deepEqual(events,[{code:"MATH_INVALID_RESULT",stepId:"bad"}]);
+});
+
+test("workflow error reporter cannot mask the original failed step",async()=>{
+ const result=await executeRegisteredWorkflow({
+  steps:[{id:"bad",nodeId:"math",operationId:"calculate",kind:"action",input:{a:1,b:0,operation:"div"}}],
+  context,dryRun:false,
+  async onWorkflowError(){throw new Error("REPORTING_DOWN")},
+ });
+ assert.equal(result.status,"failed");
+ assert.equal(result.steps[0].error,"MATH_INVALID_RESULT");
+});
