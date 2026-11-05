@@ -6,7 +6,7 @@ import "./connections.css";
 
 type Connection = {
   id: string;
-  product: "gmail" | "sheets";
+  product: "gmail" | "sheets" | "drive" | "calendar" | "docs" | "forms" | "youtube" | "contacts";
   account_email: string;
   scopes: string[];
   status: "connected" | "needs_reauth" | "revoked";
@@ -262,6 +262,12 @@ export default function ConnectionsPage() {
           <span className="connection-scope">READ ONLY</span>
           <a className="connection-button" href="/api/integrations/google/start?product=sheets">Connect Sheets <span aria-hidden="true">↗</span></a>
         </article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Drive</h2><p>Read file metadata and search Drive. No file edits or deletes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=drive">Connect Drive <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Calendar</h2><p>Read calendar events in a selected time window. No event changes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=calendar">Connect Calendar <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Docs</h2><p>Read document metadata and content structure. No document edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=docs">Connect Docs <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Forms</h2><p>Read form titles and question metadata. No response or form edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=forms">Connect Forms <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">▶</div><div className="connection-card-copy"><h2>YouTube</h2><p>Search videos and read channel metadata. No publishing actions.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=youtube">Connect YouTube <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Contacts</h2><p>Read contact names, email addresses and phone numbers.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=contacts">Connect Contacts <span aria-hidden="true">↗</span></a></article>
       </section>
 
       <WorkspaceIntegrationManager />
@@ -271,7 +277,7 @@ export default function ConnectionsPage() {
         {loading ? <p className="connections-empty">Loading connections…</p> : connections.length === 0 ? <p className="connections-empty">No Google accounts connected yet.</p> : connections.map(connection => (
           <article className="connection-row" key={connection.id}>
             <div className={`connection-icon ${connection.product === "gmail" ? "google-icon" : "sheets-icon"}`} aria-hidden="true">{connection.product === "gmail" ? "G" : "▦"}</div>
-            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{connection.product === "gmail" ? "Gmail" : "Google Sheets"} · {connection.scopes.length} permissions</span></div>
+            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{({ gmail: "Gmail", sheets: "Google Sheets", drive: "Google Drive", calendar: "Google Calendar", docs: "Google Docs", forms: "Google Forms", youtube: "YouTube", contacts: "Google Contacts" } as Record<string, string>)[connection.product]} · {connection.scopes.length} permissions</span></div>
             <span className={`connection-status status-${connection.status}`}>{connection.status.replace("_", " ")}</span>
           </article>
         ))}
