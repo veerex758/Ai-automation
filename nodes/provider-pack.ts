@@ -36,7 +36,13 @@ function actionNode(args: {
 }): NodeDefinition {
   return {
     id: args.id, name: args.name, icon: args.icon, category: args.category, version: 1,
-    auth: args.auth ?? { type: "apiKey", credentialKey: "apiKey" }, triggers: [],
+    auth: args.auth ?? (args.id === "rss_feed"
+      ? { type: "none" }
+      : { type: "apiKey", credentialKey: ({
+          discord: "botToken", telegram: "botToken", whatsapp_business: "accessToken",
+          postmark: "serverToken", github: "token", gitlab: "token", sentry: "authToken",
+          vercel: "token", calendly: "accessToken", zendesk: "apiToken",
+        } as Partial<Record<Provider, string>>)[args.id] ?? "apiKey" }), triggers: [],
     actions: [{
       id: "execute", name: args.name + " action", description: args.description,
       inputSchema: args.input, outputSchema: args.output,
