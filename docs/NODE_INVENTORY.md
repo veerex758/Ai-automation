@@ -10,14 +10,14 @@ This inventory separates executable workflow definitions from the provider direc
 | Provider directory | 100 | User-facing integrations/providers listed in `nodes/provider-catalog.ts` |
 | Provider directory mapped to native implementations | 51 | Directory entries whose `registryId` resolves to a native registry definition |
 | Provider directory not yet mapped | 49 | Directory entries with no native implementation; displayed as `coming_soon` |
-| Internal utility-pack nodes | 20 | Executable utility definitions included in the 67-node registry but not represented as separate provider-directory entries |
-| Provider-pack nodes | 20 | Executable provider adapters included in the 67-node registry |
+| Internal utility-pack nodes | 20 | Executable utility definitions included in the 71-node registry but not represented as separate provider-directory entries |
+| Provider-pack nodes | 20 | Executable provider adapters included in the 71-node registry |
 
 The 71 native definitions are composed of 27 core, integration and data definitions, 20 utility-pack definitions, 20 provider-pack definitions, and 4 catalogue AI provider definitions.
 
 ## Resolving the former “73 nodes” figure
 
-The repository source at the audited revision does not contain a 73-entry executable registry or a 73-entry provider directory. The authoritative counts are 67 executable definitions and 100 provider-directory entries. The former 73 figure is therefore not a valid implementation count and must not be used for progress reporting unless a future source change introduces six additional, validated registry definitions.
+The repository source at the audited revision did not contain a 73-entry executable registry. After this provider batch, the authoritative count is 71 executable definitions and 100 provider-directory entries. The former 73 figure is therefore not a valid implementation count and must not be used for progress reporting The remaining two-node difference from the former 73 figure is not a reason to add placeholders.
 
 Do not add six placeholder nodes merely to make the old number match. A node counts as executable only when it is registered in `nodes/registry.ts` with validated input/output schemas and a server-side handler.
 
@@ -25,5 +25,5 @@ Do not add six placeholder nodes merely to make the old number match. A node cou
 
 - Say **71 executable nodes** when referring to the native workflow registry.
 - Say **100 directory entries: 51 mapped, 49 coming soon** when referring to the provider directory.
-- Do not describe all 47 mapped providers as live-production-ready. Registration and schema-backed handlers do not by themselves prove credentials, provider contracts, live-action authorization, or successful real-service execution.
+- Do not describe all 51 mapped providers as live-production-ready. Registration and schema-backed handlers do not by themselves prove credentials, provider contracts, live-action authorization, or successful real-service execution.
 - Keep these counts protected by `tests/provider-catalog.test.ts`.
