@@ -190,7 +190,7 @@ begin
     where id=p_event_id;
   return dispatched;
 end;
-$;
+$$;
 revoke all on function public.dispatch_execution_error_event(uuid) from public,anon,authenticated;
 grant execute on function public.dispatch_execution_error_event(uuid) to service_role;
 
@@ -229,7 +229,7 @@ begin
   end loop;
   return processed;
 end;
-$;
+$$;
 revoke all on function public.dispatch_pending_execution_error_events(integer) from public,anon,authenticated;
 grant execute on function public.dispatch_pending_execution_error_events(integer) to service_role;
 
