@@ -247,7 +247,7 @@ test("Google Calendar lists events without granting write scopes", async () => {
   const operation = findOperation("google_calendar", "execute", "action");
   assert.ok(operation);
   const result = await operation.run({ credentials: { google_calendar: { accessToken: "calendar-token" } }, logger: { info() {}, error() {} },
-    http: { async request(args: any) { assert.match(args.url, /calendar\/v3\/calendars\/primary\/events/); return { status: 200, body: { items: [{ id: "event-1", summary: "Review", start: { dateTime: "2026-11-05T10:00:00Z" }] } }; } }, previousOutputs: {} }, { maxResults: 5 });
+    http: { async request(args: any) { assert.match(args.url, /calendar\/v3\/calendars\/primary\/events/); return { status: 200, body: { items: [{ id: "event-1", summary: "Review", start: { dateTime: "2026-11-05T10:00:00Z" } }] } }; } }, previousOutputs: {} }, { maxResults: 5 });
   assert.deepEqual(result, { events: [{ id: "event-1", summary: "Review", start: { dateTime: "2026-11-05T10:00:00Z" } }] });
 });
 
