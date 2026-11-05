@@ -1,3 +1,5 @@
+import { createHash, createHmac } from "node:crypto";
+import { Pool } from "pg";
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -6,9 +8,23 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+function signedS3Headers(url: URL, accessKeyId: string, secretAccessKey: string, region: string): Record<string, string> {
+  const amzDate = new Date().toISOString().replace(/[:-]|\\.\\d{3}/g, "");
+  const date = amzDate.slice(0, 8);
+  const payloadHash = createHash("sha256").update("").digest("hex");
+  const canonicalHeaders = "host:" + url.host + "\\n" + "x-amz-content-sha256:" + payloadHash + "\\n" + "x-amz-date:" + amzDate + "\\n";
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalRequest = ["GET", url.pathname, url.searchParams.toString(), canonicalHeaders, signedHeaders, payloadHash].join("\\n");
+  const scope = date + "/" + region + "/s3/aws4_request";
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, createHash("sha256").update(canonicalRequest).digest("hex")].join("\\n");
+  const hmac = (key: Buffer | string, value: string) => createHmac("sha256", key).update(value).digest();
+  const signingKey = hmac(hmac(hmac(hmac("AWS4" + secretAccessKey, date), region), "s3"), "aws4_request");
+  return { "x-amz-date": amzDate, "x-amz-content-sha256": payloadHash, Authorization: "AWS4-HMAC-SHA256 Credential=" + accessKeyId + "/" + scope + ", SignedHeaders=" + signedHeaders + ", Signature=" + createHmac("sha256", signingKey).update(stringToSign).digest("hex") };
+}
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform";
+
+const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -282,6 +298,58 @@ async function check(provider: Provider, c: Credentials) {
         url = "https://api.typeform.com/me";
         headers.Authorization = "Bearer " + required(c, "accessToken");
         break;
+      case "supabase": {
+        const project = new URL(required(c, "projectUrl"));
+        if (project.protocol !== "https:" || !project.hostname.endsWith(".supabase.co")) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = project.origin + "/rest/v1/";
+        const key = required(c, "apiKey"); headers.apikey = key; headers.Authorization = "Bearer " + key;
+        break;
+      }
+      case "postgresql": {
+        const connectionString = required(c, "connectionString");
+        if (!/^postgres(?:ql)?:\/\//i.test(connectionString)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const pool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 5000, ssl: { rejectUnauthorized: true } });
+        try {
+          const client = await pool.connect();
+          try { await client.query("SELECT 1"); } finally { client.release(); }
+        } finally { await pool.end(); }
+        return NextResponse.json({ ok: true, message: "PostgreSQL connection verified." }, { headers: { "Cache-Control": "no-store" } });
+      }
+      case "redis": {
+        const endpoint = new URL(required(c, "restUrl"));
+        if (endpoint.protocol !== "https:" || !endpoint.hostname.endsWith(".upstash.io")) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = endpoint.origin; method = "POST"; headers.Authorization = "Bearer " + required(c, "token");
+        headers["Content-Type"] = "application/json"; body = JSON.stringify(["PING"]);
+        break;
+      }
+      case "firebase": {
+        const project = required(c, "projectId");
+        if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(project) + "/databases/(default)/documents?pageSize=1";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
+      case "dropbox":
+        url = "https://api.dropboxapi.com/2/users/get_current_account"; method = "POST";
+        headers.Authorization = "Bearer " + required(c, "accessToken"); headers["Content-Type"] = "application/json"; body = "{}";
+        break;
+      case "aws_s3": {
+        const region = required(c, "region");
+        if (!/^[a-z]{2}-[a-z]+-\\d$/.test(region)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const target = new URL("https://s3." + region + ".amazonaws.com/");
+        target.searchParams.set("max-keys", "1");
+        url = target.toString();
+        Object.assign(headers, signedS3Headers(target, required(c, "accessKeyId"), required(c, "secretAccessKey"), region));
+        break;
+      }
+      case "cloudflare_r2": {
+        const account = required(c, "accountId");
+        if (!/^[a-f0-9]{32}$/i.test(account)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const target = new URL("https://" + account + ".r2.cloudflarestorage.com/");
+        url = target.toString();
+        Object.assign(headers, signedS3Headers(target, required(c, "accessKeyId"), required(c, "secretAccessKey"), "auto"));
+        break;
+      }
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) {
