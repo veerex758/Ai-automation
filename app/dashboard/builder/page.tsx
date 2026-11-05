@@ -34,6 +34,7 @@ export default function WorkflowBuilderPage() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [runningTest, setRunningTest] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [webhookDetails, setWebhookDetails] = useState<{ url: string; signingSecret: string } | null>(null);
   const [savedWorkflowId, setSavedWorkflowId] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -244,7 +245,21 @@ export default function WorkflowBuilderPage() {
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Aivanta could not activate this workflow.");
-      setNotice("Workflow activated. New verified webhook enquiries can now be processed under the configured limits.");
+      if (steps[0]?.kind === "Trigger" && steps[0].settings?.event === "webhook") {
+        const webhookResponse = await fetch(`/api/workflows/${savedWorkflowId}/webhook`, {
+          method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ confirm: true }),
+        });
+        const webhookResult = await webhookResponse.json() as { endpoint?: { path?: string }; signingSecret?: string; error?: string };
+        if (!webhookResponse.ok || !webhookResult.endpoint?.path || !webhookResult.signingSecret) {
+          setNotice("Workflow is active, but webhook setup needs attention: " + (webhookResult.error || "Could not create the secure endpoint."));
+          return;
+        }
+        setWebhookDetails({ url: window.location.origin + webhookResult.endpoint.path, signingSecret: webhookResult.signingSecret });
+        setNotice("Workflow activated and secure webhook created. Save the signing secret now; it is shown only once.");
+      } else {
+        setNotice("Workflow activated. Manual runs are available under the configured limits.");
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not activate this workflow.");
     } finally { setActivating(false); }
@@ -271,6 +286,14 @@ export default function WorkflowBuilderPage() {
         <div className="builder-content">
           <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
+          {webhookDetails && <section className="builder-notice" aria-label="New webhook endpoint">
+            <strong>Webhook endpoint</strong>
+            <p>Configure your website form to POST signed lead enquiries here:</p>
+            <code>{webhookDetails.url}</code>
+            <p><strong>Signing secret — shown once</strong></p>
+            <code>{webhookDetails.signingSecret}</code>
+            <p>Store this secret securely in your website/server integration. Do not share it publicly.</p>
+          </section>}
           <section className="ai-workflow-panel" aria-labelledby="ai-workflow-heading">
             <div className="ai-workflow-copy"><span className="builder-ai-badge">✳ AI ASSISTANT</span><h2 id="ai-workflow-heading">Describe it. We’ll draft it.</h2><p>Explain the workflow in plain English. Review the draft before applying it; nothing executes automatically.</p></div>
             <form className="ai-workflow-form" onSubmit={async event => {
