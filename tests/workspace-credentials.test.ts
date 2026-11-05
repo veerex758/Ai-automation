@@ -97,3 +97,21 @@ test("workspace credential vault accepts the first four catalogue AI providers",
   assert.throws(() => encryptWorkspaceCredentials({ pinecone: { apiKey: "key" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ elevenlabs: { apiKey: "key", endpoint: "https://untrusted.test" } } as never, key));
 });
+
+
+test("workspace credential vault accepts CRM and Teams provider fields without accepting extras", () => {
+  const value = {
+    microsoft_teams: { accessToken: "teams-token" },
+    salesforce: { accessToken: "salesforce-token", instanceUrl: "https://acme.my.salesforce.com" },
+    pipedrive: { accessToken: "pipedrive-token" },
+    zoho_crm: { accessToken: "zoho-token" },
+    freshsales: { accessToken: "freshsales-token", domain: "acme.myfreshworks.com" },
+    close: { apiKey: "close-key" },
+    apollo: { apiKey: "apollo-key" },
+    intercom: { accessToken: "intercom-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-crm:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-crm:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ salesforce: { accessToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ close: { apiKey: "key", password: "extra" } } as never, key));
+});
