@@ -132,17 +132,9 @@ begin
       and w.id <> event_row.workflow_id
       and w.definition->>'format' = 'aivanta-registry-v1'
       and jsonb_typeof(w.definition->'steps') = 'array'
-      and exists (
-        select 1 from jsonb_array_elements(w.definition->'steps') first_step
-        where first_step->>'kind' = 'trigger'
-          and first_step->>'nodeId' = 'error_trigger'
-          and first_step->>'operationId' = 'capture'
-          and first_step->>'id' = (
-            select first_step_value->>'id'
-            from jsonb_array_elements(w.definition->'steps') with ordinality as first_step_value(value,ordinality)
-            where first_step_value.ordinality = 1
-          )
-      )
+      and w.definition->'steps'->0->>'kind' = 'trigger'
+      and w.definition->'steps'->0->>'nodeId' = 'error_trigger'
+      and w.definition->'steps'->0->>'operationId' = 'capture'
   loop
     dispatch_result := public.dispatch_workflow_execution(
       workflow_row.workspace_id,
