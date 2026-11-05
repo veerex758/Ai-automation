@@ -42,6 +42,27 @@ function validateLoopBody(outerOutputs: Record<string, unknown>, input: { items:
   }
 }
 
+function resolveLoopReferences(value: unknown, outputs: Readonly<Record<string, unknown>>, item: unknown, index: number): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\\{\\{(item|index)\\}\\}/g, (_match, key: string) => {
+      const resolved = key === "item" ? item : index;
+      return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
+    }).replace(/\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})+)\\}\\}/g, (_match, path: string) => {
+      const [stepId, ...parts] = path.split(".");
+      let current: unknown = outputs[stepId];
+      for (const part of parts) {
+        if (!current || typeof current !== "object" || Array.isArray(current) || !Object.prototype.hasOwnProperty.call(current, part)) throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
+        current = (current as Record<string, unknown>)[part];
+      }
+      if (current === null || current === undefined) throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
+      return typeof current === "string" ? current : JSON.stringify(current);
+    });
+  }
+  if (Array.isArray(value)) return value.map((entry) => resolveLoopReferences(entry, outputs, item, index));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, resolveLoopReferences(entry, outputs, item, index)]));
+  return value;
+}
+
 async function runLoop(ctx: Omit<NodeContext, "previousOutputs">, outerOutputs: Record<string, unknown>, input: { items: unknown[]; bodySteps: Array<{ id: string; nodeId: string; operationId: string; input: unknown }> }) {
   const iterations: Array<{ item: unknown; index: number; outputs: Record<string, unknown> }> = [];
   for (let index = 0; index < input.items.length; index++) {
@@ -52,7 +73,7 @@ async function runLoop(ctx: Omit<NodeContext, "previousOutputs">, outerOutputs: 
       seen.add(body.id);
       const op = findOperation(body.nodeId, body.operationId, "action");
       if (!op) throw new Error("LOOP_BODY_OPERATION_NOT_FOUND");
-      const resolved = resolveReferences(body.input, local);
+      const resolved = resolveLoopReferences(body.input, local, input.items[index], index);
       const parsed = op.inputSchema.parse(resolved);
       const output = op.outputSchema.parse(await op.run({ ...ctx, previousOutputs: local }, parsed));
       local[body.id] = output;
