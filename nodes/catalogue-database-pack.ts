@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash, createHmac } from "node:crypto";
 import { Pool } from "pg";
 import { z } from "zod";
