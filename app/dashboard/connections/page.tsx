@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -64,6 +64,14 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   stability_ai: { label: "Stability AI", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   hugging_face: { label: "Hugging Face", fields: [{ name: "apiKey", label: "Access token", type: "password" }] },
   pinecone: { label: "Pinecone", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "indexHost", label: "Index host (HTTPS Pinecone host)", type: "url" }] },
+  microsoft_teams: { label: "Microsoft Teams", fields: [{ name: "accessToken", label: "Microsoft Graph access token", type: "password" }] },
+  salesforce: { label: "Salesforce", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }, { name: "instanceUrl", label: "Salesforce instance URL", type: "url" }] },
+  pipedrive: { label: "Pipedrive", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  zoho_crm: { label: "Zoho CRM", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  freshsales: { label: "Freshsales", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }, { name: "domain", label: "Freshworks domain (yourname.myfreshworks.com)", type: "text" }] },
+  close: { label: "Close", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  apollo: { label: "Apollo", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  intercom: { label: "Intercom", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
 };
 
 function WorkspaceIntegrationManager() {
