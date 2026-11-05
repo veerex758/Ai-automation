@@ -33,8 +33,32 @@ async function serverContext(workspaceId: string, steps: RegisteredWorkflowStep[
             signal: controller.signal,
             redirect: "error",
           });
+          const maxResponseBytes = 1_048_576;
+          const declaredLength = Number(response.headers.get("content-length") ?? 0);
+          if (declaredLength > maxResponseBytes) throw new Error("NODE_HTTP_RESPONSE_TOO_LARGE");
+          let raw = "";
+          if (response.body) {
+            const reader = response.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let total = 0;
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                total += value.byteLength;
+                if (total > maxResponseBytes) {
+                  await reader.cancel();
+                  throw new Error("NODE_HTTP_RESPONSE_TOO_LARGE");
+                }
+                chunks.push(value);
+              }
+            } finally { reader.releaseLock(); }
+            const bytes = new Uint8Array(total);
+            let offset = 0;
+            for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+            raw = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+          }
           let body: unknown = null;
-          const raw = await response.text();
           try { body = raw ? JSON.parse(raw) : raw; } catch { body = raw; }
           return { status: response.status, body };
         } finally { clearTimeout(timer); }
