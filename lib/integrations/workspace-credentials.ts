@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 export type WorkspaceCredentialProvider =
   | "openai" | "gemini" | "resend" | "slack" | "http"
-  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom";
+  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify";
 export type WorkspaceCredentials = Record<string, Record<string, string>>;
 
 const KEY_BYTES = 32;
@@ -86,6 +86,8 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
       elevenlabs: ["apiKey"], stability_ai: ["apiKey"], hugging_face: ["apiKey"], pinecone: ["apiKey", "indexHost"],
       microsoft_teams: ["accessToken"], salesforce: ["accessToken", "instanceUrl"], pipedrive: ["accessToken"],
       zoho_crm: ["accessToken"], freshsales: ["accessToken", "domain"], close: ["apiKey"], apollo: ["apiKey"], intercom: ["accessToken"],
+      jira: ["siteUrl", "email", "apiToken"], asana: ["accessToken"], trello: ["apiKey", "token"], clickup: ["token"],
+      monday: ["apiToken"], todoist: ["accessToken"], airtable: ["accessToken"], bitbucket: ["accessToken"], netlify: ["token"],
       notion: ["apiKey"], hubspot: ["accessToken"],
       twilio: ["accountSid", "authToken", "fromPhone"],
       shopify: ["shopDomain", "accessToken"], stripe: ["secretKey"], linear: ["apiKey"],
