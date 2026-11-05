@@ -350,6 +350,55 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     } finally { db.release(); }
   });
 
+
+  await t.test("job finalization persists failed live runs to the retryable Error Trigger outbox", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const subscriberDefinition = {
+        format: "aivanta-registry-v1",
+        steps: [{ id: "on-error", nodeId: "error_trigger", operationId: "capture", kind: "trigger",
+          input: { code: "PLACEHOLDER", message: "Placeholder" } }],
+      };
+      await db.query(
+        "update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify(subscriberDefinition), ids.workflowOther],
+      );
+      await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,1,'live')",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [job] = await claim(db, "outbox-source-worker");
+      const finished = await db.query(
+        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE','step-a','TEST_FAILURE') as result",
+        [job.id, job.lease_token],
+      );
+      assert.equal(finished.rows[0].result, "dead_letter");
+      const pending = await db.query(
+        "select dispatch_status,error_code,step_id from public.execution_error_events where job_id=$1",
+        [job.id],
+      );
+      assert.equal(pending.rowCount, 1);
+      assert.equal(pending.rows[0].dispatch_status, "pending");
+      assert.equal(pending.rows[0].error_code, "TEST_FAILURE");
+      assert.equal(pending.rows[0].step_id, "step-a");
+      const dispatched = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
+      assert.equal(dispatched.rows[0].count, 1);
+      const queued = await db.query(
+        "select payload from public.execution_jobs where workflow_id=$1 and idempotency_key like 'error:%'",
+        [ids.workflowOther],
+      );
+      assert.equal(queued.rowCount, 1);
+      assert.equal(queued.rows[0].payload.source, "error_trigger");
+      const event = await db.query(
+        "select dispatch_status,dispatched_at from public.execution_error_events where job_id=$1",
+        [job.id],
+      );
+      assert.equal(event.rows[0].dispatch_status, "dispatched");
+      assert.ok(event.rows[0].dispatched_at);
+    } finally { db.release(); }
+  });
+
   await t.test("browser roles cannot read queue tables or execute privileged RPCs", async () => {
     await resetFixture();
     const db = await client();
@@ -389,6 +438,7 @@ test.after(async () => {
         await db.query("drop function if exists public.heartbeat_execution_job(uuid,uuid,integer)");
         await db.query("drop function if exists public.checkpoint_execution_step(uuid,uuid,text,integer,text,jsonb,jsonb)");
         await db.query("drop function if exists public.finish_execution_job(uuid,uuid,boolean,text)");
+        await db.query("drop function if exists public.finish_execution_job(uuid,uuid,boolean,text,text,text)");
         await db.query("drop function if exists public.consume_execution_rate_limit(uuid,text,integer,integer)");
         await db.query("drop function if exists public.record_execution_error_event(uuid,uuid,text,text,text,integer)");
         await db.query("drop function if exists public.dispatch_execution_error_event(uuid)");
