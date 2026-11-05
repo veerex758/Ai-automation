@@ -29,7 +29,7 @@ async function runLoop(ctx: Omit<NodeContext, "previousOutputs">, outerOutputs: 
     const local: Record<string, unknown> = { ...outerOutputs, item: input.items[index], index };
     const seen = new Set<string>();
     for (const body of input.bodySteps) {
-      if (body.nodeId === "loop" || !/^[a-zA-Z0-9_-]{1,64}$/.test(body.id) || seen.has(body.id)) throw new Error("LOOP_BODY_INVALID_OR_NESTED_LOOP");
+      if (body.nodeId === "loop" || !/^[a-zA-Z0-9_-]{1,64}$/.test(body.id) || seen.has(body.id) || body.id === "item" || body.id === "index" || Object.prototype.hasOwnProperty.call(outerOutputs, body.id)) throw new Error("LOOP_BODY_INVALID_OR_NESTED_LOOP");
       seen.add(body.id);
       const op = findOperation(body.nodeId, body.operationId, "action");
       if (!op) throw new Error("LOOP_BODY_OPERATION_NOT_FOUND");
