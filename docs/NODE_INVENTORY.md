@@ -11,7 +11,7 @@ This inventory separates executable workflow definitions from the provider direc
 | Provider directory mapped to native implementations | 98 | Directory entries whose `registryId` resolves to a native registry definition |
 | Provider directory not yet mapped | 2 | Directory entries with no native implementation; displayed as `coming_soon` |
 | Internal utility-pack nodes | 20 | Executable utility definitions included in the 118-node registry but not represented as separate provider-directory entries |
-| Provider-pack nodes | 20 | Executable provider adapters included in the 94-node registry |
+| Provider-pack nodes | 20 | Executable provider adapters included in the 118-node registry |
 | Catalogue AI provider nodes | 4 | ElevenLabs, Stability AI, Hugging Face and Pinecone; each has a schema-backed action |
 | CRM and messaging catalogue nodes | 8 | Microsoft Teams, Salesforce, Pipedrive, Zoho CRM, Freshsales, Close, Apollo and Intercom |
 | Google read-only catalogue nodes | 6 | Drive, Calendar, Docs, Forms, YouTube and Contacts |
@@ -19,6 +19,7 @@ This inventory separates executable workflow definitions from the provider direc
 | Commerce/support catalogue nodes | 10 | WooCommerce, PayPal, Paddle, Lemon Squeezy, Square, Razorpay, Zoom, Cal.com, Twilio Voice and DocuSign |
 | Social/marketing catalogue nodes | 7 | X/Twitter, LinkedIn, Facebook Pages, Instagram, TikTok, Mailchimp and Typeform |
 | Database/storage catalogue nodes | 7 | Supabase, PostgreSQL, Redis (Upstash REST), Firebase/Firestore, Dropbox, AWS S3 and Cloudflare R2 |
+| Still catalogue-only | 2 | MySQL and MongoDB; native drivers and lockfile updates are still required |
 
 The 118 native definitions are composed of 27 core, integration and data definitions, 20 utility-pack definitions, 20 provider-pack definitions, 4 catalogue AI provider definitions, 8 CRM/messaging catalogue provider definitions, 6 Google read-only provider definitions, 9 productivity/developer provider definitions, 10 commerce/support provider definitions, 7 social/marketing provider definitions, and 7 database/storage provider definitions.
 
