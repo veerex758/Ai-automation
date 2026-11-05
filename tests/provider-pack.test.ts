@@ -279,7 +279,7 @@ test("Google Contacts lists bounded people metadata", async () => {
   const operation = findOperation("google_contacts", "execute", "action");
   assert.ok(operation);
   const result = await operation.run({ credentials: { google_contacts: { accessToken: "contacts-token" } }, logger: { info() {}, error() {} },
-    http: { async request(args: any) { assert.match(args.url, /people\/v1\/people\/me\/connections/); return { status: 200, body: { connections: [{ resourceName: "people/1", names: [{ displayName: "Ada Lovelace" }], emailAddresses: [{ value: "ada@example.test" }] }] } }; } }, previousOutputs: {} }, { pageSize: 10 });
+    http: { async request(args: any) { assert.match(args.url, /people\.googleapis\.com\/v1\/people\/me\/connections/); return { status: 200, body: { connections: [{ resourceName: "people/1", names: [{ displayName: "Ada Lovelace" }], emailAddresses: [{ value: "ada@example.test" }] }] } }; } }, previousOutputs: {} }, { pageSize: 10 });
   assert.deepEqual(result, { people: [{ resourceName: "people/1", displayName: "Ada Lovelace", email: "ada@example.test" }] });
 });
 
