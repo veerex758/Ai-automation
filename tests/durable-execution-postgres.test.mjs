@@ -311,6 +311,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       assert.equal(queued.rows[0].execution_mode, "live");
       assert.equal(queued.rows[0].payload.source, "error_trigger");
       assert.equal(queued.rows[0].payload.input.code, "TEST_FAILURE");
+      assert.match(queued.rows[0].payload.input.occurredAt, /Z$/);
     } finally { db.release(); }
   });
 
