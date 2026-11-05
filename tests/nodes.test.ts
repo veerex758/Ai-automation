@@ -416,6 +416,12 @@ test("AI provider adapters parse native response shapes and return durable job I
   assert.equal((await assemblyPoll.run(context, { transcriptId: "transcript_1" }) as { status: string }).status, "queued");
   await assert.rejects(() => cohere.run({ ...context, credentials: {} }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
   await assert.rejects(() => cohere.run({ ...context, credentials: { cohere: { apiKey: "bad" + String.fromCharCode(13, 10) + "header" } } }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
+  const rateLimited = { ...context, http: { async request() { return { status: 429, body: { message: "rate limited" } }; } } };
+  await assert.rejects(() => cohere.run(rateLimited, { prompt: "hello" }), /COHERE_RATE_LIMITED/);
+  const unavailable = { ...context, http: { async request() { return { status: 503, body: {} }; } } };
+  await assert.rejects(() => cohere.run(unavailable, { prompt: "hello" }), /COHERE_PROVIDER_UNAVAILABLE/);
+  const malformed = { ...context, http: { async request() { return { status: 200, body: [] }; } } };
+  await assert.rejects(() => cohere.run(malformed, { prompt: "hello" }), /COHERE_INVALID_RESPONSE/);
 });
 
 
