@@ -189,3 +189,20 @@ test("workspace credential vault accepts social and marketing provider fields", 
   assert.throws(() => encryptWorkspaceCredentials({ instagram: { accessToken: "token" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ facebook_pages: { pageAccessToken: "token", apiKey: "extra" } } as never, key));
 });
+
+
+test("workspace credential vault accepts database and storage provider fields", () => {
+  const value = {
+    supabase: { projectUrl: "https://project.supabase.co", apiKey: "supabase-test-key" },
+    postgresql: { connectionString: "postgresql://user:password@db.example.test:5432/app?sslmode=require" },
+    redis: { restUrl: "https://example.upstash.io", token: "redis-token" },
+    firebase: { projectId: "aivanta-project1", accessToken: "firebase-token" },
+    dropbox: { accessToken: "dropbox-token" },
+    aws_s3: { accessKeyId: "aws-access-id", secretAccessKey: "aws-secret", region: "us-east-1" },
+    cloudflare_r2: { accountId: "abcdef0123456789abcdef0123456789", accessKeyId: "r2-access-id", secretAccessKey: "r2-secret" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-database:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-database:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ supabase: { projectUrl: "http://localhost", apiKey: "key" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ aws_s3: { accessKeyId: "id", region: "us-east-1" } } as never, key));
+});
