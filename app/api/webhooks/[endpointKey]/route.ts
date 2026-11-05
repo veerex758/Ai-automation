@@ -191,7 +191,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     const { count: hourlyRuns, error: usageError } = await db.from("workflow_runs").select("id", { count: "exact", head: true })
       .eq("workflow_id", workflow.id).eq("mode", "live").gte("created_at", hourAgo);
     if (usageError) throw usageError;
-    if ((hourlyRuns ?? 0) >= 100) return jsonError("This workflow reached its hourly usage limit. Try again later.", 429);\n    const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
+    if ((hourlyRuns ?? 0) >= 100) return jsonError("This workflow reached its hourly usage limit. Try again later.", 429);
+    const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
       .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
     for (const step of steps) {
       if (step.nodeId === "email" && step.operationId === "send_email") {
