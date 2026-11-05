@@ -177,6 +177,7 @@ test("Error Trigger dispatches active same-workspace subscribers through the dur
   assert.match(utilityMigration, /'error:' \|\| event_row\.id::text/);
   assert.match(utilityMigration, /'source','error_trigger','input',event_input/);
   assert.match(utilityMigration, /record_and_dispatch_execution_error_event/);
+  assert.match(utilityMigration, /source_mode <> 'live'/);
   assert.match(utilityMigration, /dispatch_workflow_execution/);
   assert.match(utilityMigration, /'live'/);
   assert.match(workerService, /db\.rpc\("record_and_dispatch_execution_error_event"/);
