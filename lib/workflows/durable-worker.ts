@@ -36,7 +36,7 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
     .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
-  if (!connection) throw new Error(product === "gmail" ? "GMAIL_CONNECTION_REQUIRED" : "GOOGLE_SHEETS_CONNECTION_REQUIRED");
+  if (!connection) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
   const requiredScope = GOOGLE_PRODUCTS[product].scopes[0];
   if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
     throw new Error("GOOGLE_SCOPE_MISMATCH");
