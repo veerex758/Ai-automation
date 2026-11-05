@@ -623,42 +623,48 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "WooCommerce",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "woocommerce"
   },
   {
     "id": "paypal",
     "name": "PayPal",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "paypal"
   },
   {
     "id": "paddle",
     "name": "Paddle",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "paddle"
   },
   {
     "id": "lemon_squeezy",
     "name": "Lemon Squeezy",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "lemon_squeezy"
   },
   {
     "id": "square",
     "name": "Square",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "square"
   },
   {
     "id": "razorpay",
     "name": "Razorpay",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "razorpay"
   },
   {
     "id": "x_twitter",
@@ -738,28 +744,32 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Zoom",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "zoom"
   },
   {
     "id": "cal_com",
     "name": "Cal.com",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "cal_com"
   },
   {
     "id": "twilio_voice",
     "name": "Twilio Voice",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "twilio_voice"
   },
   {
     "id": "docusign",
     "name": "DocuSign",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "docusign"
   },
   {
     "id": "rss_feed",
