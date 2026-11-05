@@ -44,6 +44,14 @@ replicate.actions.push({ id: "run", name: "Start prediction", description: "Crea
   return { predictionId: b.id, status: b.status, raw: b };
 } });
 
+replicate.actions.push({ id: "get_prediction", name: "Get prediction", description: "Fetches a Replicate prediction by ID; pair with a durable scheduler/wait loop until status is succeeded, failed, or canceled.", inputSchema: z.object({ predictionId: str(128) }).strict(), outputSchema: z.object({ predictionId: z.string(), status: z.string(), output: z.json().optional(), error: z.string().optional(), raw: z.json() }).strict(), async run(ctx, i) {
+  const r = await ctx.http.request({ url: "https://api.replicate.com/v1/predictions/" + encodeURIComponent(i.predictionId), method: "GET", headers: { Authorization: "Bearer " + credential(ctx, "replicate") }, timeoutMs: 15000, retries: 0 });
+  if (r.status < 200 || r.status >= 300) throw new Error(errorCode("replicate", r.status));
+  const b = r.body as Record<string, unknown>;
+  if (typeof b?.id !== "string" || typeof b.status !== "string") throw new Error("REPLICATE_INVALID_RESPONSE");
+  return { predictionId: b.id, status: b.status, output: b.output, error: typeof b.error === "string" ? b.error : undefined, raw: r.body };
+} });
+
 const deepl = node("deepl", "DeepL", { type: "apiKey", credentialKey: "apiKey" });
 deepl.actions.push({ id: "translate", name: "Translate text", description: "Translate text with DeepL API Free endpoint.", inputSchema: z.object({ text: str(30000), targetLang: z.string().regex(/^[A-Z]{2,5}$/), sourceLang: z.string().regex(/^[A-Z]{2,5}$/).optional() }).strict(), outputSchema: z.object({ text: z.string(), detectedSourceLanguage: z.string().optional(), raw: z.json() }).strict(), async run(ctx, i) {
   const r = await ctx.http.request({ url: "https://api-free.deepl.com/v2/translate", method: "POST", headers: { Authorization: "DeepL-Auth-Key " + credential(ctx, "deepl"), "Content-Type": "application/json" }, body: { text: [i.text], target_lang: i.targetLang, source_lang: i.sourceLang }, timeoutMs: 20000, retries: 0 });
