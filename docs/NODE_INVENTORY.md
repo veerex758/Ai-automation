@@ -12,14 +12,15 @@ This inventory separates executable workflow definitions from the provider direc
 | Provider directory not yet mapped | 49 | Directory entries with no native implementation; displayed as `coming_soon` |
 | Internal utility-pack nodes | 20 | Executable utility definitions included in the 71-node registry but not represented as separate provider-directory entries |
 | Provider-pack nodes | 20 | Executable provider adapters included in the 71-node registry |
+| Catalogue AI provider nodes | 4 | ElevenLabs, Stability AI, Hugging Face and Pinecone; each has a schema-backed action |
 
 The 71 native definitions are composed of 27 core, integration and data definitions, 20 utility-pack definitions, 20 provider-pack definitions, and 4 catalogue AI provider definitions.
 
 ## Resolving the former “73 nodes” figure
 
-The repository source at the audited revision did not contain a 73-entry executable registry. After this provider batch, the authoritative count is 71 executable definitions and 100 provider-directory entries. The former 73 figure is therefore not a valid implementation count and must not be used for progress reporting The remaining two-node difference from the former 73 figure is not a reason to add placeholders.
+The repository source at the audited revision did not contain a 73-entry executable registry. After this provider batch, the authoritative count is 71 executable definitions and 100 provider-directory entries. The former 73 figure is therefore not a valid implementation count and must not be used for progress reporting. The remaining two-node difference from the former 73 figure is not a reason to add placeholders.
 
-Do not add six placeholder nodes merely to make the old number match. A node counts as executable only when it is registered in `nodes/registry.ts` with validated input/output schemas and a server-side handler.
+Do not add placeholder nodes merely to make the old number match. A node counts as executable only when it is registered in `nodes/registry.ts` with validated input/output schemas and a server-side handler.
 
 ## Reporting rules
 
