@@ -16,7 +16,6 @@ test("only native registry implementations are marked as registered", () => {
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
   assert.equal(registered.length, 47);
-  assert.equal(registered.length, 27);
   assert.equal(comingSoon.length, 100 - registered.length);
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
