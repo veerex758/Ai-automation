@@ -15,7 +15,7 @@ test("deduplicate and sort utilities operate deterministically",async()=>{
 });
 test("hash, template and JSON encode utilities return bounded results",async()=>{
  const h=await findOperation("crypto_hash","hash","action")!.run(context,{value:"abc"});
- assert.equal((h as any).digest,"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+ assert.equal((h as { digest: string }).digest,"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
  const t=await findOperation("template","render","action")!.run(context,{template:"Hi {{user.name}}",data:{user:{name:"Ada"}}});
  assert.deepEqual(t,{text:"Hi Ada"});
  const j=await findOperation("json_encode","encode","action")!.run(context,{value:{ok:true}});
@@ -23,9 +23,9 @@ test("hash, template and JSON encode utilities return bounded results",async()=>
 });
 test("CSV parse and stringify round trip simple quoted fields",async()=>{
  const p=await findOperation("csv_parse","parse","action")!.run(context,{csv:'name,city\nAda,"Lagos, NG"'});
- assert.equal((p as any).rows[0].city,"Lagos, NG");
+ assert.equal((p as { rows: Array<Record<string, string>> }).rows[0].city,"Lagos, NG");
  const s=await findOperation("csv_stringify","stringify","action")!.run(context,{rows:[{name:"Ada",city:"Lagos, NG"}]});
- assert.match((s as any).csv,/Lagos, NG/);
+ assert.match((s as { csv: string }).csv,/Lagos, NG/);
 });
 test("Math rejects division by zero and Base64 rejects malformed input",async()=>{
  await assert.rejects(()=>findOperation("math","calculate","action")!.run(context,{a:1,b:0,operation:"div"}),/MATH_INVALID_RESULT/);
