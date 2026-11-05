@@ -55,3 +55,22 @@ test("rejects invalid Gemini model names and non-HTTPS provider endpoints in pro
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_GEMINI_MODEL: "invalid model!" } }), /AI_CONFIGURATION_ERROR/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_GEMINI_BASE_URL: "http://ai.example.test", NODE_ENV: "production" } }), /AI_CONFIGURATION_ERROR/);
 });
+
+test("accepts a complete webhook to Gemini qualification to Resend draft", async () => {
+  const definition = {
+    version: 1,
+    nodes: [
+      { id: "incoming", type: "trigger", title: "New website enquiry", description: "Receive a signed lead form event", settings: { event: "webhook" } },
+      { id: "qualify", type: "action", title: "Qualify lead", description: "Extract and score the real-estate enquiry", settings: { provider: "gemini", operation: "qualify_real_estate_lead", leadData: "{{incoming.payload}}" } },
+      { id: "notify", type: "action", title: "Notify agent", description: "Send the qualification summary to the agency", settings: { provider: "email", operation: "send_email", recipient: "agent@example.com", message: "{{qualify.summary}}" } },
+    ],
+  };
+  const result = await generateWorkflow({
+    prompt: "When a website enquiry arrives, qualify it with Gemini and email the agency agent.",
+    env,
+    fetchImpl: fakeFetch(geminiPayload(JSON.stringify(definition))),
+  });
+  assert.deepEqual(result.definition, definition);
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
