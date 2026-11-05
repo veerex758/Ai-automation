@@ -139,8 +139,16 @@ export async function executeRegisteredWorkflow(args: {
           loopExecutionCount++;
           if (loopExecutionCount > 500) throw new Error("WORKFLOW_LOOP_EXECUTION_BUDGET_EXCEEDED");
           const scope = { ...iterationContext, [step.loop.itemAs ?? "loop_item"]: items[index], [step.loop.indexAs ?? "loop_index"]: index };
+          const iterationCheckpointId = step.id + "__loop_" + (index + 1);
+          if (!args.dryRun && completedStepIds.has(iterationCheckpointId)) {
+            aggregate.push(outputs[iterationCheckpointId]);
+            continue;
+          }
           const iteration = await executeOnce(scope, index);
-          if (!iteration.simulated) aggregate.push(iteration.output);
+          if (!iteration.simulated) {
+            outputs[iterationCheckpointId] = iteration.output;
+            aggregate.push(iteration.output);
+          }
         }
         outputs[step.id] = args.dryRun ? { iterations: items.length, simulated: true } : aggregate;
         if (!args.dryRun) loopOutputs.set(step.id, aggregate);
