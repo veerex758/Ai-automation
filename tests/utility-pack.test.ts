@@ -160,7 +160,7 @@ test("Markdown converter preserves escaped text and never emits raw HTML from in
 
 test("Regex rejects ambiguous repeated quantifiers but permits a single bounded quantifier", async () => {
  const op=findOperation("regex","match","action")!;
- await assert.rejects(()=>op.run(context,{text:"a".repeat(10000)+"!",pattern:"a+a+a+b",flags:""}),/REGEX_UNSAFE/);
+ await assert.rejects(()=>op.run(context,{text:"a".repeat(9999)+"!",pattern:"a+a+a+b",flags:""}),/REGEX_UNSAFE/);
  assert.deepEqual(await op.run(context,{text:"aaaa",pattern:"a+",flags:""}),{matched:true,matches:["aaaa"]});
 });
 
