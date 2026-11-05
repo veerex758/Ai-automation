@@ -291,7 +291,10 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         "update public.workflows set definition=$1::jsonb where id=$2",
         [JSON.stringify(subscriberDefinition), ids.workflowOther],
       );
-      await dispatch(db, crypto.randomUUID());
+      await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,1,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
       const [job] = await claim(db, "error-source-worker");
       const result = await db.query(
         "select public.record_and_dispatch_execution_error_event($1,$2,'step-a','TEST_FAILURE','TEST_FAILURE',1) as dispatched",
@@ -312,6 +315,27 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       assert.equal(queued.rows[0].payload.source, "error_trigger");
       assert.equal(queued.rows[0].payload.input.code, "TEST_FAILURE");
       assert.match(queued.rows[0].payload.input.occurredAt, /Z$/);
+    } finally { db.release(); }
+  });
+
+
+  await t.test("dry-run failures are recorded without launching live Error Trigger workflows", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      await db.query(
+        "update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify({ format: "aivanta-registry-v1", steps: [{ id: "on-error", nodeId: "error_trigger", operationId: "capture", kind: "trigger", input: { code: "TEST_FAILURE", message: "Test failure" } }] }), ids.workflowOther],
+      );
+      await dispatch(db, crypto.randomUUID());
+      const [job] = await claim(db, "dry-run-error-worker");
+      const result = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'step-a','TEST_FAILURE','TEST_FAILURE',1) as dispatched",
+        [job.id, job.lease_token],
+      );
+      assert.equal(result.rows[0].dispatched, 0);
+      const queued = await db.query("select count(*)::integer as count from public.execution_jobs where idempotency_key like 'error:%'");
+      assert.equal(queued.rows[0].count, 0);
     } finally { db.release(); }
   });
 
