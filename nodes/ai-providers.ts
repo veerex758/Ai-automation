@@ -3,11 +3,11 @@ import type { NodeDefinition, NodeContext } from "./types";
 
 const str = (max = 10000) => z.string().min(1).max(max);
 const node = (id: string, name: string, auth: NodeDefinition["auth"]): NodeDefinition => ({ id, name, icon: "brain", category: "ai", version: 1, auth, triggers: [], actions: [] });
-  if (!value || value.length > 4096 || value.includes("\r") || value.includes("\n")) throw new Error(id.toUpperCase() + "_CONNECTION_REQUIRED");
+function credential(ctx: NodeContext, id: string) {
   const value = ctx.credentials[id]?.apiKey;
-  if (!value || value.length > 4096 || /[\\r\\n]/.test(value)) throw new Error(id.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!value || value.length > 4096 || value.includes("\r") || value.includes("\n")) throw new Error(id.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
-};
+}
 const errorCode = (id: string, status: number) => id.toUpperCase() + (status === 401 || status === 403 ? "_AUTH_FAILED" : status === 429 ? "_RATE_LIMITED" : status >= 500 ? "_PROVIDER_UNAVAILABLE" : "_REQUEST_FAILED");
 const request = async (ctx: NodeContext, id: string, endpoint: string, body: unknown) => {
   const r = await ctx.http.request({ url: endpoint, method: "POST", headers: { Authorization: "Bearer " + credential(ctx, id), "Content-Type": "application/json" }, body, timeoutMs: 20000, retries: 0 });
