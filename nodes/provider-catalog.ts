@@ -209,7 +209,7 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "category": "ai",
     "group": "AI",
     "auth": "apiKey",
-    "registryId": "pinecone'
+    "registryId": "pinecone"
   },
   {
     "id": "gmail",
