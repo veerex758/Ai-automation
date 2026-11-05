@@ -347,6 +347,7 @@ test.after(async () => {
         await db.query("drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade");
         await db.query("drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade");
         await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer)");
+        await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer,text)");
         await db.query("drop function if exists public.enqueue_execution_job(uuid,uuid,uuid,text,jsonb,integer)");
         await db.query("drop function if exists public.claim_execution_jobs(text,integer,integer)");
         await db.query("drop function if exists public.heartbeat_execution_job(uuid,uuid,integer)");
