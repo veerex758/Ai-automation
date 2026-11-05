@@ -40,7 +40,7 @@ test("registry runner resolves an operation by node and operation IDs", async ()
   assert.equal((result as { eventType: string }).eventType, "signup");
 });
 
-test("Gemini action makes a real Responses API request and validates actual output", async () => {
+test("Gemini action makes a real Gemini API request and validates actual output", async () => {
   const operation = findOperation("gemini", "generate_text", "action");
   assert.ok(operation);
   let requestedUrl = "";
