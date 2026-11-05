@@ -364,3 +364,26 @@ test("Loop executes downstream registered actions for every item and exposes ite
   assert.deepEqual(output.results.map((x) => [x.item, x.index]), [["a", 0], ["b", 1], ["a", 2]]);
   assert.deepEqual((output.results[1].outputs.unique as { items: string[] }).items, ["b"]);
 });
+
+
+test("AI provider adapters parse native response shapes and return durable job IDs", async () => {
+  const cohere = findOperation("cohere", "generate", "action");
+  const together = findOperation("together_ai", "generate", "action");
+  const replicate = findOperation("replicate", "run", "action");
+  const deepl = findOperation("deepl", "translate", "action");
+  const assembly = findOperation("assemblyai", "transcribe", "action");
+  assert.ok(cohere && together && replicate && deepl && assembly);
+  const context = { credentials: { cohere: { apiKey: "c" }, together_ai: { apiKey: "t" }, replicate: { apiKey: "r" }, deepl: { apiKey: "d" }, assemblyai: { apiKey: "a" } }, logger: { info() {}, error() {} }, previousOutputs: {}, http: { async request(args: { url: string }) {
+    if (args.url.includes("cohere")) return { status: 200, body: { message: { content: [{ type: "text", text: "cohere ok" }] } } };
+    if (args.url.includes("together")) return { status: 200, body: { choices: [{ message: { content: "together ok" } }] } };
+    if (args.url.includes("replicate")) return { status: 201, body: { id: "pred_1", status: "starting", urls: {} } };
+    if (args.url.includes("deepl")) return { status: 200, body: { translations: [{ text: "bonjour", detected_source_language: "EN" }] } };
+    return { status: 200, body: { id: "transcript_1", status: "queued" } };
+  } } };
+  assert.equal((await cohere.run(context, { prompt: "hello" }) as { text: string }).text, "cohere ok");
+  assert.equal((await together.run(context, { prompt: "hello" }) as { text: string }).text, "together ok");
+  assert.equal((await replicate.run(context, { version: "version_1", input: {} }) as { predictionId: string }).predictionId, "pred_1");
+  assert.equal((await deepl.run(context, { text: "hello", targetLang: "FR" }) as { text: string }).text, "bonjour");
+  assert.equal((await assembly.run(context, { audioUrl: "https://example.com/audio.mp3" }) as { transcriptId: string }).transcriptId, "transcript_1");
+  await assert.rejects(() => cohere.run({ ...context, credentials: {} }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
+});
