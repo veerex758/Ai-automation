@@ -112,17 +112,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     let definitionToSave: Record<string, unknown> = validated.definition;
     const legacyNodes = validated.definition.nodes;
     const canBridgeLegacyDefinition = legacyNodes[0]?.type === "trigger" &&
-      legacyNodes[0].settings.event === "manual" &&
+      ["manual", "webhook"].includes(legacyNodes[0].settings.event) &&
       legacyNodes.slice(1).every((node) => node.type === "action" &&
         ((node.settings.provider === "email" && node.settings.operation === "send_email") ||
          (node.settings.provider === "slack" && node.settings.operation === "send_message")));
     const autoRegistrySteps: RegisteredWorkflowStep[] | null = canBridgeLegacyDefinition
       ? legacyNodes.map((node) => {
           if (node.type === "trigger") {
-            return { id: node.id, nodeId: "manual", operationId: "start", kind: "trigger", input: {} };
+            return node.settings.event === "webhook"\n              ? { id: node.id, nodeId: "webhooks", operationId: "receive_event", kind: "trigger", input: { eventId: "draft-event", eventType: "lead.enquiry", receivedAt: new Date(0).toISOString(), payload: {} } }\n              : { id: node.id, nodeId: "manual", operationId: "start", kind: "trigger", input: {} };
           }
           const provider = node.settings.provider ?? "internal";
-          if (provider === "email") {
+          if (provider === "gemini") {\n            return { id: node.id, nodeId: "gemini", operationId: "qualify_real_estate_lead", kind: "action", input: { leadData: node.settings.leadData ?? "" } };\n          }\n          if (provider === "email") {
             return { id: node.id, nodeId: "email", operationId: "send_email", kind: "action", input: {
               to: node.settings.recipient ?? "",
               subject: (node.title || "Aivanta workflow notification").slice(0, 200),
