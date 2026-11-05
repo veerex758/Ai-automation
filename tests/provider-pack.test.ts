@@ -550,3 +550,110 @@ test("Cloudflare R2 signs read-only object listing requests", async () => {
     { bucket: "aivanta-data", prefix: "uploads/" });
   assert.deepEqual(result, { keys: ["uploads/a.txt"], truncated: false });
 });
+
+
+import { isProviderLiveEnabled, providerPackLiveId, PROVIDER_PACK_LIVE_IDS } from "../lib/workflows/provider-live-gates";
+
+test("all 20 provider-pack adapters resolve to an exact, opt-in live gate", () => {
+  assert.equal(PROVIDER_PACK_LIVE_IDS.length, 20);
+  for (const id of PROVIDER_PACK_LIVE_IDS) {
+    assert.equal(providerPackLiveId({ kind: "action", nodeId: id, operationId: "execute" }), id);
+    assert.equal(isProviderLiveEnabled(id, undefined), false, id + " must be disabled by default");
+    assert.equal(isProviderLiveEnabled(id, "another_provider"), false, id + " must not inherit another provider's gate");
+    assert.equal(isProviderLiveEnabled(id, " " + id.toUpperCase() + " , other "), true, id + " must support exact normalized opt-in");
+  }
+  assert.equal(providerPackLiveId({ kind: "trigger", nodeId: "claude", operationId: "execute" }), null);
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "claude", operationId: "other" }), null);
+});
+
+const providerSpecificCases: Array<{
+  id: string;
+  input: Record<string, unknown>;
+  credentials: Record<string, Record<string, string>>;
+  responses: Array<{ status: number; body: unknown }>;
+  url: RegExp;
+  expected: unknown;
+}> = [
+  { id: "mistral", input: { prompt: "hello" }, credentials: { mistral: { apiKey: "mistral-test" } },
+    responses: [{ status: 200, body: { model: "mistral-test-model", choices: [{ message: { content: "Mistral says hi" } }] } }],
+    url: /api\.mistral\.ai\/v1\/chat\/completions/, expected: { text: "Mistral says hi", model: "mistral-test-model" } },
+  { id: "groq", input: { prompt: "hello" }, credentials: { groq: { apiKey: "groq-test" } },
+    responses: [{ status: 200, body: { model: "llama-test", choices: [{ message: { content: "Groq says hi" } }] } }],
+    url: /api\.groq\.com\/openai\/v1\/chat\/completions/, expected: { text: "Groq says hi", model: "llama-test" } },
+  { id: "perplexity", input: { prompt: "hello" }, credentials: { perplexity: { apiKey: "pplx-test" } },
+    responses: [{ status: 200, body: { model: "sonar-test", choices: [{ message: { content: "Search answer" } }] } }],
+    url: /api\.perplexity\.ai\/chat\/completions/, expected: { text: "Search answer", model: "sonar-test" } },
+  { id: "discord", input: { channelId: "123456789012345", content: "hello" }, credentials: { discord: { botToken: "discord-test" } },
+    responses: [{ status: 200, body: { id: "discord-message-1" } }], url: /discord\.com\/api\/v10\/channels\/123456789012345\/messages/,
+    expected: { messageId: "discord-message-1", channelId: "123456789012345" } },
+  { id: "telegram", input: { chatId: "chat-1", text: "hello" }, credentials: { telegram: { botToken: "telegram-test" } },
+    responses: [{ status: 200, body: { ok: true, result: { message_id: 42, chat: { id: 99 } } } }],
+    url: /api\.telegram\.org\/bottelegram-test\/sendMessage/, expected: { messageId: 42, chatId: 99 } },
+  { id: "whatsapp_business", input: { to: "+15551234567", text: "hello" }, credentials: { whatsapp_business: { accessToken: "wa-test", phoneNumberId: "123456789" } },
+    responses: [{ status: 200, body: { messages: [{ id: "wamid.1" }] } }], url: /graph\.facebook\.com\/v22\.0\/123456789\/messages/,
+    expected: { messageId: "wamid.1" } },
+  { id: "sendgrid", input: { to: "to@example.test", subject: "Test", text: "hello" }, credentials: { sendgrid: { apiKey: "sg-test", fromEmail: "from@example.test" } },
+    responses: [{ status: 202, body: "" }], url: /api\.sendgrid\.com\/v3\/mail\/send/, expected: { accepted: true, status: 202 } },
+  { id: "mailgun", input: { to: "to@example.test", subject: "Test", text: "hello" }, credentials: { mailgun: { apiKey: "mg-test", domain: "mg.example.test", fromEmail: "from@example.test" } },
+    responses: [{ status: 200, body: { id: "mailgun-message-1" } }], url: /api\.mailgun\.net\/v3\/mg\.example\.test\/messages/,
+    expected: { accepted: true, messageId: "mailgun-message-1" } },
+  { id: "postmark", input: { to: "to@example.test", subject: "Test", text: "hello" }, credentials: { postmark: { serverToken: "pm-test", fromEmail: "from@example.test" } },
+    responses: [{ status: 200, body: { MessageID: "postmark-message-1", SubmittedAt: "2026-11-05T00:00:00Z" } }],
+    url: /api\.postmarkapp\.com\/email/, expected: { messageId: "postmark-message-1", submittedAt: "2026-11-05T00:00:00Z" } },
+  { id: "github", input: { owner: "acme", repo: "app", title: "Bug" }, credentials: { github: { token: "gh-test" } },
+    responses: [{ status: 201, body: { number: 7, html_url: "https://github.com/acme/app/issues/7" } }],
+    url: /api\.github\.com\/repos\/acme\/app\/issues/, expected: { issueNumber: 7, url: "https://github.com/acme/app/issues/7" } },
+  { id: "gitlab", input: { projectId: 123, title: "Bug" }, credentials: { gitlab: { token: "gl-test" } },
+    responses: [{ status: 201, body: { id: 8, web_url: "https://gitlab.com/acme/app/-/issues/8" } }],
+    url: /gitlab\.com\/api\/v4\/projects\/123\/issues/, expected: { issueId: 8, url: "https://gitlab.com/acme/app/-/issues/8" } },
+  { id: "vercel", input: { limit: 2 }, credentials: { vercel: { token: "vercel-test" } },
+    responses: [{ status: 200, body: { deployments: [{ uid: "dpl_1", state: "READY", url: "app.example.test" }] } }],
+    url: /api\.vercel\.com\/v6\/deployments/, expected: { deployments: [{ uid: "dpl_1", state: "READY", url: "app.example.test" }] } },
+  { id: "calendly", input: { count: 5 }, credentials: { calendly: { accessToken: "calendly-test" } },
+    responses: [
+      { status: 200, body: { resource: { uri: "https://api.calendly.com/users/user-1" } } },
+      { status: 200, body: { collection: [{ uri: "https://api.calendly.com/event_types/event-1", name: "Discovery", active: true }] } },
+    ], url: /api\.calendly\.com\/(users\/me|event_types\?)/,
+    expected: { eventTypes: [{ uri: "https://api.calendly.com/event_types/event-1", name: "Discovery", active: true }] } },
+  { id: "zendesk", input: { subject: "Support", description: "Help", requesterEmail: "user@example.test" },
+    credentials: { zendesk: { subdomain: "acme", email: "admin@example.test", apiToken: "zd-test" } },
+    responses: [{ status: 201, body: { ticket: { id: 99, url: "https://acme.zendesk.com/api/v2/tickets/99.json" } } }],
+    url: /acme\.zendesk\.com\/api\/v2\/tickets\.json/, expected: { ticketId: 99, url: "https://acme.zendesk.com/api/v2/tickets/99.json" } },
+  { id: "freshdesk", input: { subject: "Support", description: "Help", email: "user@example.test" },
+    credentials: { freshdesk: { domain: "acme", apiKey: "fd-test" } },
+    responses: [{ status: 201, body: { id: 100 } }], url: /acme\.freshdesk\.com\/api\/v2\/tickets/, expected: { ticketId: 100 } },
+  { id: "serpapi", input: { query: "Aivanta", limit: 3 }, credentials: { serpapi: { apiKey: "serp-test" } },
+    responses: [{ status: 200, body: { organic_results: [{ title: "Aivanta", link: "https://example.test/aivanta", snippet: "Automation platform" }] } }],
+    url: /serpapi\.com\/search\.json/, expected: { results: [{ title: "Aivanta", link: "https://example.test/aivanta", snippet: "Automation platform" }] } },
+  { id: "openweather", input: { city: "Abuja" }, credentials: { openweather: { apiKey: "weather-test" } },
+    responses: [{ status: 200, body: { name: "Abuja", main: { temp: 28, humidity: 65 }, weather: [{ description: "clear sky" }] } }],
+    url: /api\.openweathermap\.org\/data\/2\.5\/weather/, expected: { city: "Abuja", temperature: 28, description: "clear sky", humidity: 65 } },
+];
+
+for (const providerCase of providerSpecificCases) {
+  test(providerCase.id + " adapter uses its provider endpoint, credentials and response contract", async () => {
+    const operation = findOperation(providerCase.id, "execute", "action");
+    assert.ok(operation, providerCase.id + " action must be registered");
+    const calls: any[] = [];
+    const responses = [...providerCase.responses];
+    const result = await operation.run({
+      credentials: providerCase.credentials,
+      logger: { info() {}, error() {} },
+      http: { async request(args: any) {
+        calls.push(args);
+        const next = responses.shift();
+        assert.ok(next, providerCase.id + " made an unexpected extra request");
+        return next;
+      } },
+      previousOutputs: {},
+    } as any, providerCase.input);
+    assert.deepEqual(result, providerCase.expected, providerCase.id);
+    assert.equal(responses.length, 0, providerCase.id + " did not consume expected responses");
+    assert.ok(calls.length >= 1, providerCase.id + " must issue a request");
+    assert.ok(calls.every((call) => providerCase.url.test(call.url)), providerCase.id + " must use its fixed vendor endpoint");
+    for (const call of calls) {
+      assert.equal(call.timeoutMs <= 20000, true, providerCase.id + " request timeout must be bounded");
+      assert.equal(call.retries, 0, providerCase.id + " side-effecting request must not be retried automatically");
+    }
+  });
+}
