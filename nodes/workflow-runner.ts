@@ -47,7 +47,7 @@ function resolveLoopReferences(value: unknown, outputs: Readonly<Record<string, 
     return value.replace(/\{\{(item|index)\}\}/g, (_match, key: string) => {
       const resolved = key === "item" ? item : index;
       return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
-    }).replace(/\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})+)\\}\\}/g, (_match, path: string) => {
+    }).replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})+)\}\}/g, (_match, path: string) => {
       const [stepId, ...parts] = path.split(".");
       let current: unknown = outputs[stepId];
       for (const part of parts) {
