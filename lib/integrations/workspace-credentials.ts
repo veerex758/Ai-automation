@@ -44,6 +44,8 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   pinecone: ["apiKey", "indexHost"],
   microsoft_teams: ["accessToken"], salesforce: ["accessToken", "instanceUrl"], pipedrive: ["accessToken"],
   zoho_crm: ["accessToken"], freshsales: ["accessToken", "domain"], close: ["apiKey"], apollo: ["apiKey"], intercom: ["accessToken"],
+  jira: ["siteUrl", "email", "apiToken"], asana: ["accessToken"], trello: ["apiKey", "token"], clickup: ["token"],
+  monday: ["apiToken"], todoist: ["accessToken"], airtable: ["accessToken"], bitbucket: ["accessToken"], netlify: ["token"],
 };
 
 function validateCredentials(value: unknown): WorkspaceCredentials {
