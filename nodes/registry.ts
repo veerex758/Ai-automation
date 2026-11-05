@@ -17,12 +17,13 @@ import { javascriptNode } from "./javascript";
 import { utilityPack } from "./utility-pack";
 import { providerPack } from "./provider-pack";
 import { catalogueAiNodes } from "./catalogue-ai-pack";
+import { catalogueCrmNodes } from "./catalogue-crm-pack";
 
 /** Only these definitions have validated schemas and executable server handlers. */
 export const nodes: NodeDefinition[] = [
   manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
   gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
-  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack, ...providerPack, ...catalogueAiNodes,
+  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack, ...providerPack, ...catalogueAiNodes, ...catalogueCrmNodes,
 ];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
