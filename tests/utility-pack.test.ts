@@ -101,3 +101,48 @@ test("Markdown converter escapes raw HTML before producing markup",async()=>{
  const op=findOperation("markdown_html","convert","action")!;
  assert.deepEqual(await op.run(context,{markdown:"<script>alert(1)</script>"}),{html:"<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>"});
 });
+
+
+test("Error Trigger redacts credential-shaped metadata and rejects non-primitive metadata", async () => {
+ const op=findOperation("error_trigger","capture","trigger")!;
+ const result=await op.run(context,{code:"STEP_FAILED",message:"Action failed",metadata:{apiKey:"do-not-leak",safe:"visible",attempt:2}});
+ assert.deepEqual((result as any).error.metadata,{apiKey:"[REDACTED]",safe:"visible",attempt:2});
+ await assert.rejects(()=>op.run(context,{code:"STEP_FAILED",message:"Action failed",metadata:{nested:{secret:"x"}}}));
+});
+
+test("Rate Limiter rejects malformed backend responses instead of treating them as success", async () => {
+ const op=findOperation("rate_limiter","check","action")!;
+ await assert.rejects(()=>op.run({...context,rateLimit:{async consume(){return {allowed:true,remaining:-1,retryAfterMs:0}}}},{key:"flow",limit:1,windowMs:1000}),/RATE_LIMIT_BACKEND_INVALID_RESPONSE/);
+});
+
+test("Regex rejects backreferences and lookarounds and returns stable matched status", async () => {
+ const op=findOperation("regex","match","action")!;
+ await assert.rejects(()=>op.run(context,{text:"aa",pattern:"(a)\\\\1",flags:""}),/REGEX_UNSAFE/);
+ await assert.rejects(()=>op.run(context,{text:"aa",pattern:"(?=a)a",flags:""}),/REGEX_UNSAFE/);
+ const output=await op.run(context,{text:"abc",pattern:"abc",flags:"g"});
+ assert.deepEqual(output,{matched:true,matches:["abc"]});
+});
+
+test("Text Transform fails rather than silently truncating oversized output", async () => {
+ const op=findOperation("text_transform","transform","action")!;
+ await assert.rejects(()=>op.run(context,{text:"a".repeat(30000),operation:"replace",search:"a",replacement:"aa"}),/TEXT_OUTPUT_TOO_LARGE/);
+});
+
+test("Object operations reject unsafe keys already present in the input object", async () => {
+ const op=findOperation("object_ops","operate","action")!;
+ const data=JSON.parse('{"safe":1,"constructor":"polluted"}');
+ await assert.rejects(()=>op.run(context,{data,operation:"keys",keys:[]}),/OBJECT_UNSAFE_KEY/);
+});
+
+test("Date Add uses explicit elapsed-time semantics across daylight-saving boundaries", async () => {
+ const op=findOperation("date_add","add","action")!;
+ const result=await op.run(context,{date:"2026-03-08T06:30:00.000Z",amount:1,unit:"h"});
+ assert.deepEqual(result,{iso:"2026-03-08T07:30:00.000Z"});
+});
+
+test("Date Format uses the requested IANA timezone deterministically", async () => {
+ const op=findOperation("date_format","format","action")!;
+ const result=await op.run(context,{date:"2026-01-01T00:00:00.000Z",timezone:"Africa/Lagos"});
+ assert.equal((result as any).timezone,"Africa/Lagos");
+ assert.match((result as any).formatted,/01 Jan 2026/);
+});
