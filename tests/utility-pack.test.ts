@@ -56,11 +56,11 @@ test("Rate Limiter delegates every decision to the shared atomic backend",async(
 test("Error Trigger is a real trigger operation and normalizes failure metadata",async()=>{
  const op=findOperation("error_trigger","capture","trigger")!;
  assert.ok(op);
- const output=await op.run(context,{code:"PROVIDER_TIMEOUT",message:"Provider timed out",workflowRunId:"00000000-0000-4000-8000-000000000001",stepId:"send"});
- assert.equal((output as any).error.code,"PROVIDER_TIMEOUT");
- assert.equal((output as any).error.stepId,"send");
- assert.match((output as any).error.eventId,/^[0-9a-f-]{36}$/);
- assert.ok(Date.parse((output as any).error.occurredAt)>0);
+ const output=await op.run(context,{code:"PROVIDER_TIMEOUT",message:"Provider timed out",workflowRunId:"00000000-0000-4000-8000-000000000001",stepId:"send"}) as {error:{code:string;stepId:string;eventId:string;occurredAt:string}};
+ assert.equal(output.error.code,"PROVIDER_TIMEOUT");
+ assert.equal(output.error.stepId,"send");
+ assert.match(output.error.eventId,/^[0-9a-f-]{36}$/);
+ assert.ok(Date.parse(output.error.occurredAt)>0);
  await assert.rejects(()=>op.run(context,{code:"bad code",message:"invalid"}));
 });
 
@@ -86,8 +86,8 @@ test("Array and Object utilities enforce bounded safe transformations",async()=>
 });
 
 test("UUID utility emits cryptographically valid UUIDs",async()=>{
- const output=await findOperation("uuid","generate","action")!.run(context,{});
- assert.match((output as any).uuid,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+ const output=await findOperation("uuid","generate","action")!.run(context,{}) as {uuid:string};
+ assert.match(output.uuid,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 });
 
 test("Date Add rejects overflow and Date Format rejects invalid timezones",async()=>{
@@ -105,8 +105,8 @@ test("Markdown converter escapes raw HTML before producing markup",async()=>{
 
 test("Error Trigger redacts credential-shaped metadata and rejects non-primitive metadata", async () => {
  const op=findOperation("error_trigger","capture","trigger")!;
- const result=await op.run(context,{code:"STEP_FAILED",message:"Action failed",metadata:{apiKey:"do-not-leak",safe:"visible",attempt:2}});
- assert.deepEqual((result as any).error.metadata,{apiKey:"[REDACTED]",safe:"visible",attempt:2});
+ const result=await op.run(context,{code:"STEP_FAILED",message:"Action failed",metadata:{apiKey:"do-not-leak",safe:"visible",attempt:2}}) as {error:{metadata:Record<string,unknown>}};
+ assert.deepEqual(result.error.metadata,{apiKey:"[REDACTED]",safe:"visible",attempt:2});
  await assert.rejects(()=>op.run(context,{code:"STEP_FAILED",message:"Action failed",metadata:{nested:{secret:"x"}}}));
 });
 
@@ -142,9 +142,9 @@ test("Date Add uses explicit elapsed-time semantics across daylight-saving bound
 
 test("Date Format uses the requested IANA timezone deterministically", async () => {
  const op=findOperation("date_format","format","action")!;
- const result=await op.run(context,{date:"2026-01-01T00:00:00.000Z",timezone:"Africa/Lagos"});
- assert.equal((result as any).timezone,"Africa/Lagos");
- assert.match((result as any).formatted,/1 Jan 2026/);
+ const result=await op.run(context,{date:"2026-01-01T00:00:00.000Z",timezone:"Africa/Lagos"}) as {timezone:string;formatted:string};
+ assert.equal(result.timezone,"Africa/Lagos");
+ assert.match(result.formatted,/1 Jan 2026/);
 });
 
 test("Regex rejects patterns with excessive repeated quantifiers before execution", async () => {
