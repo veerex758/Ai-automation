@@ -32,6 +32,8 @@ export default function WorkflowBuilderPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [runningTest, setRunningTest] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [savedWorkflowId, setSavedWorkflowId] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -211,17 +213,41 @@ export default function WorkflowBuilderPage() {
   const currentStep = steps.find(step => step.id === selected) ?? steps[0];
   const validationResult = validateWorkflowDefinition({ name, steps });
 
-  function reviewWorkflow() {
-    const actionIssues = getActionConfigurationIssues();
-    if (actionIssues.length) {
-      setNotice("Action configuration needs attention: " + actionIssues.join(" "));
+  async function runDryRun() {
+    if (!savedWorkflowId) { setNotice("Save this draft first, then run its dry-run test."); return; }
+    const issues = getActionConfigurationIssues();
+    if (issues.length || !validationResult.valid) {
+      setNotice("Fix the workflow configuration before testing: " + [...issues, ...validationResult.issues.map(issue => issue.message)].join(" "));
       return;
     }
-    if (!validationResult.valid) {
-      setNotice("Review needed: " + validationResult.issues.map(issue => issue.message).join(" "));
-      return;
-    }
-    setNotice("Basic checks passed. Activation is still disabled because live integrations, server-side validation, and execution safeguards are not connected.");
+    setRunningTest(true);
+    try {
+      const response = await fetch(`/api/workflows/${savedWorkflowId}/registry-run`, {
+        method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const result = await response.json() as { run?: { status?: string }; steps?: Array<{ status?: string }>; error?: string };
+      if (!response.ok || result.run?.status !== "succeeded") throw new Error(result.error || "Dry-run failed. Review the workflow configuration.");
+      setNotice(`Dry-run passed: ${result.steps?.length ?? 0} steps simulated. No provider calls or emails were sent. You can now activate this saved version.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not test this workflow.");
+    } finally { setRunningTest(false); }
+  }
+
+  async function activateWorkflow() {
+    if (!savedWorkflowId) { setNotice("Save and successfully test this workflow before activation."); return; }
+    setActivating(true);
+    try {
+      const response = await fetch(`/api/workflows/${savedWorkflowId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Aivanta could not activate this workflow.");
+      setNotice("Workflow activated. New verified webhook enquiries can now be processed under the configured limits.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not activate this workflow.");
+    } finally { setActivating(false); }
   }
 
   return (
@@ -241,7 +267,7 @@ export default function WorkflowBuilderPage() {
       </aside>
 
       <section className="builder-main">
-        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft} disabled={savingDraft}>{savingDraft ? "Saving…" : "Save draft"}</button><button className="builder-secondary-button" onClick={reviewWorkflow}>Test</button><button className="builder-primary-button" disabled title="Activation remains disabled until integrations and execution safeguards are configured">Activate</button></div></header>
+        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft} disabled={savingDraft}>{savingDraft ? "Saving…" : "Save draft"}</button><button className="builder-secondary-button" onClick={runDryRun} disabled={runningTest || !savedWorkflowId}>{runningTest ? "Testing…" : "Test"}</button><button className="builder-primary-button" onClick={activateWorkflow} disabled={activating || !savedWorkflowId}>{activating ? "Activating…" : "Activate"}</button></div></header>
         <div className="builder-content">
           <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
