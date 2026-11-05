@@ -178,10 +178,19 @@ create or replace function public.record_and_dispatch_execution_error_event(
 language plpgsql security definer set search_path = ''
 as $$
 declare event_id uuid;
+declare source_mode text;
+declare source_payload jsonb;
 begin
+  select execution_mode,payload into source_mode,source_payload
+  from public.execution_jobs
+  where id = p_job_id and status = 'running' and lease_token = p_lease_token and lease_until > now();
+  if not found then raise exception using errcode='22023',message='Execution lease is not valid'; end if;
   event_id := public.record_execution_error_event(
     p_job_id,p_lease_token,p_step_id,p_error_code,p_safe_message,p_attempt
   );
+  if source_mode <> 'live' or source_payload->>'source' = 'error_trigger' then
+    return 0;
+  end if;
   return public.dispatch_execution_error_event(event_id);
 end;
 $$;
