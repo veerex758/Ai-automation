@@ -129,6 +129,7 @@ begin
     select w.* from public.workflows w
     where w.workspace_id = event_row.workspace_id
       and w.status = 'active'
+      and w.created_by is not null
       and w.id <> event_row.workflow_id
       and w.definition->>'format' = 'aivanta-registry-v1'
       and jsonb_typeof(w.definition->'steps') = 'array'
@@ -143,7 +144,8 @@ begin
       workflow_row.created_by,
       'error:' || event_row.id::text || ':' || workflow_row.id::text,
       jsonb_build_object('source','error_trigger','input',event_input),
-      3
+      1,
+      'live'
     );
     if coalesce((dispatch_result->>'duplicate')::boolean,false) = false then
       dispatched := dispatched + 1;
