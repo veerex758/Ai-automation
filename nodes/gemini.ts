@@ -43,7 +43,7 @@ const leadJsonSchema = {
     fullName: { type: "STRING", nullable: true }, email: { type: "STRING", nullable: true },
     phone: { type: "STRING", nullable: true },
     propertyType: { type: "STRING", enum: ["apartment", "house", "land", "commercial", "other", "unknown"] },
-    location: { type: "STRING", nullable: true }, budget: { type: ["STRING", "NULL"] },
+    location: { type: "STRING", nullable: true }, budget: { type: "STRING", nullable: true },
     timeframe: { type: "STRING", enum: ["urgent", "within_30_days", "one_to_three_months", "over_three_months", "unknown"] },
     temperature: { type: "STRING", enum: ["hot", "warm", "cold"] },
     reason: { type: "STRING" }, missingInformation: { type: "ARRAY", items: { type: "STRING" } },
@@ -80,10 +80,12 @@ async function qualifyLead(ctx: NodeContext, rawInput: unknown) {
   try { parsed = JSON.parse(text); } catch { throw new Error("GEMINI_INVALID_JSON"); }
   return leadOutputSchema.parse({
     ...(parsed as Record<string, unknown>),
-    inputTokens: typeof body.usageMetadata?.promptTokenCount === "number" ? body.usageMetadata.promptTokenCount : undefined,\n    outputTokens: typeof body.usageMetadata?.candidatesTokenCount === "number" ? body.usageMetadata.candidatesTokenCount : undefined,
+    inputTokens: typeof body.usageMetadata?.promptTokenCount === "number" ? body.usageMetadata.promptTokenCount : undefined,
+    outputTokens: typeof body.usageMetadata?.candidatesTokenCount === "number" ? body.usageMetadata.candidatesTokenCount : undefined,
   });
 }
-\nexport const geminiNode: NodeDefinition = {
+
+export const geminiNode: NodeDefinition = {
   id: "gemini", name: "Gemini", icon: "brain-circuit", category: "ai", version: 1,
   auth: { type: "apiKey", credentialKey: "apiKey" },
   triggers: [],
