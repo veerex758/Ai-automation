@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -91,6 +91,13 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   cal_com: { label: "Cal.com", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   twilio_voice: { label: "Twilio Voice", fields: [{ name: "accountSid", label: "Account SID", type: "text" }, { name: "authToken", label: "Auth token", type: "password" }, { name: "fromPhone", label: "Twilio voice caller ID (E.164)", type: "tel" }] },
   docusign: { label: "DocuSign", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }, { name: "accountId", label: "Account ID", type: "text" }, { name: "baseUri", label: "API base URI", type: "url" }] },
+  x_twitter: { label: "X/Twitter", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  linkedin: { label: "LinkedIn", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  facebook_pages: { label: "Facebook Pages", fields: [{ name: "pageAccessToken", label: "Page access token", type: "password" }] },
+  instagram: { label: "Instagram", fields: [{ name: "accessToken", label: "Graph API access token", type: "password" }, { name: "igUserId", label: "Instagram professional account ID", type: "text" }] },
+  tiktok: { label: "TikTok", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  mailchimp: { label: "Mailchimp", fields: [{ name: "apiKey", label: "API key (includes server region suffix)", type: "password" }] },
+  typeform: { label: "Typeform", fields: [{ name: "accessToken", label: "Personal access token", type: "password" }] },
 };
 
 function WorkspaceIntegrationManager() {
