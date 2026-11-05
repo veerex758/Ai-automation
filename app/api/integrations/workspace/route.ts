@@ -7,7 +7,7 @@ import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"]);
+const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
 const labels: Record<WorkspaceCredentialProvider, string> = {
   openai: "OpenAI", gemini: "Gemini", resend: "Resend", slack: "Slack", http: "HTTP API",
   notion: "Notion", hubspot: "HubSpot", twilio: "Twilio", shopify: "Shopify", stripe: "Stripe", linear: "Linear",
@@ -38,6 +38,7 @@ claude: "Claude",
   woocommerce: "WooCommerce", paypal: "PayPal", paddle: "Paddle", lemon_squeezy: "Lemon Squeezy", square: "Square", razorpay: "Razorpay",
   zoom: "Zoom", cal_com: "Cal.com", twilio_voice: "Twilio Voice", docusign: "DocuSign",
   x_twitter: "X/Twitter", linkedin: "LinkedIn", facebook_pages: "Facebook Pages", instagram: "Instagram", tiktok: "TikTok", mailchimp: "Mailchimp", typeform: "Typeform",
+  supabase: "Supabase", postgresql: "PostgreSQL", redis: "Redis", firebase: "Firebase", dropbox: "Dropbox", aws_s3: "AWS S3", cloudflare_r2: "Cloudflare R2",
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
