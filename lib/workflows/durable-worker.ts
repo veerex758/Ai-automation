@@ -168,7 +168,7 @@ function boundedOutput(value: unknown): Record<string, unknown> {
   return { outputOmitted: true };
 }
 
-function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean): Omit<NodeContext, "previousOutputs"> {
+function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
     logger: {
@@ -195,6 +195,7 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
         } finally { clearTimeout(timer); }
       },
     },
+    rateLimit: { async consume(args) { const { data, error } = await db.rpc("consume_execution_rate_limit", { p_workspace_id: workspaceId, p_key: args.key, p_limit: args.limit, p_window_ms: args.windowMs }); if (error || !isRecord(data)) throw new Error("RATE_LIMIT_BACKEND_UNAVAILABLE"); return { allowed: data.allowed === true, remaining: Number(data.remaining), retryAfterMs: Number(data.retryAfterMs) }; } },
     webhook: { verified: webhookVerified },
   };
 }
@@ -298,7 +299,7 @@ export async function runDurableWorker() {
         const credentials = job.execution_mode === "live"
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
-        const context = executionContext(credentials, job.payload?.webhookVerified === true);
+        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
@@ -314,6 +315,13 @@ export async function runDurableWorker() {
         }
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
+          onWorkflowError: async (event) => {
+            const { error: eventError } = await db.rpc("record_execution_error_event", {
+              p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
+              p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
+            });
+            if (eventError) throw new Error("ERROR_EVENT_PERSISTENCE_FAILED");
+          },
           ...(job.execution_mode === "live" ? {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
@@ -393,7 +401,7 @@ export async function runDurableWorker() {
             ];
             const liveResult = await executeRegisteredWorkflow({
               steps: registrySteps,
-              context: executionContext(credentials, false),
+              context: executionContext(credentials, false, db, job.workspace_id),
               dryRun: false,
               onStepStart: async (step, position) => {
                 await persistCheckpoint(db, job, step, position, "started");
