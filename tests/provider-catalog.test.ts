@@ -15,7 +15,7 @@ test("only native registry implementations are marked as registered", () => {
   const catalog = getPublicNodeCatalog();
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
-  assert.equal(registered.length, 65);
+  assert.equal(registered.length, 74);
   assert.equal(comingSoon.length, 100 - registered.length);
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
@@ -106,17 +106,17 @@ test("native executable inventory has one authoritative count, separate from dir
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
 
-  // 85 is the native registry after adding four AI, eight CRM/messaging and six Google catalogue nodes:
-  // 20 utility-pack nodes and 20 provider-pack nodes, plus 18 new catalogue adapters.
-  assert.equal(nodes.length, 85);
-  assert.equal(executable.length, 85);
-  assert.equal(new Set(nodes.map((node) => node.id)).size, 85);
+  // 94 is the native registry after adding 4 AI, 8 CRM/messaging, 6 Google and 9 productivity/developer nodes:
+  // 20 utility-pack nodes and 20 provider-pack nodes, plus 27 new catalogue adapters.
+  assert.equal(nodes.length, 94);
+  assert.equal(executable.length, 94);
+  assert.equal(new Set(nodes.map((node) => node.id)).size, 94);
 
   // The 100-entry provider directory is a different inventory. Its 59
   // mapped entries do not include the 20 internal utility-pack nodes.
   assert.equal(catalog.length, 100);
   assert.equal(registered.length, 65);
-  assert.equal(comingSoon.length, 35);
-  assert.equal(new Set(registered.map((node) => node.registryNodeId)).size, 65);
+  assert.equal(comingSoon.length, 26);
+  assert.equal(new Set(registered.map((node) => node.registryNodeId)).size, 74);
   assert.ok(registered.every((node) => nodes.some((implementation) => implementation.id === node.registryNodeId)));
 });
