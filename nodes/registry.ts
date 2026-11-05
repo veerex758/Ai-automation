@@ -31,12 +31,21 @@ export function findOperation(nodeId: string, operationId: string, kind: "trigge
     : node?.actions.find((operation) => operation.id === operationId);
 }
 
+function publicSchema(schema: { toJSONSchema: () => Record<string, unknown> }) {
+  try {
+    return schema.toJSONSchema();
+  } catch {
+    // Keep catalog listing available even if a provider-specific Zod schema has an unsupported JSON Schema construct.
+    return { type: "object", additionalProperties: true, description: "Input/output schema unavailable; validate using the node runtime." };
+  }
+}
+
 export function getPublicNodeCatalog() {
   return nodes.map(({ id, name, icon, category, version, auth, triggers, actions }) => ({
     id, name, icon, category, version, auth,
     triggers: triggers.map(({ id: operationId, name: operationName, description, inputSchema, outputSchema }) => ({
       id: operationId, name: operationName, description,
-      inputSchema: inputSchema.toJSONSchema(), outputSchema: outputSchema.toJSONSchema(),
+      inputSchema: publicSchema(inputSchema), outputSchema: publicSchema(outputSchema),
     })),
     actions: actions.map(({ id: operationId, name: operationName, description, inputSchema, outputSchema }) => ({
       id: operationId, name: operationName, description,
