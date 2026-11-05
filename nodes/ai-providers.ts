@@ -71,6 +71,14 @@ assembly.actions.push({ id: "transcribe", name: "Start transcription", descripti
   return { transcriptId: b.id, status: b.status, raw: r.body };
 } });
 
+assembly.actions.push({ id: "get_transcript", name: "Get transcript", description: "Fetches AssemblyAI transcript status/text by ID; poll durably until completed or error.", inputSchema: z.object({ transcriptId: str(128) }).strict(), outputSchema: z.object({ transcriptId: z.string(), status: z.string(), text: z.string().optional(), error: z.string().optional(), raw: z.json() }).strict(), async run(ctx, i) {
+  const r = await ctx.http.request({ url: "https://api.assemblyai.com/v2/transcript/" + encodeURIComponent(i.transcriptId), method: "GET", headers: { authorization: credential(ctx, "assemblyai") }, timeoutMs: 15000, retries: 0 });
+  if (r.status < 200 || r.status >= 300) throw new Error(errorCode("assemblyai", r.status));
+  const b = r.body as Record<string, unknown>;
+  if (typeof b?.id !== "string" || typeof b.status !== "string") throw new Error("ASSEMBLYAI_INVALID_RESPONSE");
+  return { transcriptId: b.id, status: b.status, text: typeof b.text === "string" ? b.text : undefined, error: typeof b.error === "string" ? b.error : undefined, raw: r.body };
+} });
+
 const whisper = node("openai_whisper", "OpenAI Whisper", { type: "apiKey", credentialKey: "apiKey" });
 whisper.actions.push({ id: "transcribe", name: "Transcribe audio", description: "Not enabled: current HTTP transport supports JSON only; audio transcription requires multipart upload and bounded file handling.", inputSchema: z.object({ audioUrl: z.string().url(), model: z.string().default("whisper-1") }).strict(), outputSchema: z.object({ text: z.string(), raw: z.json() }).strict(), async run() { throw new Error("WHISPER_MULTIPART_TRANSPORT_NOT_IMPLEMENTED"); } });
 
