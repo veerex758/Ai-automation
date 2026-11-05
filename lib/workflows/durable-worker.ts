@@ -326,16 +326,21 @@ export async function runDurableWorker() {
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
           onWorkflowError: async (event) => {
-            const { data: eventId, error: eventError } = await db.rpc("record_execution_error_event", {
-              p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
-              p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
-            });
-            if (eventError || typeof eventId !== "string") throw new Error("ERROR_EVENT_PERSISTENCE_FAILED");
-            // Error-trigger workflows may report their own failure, but must not
-            // recursively fan out another generation of error-trigger jobs.
+            // Persist and enqueue subscribers in one database transaction. A
+            // failure rolls back both, allowing the durable job retry to retry
+            // delivery without losing an event between two RPC calls.
             if (source !== "error_trigger") {
-              const { error: dispatchError } = await db.rpc("dispatch_execution_error_event", { p_event_id: eventId });
-              if (dispatchError) throw new Error("ERROR_TRIGGER_DISPATCH_FAILED");
+              const { error: eventError } = await db.rpc("record_and_dispatch_execution_error_event", {
+                p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
+                p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
+              });
+              if (eventError) throw new Error("ERROR_TRIGGER_DISPATCH_FAILED");
+            } else {
+              const { error: eventError } = await db.rpc("record_execution_error_event", {
+                p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
+                p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
+              });
+              if (eventError) throw new Error("ERROR_EVENT_PERSISTENCE_FAILED");
             }
           },
           ...(job.execution_mode === "live" ? {
