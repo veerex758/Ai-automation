@@ -7,10 +7,29 @@ import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"]);
+const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"]);
 const labels: Record<WorkspaceCredentialProvider, string> = {
   openai: "OpenAI", gemini: "Gemini", resend: "Resend", slack: "Slack", http: "HTTP API",
   notion: "Notion", hubspot: "HubSpot", twilio: "Twilio", shopify: "Shopify", stripe: "Stripe", linear: "Linear",
+claude: "Claude",
+  mistral: "Mistral",
+  groq: "Groq",
+  perplexity: "Perplexity",
+  discord: "Discord",
+  telegram: "Telegram",
+  whatsapp_business: "WhatsApp Business",
+  sendgrid: "SendGrid",
+  mailgun: "Mailgun",
+  postmark: "Postmark",
+  github: "GitHub",
+  gitlab: "GitLab",
+  sentry: "Sentry",
+  vercel: "Vercel",
+  calendly: "Calendly",
+  zendesk: "Zendesk",
+  freshdesk: "Freshdesk",
+  serpapi: "SerpAPI",
+  openweather: "OpenWeather",
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
