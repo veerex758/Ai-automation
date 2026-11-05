@@ -10,6 +10,7 @@ const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", impor
 const workerService = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
 const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
+const utilityMigration = readFileSync(new URL("../supabase/migrations/20261105120000_aivanta_utility_execution_hardening.sql", import.meta.url), "utf8");
 const runPanel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
 
 test("queue enforces workspace-scoped idempotent dispatch and bounded payloads", () => {
@@ -156,4 +157,27 @@ test("durable waits release leases, retain attempt count, and resume from due qu
   assert.match(workerService, /AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true"/);
   assert.match(workerService, /step\.nodeId === "javascript"/);
   assert.match(workerService, /pause_execution_job/);
+});
+
+
+test("Rate Limiter uses a workspace-scoped atomic sliding-window RPC", () => {
+  assert.match(utilityMigration, /pg_advisory_xact_lock/);
+  assert.match(utilityMigration, /workspace_id,key_hash,hit_at/);
+  assert.match(utilityMigration, /consume_execution_rate_limit/);
+  assert.match(workerService, /db\.rpc\("consume_execution_rate_limit"/);
+  assert.match(workerService, /RATE_LIMIT_BACKEND_UNAVAILABLE/);
+  assert.match(workerService, /rateLimit: \{ async consume/);
+});
+
+test("Error Trigger dispatches active same-workspace subscribers through the durable queue", () => {
+  assert.match(utilityMigration, /create or replace function public\.dispatch_execution_error_event/i);
+  assert.match(utilityMigration, /w\.workspace_id = event_row\.workspace_id/);
+  assert.match(utilityMigration, /w\.status = 'active'/);
+  assert.match(utilityMigration, /w\.definition->'steps'->0->>'nodeId' = 'error_trigger'/);
+  assert.match(utilityMigration, /'error:' \|\| event_row\.id::text/);
+  assert.match(utilityMigration, /'source','error_trigger','input',event_input/);
+  assert.match(workerService, /db\.rpc\("dispatch_execution_error_event"/);
+  assert.match(workerService, /source !== "error_trigger"/);
+  assert.match(workerService, /source === "error_trigger"/);
+  assert.match(workerService, /step\.nodeId === "error_trigger"/);
 });
