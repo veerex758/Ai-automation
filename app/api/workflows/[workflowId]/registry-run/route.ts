@@ -9,7 +9,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 function serverContext(): Omit<NodeContext, "previousOutputs"> {
   const credentials: Record<string, Record<string, string>> = {};
-  if (process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
+  if (process.env.GEMINI_API_KEY) credentials.gemini = { apiKey: process.env.GEMINI_API_KEY };
   if (process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
   if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
     credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
