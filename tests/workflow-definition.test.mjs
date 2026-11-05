@@ -87,3 +87,12 @@ test("requires valid condition fields and operators", () => {
   assert.match(validateDefinition(valid(trigger(), condition({ field: "status", operator: "equals", value: "" }))).error, /expected value/i);
   assert.ok(validateDefinition(valid(trigger(), condition({ field: "status", operator: "is_set" }))).definition);
 });
+
+test("accepts a verified webhook to Gemini lead qualification to Resend draft", () => {
+  const result = validateDefinition(valid(
+    trigger({ event: "webhook" }),
+    { id: "qualify-1", type: "action", title: "Qualify enquiry", description: "Extract real-estate lead details.", settings: { provider: "gemini", operation: "qualify_real_estate_lead", leadData: "{{trigger-1.payload}}" } },
+    { id: "notify-1", type: "action", title: "Notify agent", description: "Send the lead summary to the agent.", settings: { provider: "email", operation: "send_email", recipient: "agent@example.com", message: "{{qualify-1.summary}}" } },
+  ));
+  assert.equal(result.definition.nodes.length, 3);
+});
