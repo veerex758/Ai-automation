@@ -27,7 +27,13 @@ Use separate Google OAuth clients and encryption keys for local development, pre
 ## Routes
 
 - `GET /api/integrations/google/start?product=gmail`
-- `GET /api/integrations/google/start?product=sheets`\n- `GET /api/integrations/google/start?product=drive`\n- `GET /api/integrations/google/start?product=calendar`\n- `GET /api/integrations/google/start?product=docs`\n- `GET /api/integrations/google/start?product=forms`\n- `GET /api/integrations/google/start?product=youtube`\n- `GET /api/integrations/google/start?product=contacts`
+- `GET /api/integrations/google/start?product=sheets`
+- `GET /api/integrations/google/start?product=drive`
+- `GET /api/integrations/google/start?product=calendar`
+- `GET /api/integrations/google/start?product=docs`
+- `GET /api/integrations/google/start?product=forms`
+- `GET /api/integrations/google/start?product=youtube`
+- `GET /api/integrations/google/start?product=contacts`
 - `GET /api/integrations/google/callback`
 - `GET /api/integrations/google/connections`
 
