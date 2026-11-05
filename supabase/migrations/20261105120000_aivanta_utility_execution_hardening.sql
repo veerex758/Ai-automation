@@ -71,11 +71,18 @@ create table if not exists public.execution_error_events (
   attempt integer not null check(attempt between 1 and 20),
   error_code text not null check(error_code ~ '^[A-Z0-9_]{1,64}$'),
   safe_message text not null check(length(safe_message) between 1 and 2000),
+  dispatch_status text not null default 'pending' check(dispatch_status in ('pending','dispatched','dead_letter')),
+  dispatch_attempts integer not null default 0 check(dispatch_attempts between 0 and 100),
+  dispatch_error_code text,
+  dispatched_at timestamptz,
   created_at timestamptz not null default now(),
   unique(job_id,step_id,attempt)
 );
 create index if not exists execution_error_events_workspace_created_idx
   on public.execution_error_events(workspace_id,created_at desc);
+create index if not exists execution_error_events_pending_idx
+  on public.execution_error_events(created_at)
+  where dispatch_status = 'pending';
 alter table public.execution_error_events enable row level security;
 revoke all on public.execution_error_events from public,anon,authenticated;
 grant all on public.execution_error_events to service_role;
@@ -116,13 +123,25 @@ returns integer
 language plpgsql security definer set search_path = ''
 as $$
 declare event_row public.execution_error_events%rowtype;
+declare source_job public.execution_jobs%rowtype;
 declare workflow_row public.workflows%rowtype;
 declare dispatched integer := 0;
 declare dispatch_result jsonb;
 declare event_input jsonb;
 begin
-  select * into event_row from public.execution_error_events where id = p_event_id;
+  select * into event_row from public.execution_error_events where id = p_event_id for update;
   if not found then raise exception using errcode='P0002',message='Execution error event not found'; end if;
+  if event_row.dispatch_status = 'dispatched' then return 0; end if;
+  if event_row.dispatch_status = 'dead_letter' then return 0; end if;
+  select * into source_job from public.execution_jobs where id = event_row.job_id;
+  if not found then raise exception using errcode='P0002',message='Execution source job not found'; end if;
+  if source_job.execution_mode <> 'live' or source_job.payload->>'source' = 'error_trigger' then
+    update public.execution_error_events
+      set dispatch_status='dispatched',dispatch_attempts=dispatch_attempts+1,
+          dispatch_error_code=null,dispatched_at=now()
+      where id=p_event_id;
+    return 0;
+  end if;
 
   event_input := jsonb_build_object(
     'eventId', event_row.id,
@@ -162,11 +181,53 @@ begin
       dispatched := dispatched + 1;
     end if;
   end loop;
+  update public.execution_error_events
+    set dispatch_status='dispatched',dispatch_attempts=dispatch_attempts+1,
+        dispatch_error_code=null,dispatched_at=now()
+    where id=p_event_id;
   return dispatched;
 end;
-$$;
+$;
 revoke all on function public.dispatch_execution_error_event(uuid) from public,anon,authenticated;
 grant execute on function public.dispatch_execution_error_event(uuid) to service_role;
+
+
+-- Retry pending Error Trigger deliveries independently of the failed source
+-- workflow. Event persistence is committed before dispatch, so transient queue
+-- failures cannot erase the original failure record.
+create or replace function public.dispatch_pending_execution_error_events(p_limit integer default 25)
+returns integer
+language plpgsql security definer set search_path = ''
+as $
+declare event_id uuid;
+declare processed integer := 0;
+begin
+  if p_limit is null or p_limit not between 1 and 100 then
+    raise exception using errcode='22023',message='Invalid error dispatch batch size';
+  end if;
+  for event_id in
+    select id from public.execution_error_events
+    where dispatch_status='pending'
+    order by created_at
+    limit p_limit
+    for update skip locked
+  loop
+    begin
+      perform public.dispatch_execution_error_event(event_id);
+    exception when others then
+      update public.execution_error_events
+        set dispatch_attempts=dispatch_attempts+1,
+            dispatch_status=case when dispatch_attempts+1 >= 20 then 'dead_letter' else 'pending' end,
+            dispatch_error_code='ERROR_TRIGGER_DISPATCH_FAILED'
+        where id=event_id;
+    end;
+    processed := processed + 1;
+  end loop;
+  return processed;
+end;
+$;
+revoke all on function public.dispatch_pending_execution_error_events(integer) from public,anon,authenticated;
+grant execute on function public.dispatch_pending_execution_error_events(integer) to service_role;
 
 
 -- Persisting a failure and fanning it out are one transaction. If enqueueing
