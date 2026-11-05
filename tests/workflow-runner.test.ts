@@ -3,15 +3,15 @@ import assert from "node:assert/strict";
 import { executeRegisteredWorkflow } from "../nodes/workflow-runner";
 
 const context = {
-  credentials: { openai: { apiKey: "test-only-key" } },
+  credentials: { gemini: { apiKey: "test-only-key" } },
   logger: { info() {}, error() {} },
-  http: { async request() { return { status: 200, body: { output_text: "Generated text", model: "gpt-4o-mini" } }; } },
+  http: { async request() { return { status: 200, body: { candidates: [{ content: { parts: [{ text: "Generated text" }] } }], modelVersion: "gemini-2.5-flash" } }; } },
 };
 
 test("registry workflow dry-run validates registered steps without calling providers", async () => {
   let calls = 0;
   const result = await executeRegisteredWorkflow({
-    steps: [{ id: "draft", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } }],
+    steps: [{ id: "draft", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } }],
     context: { ...context, http: { async request() { calls++; return { status: 200, body: {} }; } } },
     dryRun: true,
   });
@@ -22,7 +22,7 @@ test("registry workflow dry-run validates registered steps without calling provi
 
 test("registry workflow stores validated operation outputs for later steps", async () => {
   const result = await executeRegisteredWorkflow({
-    steps: [{ id: "draft", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } }],
+    steps: [{ id: "draft", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } }],
     context,
     dryRun: false,
   });
@@ -35,7 +35,7 @@ test("registry workflow stops after a failed registered operation", async () => 
   const result = await executeRegisteredWorkflow({
     steps: [
       { id: "bad", nodeId: "unknown", operationId: "missing", kind: "action", input: {} },
-      { id: "later", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Should not run" } },
+      { id: "later", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Should not run" } },
     ],
     context,
     dryRun: false,
@@ -49,8 +49,8 @@ test("registry workflow dry-run accepts previous-step references without provide
   let calls = 0;
   const result = await executeRegisteredWorkflow({
     steps: [
-      { id: "draft", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } },
-      { id: "rewrite", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Rewrite this: {{draft.text}}" } },
+      { id: "draft", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Draft a message" } },
+      { id: "rewrite", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Rewrite this: {{draft.text}}" } },
     ],
     context: { ...context, http: { async request() { calls++; return { status: 200, body: {} }; } } },
     dryRun: true,
@@ -65,13 +65,13 @@ test("OpenAI output can feed Slack and Email in one registry workflow", async ()
   const requests: Array<{ url: string; body: unknown }> = [];
   const result = await executeRegisteredWorkflow({
     steps: [
-      { id: "draft", nodeId: "openai", operationId: "generate_text", kind: "action", input: { prompt: "Write a concise appointment reminder" } },
+      { id: "draft", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Write a concise appointment reminder" } },
       { id: "slackNotice", nodeId: "slack", operationId: "send_message", kind: "action", input: { message: "Reminder draft: {{draft.text}}" } },
       { id: "emailNotice", nodeId: "email", operationId: "send_email", kind: "action", input: { to: "recipient@example.com", subject: "Appointment reminder", text: "{{draft.text}}" } },
     ],
     context: {
       credentials: {
-        openai: { apiKey: "test-only-key" },
+        gemini: { apiKey: "test-only-key" },
         slack: { webhookUrl: "https://hooks.slack.com/services/T000/B000/secret" },
         resend: { apiKey: "test-only-key", fromEmail: "test@example.com" },
       },
