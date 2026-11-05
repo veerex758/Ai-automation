@@ -7,8 +7,8 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify";
+const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"]);
+type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -191,6 +191,65 @@ async function check(provider: Provider, c: Credentials) {
         url = "https://api.netlify.com/api/v1/user";
         headers.Authorization = "Bearer " + required(c, "token");
         break;
+      case "woocommerce": {
+        const store = required(c, "storeUrl");
+        let parsed: URL; try { parsed = new URL(store); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hostname === "localhost" || parsed.hostname.endsWith(".local")) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/wp-json/wc/v3/system_status";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "consumerKey") + ":" + required(c, "consumerSecret")).toString("base64");
+        break;
+      }
+      case "paypal": {
+        const env = required(c, "environment");
+        if (env !== "sandbox" && env !== "live") throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = (env === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com") + "/v1/oauth2/token";
+        method = "POST"; headers.Authorization = "Basic " + Buffer.from(required(c, "clientId") + ":" + required(c, "clientSecret")).toString("base64");
+        headers["Content-Type"] = "application/x-www-form-urlencoded"; body = "grant_type=client_credentials";
+        break;
+      }
+      case "paddle":
+        url = "https://api.paddle.com/customers?per_page=1";
+        headers.Authorization = "Bearer " + required(c, "apiKey"); headers["Paddle-Version"] = "1";
+        break;
+      case "lemon_squeezy":
+        url = "https://api.lemonsqueezy.com/v1/stores/" + encodeURIComponent(required(c, "storeId"));
+        headers.Authorization = "Bearer " + required(c, "apiKey"); headers.Accept = "application/vnd.api+json";
+        break;
+      case "square": {
+        const env = required(c, "environment");
+        if (env !== "sandbox" && env !== "production") throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = (env === "sandbox" ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com") + "/v2/locations";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
+      case "razorpay":
+        url = "https://api.razorpay.com/v1/customers?count=1";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "keyId") + ":" + required(c, "keySecret")).toString("base64");
+        break;
+      case "zoom":
+        url = "https://api.zoom.us/v2/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "cal_com":
+        url = "https://api.cal.com/v2/me";
+        headers.Authorization = "Bearer " + required(c, "apiKey");
+        headers["cal-api-version"] = "2024-08-13";
+        break;
+      case "twilio_voice": {
+        const sid = required(c, "accountSid");
+        if (!/^AC[a-f0-9]{32}$/i.test(sid)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://api.twilio.com/2010-04-01/Accounts/" + encodeURIComponent(sid) + ".json";
+        headers.Authorization = "Basic " + Buffer.from(sid + ":" + required(c, "authToken")).toString("base64");
+        break;
+      }
+      case "docusign": {
+        const base = required(c, "baseUri");
+        let parsed: URL; try { parsed = new URL(base); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || (!parsed.hostname.endsWith(".docusign.net") && !parsed.hostname.endsWith(".docusign.com"))) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/restapi/v2.1/accounts/" + encodeURIComponent(required(c, "accountId"));
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) {
