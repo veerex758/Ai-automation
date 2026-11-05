@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 export type WorkspaceCredentialProvider =
   | "openai" | "gemini" | "resend" | "slack" | "http"
-  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather";
+  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 export type WorkspaceCredentials = Record<string, Record<string, string>>;
 
 const KEY_BYTES = 32;
@@ -38,6 +38,23 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   freshdesk: ["domain", "apiKey"],
   serpapi: ["apiKey"],
   openweather: ["apiKey"],
+  elevenlabs: ["apiKey"],
+  stability_ai: ["apiKey"],
+  hugging_face: ["apiKey"],
+  pinecone: ["apiKey", "indexHost"],
+  microsoft_teams: ["accessToken"], salesforce: ["accessToken", "instanceUrl"], pipedrive: ["accessToken"],
+  zoho_crm: ["accessToken"], freshsales: ["accessToken", "domain"], close: ["apiKey"], apollo: ["apiKey"], intercom: ["accessToken"],
+  jira: ["siteUrl", "email", "apiToken"], asana: ["accessToken"], trello: ["apiKey", "token"], clickup: ["token"],
+  monday: ["apiToken"], todoist: ["accessToken"], airtable: ["accessToken"], bitbucket: ["accessToken"], netlify: ["token"],
+  woocommerce: ["storeUrl", "consumerKey", "consumerSecret"], paypal: ["clientId", "clientSecret", "environment"],
+  paddle: ["apiKey"], lemon_squeezy: ["apiKey", "storeId"], square: ["accessToken", "environment"],
+  razorpay: ["keyId", "keySecret"], zoom: ["accessToken"], cal_com: ["apiKey"],
+  twilio_voice: ["accountSid", "authToken", "fromPhone"], docusign: ["accessToken", "accountId", "baseUri"],
+  supabase: ["projectUrl", "apiKey"], postgresql: ["connectionString"], redis: ["restUrl", "token"],
+  firebase: ["projectId", "accessToken"], dropbox: ["accessToken"],
+  aws_s3: ["accessKeyId", "secretAccessKey", "region"], cloudflare_r2: ["accountId", "accessKeyId", "secretAccessKey"],
+  x_twitter: ["accessToken"], linkedin: ["accessToken"], facebook_pages: ["pageAccessToken"],
+  instagram: ["accessToken", "igUserId"], tiktok: ["accessToken"], mailchimp: ["apiKey"], typeform: ["accessToken"],
 };
 
 function validateCredentials(value: unknown): WorkspaceCredentials {
@@ -77,6 +94,20 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
       freshdesk: ["domain", "apiKey"],
       serpapi: ["apiKey"],
       openweather: ["apiKey"],
+      elevenlabs: ["apiKey"], stability_ai: ["apiKey"], hugging_face: ["apiKey"], pinecone: ["apiKey", "indexHost"],
+      microsoft_teams: ["accessToken"], salesforce: ["accessToken", "instanceUrl"], pipedrive: ["accessToken"],
+      zoho_crm: ["accessToken"], freshsales: ["accessToken", "domain"], close: ["apiKey"], apollo: ["apiKey"], intercom: ["accessToken"],
+      jira: ["siteUrl", "email", "apiToken"], asana: ["accessToken"], trello: ["apiKey", "token"], clickup: ["token"],
+      monday: ["apiToken"], todoist: ["accessToken"], airtable: ["accessToken"], bitbucket: ["accessToken"], netlify: ["token"],
+      woocommerce: ["storeUrl", "consumerKey", "consumerSecret"], paypal: ["clientId", "clientSecret", "environment"],
+      paddle: ["apiKey"], lemon_squeezy: ["apiKey", "storeId"], square: ["accessToken", "environment"],
+      razorpay: ["keyId", "keySecret"], zoom: ["accessToken"], cal_com: ["apiKey"],
+      twilio_voice: ["accountSid", "authToken", "fromPhone"], docusign: ["accessToken", "accountId", "baseUri"],
+      supabase: ["projectUrl", "apiKey"], postgresql: ["connectionString"], redis: ["restUrl", "token"],
+      firebase: ["projectId", "accessToken"], dropbox: ["accessToken"],
+      aws_s3: ["accessKeyId", "secretAccessKey", "region"], cloudflare_r2: ["accountId", "accessKeyId", "secretAccessKey"],
+      x_twitter: ["accessToken"], linkedin: ["accessToken"], facebook_pages: ["pageAccessToken"],
+      instagram: ["accessToken", "igUserId"], tiktok: ["accessToken"], mailchimp: ["apiKey"], typeform: ["accessToken"],
       notion: ["apiKey"], hubspot: ["accessToken"],
       twilio: ["accountSid", "authToken", "fromPhone"],
       shopify: ["shopDomain", "accessToken"], stripe: ["secretKey"], linear: ["apiKey"],
