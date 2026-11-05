@@ -262,21 +262,20 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
 
   await t.test("shared rate limiter is atomic and isolates workspaces", async () => {
     await resetFixture();
-    const db = await client();
+    const clients = await Promise.all([client(), client(), client()]);
     try {
-      const call = () => db.query(
+      const results = await Promise.all(clients.map((db) => db.query(
         "select public.consume_execution_rate_limit($1,'checkout',2,60000) as result",
         [ids.workspace],
-      );
-      const results = await Promise.all([call(), call(), call()]);
+      )));
       const decisions = results.map((item) => item.rows[0].result.allowed).sort();
       assert.deepEqual(decisions, [false, true, true]);
-      const isolated = await db.query(
+      const isolated = await clients[0].query(
         "select public.consume_execution_rate_limit($1,'checkout',2,60000) as result",
         [ids.workspaceOther],
       );
       assert.equal(isolated.rows[0].result.allowed, true);
-    } finally { db.release(); }
+    } finally { clients.forEach((db) => db.release()); }
   });
 
   await t.test("workflow failures atomically enqueue active Error Trigger subscribers", async () => {
@@ -299,6 +298,11 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         [job.id, job.lease_token],
       );
       assert.equal(result.rows[0].dispatched, 1);
+      const duplicate = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'step-a','TEST_FAILURE','TEST_FAILURE',1) as dispatched",
+        [job.id, job.lease_token],
+      );
+      assert.equal(duplicate.rows[0].dispatched, 0);
       const queued = await db.query(
         "select execution_mode,payload from public.execution_jobs where workflow_id=$1 and idempotency_key like 'error:%'",
         [ids.workflowOther],
@@ -340,7 +344,7 @@ test.after(async () => {
     if (ready) {
       const db = await pool.connect();
       try {
-        await db.query("drop table if exists public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade");
+        await db.query("drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade");
         await db.query("drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade");
         await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer)");
         await db.query("drop function if exists public.enqueue_execution_job(uuid,uuid,uuid,text,jsonb,integer)");
