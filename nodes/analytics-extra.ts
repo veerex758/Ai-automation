@@ -4,7 +4,7 @@ import type { NodeDefinition, NodeContext } from "./types";
 const required = (max = 5000) => z.string().trim().min(1).max(max);
 function credential(ctx: NodeContext, provider: string, name: string) {
   const value = ctx.credentials[provider]?.[name];
-  if (!value) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!value || value.length > 4096 || value.includes("\r") || value.includes("\n")) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
 }
 function check(status: number, provider: string) {
