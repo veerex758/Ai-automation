@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
-test("registry includes versioned webhook, OpenAI, Slack and Email operations", () => {
+test("registry includes versioned webhook, Gemini, Slack and Email operations", () => {
   assert.equal(nodes.length, 5);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
-  assert.ok(findOperation("openai", "generate_text", "action"));
+  assert.ok(findOperation("gemini", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
 });
@@ -40,17 +40,17 @@ test("registry runner resolves an operation by node and operation IDs", async ()
   assert.equal((result as { eventType: string }).eventType, "signup");
 });
 
-test("OpenAI action makes a real Responses API request and validates actual output", async () => {
-  const operation = findOperation("openai", "generate_text", "action");
+test("Gemini action makes a real Responses API request and validates actual output", async () => {
+  const operation = findOperation("gemini", "generate_text", "action");
   assert.ok(operation);
   let requestedUrl = "";
   const result = await operation.run({
-    credentials: { openai: { apiKey: "test-only-key" } },
+    credentials: { gemini: { apiKey: "test-only-key" } },
     logger: { info() {}, error() {} },
-    http: { async request(args) { requestedUrl = args.url; return { status: 200, body: { output_text: "Hello from provider", model: "gpt-4o-mini", usage: { input_tokens: 2, output_tokens: 4 } } }; } },
+    http: { async request(args) { requestedUrl = args.url; return { status: 200, body: { candidates: [{ content: { parts: [{ text: "Hello from provider" }] } }], modelVersion: "gemini-2.5-flash", usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 4 } } }; } },
     previousOutputs: {},
-  }, { prompt: "Say hello", model: "gpt-4o-mini", maxOutputTokens: 50 });
-  assert.equal(requestedUrl, "https://api.openai.com/v1/responses");
+  }, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 50 });
+  assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
   assert.equal((result as { text: string }).text, "Hello from provider");
   assert.equal((result as { outputTokens?: number }).outputTokens, 4);
 });
