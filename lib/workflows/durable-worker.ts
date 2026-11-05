@@ -246,7 +246,7 @@ export async function runDurableWorker() {
   let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
-    let workflowErrorEvent: { code: string; message: string; stepId: string } | null = null;
+    const workflowErrorEvent: { current: { code: string; message: string; stepId: string } | null } = { current: null };
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
     try {
@@ -343,7 +343,7 @@ export async function runDurableWorker() {
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
           onWorkflowError: async (event) => {
-            workflowErrorEvent = event;
+            workflowErrorEvent.current = event;
             // Persist and enqueue subscribers in one database transaction. A
             // failure rolls back both, allowing the durable job retry to retry
             // delivery without losing an event between two RPC calls.
@@ -531,9 +531,9 @@ export async function runDurableWorker() {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
       const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
         p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false,
-        p_error_code: workflowErrorEvent?.code ?? outcome,
-        p_error_step_id: workflowErrorEvent?.stepId ?? null,
-        p_error_message: workflowErrorEvent?.message ?? outcome,
+        p_error_code: workflowErrorEvent.current?.code ?? outcome,
+        p_error_step_id: workflowErrorEvent.current?.stepId ?? null,
+        p_error_message: workflowErrorEvent.current?.message ?? outcome,
       });
       if (finishError || finished === "lease_lost") leaseLost++;
       else if (finished === "dead_letter") deadLettered++;
