@@ -282,3 +282,76 @@ test("Google Contacts lists bounded people metadata", async () => {
     http: { async request(args: any) { assert.match(args.url, /people\/v1\/people\/me\/connections/); return { status: 200, body: { connections: [{ resourceName: "people/1", names: [{ displayName: "Ada Lovelace" }], emailAddresses: [{ value: "ada@example.test" }] }] } }; } }, previousOutputs: {} }, { pageSize: 10 });
   assert.deepEqual(result, { people: [{ resourceName: "people/1", displayName: "Ada Lovelace", email: "ada@example.test" }] });
 });
+
+
+test("Jira validates the Atlassian site and creates a project issue", async () => {
+  const operation = findOperation("jira", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { jira: { siteUrl: "https://acme.atlassian.net", email: "admin@example.test", apiToken: "jira-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /rest\/api\/3\/issue$/); return { status: 201, body: { id: "10001", key: "AV-1" } }; } }, previousOutputs: {} },
+    { projectKey: "AV", summary: "Review workflow" });
+  assert.deepEqual(result, { issueId: "10001", issueKey: "AV-1", url: "https://acme.atlassian.net/browse/AV-1" });
+});
+
+test("Asana creates a task in the selected project", async () => {
+  const operation = findOperation("asana", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { asana: { accessToken: "asana-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer asana-token"); return { status: 201, body: { data: { gid: "12001", name: "Prepare launch" } } }; } }, previousOutputs: {} },
+    { projectGid: "123456789", name: "Prepare launch" });
+  assert.deepEqual(result, { taskGid: "12001", name: "Prepare launch" });
+});
+
+test("Trello creates a card using the saved API key and token", async () => {
+  const operation = findOperation("trello", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { trello: { apiKey: "trello-key", token: "trello-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { const url = new URL(args.url); assert.equal(url.searchParams.get("key"), "trello-key"); assert.equal(url.searchParams.get("token"), "trello-token"); return { status: 200, body: { id: "card-1", url: "https://trello.com/c/card-1" } }; } }, previousOutputs: {} },
+    { listId: "list-1", name: "Review node batch" });
+  assert.deepEqual(result, { cardId: "card-1", url: "https://trello.com/c/card-1" });
+});
+
+test("ClickUp creates a task in the selected list", async () => {
+  const operation = findOperation("clickup", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { clickup: { token: "clickup-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "clickup-token"); return { status: 200, body: { id: "task-1", url: "https://app.clickup.com/t/task-1" } }; } }, previousOutputs: {} },
+    { listId: "list-1", name: "Implement nodes" });
+  assert.deepEqual(result, { taskId: "task-1", url: "https://app.clickup.com/t/task-1" });
+});
+
+test("Monday.com creates a board item using GraphQL", async () => {
+  const operation = findOperation("monday", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { monday: { apiToken: "monday-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "monday-token"); return { status: 200, body: { data: { create_item: { id: "item-1", name: "Ship feature" } } } }; } }, previousOutputs: {} },
+    { boardId: "123456", groupId: "topics", name: "Ship feature" });
+  assert.deepEqual(result, { itemId: "item-1", name: "Ship feature" });
+});
+
+test("Todoist creates a task and returns its ID", async () => {
+  const operation = findOperation("todoist", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { todoist: { accessToken: "todoist-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer todoist-token"); return { status: 200, body: { id: "todo-1", url: "https://todoist.com/tasks/todo-1" } }; } }, previousOutputs: {} },
+    { content: "Verify integration" });
+  assert.deepEqual(result, { taskId: "todo-1", url: "https://todoist.com/tasks/todo-1" });
+});
+
+test("Airtable creates a record using the personal access token", async () => {
+  const operation = findOperation("airtable", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { airtable: { accessToken: "airtable-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer airtable-token"); return { status: 200, body: { id: "rec-1", createdTime: "2026-11-05T00:00:00.000Z" } }; } }, previousOutputs: {} },
+    { baseId: "appABCDEFGHIJKL", tableId: "Leads", fields: { Name: "Ada" } });
+  assert.deepEqual(result, { recordId: "rec-1", createdTime: "2026-11-05T00:00:00.000Z" });
+});
+
+test("Bitbucket creates a repository issue", async () => {
+  const operation = findOperation("bitbucket", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { bitbucket: { accessToken: "bitbucket-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer bitbucket-token"); return { status: 201, body: { id: 42, links: { html: { href: "https://bitbucket.org/acme/app/issues/42" } } } }; } }, previousOutputs: {} },
+    { workspace: "acme", repository: "app", title: "Fix bug" });
+  assert.deepEqual(result, { issueId: 42, url: "https://bitbucket.org/acme/app/issues/42" });
+});
+
+test("Netlify lists bounded site metadata", async () => {
+  const operation = findOperation("netlify", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { netlify: { token: "netlify-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer netlify-token"); return { status: 200, body: [{ id: "site-1", name: "Aivanta", ssl_url: "https://aivanta.example.test" }] }; } }, previousOutputs: {} },
+    { limit: 5 });
+  assert.deepEqual(result, { sites: [{ id: "site-1", name: "Aivanta", url: "https://aivanta.example.test" }] });
+});
