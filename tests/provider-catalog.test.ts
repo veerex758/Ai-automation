@@ -17,7 +17,7 @@ test("only native registry implementations are marked as registered", () => {
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
   assert.equal(registered.length, 27);
   assert.equal(registered.length, 27);
-  assert.equal(comingSoon.length, 100 - nodes.length);
+  assert.equal(comingSoon.length, 100 - registered.length);
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
 
@@ -25,7 +25,7 @@ test("AI workflow generation receives only registered, schema-backed operations"
   const catalog = getExecutableNodeCatalog();
   assert.equal(catalog.length, 27);
   assert.ok(catalog.every((node) => node.executionStatus === "registered"));
-  assert.deepEqual(new Set(catalog.map((node) => node.id)), new Set(nodes.filter((node) => catalog.some((entry) => entry.registryNodeId === node.id)).map((node) => node.id)));
+  assert.deepEqual(new Set(catalog.map((node) => node.id)), new Set(nodes.filter((node) => catalog.some((entry) => entry.id === node.id)).map((node) => node.id)));
   for (const item of catalog) {
     assert.ok(item.triggers.every((operation) => operation.inputSchema && operation.outputSchema));
     assert.ok(item.actions.every((operation) => operation.inputSchema && operation.outputSchema));
