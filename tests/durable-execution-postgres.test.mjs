@@ -315,6 +315,17 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       assert.equal(queued.rows[0].payload.source, "error_trigger");
       assert.equal(queued.rows[0].payload.input.code, "TEST_FAILURE");
       assert.match(queued.rows[0].payload.input.occurredAt, /Z$/);
+      const [subscriberJob] = await claim(db, "error-subscriber-worker");
+      assert.equal(subscriberJob.payload.source, "error_trigger");
+      const nested = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'handler-step','HANDLER_FAILED','HANDLER_FAILED',1) as dispatched",
+        [subscriberJob.id, subscriberJob.lease_token],
+      );
+      assert.equal(nested.rows[0].dispatched, 0);
+      const noRecursion = await db.query(
+        "select count(*)::integer as count from public.execution_jobs where idempotency_key like 'error:%'",
+      );
+      assert.equal(noRecursion.rows[0].count, 1);
     } finally { db.release(); }
   });
 
