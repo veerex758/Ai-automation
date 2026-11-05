@@ -5,7 +5,7 @@ const context={credentials:{},logger:{info(){},error(){}},http:{async request(){
 test("utility pack exposes 20 registered, schema-backed operations",()=>{
  const ids=["deduplicate","sort","split_batches","crypto_hash","template","csv_parse","csv_stringify","markdown_html","text_transform","regex","array_ops","object_ops","math","uuid","base64","date_add","date_format","error_trigger","rate_limiter","json_encode"];
  assert.equal(ids.length,20);
- for(const id of ids)assert.ok(findOperation(id,id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":id==="rate_limiter"?"check":"encode","action");
+ for(const id of ids)assert.ok(findOperation(id,id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":id==="rate_limiter"?"check":"encode","action"));
 });
 test("deduplicate and sort utilities operate deterministically",async()=>{
  const d=await findOperation("deduplicate","unique","action")!.run(context,{items:[1,1,2,3,2]});
