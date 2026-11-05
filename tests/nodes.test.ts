@@ -389,7 +389,8 @@ test("AI provider adapters parse native response shapes and return durable job I
   assert.equal((await assembly.run(context, { audioUrl: "https://example.com/audio.mp3" }) as { transcriptId: string }).transcriptId, "transcript_1");
   assert.equal((await replicatePoll.run(context, { predictionId: "pred_1" }) as { status: string }).status, "starting");
   assert.equal((await assemblyPoll.run(context, { transcriptId: "transcript_1" }) as { status: string }).status, "queued");
-  await assert.rejects(() => cohere.run({ ...context, credentials: {} }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);\n  await assert.rejects(() => cohere.run({ ...context, credentials: { cohere: { apiKey: "bad\\r\\nheader" } } }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
+  await assert.rejects(() => cohere.run({ ...context, credentials: {} }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
+  await assert.rejects(() => cohere.run({ ...context, credentials: { cohere: { apiKey: "bad\\r\\nheader" } } }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
 });
 
 
