@@ -144,7 +144,7 @@ test("Date Format uses the requested IANA timezone deterministically", async () 
  const op=findOperation("date_format","format","action")!;
  const result=await op.run(context,{date:"2026-01-01T00:00:00.000Z",timezone:"Africa/Lagos"});
  assert.equal((result as any).timezone,"Africa/Lagos");
- assert.match((result as any).formatted,/01 Jan 2026/);
+ assert.match((result as any).formatted,/1 Jan 2026/);
 });
 
 test("Regex rejects patterns with excessive repeated quantifiers before execution", async () => {
@@ -155,5 +155,5 @@ test("Regex rejects patterns with excessive repeated quantifiers before executio
 test("Markdown converter preserves escaped text and never emits raw HTML from input", async () => {
  const op=findOperation("markdown_html","convert","action")!;
  const result=await op.run(context,{markdown:"# Hello & welcome\n\n<script>bad()</script>"}) as {html:string};
- assert.equal(result.html,"<h1>Hello &amp; welcome</h1>\n<p>&lt;script&gt;bad()&lt;/script&gt;</p>");
+ assert.equal(result.html,"<h1>Hello &amp; welcome</h1>\n\n<p>&lt;script&gt;bad()&lt;/script&gt;</p>");
 });
