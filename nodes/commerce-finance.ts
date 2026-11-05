@@ -4,7 +4,7 @@ import type { NodeDefinition } from "./types";
 const required = (max = 4000) => z.string().trim().min(1).max(max);
 function secret(ctx: { credentials: Readonly<Record<string, Readonly<Record<string, string>>>> }, provider: string, field: string) {
   const value = ctx.credentials[provider]?.[field];
-  if (!value) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!value || value.length > 4096 || value.includes("\r") || value.includes("\n")) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
 }
 function ok(status: number, provider: string) {
