@@ -110,3 +110,47 @@ test("registry dry-run simulates Slack and Email without calling their providers
   assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated"]);
   assert.equal(calls, 0);
 });
+
+test("real-estate enquiry flows from verified webhook through Gemini to Resend", async () => {
+  const requests: Array<{ url: string; body: unknown }> = [];
+  const lead = {
+    fullName: "Ada Buyer", email: "ada@example.com", phone: null, propertyType: "apartment",
+    location: "Lekki", budget: "₦80m", timeframe: "within_30_days", temperature: "hot",
+    reason: "Specific property and near-term intent.", missingInformation: ["Phone number"],
+    suggestedReply: "Thanks for your enquiry. May we have your phone number?",
+    summary: "HOT lead: Ada Buyer wants an apartment in Lekki within 30 days; budget ₦80m.",
+  };
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "incoming", nodeId: "webhooks", operationId: "receive_event", kind: "trigger", input: {
+        eventId: "evt_001", eventType: "lead.enquiry", receivedAt: new Date().toISOString(),
+        payload: { name: "Ada Buyer", property: "apartment", location: "Lekki", budget: "₦80m", timeframe: "within 30 days" },
+      } },
+      { id: "qualify", nodeId: "gemini", operationId: "qualify_real_estate_lead", kind: "action", input: { leadData: "{{incoming.payload}}" } },
+      { id: "notify", nodeId: "email", operationId: "send_email", kind: "action", input: {
+        to: "agent@example.com", subject: "New {{qualify.temperature}} real-estate lead", text: "{{qualify.summary}}",
+      } },
+    ],
+    context: {
+      credentials: { gemini: { apiKey: "test-only-key" }, resend: { apiKey: "test-only-key", fromEmail: "verified@example.com" } },
+      logger: { info() {}, error() {} },
+      webhook: { verified: true },
+      http: { async request(args) {
+        requests.push({ url: args.url, body: args.body });
+        if (args.url.includes("generativelanguage.googleapis.com")) {
+          const sent = args.body as { contents: Array<{ parts: Array<{ text: string }> }> };
+          assert.ok(sent.contents[0].parts[0].text.includes("Ada Buyer"));
+          return { status: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify(lead) }] } }], usageMetadata: { promptTokenCount: 90, candidatesTokenCount: 55 } } };
+        }
+        return { status: 200, body: { id: "resend_lead_001" } };
+      } },
+    },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded"]);
+  assert.equal(requests.length, 2);
+  assert.equal((requests[1].body as { text: string }).text, lead.summary);
+  assert.equal((result.outputs.qualify as { outputTokens: number }).outputTokens, 55);
+  assert.equal((result.outputs.notify as { messageId: string }).messageId, "resend_lead_001");
+});
