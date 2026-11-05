@@ -88,7 +88,7 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
       credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;
     }
-    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"].includes(provider)) {
+    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
@@ -125,11 +125,12 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
   if (step.nodeId === "linear" && step.operationId === "create_issue") return "linear";
   if (["elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "http_request" && step.operationId === "request") return "http";
   return null;
 }
 
-const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts"]);
+const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
