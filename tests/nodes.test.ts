@@ -86,7 +86,8 @@ test("Email action sends through Resend and returns provider message ID", async 
   assert.equal(requestedUrl, "https://api.resend.com/emails");
   assert.equal((result as { messageId: string }).messageId, "email_test_123");
 });
-\ntest("Gemini qualifies a real-estate enquiry with structured output and token usage", async () => {
+
+test("Gemini qualifies a real-estate enquiry with structured output and token usage", async () => {
   const operation = findOperation("gemini", "qualify_real_estate_lead", "action");
   assert.ok(operation);
   let sentBody: unknown;
