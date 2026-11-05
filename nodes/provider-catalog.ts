@@ -544,14 +544,16 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Supabase",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "supabase"
   },
   {
     "id": "postgresql",
     "name": "PostgreSQL",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "connectionString",
+    "registryId": "postgresql"
   },
   {
     "id": "mysql",
@@ -572,35 +574,40 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Redis",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "redis"
   },
   {
     "id": "firebase",
     "name": "Firebase",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "oauth2",
+    "registryId": "firebase"
   },
   {
     "id": "dropbox",
     "name": "Dropbox",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "oauth2",
+    "registryId": "dropbox"
   },
   {
     "id": "aws_s3",
     "name": "AWS S3",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "aws_s3"
   },
   {
     "id": "cloudflare_r2",
     "name": "Cloudflare R2",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "cloudflare_r2"
   },
   {
     "id": "stripe",
