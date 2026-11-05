@@ -18,7 +18,7 @@ const redactErrorMetadata=(metadata:Record<string,unknown>|undefined)=>metadata?
 const errorTriggerNode:NodeDefinition={
  id:"error_trigger",name:"Error Trigger",icon:"alert-triangle",category:"triggers",version:1,auth:{type:"none"},
  actions:[],
- triggers:[{id:"capture",name:"Capture workflow error",description:"Accept a normalized workflow failure event",inputSchema:errorEventInputSchema,outputSchema:errorEventOutputSchema,async run(_ctx,i){return {error:{...i,metadata:redactErrorMetadata(i.metadata),eventId:i.eventId??randomUUID(),occurredAt:i.occurredAt??new Date().toISOString()}}}}],
+ triggers:[{id:"capture",name:"Capture workflow error",description:"Accept a normalized workflow failure event",inputSchema:errorEventInputSchema,outputSchema:errorEventOutputSchema,async run(_ctx,i){const input=errorEventInputSchema.parse(i);return {error:{...input,metadata:redactErrorMetadata(input.metadata),eventId:input.eventId??randomUUID(),occurredAt:input.occurredAt??new Date().toISOString()}}}}],
 };
 export const utilityPack:NodeDefinition[]=[
 make("deduplicate","Deduplicate","unique","Remove duplicate values",z.object({items,path:z.array(z.string()).max(20).optional()}).strict(),arrayOut,i=>{const s=new Set();const a=i.items.filter((x:any)=>{const k=JSON.stringify(i.path?.length?path(x,i.path):x);if(s.has(k))return false;s.add(k);return true});return {items:a,count:a.length}}),
