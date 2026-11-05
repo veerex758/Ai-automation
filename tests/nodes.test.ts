@@ -217,7 +217,7 @@ test("Airtable, HubSpot and Trello actions create records, contacts and cards", 
 
 test("public node catalog exposes the complete registry and JSON schemas to the authenticated builder API", () => {
   const catalog = getPublicNodeCatalog();
-  assert.equal(catalog.length, 74);
+  assert.equal(catalog.length, 76);
   const expected = [
     ["google_sheets", "append_rows"],
     ["gmail", "send_email"],
@@ -372,7 +372,9 @@ test("AI provider adapters parse native response shapes and return durable job I
   const replicate = findOperation("replicate", "run", "action");
   const deepl = findOperation("deepl", "translate", "action");
   const assembly = findOperation("assemblyai", "transcribe", "action");
-  assert.ok(cohere && together && replicate && deepl && assembly);
+  const replicatePoll = findOperation("replicate", "get_prediction", "action");
+  const assemblyPoll = findOperation("assemblyai", "get_transcript", "action");
+  assert.ok(cohere && together && replicate && deepl && assembly && replicatePoll && assemblyPoll);
   const context = { credentials: { cohere: { apiKey: "c" }, together_ai: { apiKey: "t" }, replicate: { apiKey: "r" }, deepl: { apiKey: "d" }, assemblyai: { apiKey: "a" } }, logger: { info() {}, error() {} }, previousOutputs: {}, http: { async request(args: { url: string }) {
     if (args.url.includes("cohere")) return { status: 200, body: { message: { content: [{ type: "text", text: "cohere ok" }] } } };
     if (args.url.includes("together")) return { status: 200, body: { choices: [{ message: { content: "together ok" } }] } };
@@ -385,6 +387,8 @@ test("AI provider adapters parse native response shapes and return durable job I
   assert.equal((await replicate.run(context, { version: "version_1", input: {} }) as { predictionId: string }).predictionId, "pred_1");
   assert.equal((await deepl.run(context, { text: "hello", targetLang: "FR" }) as { text: string }).text, "bonjour");
   assert.equal((await assembly.run(context, { audioUrl: "https://example.com/audio.mp3" }) as { transcriptId: string }).transcriptId, "transcript_1");
+  assert.equal((await replicatePoll.run(context, { predictionId: "pred_1" }) as { status: string }).status, "starting");
+  assert.equal((await assemblyPoll.run(context, { transcriptId: "transcript_1" }) as { status: string }).status, "queued");
   await assert.rejects(() => cohere.run({ ...context, credentials: {} }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);\n  await assert.rejects(() => cohere.run({ ...context, credentials: { cohere: { apiKey: "bad\\r\\nheader" } } }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
 });
 
