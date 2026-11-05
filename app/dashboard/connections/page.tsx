@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -72,6 +72,15 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   close: { label: "Close", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   apollo: { label: "Apollo", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   intercom: { label: "Intercom", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  jira: { label: "Jira", fields: [{ name: "siteUrl", label: "Atlassian site URL", type: "url" }, { name: "email", label: "Account email", type: "email" }, { name: "apiToken", label: "API token", type: "password" }] },
+  asana: { label: "Asana", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  trello: { label: "Trello", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "token", label: "API token", type: "password" }] },
+  clickup: { label: "ClickUp", fields: [{ name: "token", label: "Personal API token", type: "password" }] },
+  monday: { label: "Monday.com", fields: [{ name: "apiToken", label: "API token", type: "password" }] },
+  todoist: { label: "Todoist", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  airtable: { label: "Airtable", fields: [{ name: "accessToken", label: "Personal access token", type: "password" }] },
+  bitbucket: { label: "Bitbucket", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  netlify: { label: "Netlify", fields: [{ name: "token", label: "Personal access token", type: "password" }] },
 };
 
 function WorkspaceIntegrationManager() {
