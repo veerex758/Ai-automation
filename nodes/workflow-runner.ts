@@ -40,9 +40,9 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
     return current;
   };
   if (typeof value === "string") {
-    const exact = value.match(/^\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}$/);
+    const exact = value.match(/^\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}$/);
     if (exact) return resolvePath(exact[1]);
-    return value.replace(/\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})*)\\}\\}/g, (_match, path: string) => {
+    return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (_match, path: string) => {
       const current = resolvePath(path);
       return typeof current === "string" ? current : JSON.stringify(current);
     });
