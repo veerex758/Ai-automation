@@ -82,8 +82,14 @@ export async function executeRegisteredWorkflow(args: { steps: RegisteredWorkflo
       return { status: "failed", steps: results, outputs };
     }
     try {
-      const input = resolveReferences(step.input, outputs, args.dryRun);
-      const validated = operation.inputSchema.parse(input);
+      // Loop body templates are scoped to each iteration. Resolve only the
+      // collection against outer outputs here; resolving the entire body first
+      // would incorrectly look up {{item}} before an iteration exists.
+      const rawInput = step.nodeId === "loop" && step.operationId === "each" &&
+        step.input && typeof step.input === "object" && !Array.isArray(step.input)
+        ? { ...(step.input as Record<string, unknown>), items: resolveReferences((step.input as Record<string, unknown>).items, outputs, args.dryRun) }
+        : resolveReferences(step.input, outputs, args.dryRun);
+      const validated = operation.inputSchema.parse(rawInput);
       if (args.dryRun) {
         if (step.nodeId === "loop" && step.operationId === "each") {
           validateLoopBody(outputs, validated as { items: unknown[]; bodySteps: Array<{ id: string; nodeId: string; operationId: string; input: unknown }> });
