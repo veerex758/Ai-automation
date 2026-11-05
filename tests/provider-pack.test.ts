@@ -495,3 +495,58 @@ test("Typeform reads form metadata and field count", async () => {
     { formId: "form-1" });
   assert.deepEqual(result, { formId: "form-1", title: "Lead intake", questionCount: 3 });
 });
+
+
+test("Supabase reads a bounded table page through PostgREST", async () => {
+  const operation = findOperation("supabase", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { supabase: { projectUrl: "https://project.supabase.co", apiKey: "placeholder-key" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /rest\/v1\/leads/); return { status: 200, body: [{ id: 1, email: "ada@example.test" }] }; } }, previousOutputs: {} },
+    { table: "leads", limit: 5 });
+  assert.deepEqual(result, { rows: [{ id: 1, email: "ada@example.test" }], count: 1 });
+});
+
+test("PostgreSQL rejects invalid query forms before opening a connection", async () => {
+  const operation = findOperation("postgresql", "execute", "action"); assert.ok(operation);
+  const context = { credentials: { postgresql: { connectionString: "postgresql://db.example.invalid/aivanta" } }, logger: { info() {}, error() {} }, http: { async request() { throw new Error("HTTP not expected"); } }, previousOutputs: {} };
+  await assert.rejects(() => operation.run(context, { query: "not a SQL statement" }), /POSTGRESQL_READ_ONLY_QUERY_REQUIRED/);
+});
+
+test("Upstash Redis exposes GET only and validates its REST host", async () => {
+  const operation = findOperation("redis", "execute", "action"); assert.ok(operation);
+  const context = { credentials: { redis: { restUrl: "https://example.upstash.io", token: "placeholder-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.deepEqual(args.body, ["GET", "lead:1"]); return { status: 200, body: { result: "Ada" } }; } }, previousOutputs: {} };
+  assert.deepEqual(await operation.run(context, { key: "lead:1" }), { key: "lead:1", value: "Ada" });
+  await assert.rejects(() => operation.run({ ...context, credentials: { redis: { restUrl: "https://example.invalid", token: "placeholder-token" } } }, { key: "x" }), /REDIS_CONNECTION_INVALID/);
+});
+
+test("Firebase lists bounded Firestore documents", async () => {
+  const operation = findOperation("firebase", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { firebase: { projectId: "aivanta-project1", accessToken: "placeholder-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /firestore\.googleapis\.com/); return { status: 200, body: { documents: [{ name: "projects/aivanta-project1/databases/(default)/documents/leads/1", fields: { email: { stringValue: "ada@example.test" } } }] } }; } }, previousOutputs: {} },
+    { collection: "leads", pageSize: 5 });
+  assert.deepEqual(result, { documents: [{ name: "projects/aivanta-project1/databases/(default)/documents/leads/1", fields: { email: { stringValue: "ada@example.test" } } }] });
+});
+
+test("Dropbox lists bounded folder entries", async () => {
+  const operation = findOperation("dropbox", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { dropbox: { accessToken: "placeholder-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.url, "https://api.dropboxapi.com/2/files/list_folder"); return { status: 200, body: { entries: [{ id: "id:file-1", name: "brief.pdf", path_display: "/brief.pdf" }] } }; } }, previousOutputs: {} },
+    { path: "", limit: 5 });
+  assert.deepEqual(result, { entries: [{ id: "id:file-1", name: "brief.pdf", path: "/brief.pdf" }] });
+});
+
+test("AWS S3 signs read-only ListObjects requests with SigV4", async () => {
+  const operation = findOperation("aws_s3", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { aws_s3: { accessKeyId: "example-access", secretAccessKey: "placeholder-secret", region: "us-east-1" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.headers.Authorization, /^AWS4-HMAC-SHA256 Credential=example-access\//); return { status: 200, body: "<ListBucketResult><Contents><Key>leads/a.json</Key></Contents><IsTruncated>false</IsTruncated></ListBucketResult>" }; } }, previousOutputs: {} },
+    { bucket: "aivanta-data", prefix: "leads/" });
+  assert.deepEqual(result, { keys: ["leads/a.json"], truncated: false });
+});
+
+test("Cloudflare R2 signs read-only object listing requests", async () => {
+  const operation = findOperation("cloudflare_r2", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { cloudflare_r2: { accountId: "abcdef0123456789abcdef0123456789", accessKeyId: "example-r2-access", secretAccessKey: "placeholder-r2-secret" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /r2\.cloudflarestorage\.com\/aivanta-data/); assert.match(args.headers.Authorization, /^AWS4-HMAC-SHA256 Credential=example-r2-access\//); return { status: 200, body: "<ListBucketResult><Contents><Key>uploads/a.txt</Key></Contents><IsTruncated>false</IsTruncated></ListBucketResult>" }; } }, previousOutputs: {} },
+    { bucket: "aivanta-data", prefix: "uploads/" });
+  assert.deepEqual(result, { keys: ["uploads/a.txt"], truncated: false });
+});
