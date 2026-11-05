@@ -373,7 +373,6 @@ test("Error Trigger normalizes runner error events without side effects", async 
 
 
 test("Loop executes downstream registered actions for every item and exposes item/index references", async () => {
-  const calls: string[] = [];
   const loop = findOperation("loop", "each", "action");
   const dedupe = findOperation("deduplicate", "unique", "action");
   assert.ok(loop && dedupe);

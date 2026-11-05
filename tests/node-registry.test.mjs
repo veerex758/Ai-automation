@@ -27,7 +27,7 @@ test("registry reuses the existing action catalog for consistent UI and runner m
 test("callers cannot mutate the shared registry through returned metadata", () => {
   const first = getNodeRegistry();
   first.triggers[0].label = "corrupted";
-  first.actions[0].fields[0]?.label && (first.actions[0].fields[0].label = "corrupted");
+  if (first.actions[0].fields[0]) first.actions[0].fields[0].label = "corrupted";
   const second = getNodeRegistry();
   assert.equal(second.triggers[0].label, "Run manually");
   assert.notEqual(second.actions[0].fields[0]?.label, "corrupted");

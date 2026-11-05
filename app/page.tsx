@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const features = [
@@ -9,7 +10,7 @@ const features = [
 ];
 
 function Brand({ light = false }: { light?: boolean }) {
-  return <Link className={`brand ${light ? "brand-light" : ""}`} href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta</span></Link>;
+  return <Link className={`brand ${light ? "brand-light" : ""}`} href="/" aria-label="Aivanta home"><span className="brand-mark"><Image width={32} height={32} className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta</span></Link>;
 }
 
 export default function Home() {
@@ -37,7 +38,7 @@ export default function Home() {
           <div className="reference-hero-visual" id="product-preview">
             <div className="hero-orb" />
             <div className="floating-app-window">
-              <div className="mini-sidebar"><div className="mini-brand"><img src="/aivanta-mark.svg" alt="" /> Aivanta</div><span>▦ Dashboard</span><span className="mini-active">↗ Workflows</span><span>⌘ Integrations</span><span>♧ AI Agents</span><span>▧ Templates</span><span>⚙ Settings</span></div>
+              <div className="mini-sidebar"><div className="mini-brand"><Image width={32} height={32} src="/aivanta-mark.svg" alt="" /> Aivanta</div><span>▦ Dashboard</span><span className="mini-active">↗ Workflows</span><span>⌘ Integrations</span><span>♧ AI Agents</span><span>▧ Templates</span><span>⚙ Settings</span></div>
               <div className="mini-workflow"><div className="mini-window-heading"><span>WORKFLOW PREVIEW</span><i>•••</i></div><div className="mini-node"><b className="node-icon form-icon">▤</b><span><strong>New Lead</strong><small>Website Form</small></span><b className="node-check">✓</b></div><div className="mini-connector">↓</div><div className="mini-node"><b className="node-icon sheets-icon">▦</b><span><strong>Prepare lead task</strong><small>Internal task · Draft only</small></span><b className="node-check">✓</b></div><div className="mini-connector">↓</div><div className="mini-node"><b className="node-icon gmail-icon">✓</b><span><strong>Human review</strong><small>Check details before action</small></span><b className="node-check">✓</b></div><Link className="mini-assistant-button" href="/dashboard/ai-assistant">✺ AI Assistant <span>＋</span></Link></div>
             </div>
             <div className="reference-chat-card"><span className="chat-spark">✺</span><div><strong>AI assistant</strong><p>Draft a lead follow-up workflow with an internal task and a human review step.</p><Link href="/dashboard/builder">Review workflow ↗</Link></div></div>
@@ -54,7 +55,7 @@ export default function Home() {
       <section className="reference-workspace-section">
         <div className="reference-workspace-copy"><div className="reference-eyebrow">ONE CLEAR VIEW OF YOUR WORK</div><h2>Your automations,<br /><span>all in one place.</span></h2><p>Manage saved drafts, inspect workflow steps, and review available activity from one focused workspace.</p><Link className="reference-primary" href="/dashboard">Explore the dashboard <span>→</span></Link></div>
         <div className="reference-dashboard-preview">
-          <div className="preview-dashboard-sidebar"><div className="mini-brand"><img src="/aivanta-mark.svg" alt="" /> Aivanta</div>{["Dashboard","Workflows","Integrations","AI Agents","Templates","Analytics","Billing","Settings"].map((item,i)=><span className={i===0?"selected":""} key={item}>{["▦","↗","⌘","✺","▧","▥","◇","⚙"][i]} {item}</span>)}</div>
+          <div className="preview-dashboard-sidebar"><div className="mini-brand"><Image width={32} height={32} src="/aivanta-mark.svg" alt="" /> Aivanta</div>{["Dashboard","Workflows","Integrations","AI Agents","Templates","Analytics","Billing","Settings"].map((item,i)=><span className={i===0?"selected":""} key={item}>{["▦","↗","⌘","✺","▧","▥","◇","⚙"][i]} {item}</span>)}</div>
           <div className="preview-dashboard-main"><div className="preview-dashboard-top"><span>⌕ Search anything...</span><span>♧　◉</span></div><div className="preview-welcome"><div><strong>Welcome back 👋</strong><small>Here&apos;s what&apos;s happening with your automation platform today.</small></div><Link href="/dashboard">＋ Create Workflow</Link></div><div className="preview-stats"><div><small>Total Workflows</small><strong>—</strong><em>Live workspace data</em></div><div><small>Active Workflows</small><strong>—</strong><em>Live workspace data</em></div><div><small>Successful Runs</small><strong>—</strong><em>Connected run history</em></div><div><small>Failed Runs</small><strong>—</strong><em>Connected run history</em></div></div><div className="preview-chart-row"><div className="preview-chart"><strong>Workflow Performance</strong><div className="chart-art"><svg viewBox="0 0 360 105" role="img" aria-label="Illustrative workflow performance chart"><path d="M0 82 C30 65 38 82 60 61 S94 70 112 40 S155 71 179 44 S210 61 235 33 S274 53 300 20 S334 22 360 8" fill="none" stroke="#b7f65c" strokeWidth="3" strokeLinecap="round"/><path d="M0 82 C30 65 38 82 60 61 S94 70 112 40 S155 71 179 44 S210 61 235 33 S274 53 300 20 S334 22 360 8 L360 105 L0 105Z" fill="url(#chartFill)" opacity=".35"/><defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#9be64b"/><stop offset="1" stopColor="#9be64b" stopOpacity="0"/></linearGradient></defs></svg></div></div><div className="preview-success"><strong>Success Rate</strong><div className="success-ring"><span>—<small>Awaiting data</small></span></div></div></div><div className="preview-recent"><strong>Recent Workflows</strong><p>Connect your workspace to see real workflow status and execution history.</p><Link href="/dashboard">Open workspace ↗</Link></div></div>
         </div>
       </section>
