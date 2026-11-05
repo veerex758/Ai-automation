@@ -133,3 +133,22 @@ test("workspace credential vault accepts the CRM and messaging provider fields",
   assert.throws(() => encryptWorkspaceCredentials({ salesforce: { accessToken: "token" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ close: { apiKey: "key", password: "extra" } } as never, key));
 });
+
+
+test("workspace credential vault accepts productivity and developer provider fields", () => {
+  const value = {
+    jira: { siteUrl: "https://acme.atlassian.net", email: "admin@example.test", apiToken: "jira-token" },
+    asana: { accessToken: "asana-token" },
+    trello: { apiKey: "trello-key", token: "trello-token" },
+    clickup: { token: "clickup-token" },
+    monday: { apiToken: "monday-token" },
+    todoist: { accessToken: "todoist-token" },
+    airtable: { accessToken: "airtable-token" },
+    bitbucket: { accessToken: "bitbucket-token" },
+    netlify: { token: "netlify-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-productivity:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-productivity:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ jira: { siteUrl: "https://acme.atlassian.net", apiToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ trello: { apiKey: "key" } } as never, key));
+});
