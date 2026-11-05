@@ -49,7 +49,7 @@ export function getPublicNodeCatalog() {
     })),
     actions: actions.map(({ id: operationId, name: operationName, description, inputSchema, outputSchema }) => ({
       id: operationId, name: operationName, description,
-      inputSchema: inputSchema.toJSONSchema(), outputSchema: outputSchema.toJSONSchema(),
+      inputSchema: publicSchema(inputSchema), outputSchema: publicSchema(outputSchema),
     })),
   }));
 }
