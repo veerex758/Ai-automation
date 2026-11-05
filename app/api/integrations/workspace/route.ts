@@ -7,7 +7,7 @@ import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"]);
+const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"]);
 const labels: Record<WorkspaceCredentialProvider, string> = {
   openai: "OpenAI", gemini: "Gemini", resend: "Resend", slack: "Slack", http: "HTTP API",
   notion: "Notion", hubspot: "HubSpot", twilio: "Twilio", shopify: "Shopify", stripe: "Stripe", linear: "Linear",
@@ -35,6 +35,8 @@ claude: "Claude",
   freshsales: "Freshsales", close: "Close", apollo: "Apollo", intercom: "Intercom",
   jira: "Jira", asana: "Asana", trello: "Trello", clickup: "ClickUp", monday: "Monday.com",
   todoist: "Todoist", airtable: "Airtable", bitbucket: "Bitbucket", netlify: "Netlify",
+  woocommerce: "WooCommerce", paypal: "PayPal", paddle: "Paddle", lemon_squeezy: "Lemon Squeezy", square: "Square", razorpay: "Razorpay",
+  zoom: "Zoom", cal_com: "Cal.com", twilio_voice: "Twilio Voice", docusign: "DocuSign",
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
