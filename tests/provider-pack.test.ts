@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { providerPack } from "../nodes/provider-pack";
 import { findOperation } from "../nodes/registry";
+import { isProviderLiveEnabled, providerPackLiveId, PROVIDER_PACK_LIVE_IDS } from "../lib/workflows/provider-live-gates";
 
 test("20 additional catalogue providers have executable schema-backed actions", () => {
   assert.equal(providerPack.length, 20);
@@ -552,7 +553,6 @@ test("Cloudflare R2 signs read-only object listing requests", async () => {
 });
 
 
-import { isProviderLiveEnabled, providerPackLiveId, PROVIDER_PACK_LIVE_IDS } from "../lib/workflows/provider-live-gates";
 
 test("all 20 provider-pack adapters resolve to an exact, opt-in live gate", () => {
   assert.equal(PROVIDER_PACK_LIVE_IDS.length, 20);
