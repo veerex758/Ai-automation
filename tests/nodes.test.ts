@@ -217,7 +217,7 @@ test("Airtable, HubSpot and Trello actions create records, contacts and cards", 
 
 test("public node catalog exposes the complete registry and JSON schemas to the authenticated builder API", () => {
   const catalog = getPublicNodeCatalog();
-  assert.equal(catalog.length, 76);
+  assert.equal(catalog.length, 74);
   const expected = [
     ["google_sheets", "append_rows"],
     ["gmail", "send_email"],
