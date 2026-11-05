@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 export type WorkspaceCredentialProvider =
   | "openai" | "gemini" | "resend" | "slack" | "http"
-  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather";
+  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone";
 export type WorkspaceCredentials = Record<string, Record<string, string>>;
 
 const KEY_BYTES = 32;
@@ -38,6 +38,10 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   freshdesk: ["domain", "apiKey"],
   serpapi: ["apiKey"],
   openweather: ["apiKey"],
+  elevenlabs: ["apiKey"],
+  stability_ai: ["apiKey"],
+  hugging_face: ["apiKey"],
+  pinecone: ["apiKey", "indexHost"],
 };
 
 function validateCredentials(value: unknown): WorkspaceCredentials {
@@ -77,6 +81,7 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
       freshdesk: ["domain", "apiKey"],
       serpapi: ["apiKey"],
       openweather: ["apiKey"],
+      elevenlabs: ["apiKey"], stability_ai: ["apiKey"], hugging_face: ["apiKey"], pinecone: ["apiKey", "indexHost"],
       notion: ["apiKey"], hubspot: ["accessToken"],
       twilio: ["accountSid", "authToken", "fromPhone"],
       shopify: ["shopDomain", "accessToken"], stripe: ["secretKey"], linear: ["apiKey"],
