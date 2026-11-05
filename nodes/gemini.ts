@@ -33,15 +33,17 @@ const leadOutputSchema = z.object({
   missingInformation: z.array(z.string().max(120)).max(12),
   suggestedReply: z.string().min(1).max(1200),
   summary: z.string().min(1).max(2000),
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
 }).strict();
 
 const leadJsonSchema = {
   type: "OBJECT",
   properties: {
-    fullName: { type: "STRING", nullable: true }, email: { type: ["STRING", "NULL"] },
-    phone: { type: ["STRING", "NULL"] },
+    fullName: { type: "STRING", nullable: true }, email: { type: "STRING", nullable: true },
+    phone: { type: "STRING", nullable: true },
     propertyType: { type: "STRING", enum: ["apartment", "house", "land", "commercial", "other", "unknown"] },
-    location: { type: ["STRING", "NULL"] }, budget: { type: ["STRING", "NULL"] },
+    location: { type: "STRING", nullable: true }, budget: { type: ["STRING", "NULL"] },
     timeframe: { type: "STRING", enum: ["urgent", "within_30_days", "one_to_three_months", "over_three_months", "unknown"] },
     temperature: { type: "STRING", enum: ["hot", "warm", "cold"] },
     reason: { type: "STRING" }, missingInformation: { type: "ARRAY", items: { type: "STRING" } },
@@ -76,7 +78,10 @@ async function qualifyLead(ctx: NodeContext, rawInput: unknown) {
   if (!text.trim()) throw new Error("GEMINI_EMPTY_RESPONSE");
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { throw new Error("GEMINI_INVALID_JSON"); }
-  return leadOutputSchema.parse({\n    ...(parsed as Record<string, unknown>),\n    inputTokens: typeof body.usageMetadata?.promptTokenCount === "number" ? body.usageMetadata.promptTokenCount : undefined,\n    outputTokens: typeof body.usageMetadata?.candidatesTokenCount === "number" ? body.usageMetadata.candidatesTokenCount : undefined,\n  });
+  return leadOutputSchema.parse({
+    ...(parsed as Record<string, unknown>),
+    inputTokens: typeof body.usageMetadata?.promptTokenCount === "number" ? body.usageMetadata.promptTokenCount : undefined,\n    outputTokens: typeof body.usageMetadata?.candidatesTokenCount === "number" ? body.usageMetadata.candidatesTokenCount : undefined,
+  });
 }
 \nexport const geminiNode: NodeDefinition = {
   id: "gemini", name: "Gemini", icon: "brain-circuit", category: "ai", version: 1,
