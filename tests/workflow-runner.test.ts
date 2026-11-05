@@ -170,9 +170,9 @@ test("loop metadata executes a downstream registered operation once per source i
   });
   assert.equal(result.status, "succeeded");
   assert.deepEqual(result.outputs.each, [
-    { data: { value: "alpha", index: "0" } },
-    { data: { value: "beta", index: "1" } },
-    { data: { value: "gamma", index: "2" } },
+    { data: { value: "alpha", index: 0 } },
+    { data: { value: "beta", index: 1 } },
+    { data: { value: "gamma", index: 2 } },
   ]);
 });
 
@@ -190,9 +190,9 @@ test("loop metadata executes multiple downstream steps per source item", async (
   });
   assert.equal(result.status, "succeeded");
   assert.deepEqual(result.outputs.decorate, [
-    { data: { label: "item-alpha", index: "0" } },
-    { data: { label: "item-beta", index: "1" } },
-    { data: { label: "item-gamma", index: "2" } },
+    { data: { label: "item-alpha", index: 0 } },
+    { data: { label: "item-beta", index: 1 } },
+    { data: { label: "item-gamma", index: 2 } },
   ]);
 });
 
@@ -250,7 +250,7 @@ test("Split in Batches drives each downstream step once per batch in order",asyn
   context,dryRun:false,
  });
  assert.equal(result.status,"succeeded");
- assert.deepEqual(result.outputs.process,[[1,2],[3,4],[5]]);
+ assert.deepEqual(result.outputs.process,[{items:[1,2],count:2},{items:[3,4],count:2},{items:[5],count:1}]);
 });
 
 test("Split in Batches supports chained downstream batch steps with matching batch scope",async()=>{
@@ -258,13 +258,13 @@ test("Split in Batches supports chained downstream batch steps with matching bat
   steps:[
    {id:"source",nodeId:"split_batches",operationId:"split",kind:"action",input:{items:[1,2,3,4],batchSize:2}},
    {id:"first",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{batch}}",operation:"reverse"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
-   {id:"second",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{first}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+   {id:"second",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{first.items}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
   ],
   context,dryRun:false,
  });
  assert.equal(result.status,"succeeded");
- assert.deepEqual(result.outputs.first,[[2,1],[4,3]]);
- assert.deepEqual(result.outputs.second,[[2,1],[4,3]]);
+ assert.deepEqual(result.outputs.first,[{items:[2,1],count:2},{items:[4,3],count:2}]);
+ assert.deepEqual(result.outputs.second,[{items:[2,1],count:2},{items:[4,3],count:2}]);
 });
 
 test("workflow runner emits a normalized error event once when an operation fails",async()=>{
@@ -310,7 +310,7 @@ test("Split in Batches passes each actual batch to downstream work, not the full
     context, dryRun: false,
   });
   assert.equal(result.status, "succeeded");
-  assert.deepEqual(result.outputs.consume, [[2, 1], [4, 3], [5]]);
+  assert.deepEqual(result.outputs.consume, [{items:[2,1],count:2},{items:[4,3],count:2},{items:[5],count:1}]);
 });
 
 test("workflow references reject prototype traversal", async () => {
