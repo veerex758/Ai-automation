@@ -71,12 +71,12 @@ async function qualifyLead(ctx: Parameters<NonNullable<NodeDefinition["actions"]
     ctx.logger.error("Gemini lead qualification failed", { status: response.status });
     throw new Error(response.status === 429 ? "GEMINI_RATE_LIMITED" : "GEMINI_REQUEST_FAILED");
   }
-  const body = response.body as { candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }> };
+  const body = response.body as { candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }>; usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown } };
   const text = body?.candidates?.[0]?.content?.parts?.map((part) => typeof part.text === "string" ? part.text : "").join("") ?? "";
   if (!text.trim()) throw new Error("GEMINI_EMPTY_RESPONSE");
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { throw new Error("GEMINI_INVALID_JSON"); }
-  return leadOutputSchema.parse(parsed);
+  return leadOutputSchema.parse({\n    ...(parsed as Record<string, unknown>),\n    inputTokens: typeof body.usageMetadata?.promptTokenCount === "number" ? body.usageMetadata.promptTokenCount : undefined,\n    outputTokens: typeof body.usageMetadata?.candidatesTokenCount === "number" ? body.usageMetadata.candidatesTokenCount : undefined,\n  });
 }
 \nexport const geminiNode: NodeDefinition = {
   id: "gemini", name: "Gemini", icon: "brain-circuit", category: "ai", version: 1,
