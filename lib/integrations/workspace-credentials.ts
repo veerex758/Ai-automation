@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 export type WorkspaceCredentialProvider =
   | "openai" | "gemini" | "resend" | "slack" | "http"
-  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign";
+  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform";
 export type WorkspaceCredentials = Record<string, Record<string, string>>;
 
 const KEY_BYTES = 32;
@@ -50,6 +50,8 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   paddle: ["apiKey"], lemon_squeezy: ["apiKey", "storeId"], square: ["accessToken", "environment"],
   razorpay: ["keyId", "keySecret"], zoom: ["accessToken"], cal_com: ["apiKey"],
   twilio_voice: ["accountSid", "authToken", "fromPhone"], docusign: ["accessToken", "accountId", "baseUri"],
+  x_twitter: ["accessToken"], linkedin: ["accessToken"], facebook_pages: ["pageAccessToken"],
+  instagram: ["accessToken", "igUserId"], tiktok: ["accessToken"], mailchimp: ["apiKey"], typeform: ["accessToken"],
 };
 
 function validateCredentials(value: unknown): WorkspaceCredentials {
@@ -98,6 +100,8 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
       paddle: ["apiKey"], lemon_squeezy: ["apiKey", "storeId"], square: ["accessToken", "environment"],
       razorpay: ["keyId", "keySecret"], zoom: ["accessToken"], cal_com: ["apiKey"],
       twilio_voice: ["accountSid", "authToken", "fromPhone"], docusign: ["accessToken", "accountId", "baseUri"],
+      x_twitter: ["accessToken"], linkedin: ["accessToken"], facebook_pages: ["pageAccessToken"],
+      instagram: ["accessToken", "igUserId"], tiktok: ["accessToken"], mailchimp: ["apiKey"], typeform: ["accessToken"],
       notion: ["apiKey"], hubspot: ["accessToken"],
       twilio: ["accountSid", "authToken", "fromPhone"],
       shopify: ["shopDomain", "accessToken"], stripe: ["secretKey"], linear: ["apiKey"],
