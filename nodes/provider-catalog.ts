@@ -440,49 +440,56 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Jira",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "jira"
   },
   {
     "id": "asana",
     "name": "Asana",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "asana"
   },
   {
     "id": "trello",
     "name": "Trello",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "trello"
   },
   {
     "id": "clickup",
     "name": "ClickUp",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "clickup"
   },
   {
     "id": "monday",
     "name": "Monday.com",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "monday"
   },
   {
     "id": "todoist",
     "name": "Todoist",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "todoist"
   },
   {
     "id": "airtable",
     "name": "Airtable",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "airtable"
   },
   {
     "id": "github",
@@ -505,7 +512,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Bitbucket",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "oauth2",
+    "registryId": "bitbucket"
   },
   {
     "id": "sentry",
@@ -528,7 +536,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Netlify",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "netlify"
   },
   {
     "id": "supabase",
