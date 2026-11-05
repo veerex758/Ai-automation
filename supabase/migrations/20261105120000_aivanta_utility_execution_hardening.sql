@@ -95,3 +95,70 @@ end;
 $$;
 revoke all on function public.record_execution_error_event(uuid,uuid,text,text,text,integer) from public,anon,authenticated;
 grant execute on function public.record_execution_error_event(uuid,uuid,text,text,text,integer) to service_role;
+
+
+-- Dispatch each persisted failure to active workflows whose first registry
+-- step is the Error Trigger. The source job payload is checked by the worker
+-- before this function is called to prevent recursive error-trigger chains.
+create or replace function public.dispatch_execution_error_event(p_event_id uuid)
+returns integer
+language plpgsql security definer set search_path = ''
+as $$
+declare event_row public.execution_error_events%rowtype;
+declare workflow_row public.workflows%rowtype;
+declare dispatched integer := 0;
+declare dispatch_result jsonb;
+declare event_input jsonb;
+begin
+  select * into event_row from public.execution_error_events where id = p_event_id;
+  if not found then raise exception using errcode='P0002',message='Execution error event not found'; end if;
+
+  event_input := jsonb_build_object(
+    'eventId', event_row.id,
+    'code', event_row.error_code,
+    'message', event_row.safe_message,
+    'workflowId', event_row.workflow_id,
+    'workflowRunId', event_row.workflow_run_id,
+    'executionId', event_row.job_id,
+    'stepId', event_row.step_id,
+    'attempt', event_row.attempt,
+    'occurredAt', event_row.created_at
+  );
+
+  for workflow_row in
+    select w.* from public.workflows w
+    where w.workspace_id = event_row.workspace_id
+      and w.status = 'active'
+      and w.id <> event_row.workflow_id
+      and w.definition->>'format' = 'aivanta-registry-v1'
+      and jsonb_typeof(w.definition->'steps') = 'array'
+      and exists (
+        select 1 from jsonb_array_elements(w.definition->'steps') first_step
+        where first_step->>'kind' = 'trigger'
+          and first_step->>'nodeId' = 'error_trigger'
+          and first_step->>'operationId' = 'capture'
+          and first_step->>'id' = (
+            select first_step_value->>'id'
+            from jsonb_array_elements(w.definition->'steps') with ordinality as first_step_value(value,ordinality)
+            where first_step_value.ordinality = 1
+          )
+      )
+  loop
+    dispatch_result := public.dispatch_workflow_execution(
+      workflow_row.workspace_id,
+      workflow_row.id,
+      workflow_row.version,
+      workflow_row.created_by,
+      'error:' || event_row.id::text || ':' || workflow_row.id::text,
+      jsonb_build_object('source','error_trigger','input',event_input),
+      3
+    );
+    if coalesce((dispatch_result->>'duplicate')::boolean,false) = false then
+      dispatched := dispatched + 1;
+    end if;
+  end loop;
+  return dispatched;
+end;
+$$;
+revoke all on function public.dispatch_execution_error_event(uuid) from public,anon,authenticated;
+grant execute on function public.dispatch_execution_error_event(uuid) to service_role;
