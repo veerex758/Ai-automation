@@ -324,3 +324,22 @@ test("workflow references reject prototype traversal", async () => {
   assert.equal(result.status, "failed");
   assert.equal(result.steps[1].error, "WORKFLOW_REFERENCE_NOT_FOUND");
 });
+
+
+test("Split in Batches resumes completed downstream iterations without replaying them", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "split_batches", operationId: "split", kind: "action", input: { items: [1, 2, 3, 4], batchSize: 2 } },
+      { id: "consume", nodeId: "array_ops", operationId: "operate", kind: "action", input: { items: "{{current_batch}}", operation: "reverse" }, loop: { sourceStepId: "source", itemAs: "current_batch", indexAs: "batch_index", maxIterations: 10 } },
+    ],
+    context,
+    dryRun: false,
+    initialOutputs: { "consume__loop_1": { items: ["persisted-result"], count: 1 } },
+    completedStepIds: ["consume__loop_1"],
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.consume, [
+    { items: ["persisted-result"], count: 1 },
+    { items: [4, 3], count: 2 },
+  ]);
+});
