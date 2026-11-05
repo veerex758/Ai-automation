@@ -22,12 +22,13 @@ import { catalogueGoogleNodes } from "./catalogue-google-pack";
 import { catalogueProductivityNodes } from "./catalogue-productivity-pack";
 import { catalogueCommerceSupportNodes } from "./catalogue-commerce-support-pack";
 import { catalogueMarketingNodes } from "./catalogue-marketing-pack";
+import { catalogueDatabaseNodes } from "./catalogue-database-pack";
 
 /** Only these definitions have validated schemas and executable server handlers. */
 export const nodes: NodeDefinition[] = [
   manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
   gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
-  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack, ...providerPack, ...catalogueAiNodes, ...catalogueCrmNodes, ...catalogueGoogleNodes, ...catalogueProductivityNodes, ...catalogueCommerceSupportNodes, ...catalogueMarketingNodes,
+  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack, ...providerPack, ...catalogueAiNodes, ...catalogueCrmNodes, ...catalogueGoogleNodes, ...catalogueProductivityNodes, ...catalogueCommerceSupportNodes, ...catalogueMarketingNodes, ...catalogueDatabaseNodes,
 ];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
