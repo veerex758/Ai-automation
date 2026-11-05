@@ -109,6 +109,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       if (!process.env.GEMINI_API_KEY || !process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL || process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         return NextResponse.json({ error: "Configure Gemini, Resend, and the server live-execution switch before activation." }, { status: 503 });
       }
+      if (steps[0]?.nodeId === "webhooks" && (!process.env.AIVANTA_WEBHOOK_ENCRYPTION_KEY ||
+          !process.env.AIVANTA_WEBHOOK_SECRET_KEY_VERSION || !process.env.SUPABASE_SERVICE_ROLE_KEY ||
+          !process.env.NEXT_PUBLIC_SUPABASE_URL)) {
+        return NextResponse.json({ error: "Secure webhook provisioning is not configured. The workflow was not activated." }, { status: 503 });
+      }
       const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
       const emailStep = steps.find((step) => step.nodeId === "email" && step.operationId === "send_email");
       const emailInput = emailStep?.input as Record<string, unknown> | undefined;
