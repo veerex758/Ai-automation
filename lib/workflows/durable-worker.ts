@@ -289,8 +289,11 @@ export async function runDurableWorker() {
         if (source === "schedule" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "schedule" || steps[0]?.operationId !== "scheduled")) {
           throw new Error("INVALID_SCHEDULE_TRIGGER_DEFINITION");
         }
+        if (source === "error_trigger" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "error_trigger" || steps[0]?.operationId !== "capture")) {
+          throw new Error("INVALID_ERROR_TRIGGER_DEFINITION");
+        }
         if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (isRecord(job.payload?.input) && (source === "schedule" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
+        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
@@ -323,11 +326,17 @@ export async function runDurableWorker() {
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
           onWorkflowError: async (event) => {
-            const { error: eventError } = await db.rpc("record_execution_error_event", {
+            const { data: eventId, error: eventError } = await db.rpc("record_execution_error_event", {
               p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
               p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
             });
-            if (eventError) throw new Error("ERROR_EVENT_PERSISTENCE_FAILED");
+            if (eventError || typeof eventId !== "string") throw new Error("ERROR_EVENT_PERSISTENCE_FAILED");
+            // Error-trigger workflows may report their own failure, but must not
+            // recursively fan out another generation of error-trigger jobs.
+            if (source !== "error_trigger") {
+              const { error: dispatchError } = await db.rpc("dispatch_execution_error_event", { p_event_id: eventId });
+              if (dispatchError) throw new Error("ERROR_TRIGGER_DISPATCH_FAILED");
+            }
           },
           ...(job.execution_mode === "live" ? {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
