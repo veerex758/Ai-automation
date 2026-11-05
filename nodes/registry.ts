@@ -15,12 +15,13 @@ import { scheduleNode } from "./schedule";
 import { loopNode } from "./loop";
 import { javascriptNode } from "./javascript";
 import { utilityPack } from "./utility-pack";
+import { providerPack } from "./provider-pack";
 
 /** Only these definitions have validated schemas and executable server handlers. */
 export const nodes: NodeDefinition[] = [
   manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
   gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
-  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack,
+  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack, ...providerPack,
 ];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
