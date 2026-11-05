@@ -1,0 +1,97 @@
+-- Shared utility execution primitives. Additive only; safe to roll back after workers stop.
+create table if not exists public.execution_rate_limit_hits (
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  key_hash text not null check (key_hash ~ '^[0-9a-f]{32}$'),
+  hit_at timestamptz not null default clock_timestamp()
+);
+create index if not exists execution_rate_limit_hits_lookup_idx
+  on public.execution_rate_limit_hits(workspace_id,key_hash,hit_at);
+alter table public.execution_rate_limit_hits enable row level security;
+revoke all on public.execution_rate_limit_hits from public,anon,authenticated;
+grant all on public.execution_rate_limit_hits to service_role;
+
+create or replace function public.consume_execution_rate_limit(
+  p_workspace_id uuid,p_key text,p_limit integer,p_window_ms integer
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+declare key_digest text;
+declare current_count integer;
+declare oldest_hit timestamptz;
+declare allowed boolean;
+declare remaining integer;
+declare retry_ms integer;
+declare now_at timestamptz := clock_timestamp();
+begin
+  if p_workspace_id is null or p_key is null or length(p_key) not between 1 and 200
+     or p_limit not between 1 and 10000 or p_window_ms not between 100 and 3600000 then
+    raise exception using errcode='22023',message='Invalid rate limit request';
+  end if;
+  key_digest := md5(p_key);
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_workspace_id::text || ':' || key_digest,0));
+  delete from public.execution_rate_limit_hits
+    where workspace_id=p_workspace_id and key_hash=key_digest
+      and hit_at <= now_at - (p_window_ms * interval '1 millisecond');
+  select count(*)::integer,min(hit_at) into current_count,oldest_hit
+    from public.execution_rate_limit_hits
+    where workspace_id=p_workspace_id and key_hash=key_digest;
+  allowed := current_count < p_limit;
+  if allowed then
+    insert into public.execution_rate_limit_hits(workspace_id,key_hash,hit_at) values(p_workspace_id,key_digest,now_at);
+    remaining := greatest(0,p_limit-current_count-1);
+    retry_ms := 0;
+  else
+    remaining := 0;
+    retry_ms := greatest(0,ceil(extract(epoch from (oldest_hit + p_window_ms * interval '1 millisecond' - now_at))*1000)::integer);
+  end if;
+  return jsonb_build_object('allowed',allowed,'remaining',remaining,'retryAfterMs',retry_ms);
+end;
+$$;
+revoke all on function public.consume_execution_rate_limit(uuid,text,integer,integer) from public,anon,authenticated;
+grant execute on function public.consume_execution_rate_limit(uuid,text,integer,integer) to service_role;
+
+create table if not exists public.execution_error_events (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  workflow_id uuid not null references public.workflows(id) on delete cascade,
+  workflow_run_id uuid not null references public.workflow_runs(id) on delete cascade,
+  job_id uuid not null references public.execution_jobs(id) on delete cascade,
+  step_id text not null check(length(step_id) between 1 and 64),
+  attempt integer not null check(attempt between 1 and 20),
+  error_code text not null check(error_code ~ '^[A-Z0-9_]{1,64}$'),
+  safe_message text not null check(length(safe_message) between 1 and 2000),
+  created_at timestamptz not null default now(),
+  unique(job_id,step_id,attempt)
+);
+create index if not exists execution_error_events_workspace_created_idx
+  on public.execution_error_events(workspace_id,created_at desc);
+alter table public.execution_error_events enable row level security;
+revoke all on public.execution_error_events from public,anon,authenticated;
+grant all on public.execution_error_events to service_role;
+
+create or replace function public.record_execution_error_event(
+  p_job_id uuid,p_lease_token uuid,p_step_id text,p_error_code text,p_safe_message text,p_attempt integer
+) returns uuid
+language plpgsql security definer set search_path = ''
+as $$
+declare job_row public.execution_jobs%rowtype;
+declare event_id uuid;
+declare safe_code text;
+begin
+  select * into job_row from public.execution_jobs
+    where id=p_job_id and status='running' and lease_token=p_lease_token for update;
+  if not found then raise exception using errcode='22023',message='Execution lease is not valid'; end if;
+  safe_code := case when p_error_code ~ '^[A-Z0-9_]{1,64}$' then p_error_code else 'NODE_EXECUTION_FAILED' end;
+  if p_step_id is null or length(p_step_id) not between 1 and 64
+     or p_attempt is null or p_attempt not between 1 and 20 then
+    raise exception using errcode='22023',message='Invalid execution error event';
+  end if;
+  insert into public.execution_error_events(workspace_id,workflow_id,workflow_run_id,job_id,step_id,attempt,error_code,safe_message)
+  values(job_row.workspace_id,job_row.workflow_id,job_row.run_id,p_job_id,p_step_id,p_attempt,safe_code,left(coalesce(p_safe_message,safe_code),2000))
+  on conflict(job_id,step_id,attempt) do update set error_code=excluded.error_code
+  returning id into event_id;
+  return event_id;
+end;
+$$;
+revoke all on function public.record_execution_error_event(uuid,uuid,text,text,text,integer) from public,anon,authenticated;
+grant execute on function public.record_execution_error_event(uuid,uuid,text,text,text,integer) to service_role;
