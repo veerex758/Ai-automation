@@ -50,8 +50,8 @@ export const openaiNode: NodeDefinition = {
       return outputSchema.parse({
         text: body.output_text,
         model: typeof body.model === "string" ? body.model : input.model,
-        inputTokens: typeof body.usage?.input_tokens === "number" ? body.usage.input_tokens : undefined,
-        outputTokens: typeof body.usage?.output_tokens === "number" ? body.usage.output_tokens : undefined,
+        ...(typeof body.usage?.input_tokens === "number" ? { inputTokens: body.usage.input_tokens } : {}),
+        ...(typeof body.usage?.output_tokens === "number" ? { outputTokens: body.usage.output_tokens } : {}),
       });
     },
   }],
