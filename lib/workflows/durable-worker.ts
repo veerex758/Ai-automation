@@ -231,6 +231,10 @@ export async function runDurableWorker() {
   }
 
   const workerId = process.env.AIVANTA_WORKER_ID?.slice(0, 100) || "vercel-worker";
+  const { error: pendingDispatchError } = await db.rpc("dispatch_pending_execution_error_events", { p_limit: 25 });
+  if (pendingDispatchError) {
+    console.warn("Aivanta worker could not dispatch pending workflow error events.");
+  }
   const { data, error } = await db.rpc("claim_execution_jobs", {
     p_worker_id: workerId, p_limit: 1, p_lease_seconds: 120,
   });
@@ -242,6 +246,7 @@ export async function runDurableWorker() {
   let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
+    let workflowErrorEvent: { code: string; message: string; stepId: string } | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
     try {
@@ -338,6 +343,7 @@ export async function runDurableWorker() {
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
           onWorkflowError: async (event) => {
+            workflowErrorEvent = event;
             // Persist and enqueue subscribers in one database transaction. A
             // failure rolls back both, allowing the durable job retry to retry
             // delivery without losing an event between two RPC calls.
@@ -524,7 +530,10 @@ export async function runDurableWorker() {
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
       const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
-        p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false, p_error_code: outcome,
+        p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false,
+        p_error_code: workflowErrorEvent?.code ?? outcome,
+        p_error_step_id: workflowErrorEvent?.stepId ?? null,
+        p_error_message: workflowErrorEvent?.message ?? outcome,
       });
       if (finishError || finished === "lease_lost") leaseLost++;
       else if (finished === "dead_letter") deadLettered++;
