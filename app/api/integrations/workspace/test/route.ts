@@ -85,6 +85,28 @@ async function check(provider: Provider, c: Credentials) {
         headers.Authorization = required(c, "apiKey"); headers["Content-Type"] = "application/json";
         body = JSON.stringify({ query: "{ viewer { id name } }" });
         break;
+      case "elevenlabs":
+        url = "https://api.elevenlabs.io/v1/user";
+        headers["xi-api-key"] = required(c, "apiKey");
+        break;
+      case "stability_ai":
+        url = "https://api.stability.ai/v1/user/account";
+        headers.Authorization = "Bearer " + required(c, "apiKey");
+        break;
+      case "hugging_face":
+        url = "https://huggingface.co/api/whoami-v2";
+        headers.Authorization = "Bearer " + required(c, "apiKey");
+        break;
+      case "pinecone": {
+        const host = required(c, "indexHost");
+        let parsed: URL;
+        try { parsed = new URL(host.startsWith("https://") ? host : "https://" + host); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".pinecone.io") || parsed.username || parsed.password) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/describe_index_stats"; method = "POST";
+        headers["Api-Key"] = required(c, "apiKey"); headers["Content-Type"] = "application/json";
+        body = "{}";
+        break;
+      }
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) {
