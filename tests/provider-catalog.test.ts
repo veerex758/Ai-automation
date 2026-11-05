@@ -106,7 +106,7 @@ test("native executable inventory has one authoritative count, separate from dir
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
 
-  // 104 is the native registry after adding 4 AI, 8 CRM/messaging, 6 Google, 9 productivity/developer and 10 commerce/support, 7 marketing and 7 database/storage nodes:
+  // 118 is the native registry after adding 51 provider adapters across the seven catalogue batches:
   // 20 utility-pack nodes and 20 provider-pack nodes, plus 51 new catalogue adapters.
   assert.equal(nodes.length, 118);
   assert.equal(executable.length, 118);
@@ -115,7 +115,7 @@ test("native executable inventory has one authoritative count, separate from dir
   // The 100-entry provider directory is a different inventory. Its 98
   // mapped entries do not include the 20 internal utility-pack nodes.
   assert.equal(catalog.length, 100);
-  assert.equal(registered.length, 74);
+  assert.equal(registered.length, 98);
   assert.equal(comingSoon.length, 2);
   assert.equal(new Set(registered.map((node) => node.registryNodeId)).size, 98);
   assert.ok(registered.every((node) => nodes.some((implementation) => implementation.id === node.registryNodeId)));
