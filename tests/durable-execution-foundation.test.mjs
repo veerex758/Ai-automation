@@ -10,7 +10,7 @@ const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", impor
 const workerService = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
 const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
-const utilityMigration = readFileSync(new URL("../supabase/migrations/20261105120000_aivanta_utility_execution_hardening.sql", import.meta.url), "utf8");
+const utilityMigration = readFileSync(new URL("../supabase/migrations/20261105045346_aivanta_utility_execution_hardening.sql", import.meta.url), "utf8");
 const runPanel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
 
 test("queue enforces workspace-scoped idempotent dispatch and bounded payloads", () => {
