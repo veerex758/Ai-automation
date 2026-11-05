@@ -204,7 +204,8 @@ export default function WorkflowBuilderPage() {
       };
 
       let workflowId = savedWorkflowId;
-      if (!workflowId) {
+      const isNewWorkflow = !workflowId;
+      if (isNewWorkflow) {
         const createResponse = await fetch("/api/workflows", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
