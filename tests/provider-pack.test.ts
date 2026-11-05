@@ -160,3 +160,76 @@ test("Pinecone requires a Pinecone HTTPS index host and returns validated matche
   assert.deepEqual(result, { matches: [{ id: "vector-1", score: 0.98, metadata: { kind: "lead" } }] });
   await assert.rejects(() => operation.run({ ...context, credentials: { pinecone: { apiKey: "pc-test", indexHost: "https://example.com" } } }, { vector: [1] }), /PINECONE_CONNECTION_INVALID/);
 });
+
+
+test("Microsoft Teams sends a bounded message to the selected chat", async () => {
+  const operation = findOperation("microsoft_teams", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { microsoft_teams: { accessToken: "teams-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /chats\/chat-1\/messages$/); assert.equal(args.headers.Authorization, "Bearer teams-token"); return { status: 201, body: { id: "message-1" } }; } }, previousOutputs: {} },
+    { chatId: "chat-1", content: "Hello team" });
+  assert.deepEqual(result, { messageId: "message-1", chatId: "chat-1" });
+});
+
+test("Salesforce validates its instance host and creates a lead", async () => {
+  const operation = findOperation("salesforce", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { salesforce: { accessToken: "sf-token", instanceUrl: "https://acme.my.salesforce.com" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /sobjects\/Lead/); return { status: 201, body: { id: "00Q123", success: true } }; } }, previousOutputs: {} },
+    { firstName: "Ada", lastName: "Lovelace", company: "Aivanta", email: "ada@example.test" });
+  assert.deepEqual(result, { leadId: "00Q123", success: true });
+});
+
+test("Pipedrive creates a person and normalizes the returned identifier", async () => {
+  const operation = findOperation("pipedrive", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { pipedrive: { accessToken: "pd-token" } }, logger: { info() {}, error() {} },
+    http: { async request() { return { status: 201, body: { success: true, data: { id: 123 } } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", firstName: "Ada", lastName: "Lovelace" });
+  assert.deepEqual(result, { contactId: "123" });
+});
+
+test("Zoho CRM creates a contact from the provider's success details payload", async () => {
+  const operation = findOperation("zoho_crm", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { zoho_crm: { accessToken: "zoho-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Zoho-oauthtoken zoho-token"); return { status: 201, body: { data: [{ status: "success", details: { id: "zoho-1" } }] } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", firstName: "Ada", lastName: "Lovelace" });
+  assert.deepEqual(result, { contactId: "zoho-1" });
+});
+
+test("Freshsales validates its account domain and creates a contact", async () => {
+  const operation = findOperation("freshsales", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { freshsales: { accessToken: "fresh-token", domain: "acme.myfreshworks.com" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /^https:\/\/acme\.myfreshworks\.com\//); return { status: 201, body: { contact: { id: 456 } } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", firstName: "Ada", lastName: "Lovelace" });
+  assert.deepEqual(result, { contactId: "456" });
+});
+
+test("Close creates a lead using Basic API-key authentication", async () => {
+  const operation = findOperation("close", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { close: { apiKey: "close-key" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Basic " + Buffer.from("close-key:").toString("base64")); return { status: 200, body: { id: "lead-1" } }; } }, previousOutputs: {} },
+    { name: "Ada Lovelace", email: "ada@example.test" });
+  assert.deepEqual(result, { contactId: "lead-1" });
+});
+
+test("Apollo creates a contact with the API key in its dedicated header", async () => {
+  const operation = findOperation("apollo", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { apollo: { apiKey: "apollo-key" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers["x-api-key"], "apollo-key"); return { status: 200, body: { contact: { id: "apollo-1" } } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", firstName: "Ada", lastName: "Lovelace" });
+  assert.deepEqual(result, { contactId: "apollo-1" });
+});
+
+test("Intercom creates a contact and returns the provider ID", async () => {
+  const operation = findOperation("intercom", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run({ credentials: { intercom: { accessToken: "intercom-token" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers["Intercom-Version"], "2.11"); return { status: 200, body: { id: "intercom-1" } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", name: "Ada Lovelace" });
+  assert.deepEqual(result, { contactId: "intercom-1" });
+});
