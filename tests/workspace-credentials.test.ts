@@ -203,6 +203,6 @@ test("workspace credential vault accepts database and storage provider fields", 
   };
   const encrypted = encryptWorkspaceCredentials(value, key, "workspace-database:providers");
   assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-database:providers"), value);
-  assert.throws(() => encryptWorkspaceCredentials({ supabase: { projectUrl: "http://localhost", apiKey: "key" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ supabase: { projectUrl: "https://project.supabase.co" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ aws_s3: { accessKeyId: "id", region: "us-east-1" } } as never, key));
 });
