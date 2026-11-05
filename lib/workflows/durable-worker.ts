@@ -195,7 +195,19 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
         } finally { clearTimeout(timer); }
       },
     },
-    rateLimit: { async consume(args) { const { data, error } = await db.rpc("consume_execution_rate_limit", { p_workspace_id: workspaceId, p_key: args.key, p_limit: args.limit, p_window_ms: args.windowMs }); if (error || !isRecord(data)) throw new Error("RATE_LIMIT_BACKEND_UNAVAILABLE"); return { allowed: data.allowed === true, remaining: Number(data.remaining), retryAfterMs: Number(data.retryAfterMs) }; } },
+    rateLimit: { async consume(args) {
+      const { data, error } = await db.rpc("consume_execution_rate_limit", {
+        p_workspace_id: workspaceId, p_key: args.key, p_limit: args.limit, p_window_ms: args.windowMs,
+      });
+      if (error || !isRecord(data)) throw new Error("RATE_LIMIT_BACKEND_UNAVAILABLE");
+      if (typeof data.allowed !== "boolean" || typeof data.remaining !== "number" ||
+          !Number.isInteger(data.remaining) || data.remaining < 0 || data.remaining > args.limit ||
+          typeof data.retryAfterMs !== "number" || !Number.isInteger(data.retryAfterMs) ||
+          data.retryAfterMs < 0 || data.retryAfterMs > args.windowMs) {
+        throw new Error("RATE_LIMIT_BACKEND_INVALID_RESPONSE");
+      }
+      return { allowed: data.allowed, remaining: data.remaining, retryAfterMs: data.retryAfterMs };
+    } },
     webhook: { verified: webhookVerified },
   };
 }
