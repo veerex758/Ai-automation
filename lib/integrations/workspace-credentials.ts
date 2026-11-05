@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 export type WorkspaceCredentialProvider =
   | "openai" | "gemini" | "resend" | "slack" | "http"
-  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify";
+  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign";
 export type WorkspaceCredentials = Record<string, Record<string, string>>;
 
 const KEY_BYTES = 32;
@@ -46,6 +46,10 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   zoho_crm: ["accessToken"], freshsales: ["accessToken", "domain"], close: ["apiKey"], apollo: ["apiKey"], intercom: ["accessToken"],
   jira: ["siteUrl", "email", "apiToken"], asana: ["accessToken"], trello: ["apiKey", "token"], clickup: ["token"],
   monday: ["apiToken"], todoist: ["accessToken"], airtable: ["accessToken"], bitbucket: ["accessToken"], netlify: ["token"],
+  woocommerce: ["storeUrl", "consumerKey", "consumerSecret"], paypal: ["clientId", "clientSecret", "environment"],
+  paddle: ["apiKey"], lemon_squeezy: ["apiKey", "storeId"], square: ["accessToken", "environment"],
+  razorpay: ["keyId", "keySecret"], zoom: ["accessToken"], cal_com: ["apiKey"],
+  twilio_voice: ["accountSid", "authToken", "fromPhone"], docusign: ["accessToken", "accountId", "baseUri"],
 };
 
 function validateCredentials(value: unknown): WorkspaceCredentials {
@@ -90,6 +94,10 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
       zoho_crm: ["accessToken"], freshsales: ["accessToken", "domain"], close: ["apiKey"], apollo: ["apiKey"], intercom: ["accessToken"],
       jira: ["siteUrl", "email", "apiToken"], asana: ["accessToken"], trello: ["apiKey", "token"], clickup: ["token"],
       monday: ["apiToken"], todoist: ["accessToken"], airtable: ["accessToken"], bitbucket: ["accessToken"], netlify: ["token"],
+      woocommerce: ["storeUrl", "consumerKey", "consumerSecret"], paypal: ["clientId", "clientSecret", "environment"],
+      paddle: ["apiKey"], lemon_squeezy: ["apiKey", "storeId"], square: ["accessToken", "environment"],
+      razorpay: ["keyId", "keySecret"], zoom: ["accessToken"], cal_com: ["apiKey"],
+      twilio_voice: ["accountSid", "authToken", "fromPhone"], docusign: ["accessToken", "accountId", "baseUri"],
       notion: ["apiKey"], hubspot: ["accessToken"],
       twilio: ["accountSid", "authToken", "fromPhone"],
       shopify: ["shopDomain", "accessToken"], stripe: ["secretKey"], linear: ["apiKey"],
