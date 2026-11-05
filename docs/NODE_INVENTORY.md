@@ -13,6 +13,7 @@ This inventory separates executable workflow definitions from the provider direc
 | Internal utility-pack nodes | 20 | Executable utility definitions included in the 79-node registry but not represented as separate provider-directory entries |
 | Provider-pack nodes | 20 | Executable provider adapters included in the 79-node registry |
 | Catalogue AI provider nodes | 4 | ElevenLabs, Stability AI, Hugging Face and Pinecone; each has a schema-backed action |
+| CRM and messaging catalogue nodes | 8 | Microsoft Teams, Salesforce, Pipedrive, Zoho CRM, Freshsales, Close, Apollo and Intercom |
 
 The 79 native definitions are composed of 27 core, integration and data definitions, 20 utility-pack definitions, 20 provider-pack definitions, 4 catalogue AI provider definitions, and 8 CRM/messaging catalogue provider definitions.
 
