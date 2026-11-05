@@ -355,3 +355,87 @@ test("Netlify lists bounded site metadata", async () => {
     { limit: 5 });
   assert.deepEqual(result, { sites: [{ id: "site-1", name: "Aivanta", url: "https://aivanta.example.test" }] });
 });
+
+
+test("WooCommerce validates HTTPS store origin and creates a customer", async () => {
+  const operation = findOperation("woocommerce", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { woocommerce: { storeUrl: "https://shop.example.test", consumerKey: "ck-test", consumerSecret: "cs-test" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /wp-json\/wc\/v3\/customers/); return { status: 201, body: { id: 101, email: "ada@example.test" } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", firstName: "Ada", lastName: "Lovelace" });
+  assert.deepEqual(result, { customerId: 101, email: "ada@example.test" });
+});
+
+test("PayPal obtains a token and creates an order without capturing payment", async () => {
+  const operation = findOperation("paypal", "execute", "action"); assert.ok(operation);
+  let calls = 0;
+  const result = await operation.run({ credentials: { paypal: { clientId: "client-test", clientSecret: "secret-test", environment: "sandbox" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { calls++; if (calls === 1) { assert.match(args.url, /sandbox\.paypal\.com\/v1\/oauth2\/token/); return { status: 200, body: { access_token: "temporary-access-token" } }; } assert.match(args.url, /v2\/checkout\/orders/); return { status: 201, body: { id: "ORDER-1", status: "CREATED", links: [{ rel: "approve", href: "https://paypal.example.test/approve" }] } }; } }, previousOutputs: {} },
+    { amount: "12.50", currency: "USD", returnUrl: "https://app.example.test/return", cancelUrl: "https://app.example.test/cancel" });
+  assert.equal(calls, 2);
+  assert.deepEqual(result, { orderId: "ORDER-1", status: "CREATED", approvalUrl: "https://paypal.example.test/approve" });
+});
+
+test("Paddle creates a customer without creating a transaction", async () => {
+  const operation = findOperation("paddle", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { paddle: { apiKey: "paddle-test" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer paddle-test"); return { status: 201, body: { data: { id: "ctm_1", email: "ada@example.test" } } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", name: "Ada Lovelace" });
+  assert.deepEqual(result, { customerId: "ctm_1", email: "ada@example.test" });
+});
+
+test("Lemon Squeezy creates a store-scoped customer", async () => {
+  const operation = findOperation("lemon_squeezy", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { lemon_squeezy: { apiKey: "lemon-test", storeId: "12345" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Accept, "application/vnd.api+json"); return { status: 201, body: { data: { id: "customer-1", attributes: { email: "ada@example.test" } } } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", name: "Ada Lovelace" });
+  assert.deepEqual(result, { customerId: "customer-1", email: "ada@example.test" });
+});
+
+test("Square creates an idempotent customer in the selected environment", async () => {
+  const operation = findOperation("square", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { square: { accessToken: "square-test", environment: "sandbox" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /^https:\/\/connect\.squareupsandbox\.com/); assert.equal(args.headers.Authorization, "Bearer square-test"); return { status: 200, body: { customer: { id: "square-customer", email_address: "ada@example.test" } } }; } }, previousOutputs: {} },
+    { email: "ada@example.test", givenName: "Ada" });
+  assert.deepEqual(result, { customerId: "square-customer", email: "ada@example.test" });
+});
+
+test("Razorpay creates a customer using Basic key authentication", async () => {
+  const operation = findOperation("razorpay", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { razorpay: { keyId: "rzp-test", keySecret: "razor-secret" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Basic " + Buffer.from("rzp-test:razor-secret").toString("base64")); return { status: 200, body: { id: "cust_1", email: "ada@example.test" } }; } }, previousOutputs: {} },
+    { name: "Ada Lovelace", email: "ada@example.test" });
+  assert.deepEqual(result, { customerId: "cust_1", email: "ada@example.test" });
+});
+
+test("Zoom lists bounded meeting metadata", async () => {
+  const operation = findOperation("zoom", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { zoom: { accessToken: "zoom-test" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers.Authorization, "Bearer zoom-test"); return { status: 200, body: { meetings: [{ id: 123, topic: "Planning", start_time: "2026-11-05T12:00:00Z" }] } }; } }, previousOutputs: {} },
+    { pageSize: 5 });
+  assert.deepEqual(result, { meetings: [{ id: 123, topic: "Planning", startTime: "2026-11-05T12:00:00Z" }] });
+});
+
+test("Cal.com creates a booking using an explicit event type and attendee", async () => {
+  const operation = findOperation("cal_com", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { cal_com: { apiKey: "cal-test" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.equal(args.headers["cal-api-version"], "2024-08-13"); return { status: 201, body: { data: { uid: "booking-1", status: "accepted" } } }; } }, previousOutputs: {} },
+    { eventTypeId: 10, start: "2026-11-06T10:00:00Z", attendeeName: "Ada", attendeeEmail: "ada@example.test", timeZone: "Africa/Lagos" });
+  assert.deepEqual(result, { bookingUid: "booking-1", status: "accepted" });
+});
+
+test("Twilio Voice validates an HTTPS TwiML URL before initiating a call", async () => {
+  const operation = findOperation("twilio_voice", "execute", "action"); assert.ok(operation);
+  const context = { credentials: { twilio_voice: { accountSid: "AC-placeholder-test", authToken: "voice-test", fromPhone: "+15550001111" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /\/Calls\.json$/); return { status: 201, body: { sid: "CA-call-1", status: "queued" } }; } }, previousOutputs: {} };
+  const result = await operation.run(context, { to: "+15550002222", twimlUrl: "https://voice.example.test/instructions.xml" });
+  assert.deepEqual(result, { callSid: "CA-call-1", status: "queued" });
+  await assert.rejects(() => operation.run(context, { to: "+15550002222", twimlUrl: "http://127.0.0.1/unsafe" }), /TWILIO_VOICE_TWIML_URL_INVALID/);
+});
+
+test("DocuSign lists envelopes from a validated account API host", async () => {
+  const operation = findOperation("docusign", "execute", "action"); assert.ok(operation);
+  const result = await operation.run({ credentials: { docusign: { accessToken: "docusign-test", accountId: "account-1", baseUri: "https://na4.docusign.net" } }, logger: { info() {}, error() {} },
+    http: { async request(args: any) { assert.match(args.url, /restapi\/v2\.1\/accounts\/account-1\/envelopes/); return { status: 200, body: { envelopes: [{ envelopeId: "env-1", status: "sent", emailSubject: "Agreement" }] } }; } }, previousOutputs: {} },
+    { fromDate: "2026-11-01T00:00:00Z" });
+  assert.deepEqual(result, { envelopes: [{ envelopeId: "env-1", status: "sent", emailSubject: "Agreement" }] });
+});
