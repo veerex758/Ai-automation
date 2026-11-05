@@ -15,7 +15,7 @@ test("only native registry implementations are marked as registered", () => {
   const catalog = getPublicNodeCatalog();
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
-  assert.equal(registered.length, 47);
+  assert.equal(registered.length, 51);
   assert.equal(comingSoon.length, 100 - registered.length);
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
@@ -107,16 +107,16 @@ test("native executable inventory has one authoritative count, separate from dir
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
 
   // 67 is the complete native registry: 27 core/data/vendor nodes plus
-  // 20 utility-pack nodes and 20 provider-pack nodes.
-  assert.equal(nodes.length, 67);
-  assert.equal(executable.length, 67);
+  // 20 utility-pack nodes and 20 provider-pack nodes and 4 additional catalogue AI nodes.
+  assert.equal(nodes.length, 71);
+  assert.equal(executable.length, 71);
   assert.equal(new Set(nodes.map((node) => node.id)).size, 67);
 
   // The 100-entry provider directory is a different inventory. Its 47
   // mapped entries do not include the 20 internal utility-pack nodes.
   assert.equal(catalog.length, 100);
   assert.equal(registered.length, 47);
-  assert.equal(comingSoon.length, 53);
+  assert.equal(comingSoon.length, 49);
   assert.equal(new Set(registered.map((node) => node.registryNodeId)).size, 47);
   assert.ok(registered.every((node) => nodes.some((implementation) => implementation.id === node.registryNodeId)));
 });
