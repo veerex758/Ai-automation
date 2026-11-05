@@ -16,7 +16,7 @@ const liveModeMigration = await readFile(
   "utf8",
 );
 const utilityMigration = await readFile(
-  new URL("../supabase/migrations/20261105120000_aivanta_utility_execution_hardening.sql", import.meta.url),
+  new URL("../supabase/migrations/20261105045346_aivanta_utility_execution_hardening.sql", import.meta.url),
   "utf8",
 );
 const ids = {
