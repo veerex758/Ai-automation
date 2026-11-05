@@ -126,6 +126,7 @@ test("Loop executes its registered downstream actions once per item with isolate
     }],
     context: {
       ...context,
+      credentials: { openai: { apiKey: "test-only-key" } },
       http: { async request(args) {
         const body = args.body as { input?: string };
         const prompt = body.input ?? "";
