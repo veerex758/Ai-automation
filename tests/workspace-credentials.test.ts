@@ -115,3 +115,21 @@ test("workspace credential vault accepts CRM and Teams provider fields without a
   assert.throws(() => encryptWorkspaceCredentials({ salesforce: { accessToken: "token" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ close: { apiKey: "key", password: "extra" } } as never, key));
 });
+
+
+test("workspace credential vault accepts the CRM and messaging provider fields", () => {
+  const value = {
+    microsoft_teams: { accessToken: "teams-token" },
+    salesforce: { accessToken: "salesforce-token", instanceUrl: "https://acme.my.salesforce.com" },
+    pipedrive: { accessToken: "pipedrive-token" },
+    zoho_crm: { accessToken: "zoho-token" },
+    freshsales: { accessToken: "freshsales-token", domain: "acme.myfreshworks.com" },
+    close: { apiKey: "close-key" },
+    apollo: { apiKey: "apollo-key" },
+    intercom: { accessToken: "intercom-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-crm:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-crm:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ salesforce: { accessToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ close: { apiKey: "key", password: "extra" } } as never, key));
+});
