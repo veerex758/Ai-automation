@@ -7,8 +7,8 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone";
+const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"]);
+type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -107,6 +107,47 @@ async function check(provider: Provider, c: Credentials) {
         body = "{}";
         break;
       }
+      case "microsoft_teams":
+        url = "https://graph.microsoft.com/v1.0/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "salesforce": {
+        const instance = required(c, "instanceUrl");
+        let parsed: URL;
+        try { parsed = new URL(instance); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password || !(parsed.hostname.endsWith(".salesforce.com") || parsed.hostname.endsWith(".force.com"))) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/services/data/v60.0/limits";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
+      case "pipedrive":
+        url = "https://api.pipedrive.com/v1/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "zoho_crm":
+        url = "https://www.zohoapis.com/crm/v6/users?type=CurrentUser";
+        headers.Authorization = "Zoho-oauthtoken " + required(c, "accessToken");
+        break;
+      case "freshsales": {
+        const domain = required(c, "domain");
+        if (!/^[a-z0-9-]+\.myfreshworks\.com$/i.test(domain)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + domain + "/crm/sales/api/contacts/filters";
+        headers.Authorization = "Token token=" + required(c, "accessToken");
+        break;
+      }
+      case "close":
+        url = "https://api.close.com/api/v1/me/";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "apiKey") + ":").toString("base64");
+        break;
+      case "apollo":
+        url = "https://api.apollo.io/api/v1/auth/health";
+        headers["x-api-key"] = required(c, "apiKey");
+        break;
+      case "intercom":
+        url = "https://api.intercom.io/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        headers["Intercom-Version"] = "2.11";
+        break;
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) {
