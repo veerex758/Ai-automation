@@ -29,7 +29,7 @@ async function serverContext(workspaceId: string, steps: RegisteredWorkflowStep[
           const response = await fetch(args.url, {
             method: args.method,
             headers: args.headers,
-            body: args.body === undefined ? undefined : JSON.stringify(args.body),
+            body: args.body === undefined ? undefined : typeof args.body === "string" ? args.body : JSON.stringify(args.body),
             signal: controller.signal,
             redirect: "error",
           });
