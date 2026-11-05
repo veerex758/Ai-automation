@@ -2,6 +2,7 @@ import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { decryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
+import { GOOGLE_PRODUCTS, type GoogleProduct } from "@/lib/integrations/google-oauth";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
@@ -29,16 +30,14 @@ function client() {
   });
 }
 
-async function googleAccessToken(db: DbClient, workspaceId: string, product: "gmail" | "sheets"): Promise<string> {
+async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct): Promise<string> {
   const { data: connection, error } = await db.from("google_connections")
     .select("id,encrypted_credentials,expires_at,status,scopes")
     .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
   if (!connection) throw new Error(product === "gmail" ? "GMAIL_CONNECTION_REQUIRED" : "GOOGLE_SHEETS_CONNECTION_REQUIRED");
-  const requiredScope = product === "gmail"
-    ? "https://www.googleapis.com/auth/gmail.readonly"
-    : "https://www.googleapis.com/auth/spreadsheets.readonly";
+  const requiredScope = GOOGLE_PRODUCTS[product].scopes[0];
   if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
     throw new Error("GOOGLE_SCOPE_MISMATCH");
   }
@@ -80,8 +79,13 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: "gm
 async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>): Promise<WorkspaceCredentials> {
   const credentials: WorkspaceCredentials = {};
   for (const provider of providers) {
-    if (provider === "gmail" || provider === "sheets") {
-      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, provider) };
+    const googleProductByProvider: Record<string, GoogleProduct> = {
+      gmail: "gmail", sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
+      google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
+    };
+    const googleProduct = googleProductByProvider[provider];
+    if (googleProduct) {
+      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;
     }
     if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"].includes(provider)) {
@@ -113,6 +117,7 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "email" && step.operationId === "send_email") return "resend";
   if (step.nodeId === "gmail" && step.operationId === "list_messages") return "gmail";
   if (step.nodeId === "google_sheets" && step.operationId === "get_values") return "sheets";
+  if (["google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "notion" && step.operationId === "create_page") return "notion";
   if (step.nodeId === "hubspot" && step.operationId === "create_contact") return "hubspot";
   if (step.nodeId === "twilio" && step.operationId === "send_sms") return "twilio";
@@ -124,7 +129,7 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   return null;
 }
 
-const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"]);
+const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
