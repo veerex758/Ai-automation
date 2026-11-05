@@ -4,7 +4,7 @@ import type { NodeDefinition, NodeContext } from "./types";
 const required = (max = 4000) => z.string().trim().min(1).max(max);
 function secret(ctx: NodeContext, provider: string, key = "apiKey") {
   const value = ctx.credentials[provider]?.[key];
-  if (!value || value.length > 4096 || value.includes("\\r") || value.includes("\\n")) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!value || value.length > 4096 || value.split("").some((char) => char.charCodeAt(0) === 10 || char.charCodeAt(0) === 13)) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
 }
 function headers(token: string) {
