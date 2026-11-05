@@ -7,8 +7,8 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign";
+const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"]);
+type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -250,6 +250,38 @@ async function check(provider: Provider, c: Credentials) {
         headers.Authorization = "Bearer " + required(c, "accessToken");
         break;
       }
+      case "x_twitter":
+        url = "https://api.x.com/2/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "linkedin":
+        url = "https://api.linkedin.com/v2/userinfo";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "facebook_pages":
+        url = "https://graph.facebook.com/v22.0/" + encodeURIComponent(required(c, "pageId")) + "?fields=id,name";
+        headers.Authorization = "Bearer " + required(c, "pageAccessToken");
+        break;
+      case "instagram":
+        url = "https://graph.facebook.com/v22.0/" + encodeURIComponent(required(c, "igUserId")) + "?fields=id,username";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "tiktok":
+        url = "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name";
+        method = "POST"; headers.Authorization = "Bearer " + required(c, "accessToken");
+        headers["Content-Type"] = "application/json"; body = JSON.stringify({ fields: ["open_id", "display_name"] });
+        break;
+      case "mailchimp": {
+        const key = required(c, "apiKey"), region = key.split("-").pop() ?? "";
+        if (!/^us\d{1,2}$/.test(region)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + region + ".api.mailchimp.com/3.0/ping";
+        headers.Authorization = "Basic " + Buffer.from("aivanta:" + key).toString("base64");
+        break;
+      }
+      case "typeform":
+        url = "https://api.typeform.com/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) {
