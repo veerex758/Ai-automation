@@ -133,7 +133,7 @@ begin
     'executionId', event_row.job_id,
     'stepId', event_row.step_id,
     'attempt', event_row.attempt,
-    'occurredAt', event_row.created_at
+    'occurredAt', to_char(event_row.created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
   );
 
   for workflow_row in
