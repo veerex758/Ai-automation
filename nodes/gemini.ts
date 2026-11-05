@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { NodeDefinition } from "./types";
+import type { NodeDefinition, NodeContext } from "./types";
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1).max(12000).describe("The exact task or question for Gemini to answer."),
@@ -38,7 +38,7 @@ const leadOutputSchema = z.object({
 const leadJsonSchema = {
   type: "OBJECT",
   properties: {
-    fullName: { type: ["STRING", "NULL"] }, email: { type: ["STRING", "NULL"] },
+    fullName: { type: "STRING", nullable: true }, email: { type: ["STRING", "NULL"] },
     phone: { type: ["STRING", "NULL"] },
     propertyType: { type: "STRING", enum: ["apartment", "house", "land", "commercial", "other", "unknown"] },
     location: { type: ["STRING", "NULL"] }, budget: { type: ["STRING", "NULL"] },
@@ -51,7 +51,7 @@ const leadJsonSchema = {
   propertyOrdering: ["fullName", "email", "phone", "propertyType", "location", "budget", "timeframe", "temperature", "reason", "missingInformation", "suggestedReply", "summary"],
 };
 
-async function qualifyLead(ctx: Parameters<NonNullable<NodeDefinition["actions"][number]["run"]>>[0], rawInput: unknown) {
+async function qualifyLead(ctx: NodeContext, rawInput: unknown) {
   const input = leadInputSchema.parse(rawInput);
   const apiKey = ctx.credentials.gemini?.apiKey;
   if (!apiKey) throw new Error("GEMINI_CONNECTION_REQUIRED");
