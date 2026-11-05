@@ -157,3 +157,25 @@ test("Markdown converter preserves escaped text and never emits raw HTML from in
  const result=await op.run(context,{markdown:"# Hello & welcome\n\n<script>bad()</script>"}) as {html:string};
  assert.equal(result.html,"<h1>Hello &amp; welcome</h1>\n\n<p>&lt;script&gt;bad()&lt;/script&gt;</p>");
 });
+
+test("Regex rejects ambiguous repeated quantifiers but permits a single bounded quantifier", async () => {
+ const op=findOperation("regex","match","action")!;
+ await assert.rejects(()=>op.run(context,{text:"a".repeat(10000)+"!",pattern:"a+a+a+b",flags:""}),/REGEX_UNSAFE/);
+ assert.deepEqual(await op.run(context,{text:"aaaa",pattern:"a+",flags:""}),{matched:true,matches:["aaaa"]});
+});
+
+test("Text Transform rejects oversized replacement before allocating the expanded result", async () => {
+ const op=findOperation("text_transform","transform","action")!;
+ await assert.rejects(()=>op.run(context,{text:"x".repeat(1000),operation:"replace",search:"x",replacement:"y".repeat(50000)}),/TEXT_OUTPUT_TOO_LARGE/);
+});
+
+test("Array flatten is bounded even for deeply nested input", async () => {
+ const op=findOperation("array_ops","operate","action")!;
+ const nested=Array.from({length:11000},(_,index)=>index);
+ await assert.rejects(()=>op.run(context,{items:[nested],operation:"flatten"}),/ARRAY_TOO_LARGE/);
+});
+
+test("Split in Batches cannot exceed the workflow runner iteration limit", async () => {
+ const op=findOperation("split_batches","split","action")!;
+ await assert.rejects(()=>op.run(context,{items:Array.from({length:101},(_,index)=>index),batchSize:1}),/BATCH_COUNT_LIMIT_EXCEEDED/);
+});
