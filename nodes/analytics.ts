@@ -4,7 +4,7 @@ import type { NodeDefinition, NodeContext } from "./types";
 const text = (max = 10000) => z.string().trim().min(1).max(max);
 function key(ctx: NodeContext, provider: string, name = "apiKey") {
   const value = ctx.credentials[provider]?.[name];
-  if (!value) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!value || value.length > 4096 || value.includes("\r") || value.includes("\n")) throw new Error(provider.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
 }
 function success(status: number, provider: string) {
