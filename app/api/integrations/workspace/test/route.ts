@@ -259,7 +259,7 @@ async function check(provider: Provider, c: Credentials) {
         headers.Authorization = "Bearer " + required(c, "accessToken");
         break;
       case "facebook_pages":
-        url = "https://graph.facebook.com/v22.0/" + encodeURIComponent(required(c, "pageId")) + "?fields=id,name";
+        url = "https://graph.facebook.com/v22.0/me?fields=id,name";
         headers.Authorization = "Bearer " + required(c, "pageAccessToken");
         break;
       case "instagram":
