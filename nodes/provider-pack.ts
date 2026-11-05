@@ -31,12 +31,12 @@ async function call(ctx: NodeContext, provider: Provider, args: {
 
 function actionNode(args: {
   id: Provider; name: string; icon: string; category: NodeDefinition["category"];
-  description: string; input: z.ZodTypeAny; output: z.ZodTypeAny;
+  description: string; input: z.ZodTypeAny; output: z.ZodTypeAny; auth?: NodeDefinition["auth"];
   run(ctx: NodeContext, input: any): Promise<unknown>;
 }): NodeDefinition {
   return {
     id: args.id, name: args.name, icon: args.icon, category: args.category, version: 1,
-    auth: { type: "apiKey", credentialKey: "apiKey" }, triggers: [],
+    auth: args.auth ?? { type: "apiKey", credentialKey: "apiKey" }, triggers: [],
     actions: [{
       id: "execute", name: args.name + " action", description: args.description,
       inputSchema: args.input, outputSchema: args.output,
@@ -308,7 +308,7 @@ export const providerPack: NodeDefinition[] = [
     },
   }),
   actionNode({
-    id: "rss_feed", name: "RSS Feed", icon: "rss", category: "data",
+    id: "rss_feed", name: "RSS Feed", icon: "rss", category: "data", auth: { type: "none" },
     description: "Fetches a feed from a validated public HTTP(S) RSS URL and returns its raw XML as bounded text.",
     input: z.object({ feedUrl: z.string().url(), maxBytes: z.number().int().min(1024).max(100000).default(30000) }).strict(),
     output: z.object({ feedUrl: z.string().url(), xml: z.string().max(100000) }).strict(),
