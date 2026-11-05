@@ -1,6 +1,6 @@
 # Google OAuth connections
 
-This feature adds the first official account-authorization flow for Gmail and Google Sheets. The initial permissions are read-only. Connecting an account does not execute workflows, send mail, or modify spreadsheets.
+This feature provides official account authorization for Gmail, Google Sheets, Drive, Calendar, Docs, Forms, YouTube and Contacts. Each connection requests only its product-specific read-only scope. Connecting an account does not execute workflows or modify provider data.
 
 ## Required environment variables
 
@@ -18,7 +18,7 @@ Use separate Google OAuth clients and encryption keys for local development, pre
 
 1. Create or select a Google Cloud project controlled by the Aivanta owner.
 2. Configure the OAuth consent screen, audience, and support/contact details.
-3. Enable the Gmail API and Google Sheets API.
+3. Enable the Gmail, Google Sheets, Google Drive, Google Calendar, Google Docs, Google Forms, YouTube Data and People APIs.
 4. Create a Web application OAuth client.
 5. Add the exact value of `GOOGLE_REDIRECT_URI` to Authorized redirect URIs.
 6. Add only approved staging test accounts to the test audience while the app is in testing.
@@ -27,7 +27,7 @@ Use separate Google OAuth clients and encryption keys for local development, pre
 ## Routes
 
 - `GET /api/integrations/google/start?product=gmail`
-- `GET /api/integrations/google/start?product=sheets`
+- `GET /api/integrations/google/start?product=sheets`\n- `GET /api/integrations/google/start?product=drive`\n- `GET /api/integrations/google/start?product=calendar`\n- `GET /api/integrations/google/start?product=docs`\n- `GET /api/integrations/google/start?product=forms`\n- `GET /api/integrations/google/start?product=youtube`\n- `GET /api/integrations/google/start?product=contacts`
 - `GET /api/integrations/google/callback`
 - `GET /api/integrations/google/connections`
 
