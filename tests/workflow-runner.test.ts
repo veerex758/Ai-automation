@@ -245,7 +245,7 @@ test("Split in Batches drives each downstream step once per batch in order",asyn
  const result=await executeRegisteredWorkflow({
   steps:[
    {id:"source",nodeId:"split_batches",operationId:"split",kind:"action",input:{items:[1,2,3,4,5],batchSize:2}},
-   {id:"process",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{source.batches}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+   {id:"process",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{batch}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
   ],
   context,dryRun:false,
  });
@@ -257,7 +257,7 @@ test("Split in Batches supports chained downstream batch steps with matching bat
  const result=await executeRegisteredWorkflow({
   steps:[
    {id:"source",nodeId:"split_batches",operationId:"split",kind:"action",input:{items:[1,2,3,4],batchSize:2}},
-   {id:"first",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{source.batches}}",operation:"reverse"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+   {id:"first",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{batch}}",operation:"reverse"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
    {id:"second",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{first}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
   ],
   context,dryRun:false,
@@ -286,4 +286,41 @@ test("workflow error reporter cannot mask the original failed step",async()=>{
  });
  assert.equal(result.status,"failed");
  assert.equal(result.steps[0].error,"MATH_INVALID_RESULT");
+});
+
+
+test("whole-value workflow references preserve arrays and objects instead of stringifying them", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { payload: [{ id: 1 }, { id: 2 }] } } },
+      { id: "copy", nodeId: "array_ops", operationId: "operate", kind: "action", input: { items: "{{source.data.payload}}", operation: "reverse" } },
+    ],
+    context, dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.copy, { items: [{ id: 2 }, { id: 1 }], count: 2 });
+});
+
+test("Split in Batches passes each actual batch to downstream work, not the full batch list", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "split_batches", operationId: "split", kind: "action", input: { items: [1, 2, 3, 4, 5], batchSize: 2 } },
+      { id: "consume", nodeId: "array_ops", operationId: "operate", kind: "action", input: { items: "{{current_batch}}", operation: "reverse" }, loop: { sourceStepId: "source", itemAs: "current_batch", indexAs: "batch_index", maxIterations: 10 } },
+    ],
+    context, dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.consume, [[2, 1], [4, 3], [5]]);
+});
+
+test("workflow references reject prototype traversal", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { value: "safe" } } },
+      { id: "read", nodeId: "text_transform", operationId: "transform", kind: "action", input: { text: "{{source.__proto__}}", operation: "trim" } },
+    ],
+    context, dryRun: false,
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.steps[1].error, "WORKFLOW_REFERENCE_NOT_FOUND");
 });
