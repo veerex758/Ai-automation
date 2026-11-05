@@ -657,3 +657,39 @@ for (const providerCase of providerSpecificCases) {
     }
   });
 }
+
+
+const credentialRequiredProviderInputs: Array<{ id: string; input: Record<string, unknown> }> = [
+  { id: "claude", input: { prompt: "hello" } },
+  ...providerSpecificCases.map(({ id, input }) => ({ id, input })),
+  { id: "sentry", input: { organization: "acme" } },
+];
+
+for (const item of credentialRequiredProviderInputs) {
+  test(item.id + " adapter fails closed before network access when credentials are missing", async () => {
+    const operation = findOperation(item.id, "execute", "action");
+    assert.ok(operation);
+    let networkCalls = 0;
+    await assert.rejects(() => operation.run({
+      credentials: {}, logger: { info() {}, error() {} },
+      http: { async request() { networkCalls++; throw new Error("network must not be reached"); } },
+      previousOutputs: {},
+    } as any, item.input), /CONNECTION_REQUIRED/);
+    assert.equal(networkCalls, 0, item.id + " must validate credentials before making a request");
+  });
+}
+
+for (const providerCase of providerSpecificCases) {
+  test(providerCase.id + " adapter reports rate limits without retrying a provider action", async () => {
+    const operation = findOperation(providerCase.id, "execute", "action");
+    assert.ok(operation);
+    let networkCalls = 0;
+    await assert.rejects(() => operation.run({
+      credentials: providerCase.credentials,
+      logger: { info() {}, error() {} },
+      http: { async request() { networkCalls++; return { status: 429, body: {} }; } },
+      previousOutputs: {},
+    } as any, providerCase.input), new RegExp(providerCase.id.toUpperCase() + "_RATE_LIMITED"));
+    assert.equal(networkCalls, 1, providerCase.id + " must not retry a rate-limited action");
+  });
+}
