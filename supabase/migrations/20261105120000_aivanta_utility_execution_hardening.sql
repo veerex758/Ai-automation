@@ -17,13 +17,14 @@ create or replace function public.consume_execution_rate_limit(
 ) returns jsonb
 language plpgsql security definer set search_path = ''
 as $$
-declare key_digest text;
-declare current_count integer;
-declare oldest_hit timestamptz;
-declare allowed boolean;
-declare remaining integer;
-declare retry_ms integer;
-declare now_at timestamptz := clock_timestamp();
+declare
+  key_digest text;
+  current_count integer;
+  oldest_hit timestamptz;
+  allowed boolean;
+  remaining integer;
+  retry_ms integer;
+  now_at timestamptz := clock_timestamp();
 begin
   if p_workspace_id is null or p_key is null or length(p_key) not between 1 and 200
      or p_limit not between 1 and 10000 or p_window_ms not between 100 and 3600000 then
@@ -92,9 +93,10 @@ create or replace function public.record_execution_error_event(
 ) returns uuid
 language plpgsql security definer set search_path = ''
 as $$
-declare job_row public.execution_jobs%rowtype;
-declare event_id uuid;
-declare safe_code text;
+declare
+  job_row public.execution_jobs%rowtype;
+  event_id uuid;
+  safe_code text;
 begin
   select * into job_row from public.execution_jobs
     where id=p_job_id and status='running' and lease_token=p_lease_token and lease_until > now() for update;
@@ -122,12 +124,13 @@ create or replace function public.dispatch_execution_error_event(p_event_id uuid
 returns integer
 language plpgsql security definer set search_path = ''
 as $$
-declare event_row public.execution_error_events%rowtype;
-declare source_job public.execution_jobs%rowtype;
-declare workflow_row public.workflows%rowtype;
-declare dispatched integer := 0;
-declare dispatch_result jsonb;
-declare event_input jsonb;
+declare
+  event_row public.execution_error_events%rowtype;
+  source_job public.execution_jobs%rowtype;
+  workflow_row public.workflows%rowtype;
+  dispatched integer := 0;
+  dispatch_result jsonb;
+  event_input jsonb;
 begin
   select * into event_row from public.execution_error_events where id = p_event_id for update;
   if not found then raise exception using errcode='P0002',message='Execution error event not found'; end if;
@@ -238,9 +241,10 @@ create or replace function public.record_and_dispatch_execution_error_event(
 ) returns integer
 language plpgsql security definer set search_path = ''
 as $$
-declare event_id uuid;
-declare source_mode text;
-declare source_payload jsonb;
+declare
+  event_id uuid;
+  source_mode text;
+  source_payload jsonb;
 begin
   select execution_mode,payload into source_mode,source_payload
   from public.execution_jobs
@@ -273,10 +277,11 @@ create or replace function public.finish_execution_job(
 ) returns text
 language plpgsql security definer set search_path = ''
 as $$
-declare job_row public.execution_jobs%rowtype;
-declare safe_code text;
-declare safe_step_id text;
-declare delay_seconds integer;
+declare
+  job_row public.execution_jobs%rowtype;
+  safe_code text;
+  safe_step_id text;
+  delay_seconds integer;
 begin
   select * into job_row from public.execution_jobs
   where id=p_job_id and status='running'
