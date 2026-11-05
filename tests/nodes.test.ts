@@ -4,10 +4,15 @@ import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 import type { NodeContext } from "../nodes/types";
 
-test("registry includes versioned webhook, OpenAI, Gemini, Slack and Email operations", () => {
-  assert.equal(nodes.length, 14);
+test("registry includes versioned provider and data utility operations", () => {
+  assert.equal(nodes.length, 67);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
+  assert.ok(findOperation("http_request", "request", "action"));
+  assert.ok(findOperation("wait", "delay", "action"));
+  assert.ok(findOperation("loop", "iterate", "action"));
+  assert.ok(findOperation("schedule", "scheduled", "trigger"));
+  assert.ok(findOperation("javascript", "execute", "action"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("gemini", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
@@ -21,6 +26,16 @@ test("registry includes versioned webhook, OpenAI, Gemini, Slack and Email opera
   assert.ok(findOperation("shopify", "list_products", "action"));
   assert.ok(findOperation("stripe", "create_customer", "action"));
   assert.ok(findOperation("linear", "create_issue", "action"));
+  assert.ok(findOperation("set_fields", "merge_fields", "action"));
+  assert.ok(findOperation("json_parse", "parse", "action"));
+  assert.ok(findOperation("filter", "filter_items", "action"));
+  assert.ok(findOperation("aggregate", "calculate", "action"));
+  assert.ok(findOperation("date_time", "current_time", "action"));
+  assert.ok(findOperation("if", "evaluate", "action"));
+  assert.ok(findOperation("switch", "select_route", "action"));
+  assert.ok(findOperation("merge", "merge_inputs", "action"));
+  assert.equal(nodes.length, 67);
+  for (const id of ["deduplicate","sort","split_batches","crypto_hash","template","csv_parse","csv_stringify","markdown_html","text_transform","regex","array_ops","object_ops","math","uuid","base64","date_add","date_format","error_trigger","rate_limiter","json_encode"]) assert.ok(findOperation(id, id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":id==="json_encode"?"encode":"check","action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
@@ -221,4 +236,93 @@ test("dry-run simulates all ten vendor integrations without provider calls", asy
   assert.equal(result.steps.length, 10);
   assert.ok(result.steps.every((step) => step.status === "simulated"));
   assert.equal(calls, 0);
+});
+
+
+test("HTTP Request blocks loopback targets and requires workspace-scoped credentials", async () => {
+  const operation = findOperation("http_request", "request", "action");
+  assert.ok(operation);
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("SHOULD_NOT_USE_GENERIC_HTTP"); } },
+    previousOutputs: {},
+  } as NodeContext;
+  await assert.rejects(
+    () => operation.run(context, { url: "http://127.0.0.1/admin", method: "GET", authMode: "none" }),
+    /HTTP_REQUEST_PRIVATE_HOST_BLOCKED/,
+  );
+  await assert.rejects(
+    () => operation.run(context, { url: "https://example.com/api", method: "GET", authMode: "bearer" }),
+    /HTTP_WORKSPACE_BEARER_CREDENTIAL_REQUIRED/,
+  );
+});
+
+
+test("JavaScript node uses a disposable deny-all Vercel Sandbox and cleans it up", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let options: unknown;
+  let command: { cmd: string; args: string[]; stdout: NodeJS.WritableStream } | undefined;
+  let stopped = false;
+  const output = JSON.stringify({ ok: true, result: { total: 42 }, logs: ["ran safely"] });
+  const result = await executeJavaScriptInSandbox({
+    code: "return { total: input.left + input.right };",
+    input: { left: 20, right: 22 },
+    timeoutMs: 5000,
+  }, async (received) => {
+    options = received;
+    return {
+      async runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream }) {
+        command = args;
+        args.stdout.write(output);
+        return { exitCode: 0, async stdout() { return ""; } };
+      },
+      async stop() { stopped = true; },
+    } as never;
+  });
+  assert.equal((options as { image?: unknown }).image, "vercel/sandbox/node:24");
+  assert.deepEqual((options as { resources?: unknown }).resources, { vcpus: 1 });
+  assert.equal((options as { timeout?: unknown }).timeout, 5000);
+  assert.equal((options as { persistent?: unknown }).persistent, false);
+  assert.equal((options as { networkPolicy?: unknown }).networkPolicy, "deny-all");
+  assert.deepEqual((options as { env?: unknown }).env, {});
+  assert.equal(command?.cmd, "node");
+  assert.ok(command?.args.includes("--permission"));
+  assert.deepEqual(result.result, { total: 42 });
+  assert.deepEqual(result.logs, ["ran safely"]);
+  assert.equal(stopped, true);
+});
+
+test("JavaScript sandbox is cleaned up when execution fails", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let stopped = false;
+  await assert.rejects(() => executeJavaScriptInSandbox({ code: "return 1;" }, async () => ({
+    async runCommand() { throw new Error("sandbox command timed out"); },
+    async stop() { stopped = true; },
+  } as never)), /sandbox command timed out/);
+  assert.equal(stopped, true);
+});
+
+test("JavaScript sandbox rejects oversized inputs before provisioning", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let provisioned = false;
+  await assert.rejects(() => executeJavaScriptInSandbox({ code: "x".repeat(20_001) }, async () => {
+    provisioned = true;
+    throw new Error("must not provision");
+  }), /too_big|too_large|maximum/i);
+  assert.equal(provisioned, false);
+});
+
+
+test("JavaScript sandbox caps streamed stdout and still stops the VM", async () => {
+  const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
+  let stopped = false;
+  await assert.rejects(() => executeJavaScriptInSandbox({ code: "return 1;" }, async () => ({
+    async runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream }) {
+      args.stdout.on("error", () => {});
+      args.stdout.write("x".repeat(50_000));
+      return { exitCode: 0, async stdout() { return ""; } };
+    },
+    async stop() { stopped = true; },
+  } as never)), /JAVASCRIPT_OUTPUT_TOO_LARGE/);
+  assert.equal(stopped, true);
 });
