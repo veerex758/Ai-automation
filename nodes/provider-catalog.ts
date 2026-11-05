@@ -184,28 +184,32 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "ElevenLabs",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "elevenlabs"
   },
   {
     "id": "stability_ai",
     "name": "Stability AI",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "stability_ai"
   },
   {
     "id": "hugging_face",
     "name": "Hugging Face",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "hugging_face"
   },
   {
     "id": "pinecone",
     "name": "Pinecone",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "pinecone'
   },
   {
     "id": "gmail",
