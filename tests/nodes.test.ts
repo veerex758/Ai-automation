@@ -317,7 +317,7 @@ test("JavaScript sandbox caps streamed stdout and still stops the VM", async () 
   const { executeJavaScriptInSandbox } = await import("../nodes/javascript");
   let stopped = false;
   await assert.rejects(() => executeJavaScriptInSandbox({ code: "return 1;" }, async () => ({
-    async runCommand(args) {
+    async runCommand(args: { cmd: string; args: string[]; stdout: NodeJS.WritableStream }) {
       args.stdout.on("error", () => {});
       args.stdout.write("x".repeat(50_000));
       return { exitCode: 0, async stdout() { return ""; } };
