@@ -62,3 +62,30 @@ test("RSS node is credential-free and still relies on the guarded HTTP client", 
   assert.equal((result as any).xml, "<rss><channel/></rss>");
   assert.equal(called, true);
 });
+
+
+test("Sentry adapter accepts the provider's top-level projects array", async () => {
+  let requested = "";
+  const context = {
+    credentials: { sentry: { authToken: "sentry-test-token" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args: any) {
+      requested = args.url;
+      return { status: 200, body: [{ id: "42", name: "Aivanta", slug: "aivanta" }] };
+    } },
+    previousOutputs: {},
+  };
+  const operation = findOperation("sentry", "execute", "action");
+  assert.ok(operation);
+  const result = await operation.run(context, { organization: "acme" });
+  assert.match(requested, /organizations\/acme\/projects/);
+  assert.deepEqual(result, { projects: [{ id: "42", name: "Aivanta", slug: "aivanta" }] });
+});
+
+test("provider auth metadata names the actual saved secret and RSS needs no credential", () => {
+  const byId = new Map(providerPack.map((node) => [node.id, node]));
+  assert.equal(byId.get("discord")?.auth.type, "apiKey");
+  assert.equal((byId.get("discord")?.auth as any).credentialKey, "botToken");
+  assert.equal((byId.get("whatsapp_business")?.auth as any).credentialKey, "accessToken");
+  assert.equal(byId.get("rss_feed")?.auth.type, "none");
+});
