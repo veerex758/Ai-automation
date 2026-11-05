@@ -387,3 +387,18 @@ test("AI provider adapters parse native response shapes and return durable job I
   assert.equal((await assembly.run(context, { audioUrl: "https://example.com/audio.mp3" }) as { transcriptId: string }).transcriptId, "transcript_1");
   await assert.rejects(() => cohere.run({ ...context, credentials: {} }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
 });
+
+
+test("HTTP Request uses workspace credentials and blocks private targets before transport", async () => {
+  const operation = findOperation("http_request", "request", "action");
+  assert.ok(operation);
+  const calls: Array<{ url: string; method: string; headers?: Record<string, string> }> = [];
+  const context = { credentials: { http_request: { apiKey: "workspace-secret" } }, logger: { info() {}, error() {} }, previousOutputs: {}, http: { async request(args: { url: string; method: string; headers?: Record<string, string> }) { calls.push(args); return { status: 200, body: { ok: true } }; } } };
+  const result = await operation.run(context, { url: "https://8.8.8.8/v1/test", method: "POST", auth: "bearer", body: { value: 1 } }) as { status: number; body: { ok: boolean } };
+  assert.equal(result.status, 200);
+  assert.equal(result.body.ok, true);
+  assert.equal(calls[0].headers?.Authorization, "Bearer workspace-secret");
+  await assert.rejects(() => operation.run(context, { url: "https://127.0.0.1/admin", method: "GET", auth: "none" }), /HTTP_REQUEST_SSRF_BLOCKED/);
+  await assert.rejects(() => operation.run(context, { url: "http://8.8.8.8", method: "GET", auth: "none" }), /HTTP_REQUEST_SSRF_BLOCKED/);
+  assert.equal(calls.length, 1);
+});
