@@ -15,11 +15,16 @@ const liveModeMigration = await readFile(
   new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url),
   "utf8",
 );
+const utilityMigration = await readFile(
+  new URL("../supabase/migrations/20261105120000_aivanta_utility_execution_hardening.sql", import.meta.url),
+  "utf8",
+);
 const ids = {
   workspace: "10000000-0000-4000-8000-000000000001",
   workflow: "20000000-0000-4000-8000-000000000001",
   workflowOther: "20000000-0000-4000-8000-000000000002",
   user: "30000000-0000-4000-8000-000000000001",
+  workspaceOther: "10000000-0000-4000-8000-000000000002",
 };
 let ready = false;
 
@@ -45,6 +50,8 @@ async function resetFixture() {
   try {
     await db.query(`
       truncate table
+        public.execution_error_events,
+        public.execution_rate_limit_hits,
         public.execution_dead_letters,
         public.execution_checkpoints,
         public.execution_jobs,
@@ -54,8 +61,8 @@ async function resetFixture() {
     // Each subtest starts from workflow version 1 so a prior version-pinning
     // assertion cannot leak mutated fixture state into later dispatch tests.
     await db.query(
-      "update public.workflows set version=1,status='active',definition=$1::jsonb where id=$2",
-      [JSON.stringify({ version: 1, nodes: [] }), ids.workflow],
+      "update public.workflows set version=1,status='active',definition=$1::jsonb,created_by=$2 where id=$3",
+      [JSON.stringify({ version: 1, nodes: [] }), ids.user, ids.workflow],
     );
   } finally {
     await db.query("reset role").catch(() => {});
@@ -71,7 +78,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
   const setup = await client();
   try {
     await setup.query(`
-      drop table if exists public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade;
+      drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade;
       drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade;
       do $$ begin
         if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
@@ -82,7 +89,8 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       create table public.workflows (
         id uuid primary key, workspace_id uuid not null references public.workspaces(id),
         version integer not null, status text not null,
-        definition jsonb not null default '{"version":1,"nodes":[]}'::jsonb
+        definition jsonb not null default '{"version":1,"nodes":[]}'::jsonb,
+        created_by uuid
       );
       create table public.workflow_runs (
         id uuid primary key default gen_random_uuid(),
@@ -94,13 +102,14 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       grant usage on schema public to anon, authenticated, service_role;
     `);
-    await setup.query("insert into public.workspaces values ($1)", [ids.workspace]);
+    await setup.query("insert into public.workspaces values ($1),($2)", [ids.workspace, ids.workspaceOther]);
     await setup.query(
-      "insert into public.workflows (id,workspace_id,version,status,definition) values ($1,$2,1,'active',$3::jsonb),($4,$2,1,'active',$3::jsonb)",
-      [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] }), ids.workflowOther],
+      "insert into public.workflows (id,workspace_id,version,status,definition,created_by) values ($1,$2,1,'active',$3::jsonb,$4),($5,$2,1,'active',$3::jsonb,$4)",
+      [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] }), ids.user, ids.workflowOther],
     );
     await setup.query(migration);
     await setup.query(liveModeMigration);
+    await setup.query(utilityMigration);
     ready = true;
   } finally {
     setup.release();
@@ -250,6 +259,57 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     } finally { db.release(); }
   });
 
+
+  await t.test("shared rate limiter is atomic and isolates workspaces", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const call = () => db.query(
+        "select public.consume_execution_rate_limit($1,'checkout',2,60000) as result",
+        [ids.workspace],
+      );
+      const results = await Promise.all([call(), call(), call()]);
+      const decisions = results.map((item) => item.rows[0].result.allowed).sort();
+      assert.deepEqual(decisions, [false, true, true]);
+      const isolated = await db.query(
+        "select public.consume_execution_rate_limit($1,'checkout',2,60000) as result",
+        [ids.workspaceOther],
+      );
+      assert.equal(isolated.rows[0].result.allowed, true);
+    } finally { db.release(); }
+  });
+
+  await t.test("workflow failures atomically enqueue active Error Trigger subscribers", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const subscriberDefinition = {
+        format: "aivanta-registry-v1",
+        steps: [{ id: "on-error", nodeId: "error_trigger", operationId: "capture", kind: "trigger",
+          input: { code: "TEST_FAILURE", message: "Test failure" } }],
+      };
+      await db.query(
+        "update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify(subscriberDefinition), ids.workflowOther],
+      );
+      await dispatch(db, crypto.randomUUID());
+      const [job] = await claim(db, "error-source-worker");
+      const result = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'step-a','TEST_FAILURE','TEST_FAILURE',1) as dispatched",
+        [job.id, job.lease_token],
+      );
+      assert.equal(result.rows[0].dispatched, 1);
+      const queued = await db.query(
+        "select execution_mode,payload from public.execution_jobs where workflow_id=$1 and idempotency_key like 'error:%'",
+        [ids.workflowOther],
+      );
+      assert.equal(queued.rowCount, 1);
+      assert.equal(queued.rows[0].execution_mode, "live");
+      assert.equal(queued.rows[0].payload.source, "error_trigger");
+      assert.equal(queued.rows[0].payload.input.code, "TEST_FAILURE");
+    } finally { db.release(); }
+  });
+
   await t.test("browser roles cannot read queue tables or execute privileged RPCs", async () => {
     await resetFixture();
     const db = await client();
@@ -288,6 +348,10 @@ test.after(async () => {
         await db.query("drop function if exists public.heartbeat_execution_job(uuid,uuid,integer)");
         await db.query("drop function if exists public.checkpoint_execution_step(uuid,uuid,text,integer,text,jsonb,jsonb)");
         await db.query("drop function if exists public.finish_execution_job(uuid,uuid,boolean,text)");
+        await db.query("drop function if exists public.consume_execution_rate_limit(uuid,text,integer,integer)");
+        await db.query("drop function if exists public.record_execution_error_event(uuid,uuid,text,text,text,integer)");
+        await db.query("drop function if exists public.dispatch_execution_error_event(uuid)");
+        await db.query("drop function if exists public.record_and_dispatch_execution_error_event(uuid,uuid,text,text,text,integer)");
       } finally {
         await db.query("reset role").catch(() => {});
         db.release();
