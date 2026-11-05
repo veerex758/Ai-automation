@@ -232,42 +232,48 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Drive",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_drive"
   },
   {
     "id": "google_calendar",
     "name": "Calendar",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_calendar"
   },
   {
     "id": "google_docs",
     "name": "Docs",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_docs"
   },
   {
     "id": "google_forms",
     "name": "Forms",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_forms"
   },
   {
     "id": "youtube",
     "name": "YouTube",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "youtube"
   },
   {
     "id": "google_contacts",
     "name": "Contacts",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_contacts"
   },
   {
     "id": "slack",
