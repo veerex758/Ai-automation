@@ -88,7 +88,7 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
       credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;
     }
-    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"].includes(provider)) {
+    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
@@ -129,11 +129,12 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (["woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (["x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (["supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "rss_feed"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "http_request" && step.operationId === "request") return "http";
   return null;
 }
 
-const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "rss_feed"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
@@ -289,7 +290,7 @@ export async function runDurableWorker() {
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
         }
-        const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value)));
+        const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value) && value !== "rss_feed"));
         const credentials = job.execution_mode === "live"
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
