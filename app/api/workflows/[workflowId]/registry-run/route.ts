@@ -114,6 +114,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       const liveNodeAllowlist = new Set((process.env.AIVANTA_LIVE_NODE_ALLOWLIST ?? "")
         .split(",").map((item) => item.trim()).filter(Boolean));
       const unsupportedLiveStep = steps.find((step) =>
+        (step.nodeId === "loop") || // Nested actions are not yet included in credential loading and live allowlist checks.
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
         (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email") &&
           !liveNodeAllowlist.has(step.nodeId + "." + step.operationId))
