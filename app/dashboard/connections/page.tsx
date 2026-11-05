@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -81,6 +81,16 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   airtable: { label: "Airtable", fields: [{ name: "accessToken", label: "Personal access token", type: "password" }] },
   bitbucket: { label: "Bitbucket", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
   netlify: { label: "Netlify", fields: [{ name: "token", label: "Personal access token", type: "password" }] },
+  woocommerce: { label: "WooCommerce", fields: [{ name: "storeUrl", label: "HTTPS store URL", type: "url" }, { name: "consumerKey", label: "Consumer key", type: "password" }, { name: "consumerSecret", label: "Consumer secret", type: "password" }] },
+  paypal: { label: "PayPal", fields: [{ name: "clientId", label: "REST client ID", type: "password" }, { name: "clientSecret", label: "REST client secret", type: "password" }, { name: "environment", label: "Environment (sandbox or live)", type: "text" }] },
+  paddle: { label: "Paddle", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  lemon_squeezy: { label: "Lemon Squeezy", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "storeId", label: "Store ID", type: "text" }] },
+  square: { label: "Square", fields: [{ name: "accessToken", label: "Access token", type: "password" }, { name: "environment", label: "Environment (sandbox or production)", type: "text" }] },
+  razorpay: { label: "Razorpay", fields: [{ name: "keyId", label: "Key ID", type: "text" }, { name: "keySecret", label: "Key secret", type: "password" }] },
+  zoom: { label: "Zoom", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  cal_com: { label: "Cal.com", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  twilio_voice: { label: "Twilio Voice", fields: [{ name: "accountSid", label: "Account SID", type: "text" }, { name: "authToken", label: "Auth token", type: "password" }, { name: "fromPhone", label: "Twilio voice caller ID (E.164)", type: "tel" }] },
+  docusign: { label: "DocuSign", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }, { name: "accountId", label: "Account ID", type: "text" }, { name: "baseUri", label: "API base URI", type: "url" }] },
 };
 
 function WorkspaceIntegrationManager() {
