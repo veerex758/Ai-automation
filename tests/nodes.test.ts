@@ -86,3 +86,30 @@ test("Email action sends through Resend and returns provider message ID", async 
   assert.equal(requestedUrl, "https://api.resend.com/emails");
   assert.equal((result as { messageId: string }).messageId, "email_test_123");
 });
+\ntest("Gemini qualifies a real-estate enquiry with structured output and token usage", async () => {
+  const operation = findOperation("gemini", "qualify_real_estate_lead", "action");
+  assert.ok(operation);
+  let sentBody: unknown;
+  const qualification = {
+    fullName: "Ada Buyer", email: "ada@example.com", phone: null,
+    propertyType: "apartment", location: "Lekki", budget: "₦80m",
+    timeframe: "within_30_days", temperature: "hot",
+    reason: "Specific property type, location, budget and near-term timeline.",
+    missingInformation: ["Phone number"],
+    suggestedReply: "Thanks for your enquiry. May we have your phone number?",
+    summary: "HOT lead: Ada Buyer wants an apartment in Lekki within 30 days; budget ₦80m. Phone number missing.",
+  };
+  const result = await operation.run({
+    credentials: { gemini: { apiKey: "test-only-key" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args) {
+      sentBody = args.body;
+      return { status: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify(qualification) }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 80 } } };
+    } },
+    previousOutputs: {},
+  }, { leadData: "Ada wants an apartment in Lekki, budget ₦80m, needs it within 30 days." });
+  assert.equal((result as { temperature: string }).temperature, "hot");
+  assert.equal((result as { email: string }).email, "ada@example.com");
+  assert.equal((result as { inputTokens: number }).inputTokens, 100);
+  assert.ok((sentBody as { generationConfig: { responseJsonSchema: unknown } }).generationConfig.responseJsonSchema);
+});
