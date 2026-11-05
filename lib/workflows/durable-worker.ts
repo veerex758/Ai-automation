@@ -8,6 +8,7 @@ import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
+import { isProviderLiveEnabled, providerPackLiveId } from "@/lib/workflows/provider-live-gates";
 
 
 type Job = {
@@ -111,6 +112,8 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
 }
 
 function providerForStep(step: RegisteredWorkflowStep): string | null {
+  const providerPackProvider = providerPackLiveId(step);
+  if (providerPackProvider) return providerPackProvider;
   if (step.nodeId === "openai" && step.operationId === "generate_text") return "openai";
   if (step.nodeId === "gemini" && step.operationId === "generate_text") return "gemini";
   if (step.nodeId === "slack" && ["send_message", "post_message"].includes(step.operationId)) return "slack";
@@ -144,8 +147,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   const provider = step.kind === "action" ? providerForStep(step) : null;
   if (!provider) return false;
   if (SERVER_ENABLED_INTEGRATIONS.has(provider) || (step.nodeId === "slack" && step.operationId === "post_message")) {
-    const enabled = new Set((process.env.AIVANTA_LIVE_INTEGRATIONS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-    return enabled.has(provider);
+    return isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS);
   }
   return true;
 }
