@@ -72,7 +72,23 @@ export function getPublicNodeCatalog() {
 
 /** Returns only registered definitions for AI planning and execution validation. */
 export function getExecutableNodeCatalog() {
-  return getPublicNodeCatalog()
+  const catalog = getPublicNodeCatalog()
     .filter((node) => node.executionStatus === "registered")
     .map(({ registryNodeId, ...node }) => ({ ...node, id: registryNodeId ?? node.id }));
+  const represented = new Set(catalog.map((node) => node.id));
+  const internalNodes = nodes
+    .filter((node) => !represented.has(node.id))
+    .map((node) => ({
+      id: node.id,
+      name: node.name,
+      icon: node.icon,
+      category: node.category,
+      group: node.category,
+      version: node.version,
+      auth: node.auth,
+      executionStatus: "registered" as const,
+      triggers: node.triggers.map(publicOperation),
+      actions: node.actions.map(publicOperation),
+    }));
+  return [...catalog, ...internalNodes];
 }
