@@ -344,3 +344,22 @@ test("Error Trigger normalizes runner error events without side effects", async 
   const result = await operation.run(context, { workflowId: "wf_1", stepId: "step_2", error: "Provider timeout", code: "PROVIDER_TIMEOUT", occurredAt });
   assert.deepEqual(result, { workflowId: "wf_1", stepId: "step_2", error: "Provider timeout", code: "PROVIDER_TIMEOUT", occurredAt });
 });
+
+
+test("Loop executes downstream registered actions for every item and exposes item/index references", async () => {
+  const calls: string[] = [];
+  const loop = findOperation("loop", "each", "action");
+  const dedupe = findOperation("deduplicate", "unique", "action");
+  assert.ok(loop && dedupe);
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } } };
+  const result = await executeRegisteredWorkflow({ context, dryRun: false, steps: [
+    { id: "iterate", nodeId: "loop", operationId: "each", kind: "action", input: { items: ["a", "b", "a"], bodySteps: [
+      { id: "unique", nodeId: "deduplicate", operationId: "unique", input: { items: ["{{item}}", "{{item}}"] } },
+    ] } },
+  ] });
+  assert.equal(result.status, "succeeded");
+  const output = result.outputs.iterate as { iterations: number; results: Array<{ item: string; index: number; outputs: Record<string, unknown> }> };
+  assert.equal(output.iterations, 3);
+  assert.deepEqual(output.results.map((x) => [x.item, x.index]), [["a", 0], ["b", 1], ["a", 2]]);
+  assert.deepEqual((output.results[1].outputs.unique as { items: string[] }).items, ["b"]);
+});
