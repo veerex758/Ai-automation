@@ -32,7 +32,8 @@ begin
        'sendgrid','mailgun','postmark','github','gitlab','sentry','vercel','calendly',
        'zendesk','freshdesk','serpapi','openweather',
        'elevenlabs','stability_ai','hugging_face','pinecone',
-       'microsoft_teams','salesforce','pipedrive','zoho_crm','freshsales','close','apollo','intercom'
+       'microsoft_teams','salesforce','pipedrive','zoho_crm','freshsales','close','apollo','intercom',
+       'jira','asana','trello','clickup','monday','todoist','airtable','bitbucket','netlify'
      )
      or p_display_name is null or length(trim(p_display_name)) not between 1 and 120
      or p_encrypted_credentials is null or length(p_encrypted_credentials) not between 32 and 65536
