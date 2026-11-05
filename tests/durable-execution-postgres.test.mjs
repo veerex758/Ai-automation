@@ -400,7 +400,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
   });
 
 
-  await t.test("pending Error Trigger deliveries retry after a subscriber is repaired", async () => {
+  await t.test("pending Error Trigger deliveries retry after a transient queue insert failure", async () => {
     await resetFixture();
     const db = await client();
     try {
@@ -410,7 +410,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
           input: { code: "PLACEHOLDER", message: "Placeholder" } }],
       };
       await db.query(
-        "update public.workflows set definition=$1::jsonb,created_by=null where id=$2",
+        "update public.workflows set definition=$1::jsonb where id=$2",
         [JSON.stringify(subscriberDefinition), ids.workflowOther],
       );
       await db.query(
@@ -422,6 +422,22 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         "select public.record_execution_error_event($1,$2,'step-retry','SUBSCRIBER_SETUP','SUBSCRIBER_SETUP',1) as id",
         [job.id, job.lease_token],
       );
+      await db.query(`
+        create or replace function public.test_fail_error_trigger_job_insert()
+        returns trigger language plpgsql as $$
+        begin
+          if new.payload->>'source' = 'error_trigger' then
+            raise exception 'simulated transient queue insert failure';
+          end if;
+          return new;
+        end;
+        $$;
+      `);
+      await db.query(`
+        create trigger test_fail_error_trigger_job_insert
+        before insert on public.execution_jobs
+        for each row execute function public.test_fail_error_trigger_job_insert()
+      `);
       const first = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
       assert.equal(first.rows[0].count, 1);
       const failed = await db.query(
@@ -431,7 +447,8 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       assert.equal(failed.rows[0].dispatch_status, "pending");
       assert.equal(failed.rows[0].dispatch_attempts, 1);
       assert.equal(failed.rows[0].dispatch_error_code, "ERROR_TRIGGER_DISPATCH_FAILED");
-      await db.query("update public.workflows set created_by=$1 where id=$2", [ids.user, ids.workflowOther]);
+      await db.query("drop trigger test_fail_error_trigger_job_insert on public.execution_jobs");
+      await db.query("drop function public.test_fail_error_trigger_job_insert()");
       const second = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
       assert.equal(second.rows[0].count, 1);
       const queued = await db.query(
@@ -445,7 +462,11 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       assert.equal(succeeded.rows[0].dispatch_status, "dispatched");
       assert.equal(succeeded.rows[0].dispatch_attempts, 2);
-    } finally { db.release(); }
+    } finally {
+      await db.query("drop trigger if exists test_fail_error_trigger_job_insert on public.execution_jobs").catch(() => {});
+      await db.query("drop function if exists public.test_fail_error_trigger_job_insert()").catch(() => {});
+      db.release();
+    }
   });
 
   await t.test("browser roles cannot read queue tables or execute privileged RPCs", async () => {
