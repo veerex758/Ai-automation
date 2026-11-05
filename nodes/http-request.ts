@@ -35,7 +35,7 @@ async function assertPublicHttps(raw: string) {
 
 const node: NodeDefinition = { id: "http_request", name: "HTTP Request", icon: "globe", category: "developer", version: 1, auth: { type: "apiKey", credentialKey: "apiKey" }, triggers: [], actions: [] };
 node.actions.push({ id: "request", name: "Make HTTP request", description: "HTTPS request with workspace credential auth and private-address/redirect protections. DNS preflight is defense-in-depth; use a pinned outbound gateway for high-risk deployments.", inputSchema: z.object({ url: z.string().url().max(2048), method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET"), headers: z.record(z.string(), z.string().max(2000)).default({}), body: z.json().optional(), auth: z.enum(["none", "bearer", "api_key"]).default("none"), credentialHeader: z.string().regex(/^[A-Za-z0-9-]{1,64}$/).default("Authorization") }).strict(), outputSchema: z.object({ status: z.number().int(), body: z.json(), headers: z.record(z.string(), z.string()).optional() }).strict(), async run(ctx: NodeContext, input) {
-  const url = await assertPublicHttps(input.url);
+  if ((input.method === "GET" || input.method === "DELETE") && input.body !== undefined) throw new Error("HTTP_REQUEST_BODY_NOT_ALLOWED");\n  const url = await assertPublicHttps(input.url);
   const headers: Record<string, string> = { Accept: "application/json", ...input.headers };
   if (input.auth !== "none") {
     const key = ctx.credentials.http_request?.apiKey;
@@ -43,7 +43,7 @@ node.actions.push({ id: "request", name: "Make HTTP request", description: "HTTP
     if (input.auth === "bearer") headers[input.credentialHeader] = "Bearer " + key;
     else headers[input.credentialHeader] = key;
   }
-  if (Object.keys(headers).some((name) => /^(host|connection|content-length|transfer-encoding)$/i.test(name))) throw new Error("HTTP_REQUEST_HEADER_BLOCKED");
+  if (Object.entries(headers).some(([name, value]) => /^(host|connection|content-length|transfer-encoding)$/i.test(name) || /[\\r\\n]/.test(name + value))) throw new Error("HTTP_REQUEST_HEADER_BLOCKED");
   const response = await ctx.http.request({ url, method: input.method, headers, body: input.body, timeoutMs: 15000, retries: 0 });
   return { status: response.status, body: response.body };
 } });
