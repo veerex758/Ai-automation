@@ -202,8 +202,9 @@ create or replace function public.dispatch_pending_execution_error_events(p_limi
 returns integer
 language plpgsql security definer set search_path = ''
 as $
-declare event_id uuid;
-declare processed integer := 0;
+declare
+  event_id uuid;
+  processed integer := 0;
 begin
   if p_limit is null or p_limit not between 1 and 100 then
     raise exception using errcode='22023',message='Invalid error dispatch batch size';
