@@ -314,7 +314,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Microsoft Teams",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "oauth2",\n    "registryId": "microsoft_teams"
+    "auth": "oauth2",
+    "registryId": "microsoft_teams"
   },
   {
     "id": "resend",
@@ -361,49 +362,56 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Salesforce",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2",\n    "registryId": "salesforce"
+    "auth": "oauth2",
+    "registryId": "salesforce"
   },
   {
     "id": "pipedrive",
     "name": "Pipedrive",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2",\n    "registryId": "pipedrive"
+    "auth": "oauth2",
+    "registryId": "pipedrive"
   },
   {
     "id": "zoho_crm",
     "name": "Zoho CRM",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2",\n    "registryId": "zoho_crm"
+    "auth": "oauth2",
+    "registryId": "zoho_crm"
   },
   {
     "id": "freshsales",
     "name": "Freshsales",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2",\n    "registryId": "freshsales"
+    "auth": "oauth2",
+    "registryId": "freshsales"
   },
   {
     "id": "close",
     "name": "Close",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "apiKey",\n    "registryId": "close"
+    "auth": "apiKey",
+    "registryId": "close"
   },
   {
     "id": "apollo",
     "name": "Apollo",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "apiKey",\n    "registryId": "apollo"
+    "auth": "apiKey",
+    "registryId": "apollo"
   },
   {
     "id": "intercom",
     "name": "Intercom",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2",\n    "registryId": "intercom"
+    "auth": "oauth2",
+    "registryId": "intercom"
   },
   {
     "id": "notion",
