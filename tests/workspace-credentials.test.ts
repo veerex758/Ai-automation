@@ -152,3 +152,23 @@ test("workspace credential vault accepts productivity and developer provider fie
   assert.throws(() => encryptWorkspaceCredentials({ jira: { siteUrl: "https://acme.atlassian.net", apiToken: "token" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ trello: { apiKey: "key" } } as never, key));
 });
+
+
+test("workspace credential vault accepts payment and support provider fields", () => {
+  const value = {
+    woocommerce: { storeUrl: "https://shop.example.test", consumerKey: "ck-test", consumerSecret: "cs-test" },
+    paypal: { clientId: "paypal-client", clientSecret: "paypal-secret", environment: "sandbox" },
+    paddle: { apiKey: "paddle-key" },
+    lemon_squeezy: { apiKey: "lemon-key", storeId: "12345" },
+    square: { accessToken: "square-token", environment: "sandbox" },
+    razorpay: { keyId: "rzp-test", keySecret: "razor-secret" },
+    zoom: { accessToken: "zoom-token" },
+    cal_com: { apiKey: "cal-key" },
+    twilio_voice: { accountSid: "AC-placeholder-test", authToken: "voice-secret", fromPhone: "+15550001111" },
+    docusign: { accessToken: "docusign-token", accountId: "account-1", baseUri: "https://na4.docusign.net" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-commerce:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-commerce:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ paypal: { clientId: "id", clientSecret: "secret" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ square: { accessToken: "token" } } as never, key));
+});
