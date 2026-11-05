@@ -18,8 +18,9 @@ import { commerceNodes } from "./commerce-finance";
 import { infrastructureNodes } from "./infrastructure";
 import { productivityNodes } from "./productivity";
 import { httpRequestNode } from "./http-request";
+import { scheduleTriggerNode } from "./schedule-trigger";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes, ...communicationMarketingNodes, ...crmMarketingNodes, ...analyticsNodes, ...analyticsExtraNodes, ...messagingDirectoryNodes, ...emailMarketingExtraNodes, ...commerceNodes, ...infrastructureNodes, ...productivityNodes, httpRequestNode];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes, ...communicationMarketingNodes, ...crmMarketingNodes, ...analyticsNodes, ...analyticsExtraNodes, ...messagingDirectoryNodes, ...emailMarketingExtraNodes, ...commerceNodes, ...infrastructureNodes, ...productivityNodes, httpRequestNode, scheduleTriggerNode];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
