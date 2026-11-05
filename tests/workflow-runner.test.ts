@@ -275,7 +275,7 @@ test("workflow runner emits a normalized error event once when an operation fail
   async onWorkflowError(event){events.push(event)},
  });
  assert.equal(result.status,"failed");
- assert.deepEqual(events,[{code:"MATH_INVALID_RESULT",stepId:"bad"}]);
+ assert.deepEqual(events,[{code:"MATH_INVALID_RESULT",message:"MATH_INVALID_RESULT",stepId:"bad"}]);
 });
 
 test("workflow error reporter cannot mask the original failed step",async()=>{
