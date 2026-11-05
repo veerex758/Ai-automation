@@ -5,7 +5,7 @@ const str = (max = 10000) => z.string().min(1).max(max);
 const node = (id: string, name: string, auth: NodeDefinition["auth"]): NodeDefinition => ({ id, name, icon: "brain", category: "ai", version: 1, auth, triggers: [], actions: [] });
 const credential = (ctx: NodeContext, id: string) => {
   const value = ctx.credentials[id]?.apiKey;
-  if (!value || value.length > 8192) throw new Error(id.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!value || value.length > 4096 || /[\\r\\n]/.test(value)) throw new Error(id.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
 };
 const errorCode = (id: string, status: number) => id.toUpperCase() + (status === 401 || status === 403 ? "_AUTH_FAILED" : status === 429 ? "_RATE_LIMITED" : status >= 500 ? "_PROVIDER_UNAVAILABLE" : "_REQUEST_FAILED");
