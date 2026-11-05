@@ -214,10 +214,17 @@ export const providerPack: NodeDefinition[] = [
     output: z.object({ projects: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).strict()).max(500) }).strict(),
     async run(ctx, i) {
       const token = secret(ctx, "sentry", "authToken");
-      const body = await call(ctx, "sentry", { url: "https://sentry.io/api/0/organizations/" + encodeURIComponent(i.organization) + "/projects/",
-        headers: { Authorization: "Bearer " + token } });
-      const raw = body.projects;
+      const response = await ctx.http.request({
+        url: "https://sentry.io/api/0/organizations/" + encodeURIComponent(i.organization) + "/projects/",
+        method: "GET", headers: { Authorization: "Bearer " + token }, timeoutMs: 15000, retries: 0,
+      });
+      if (response.status < 200 || response.status >= 300) {
+        ctx.logger.error("Sentry request failed", { status: response.status });
+        throw new Error(response.status === 429 ? "SENTRY_RATE_LIMITED" : "SENTRY_REQUEST_FAILED");
+      }
+      const raw = response.body;
       const projects = Array.isArray(raw) ? raw.flatMap((p: any) => typeof p?.id === "string" && typeof p?.name === "string" && typeof p?.slug === "string" ? [{ id: p.id, name: p.name, slug: p.slug }] : []) : [];
+      if (!Array.isArray(raw)) throw new Error("SENTRY_INVALID_RESPONSE");
       return { projects };
     },
   }),
