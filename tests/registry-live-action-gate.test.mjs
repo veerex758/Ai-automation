@@ -6,7 +6,7 @@ const routeUrl = new URL("../app/api/workflows/[workflowId]/registry-run/route.t
 
 test("live registry execution requires the server-side per-operation allowlist", async () => {
   const source = await readFile(routeUrl, "utf8");
-  assert.match(source, /unsupportedLiveStep\s*=\s*steps\.find/);
+  assert.match(source, /unsupportedLiveStep\s*=\s*executableSteps\.find/);
   assert.match(source, /step\.nodeId === "manual" && step\.operationId === "start"/);
   assert.match(source, /step\.nodeId === "email" && step\.operationId === "send_email"/);
   assert.match(source, /AIVANTA_LIVE_NODE_ALLOWLIST/);

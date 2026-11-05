@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { validateWorkflowDefinition } from "@/lib/workflows/validation";
@@ -190,7 +191,7 @@ export default function WorkflowBuilderPage() {
               : {
                   provider: catalogAction?.provider || "internal",
                   operation: catalogAction?.operation || "create_task",
-                  ...Object.fromEntries(Object.entries(step.settings || {}).filter(([key, value]) => typeof value === "string" && value.trim())),
+                  ...Object.fromEntries(Object.entries(step.settings || {}).filter(([, value]) => typeof value === "string" && value.trim())),
                 };
           return {
             id: String(step.id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || `step-${index + 1}`,
@@ -204,7 +205,7 @@ export default function WorkflowBuilderPage() {
 
       let workflowId = savedWorkflowId;
       const isNewWorkflow = !workflowId;
-      if (!workflowId) {
+      if (isNewWorkflow) {
         const createResponse = await fetch("/api/workflows", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -297,7 +298,7 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <aside className="builder-sidebar">
-        <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
+        <Link className="builder-brand" href="/"><span className="builder-brand-mark"><Image width={32} height={32} src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
         <div className="builder-workspace"><span>A</span><div><strong>{workspaceName}</strong><small>Free workspace</small></div><b>⌄</b></div>
         <div className="builder-nav-label">WORKSPACE</div>
         <Link className="builder-nav-link" href="/dashboard"><span>▦</span>Dashboard</Link>

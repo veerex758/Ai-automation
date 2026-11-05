@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -222,7 +223,7 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <aside className="workflow-side-nav">
-        <Link className="workflow-side-brand" href="/"><span><img src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span>Aivanta</Link>
+        <Link className="workflow-side-brand" href="/"><span><Image width={32} height={32} src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span>Aivanta</Link>
         <div className="workflow-side-label">WORKSPACE</div>
         <Link className="workflow-side-link" href="/dashboard"><span>▦</span>Dashboard</Link>
         <Link className="workflow-side-link active" href="/dashboard#workflows"><span>↗</span>Workflows</Link>

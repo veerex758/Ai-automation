@@ -2,18 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nodes, findOperation, getPublicNodeCatalog } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
+import { executeRegisteredWorkflow } from "../nodes/workflow-runner";
 
-test("registry includes the original nodes and ten additional registered nodes", () => {
-  assert.equal(nodes.length, 15);
+test("registry includes the original nodes and all requested node definitions", () => {
+  assert.equal(nodes.length, 74);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
-  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time"]) {
+  for (const id of ["google_sheets", "gmail", "notion", "discord", "telegram", "airtable", "hubspot", "trello", "json", "date_time", "error_trigger", "sub_workflow", "rate_limiter", "deduplicate", "sort", "split_batches", "crypto_hash", "template", "csv", "excel", "pdf_generate", "pdf_extract", "xml", "markdown_html", "image_resize", "cohere", "together_ai", "replicate", "deepl", "assemblyai", "openai_whisper", "weaviate", "messagebird", "vonage_sms", "brevo", "convertkit", "klaviyo", "lemlist", "customer_io", "mixpanel", "posthog", "segment", "datadog", "google_analytics", "tally", "signal", "matrix", "mattermost", "beehiiv", "activecampaign", "bigcommerce", "gumroad", "wise", "coinbase", "plaid", "algolia", "cloudflare", "neon", "planetscale", "elasticsearch", "docker_ssh", "coda", "confluence", "obsidian", "evernote", "basecamp"]) {
     assert.ok(nodes.some((node) => node.id === id), "missing node: " + id);
-    assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
+    if (id !== "error_trigger") assert.ok(nodes.find((node) => node.id === id)!.actions.length > 0, "missing action: " + id);
   }
+  assert.ok(findOperation("error_trigger", "catch_error", "trigger"));
   assert.ok(findOperation("google_sheets", "append_rows", "action"));
   assert.ok(findOperation("gmail", "send_email", "action"));
   assert.ok(findOperation("notion", "create_page", "action"));
@@ -24,6 +26,40 @@ test("registry includes the original nodes and ten additional registered nodes",
   assert.ok(findOperation("trello", "create_card", "action"));
   assert.ok(findOperation("json", "parse", "action"));
   assert.ok(findOperation("date_time", "current_time", "action"));
+  assert.ok(findOperation("messagebird", "send_sms", "action"));
+  assert.ok(findOperation("vonage_sms", "send_sms", "action"));
+  assert.ok(findOperation("brevo", "send_transactional_email", "action"));
+  assert.ok(findOperation("convertkit", "add_subscriber_to_form", "action"));
+  assert.ok(findOperation("klaviyo", "create_profile", "action"));
+  assert.ok(findOperation("lemlist", "create_lead", "action"));
+  assert.ok(findOperation("customer_io", "identify_customer", "action"));
+  assert.ok(findOperation("mixpanel", "track_event", "action"));
+  assert.ok(findOperation("posthog", "capture_event", "action"));
+  assert.ok(findOperation("segment", "track_event", "action"));
+  assert.ok(findOperation("datadog", "submit_log", "action"));
+  assert.ok(findOperation("google_analytics", "send_event", "action"));
+  assert.ok(findOperation("tally", "get_form", "action"));
+  assert.ok(findOperation("signal", "send_message", "action"));
+  assert.ok(findOperation("matrix", "send_room_message", "action"));
+  assert.ok(findOperation("mattermost", "create_post", "action"));
+  assert.ok(findOperation("beehiiv", "create_subscription", "action"));
+  assert.ok(findOperation("activecampaign", "sync_contact", "action"));
+  assert.ok(findOperation("bigcommerce", "create_product", "action"));
+  assert.ok(findOperation("gumroad", "verify_sale", "action"));
+  assert.ok(findOperation("wise", "list_profiles", "action"));
+  assert.ok(findOperation("coinbase", "list_accounts", "action"));
+  assert.ok(findOperation("plaid", "get_accounts", "action"));
+  assert.ok(findOperation("algolia", "search_index", "action"));
+  assert.ok(findOperation("cloudflare", "list_zones", "action"));
+  assert.ok(findOperation("neon", "list_projects", "action"));
+  assert.ok(findOperation("planetscale", "list_databases", "action"));
+  assert.ok(findOperation("elasticsearch", "search", "action"));
+  assert.ok(findOperation("docker_ssh", "execute_command", "action"));
+  assert.ok(findOperation("coda", "list_docs", "action"));
+  assert.ok(findOperation("confluence", "search_pages", "action"));
+  assert.ok(findOperation("obsidian", "read_note", "action"));
+  assert.ok(findOperation("evernote", "search_notes", "action"));
+  assert.ok(findOperation("basecamp", "list_projects", "action"));
 });
 
 test("manual trigger accepts the legacy builder's manual start event", async () => {
@@ -179,9 +215,9 @@ test("Airtable, HubSpot and Trello actions create records, contacts and cards", 
 });
 
 
-test("public node catalog exposes all ten new operations and JSON schemas to the authenticated builder API", () => {
+test("public node catalog exposes the complete registry and JSON schemas to the authenticated builder API", () => {
   const catalog = getPublicNodeCatalog();
-  assert.equal(catalog.length, 15);
+  assert.equal(catalog.length, 74);
   const expected = [
     ["google_sheets", "append_rows"],
     ["gmail", "send_email"],
@@ -202,4 +238,202 @@ test("public node catalog exposes all ten new operations and JSON schemas to the
     assert.ok(operation.inputSchema && typeof operation.inputSchema === "object");
     assert.ok(operation.outputSchema && typeof operation.outputSchema === "object");
   }
+});
+
+
+test("high-risk or tenant-hosted connectors fail closed until their security adapters exist", async () => {
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("network must not be reached"); } },
+    previousOutputs: {},
+  };
+  const cases: Array<[string, string, unknown, RegExp]> = [
+    ["signal", "send_message", { recipient: "+2348012345678", message: "hello" }, /SIGNAL_ADAPTER_NOT_CONFIGURED/],
+    ["matrix", "send_room_message", { roomId: "!room:example.org", message: "hello" }, /MATRIX_ADAPTER_NOT_CONFIGURED/],
+    ["mattermost", "create_post", { channelId: "channel_1", message: "hello" }, /MATTERMOST_ADAPTER_NOT_CONFIGURED/],
+    ["activecampaign", "sync_contact", { email: "person@example.com" }, /ACTIVECAMPAIGN_ADAPTER_BLOCKED/],
+    ["elasticsearch", "search", { index: "items", query: { match_all: {} } }, /ELASTICSEARCH_ADAPTER_BLOCKED/],
+    ["docker_ssh", "execute_command", { command: "whoami" }, /DOCKER_SSH_ADAPTER_BLOCKED/],
+    ["confluence", "search_pages", { query: "status" }, /CONFLUENCE_ADAPTER_NOT_ENABLED/],
+    ["obsidian", "read_note", { path: "notes/todo.md" }, /OBSIDIAN_ADAPTER_NOT_ENABLED/],
+    ["weaviate", "query", { endpoint: "https://cluster.example.com", query: "{ Get { Article { title } } }" }, /WEAVIATE_ADAPTER_BLOCKED/],
+  ];
+  for (const [nodeId, operationId, input, expected] of cases) {
+    const operation = findOperation(nodeId, operationId, "action");
+    assert.ok(operation, "missing " + nodeId + "." + operationId);
+    await assert.rejects(() => operation.run(context, input as never), expected);
+  }
+});
+
+test("new provider actions use credential vault values and validate successful provider responses", async () => {
+  const messagebird = findOperation("messagebird", "send_sms", "action");
+  const cloudflare = findOperation("cloudflare", "list_zones", "action");
+  const coda = findOperation("coda", "list_docs", "action");
+  assert.ok(messagebird && cloudflare && coda);
+  const calls: Array<{ url: string; headers?: Record<string, string> }> = [];
+  const context = {
+    credentials: {
+      messagebird: { accessKey: "test-access-key" },
+      cloudflare: { apiToken: "test-cloudflare-token" },
+      coda: { apiToken: "test-coda-token" },
+    },
+    logger: { info() {}, error() {} },
+    http: { async request(args: { url: string; headers?: Record<string, string> }) {
+      calls.push(args);
+      if (args.url.includes("messagebird")) return { status: 200, body: { id: "msg_123", recipients: { items: [{ status: "sent" }] } } };
+      if (args.url.includes("cloudflare")) return { status: 200, body: { success: true, result: [{ id: "zone_1", name: "example.com", status: "active" }] } };
+      return { status: 200, body: { items: [{ id: "doc_1", name: "Runbook" }] } };
+    } },
+    previousOutputs: {},
+  };
+  const sms = await messagebird.run(context, { originator: "Aivanta", recipient: "+2348012345678", body: "Test" });
+  const zones = await cloudflare.run(context, {});
+  const docs = await coda.run(context, { limit: 10 });
+  assert.equal((sms as { messageId: string }).messageId, "msg_123");
+  assert.equal((zones as { zones: unknown[] }).zones.length, 1);
+  assert.equal((docs as { docs: unknown[] }).docs.length, 1);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].headers?.Authorization, "AccessKey test-access-key");
+  assert.equal(calls[1].headers?.Authorization, "Bearer test-cloudflare-token");
+  assert.equal(calls[2].headers?.Authorization, "Bearer test-coda-token");
+});
+
+
+test("Vonage SMS sends form-encoded credentials without JSON wrapping", async () => {
+  const vonage = findOperation("vonage_sms", "send_sms", "action");
+  assert.ok(vonage);
+  const requests: Array<{ body?: unknown; headers?: Record<string, string> }> = [];
+  const context = {
+    credentials: { vonage_sms: { apiKey: "test-key", apiSecret: "test-secret" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args: { body?: unknown; headers?: Record<string, string> }) {
+      requests.push(args);
+      return { status: 200, body: { messages: [{ "message-id": "sms_1", status: "0" }] } };
+    } },
+    previousOutputs: {},
+  };
+  const result = await vonage.run(context, { from: "Aivanta", to: "+2348012345678", text: "Hello" });
+  assert.equal((result as { messageUuid: string }).messageUuid, "sms_1");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].headers?.["Content-Type"], "application/x-www-form-urlencoded");
+  assert.equal(typeof requests[0].body, "string");
+  const form = new URLSearchParams(requests[0].body as string);
+  assert.equal(form.get("api_key"), "test-key");
+  assert.equal(form.get("api_secret"), "test-secret");
+  assert.equal(form.get("text"), "Hello");
+});
+
+
+test("utility nodes perform deterministic bounded transformations", async () => {
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } }, previousOutputs: {} };
+  const dedupe = findOperation("deduplicate", "unique", "action");
+  const sort = findOperation("sort", "sort_array", "action");
+  const split = findOperation("split_batches", "batch", "action");
+  const hash = findOperation("crypto_hash", "sha256", "action");
+  const template = findOperation("template", "render", "action");
+  assert.ok(dedupe && sort && split && hash && template);
+  const unique = await dedupe.run(context, { items: ["a", "b", "a", "c", "b"] }) as { items: string[]; removed: number };
+  assert.deepEqual(unique.items, ["a", "b", "c"]);
+  assert.equal(unique.removed, 2);
+  const sorted = await sort.run(context, { items: [{ rank: 3 }, { rank: 1 }, { rank: 2 }], key: "rank" }) as { items: Array<{ rank: number }> };
+  assert.deepEqual(sorted.items.map(x => x.rank), [1, 2, 3]);
+  const batches = await split.run(context, { items: [1, 2, 3, 4, 5], batchSize: 2 }) as { batches: number[][]; batchCount: number };
+  assert.deepEqual(batches.batches, [[1, 2], [3, 4], [5]]);
+  assert.equal(batches.batchCount, 3);
+  const digest = await hash.run(context, { value: "hello", encoding: "hex" }) as { digest: string };
+  assert.equal(digest.digest, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+  const rendered = await template.run(context, { template: "Hello {{user.name}}", data: { user: { name: "<script>" } } }) as { html: string };
+  assert.equal(rendered.html, "Hello &lt;script&gt;");
+});
+
+test("CSV and XML document helpers reject malformed or unsafe input", async () => {
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } }, previousOutputs: {} };
+  const csv = findOperation("csv", "parse", "action");
+  const xml = findOperation("xml", "parse", "action");
+  assert.ok(csv && xml);
+  const parsed = await csv.run(context, { text: 'name,note\n"Ada","hello, world"\n' }) as { rows: string[][]; rowCount: number };
+  assert.deepEqual(parsed.rows, [["name", "note"], ["Ada", "hello, world"]]);
+  assert.equal(parsed.rowCount, 2);
+  await assert.rejects(() => csv.run(context, { text: '"unfinished' }), /CSV_UNCLOSED_QUOTE/);
+  await assert.rejects(() => xml.run(context, { xml: '<!DOCTYPE x [<!ENTITY a "boom">]><x>&a;</x>' }), /XML_DTD_FORBIDDEN/);
+  const root = await xml.run(context, { xml: "<root><item>safe</item></root>" }) as { root: string; text: string };
+  assert.equal(root.root, "root");
+  assert.equal(root.text, "safe");
+});
+
+
+test("Error Trigger normalizes runner error events without side effects", async () => {
+  const operation = findOperation("error_trigger", "catch_error", "trigger");
+  assert.ok(operation);
+  const occurredAt = new Date().toISOString();
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } }, previousOutputs: {} };
+  const result = await operation.run(context, { workflowId: "wf_1", stepId: "step_2", error: "Provider timeout", code: "PROVIDER_TIMEOUT", occurredAt });
+  assert.deepEqual(result, { workflowId: "wf_1", stepId: "step_2", error: "Provider timeout", code: "PROVIDER_TIMEOUT", occurredAt });
+});
+
+
+test("Loop executes downstream registered actions for every item and exposes item/index references", async () => {
+  const loop = findOperation("loop", "each", "action");
+  const dedupe = findOperation("deduplicate", "unique", "action");
+  assert.ok(loop && dedupe);
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } } };
+  const result = await executeRegisteredWorkflow({ context, dryRun: false, steps: [
+    { id: "iterate", nodeId: "loop", operationId: "each", kind: "action", input: { items: ["a", "b", "a"], bodySteps: [
+      { id: "unique", nodeId: "deduplicate", operationId: "unique", input: { items: ["{{item}}", "{{item}}"] } },
+    ] } },
+  ] });
+  assert.equal(result.status, "succeeded", JSON.stringify(result));
+  const output = result.outputs.iterate as { iterations: number; results: Array<{ item: string; index: number; outputs: Record<string, unknown> }> };
+  assert.equal(output.iterations, 3);
+  assert.deepEqual(output.results.map((x) => [x.item, x.index]), [["a", 0], ["b", 1], ["a", 2]]);
+  assert.deepEqual((output.results[1].outputs.unique as { items: string[] }).items, ["b"]);
+});
+
+
+test("AI provider adapters parse native response shapes and return durable job IDs", async () => {
+  const cohere = findOperation("cohere", "generate", "action");
+  const together = findOperation("together_ai", "generate", "action");
+  const replicate = findOperation("replicate", "run", "action");
+  const deepl = findOperation("deepl", "translate", "action");
+  const assembly = findOperation("assemblyai", "transcribe", "action");
+  const replicatePoll = findOperation("replicate", "get_prediction", "action");
+  const assemblyPoll = findOperation("assemblyai", "get_transcript", "action");
+  assert.ok(cohere && together && replicate && deepl && assembly && replicatePoll && assemblyPoll);
+  const context = { credentials: { cohere: { apiKey: "c" }, together_ai: { apiKey: "t" }, replicate: { apiKey: "r" }, deepl: { apiKey: "d" }, assemblyai: { apiKey: "a" } }, logger: { info() {}, error() {} }, previousOutputs: {}, http: { async request(args: { url: string }) {
+    if (args.url.includes("cohere")) return { status: 200, body: { message: { content: [{ type: "text", text: "cohere ok" }] } } };
+    if (args.url.includes("together")) return { status: 200, body: { choices: [{ message: { content: "together ok" } }] } };
+    if (args.url.includes("replicate")) return { status: 201, body: { id: "pred_1", status: "starting", urls: {} } };
+    if (args.url.includes("deepl")) return { status: 200, body: { translations: [{ text: "bonjour", detected_source_language: "EN" }] } };
+    return { status: 200, body: { id: "transcript_1", status: "queued" } };
+  } } };
+  assert.equal((await cohere.run(context, { prompt: "hello" }) as { text: string }).text, "cohere ok");
+  assert.equal((await together.run(context, { prompt: "hello" }) as { text: string }).text, "together ok");
+  assert.equal((await replicate.run(context, { version: "version_1", input: {} }) as { predictionId: string }).predictionId, "pred_1");
+  assert.equal((await deepl.run(context, { text: "hello", targetLang: "FR" }) as { text: string }).text, "bonjour");
+  assert.equal((await assembly.run(context, { audioUrl: "https://example.com/audio.mp3" }) as { transcriptId: string }).transcriptId, "transcript_1");
+  assert.equal((await replicatePoll.run(context, { predictionId: "pred_1" }) as { status: string }).status, "starting");
+  assert.equal((await assemblyPoll.run(context, { transcriptId: "transcript_1" }) as { status: string }).status, "queued");
+  await assert.rejects(() => cohere.run({ ...context, credentials: {} }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
+  await assert.rejects(() => cohere.run({ ...context, credentials: { cohere: { apiKey: "bad" + String.fromCharCode(13, 10) + "header" } } }, { prompt: "hello" }), /COHERE_CONNECTION_REQUIRED/);
+  const rateLimited = { ...context, http: { async request() { return { status: 429, body: { message: "rate limited" } }; } } };
+  await assert.rejects(() => cohere.run(rateLimited, { prompt: "hello" }), /COHERE_RATE_LIMITED/);
+  const unavailable = { ...context, http: { async request() { return { status: 503, body: {} }; } } };
+  await assert.rejects(() => cohere.run(unavailable, { prompt: "hello" }), /COHERE_PROVIDER_UNAVAILABLE/);
+  const malformed = { ...context, http: { async request() { return { status: 200, body: [] }; } } };
+  await assert.rejects(() => cohere.run(malformed, { prompt: "hello" }), /COHERE_INVALID_RESPONSE/);
+});
+
+
+test("HTTP Request uses workspace credentials and blocks private targets before transport", async () => {
+  const operation = findOperation("http_request", "request", "action");
+  assert.ok(operation);
+  const calls: Array<{ url: string; method: string; headers?: Record<string, string> }> = [];
+  const context = { credentials: { http_request: { apiKey: "workspace-secret" } }, logger: { info() {}, error() {} }, previousOutputs: {}, http: { async request(args: { url: string; method: string; headers?: Record<string, string> }) { calls.push(args); return { status: 200, body: { ok: true } }; } } };
+  const result = await operation.run(context, operation.inputSchema.parse({ url: "https://8.8.8.8/v1/test", method: "POST", auth: "bearer", body: { value: 1 } })) as { status: number; body: { ok: boolean } };
+  assert.equal(result.status, 200);
+  assert.equal(result.body.ok, true);
+  assert.equal(calls[0].headers?.Authorization, "Bearer workspace-secret");
+  await assert.rejects(() => operation.run(context, operation.inputSchema.parse({ url: "https://127.0.0.1/admin", method: "GET", auth: "none" })), /HTTP_REQUEST_SSRF_BLOCKED/);
+  await assert.rejects(() => operation.run(context, operation.inputSchema.parse({ url: "http://8.8.8.8", method: "GET", auth: "none" })), /HTTP_REQUEST_SSRF_BLOCKED/);
+  assert.equal(calls.length, 1);
 });

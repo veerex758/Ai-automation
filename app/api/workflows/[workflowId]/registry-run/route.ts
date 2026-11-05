@@ -8,8 +8,25 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
+function collectExecutableSteps(steps: RegisteredWorkflowStep[]): RegisteredWorkflowStep[] {
+  const collected: RegisteredWorkflowStep[] = [];
+  for (const step of steps) {
+    collected.push(step);
+    if (step.nodeId !== "iterate" || !isRecord(step.input) || !Array.isArray(step.input.bodySteps)) continue;
+    for (const nested of step.input.bodySteps) {
+      if (!isRecord(nested) || typeof nested.id !== "string" || typeof nested.nodeId !== "string" ||
+        typeof nested.operationId !== "string" || !("input" in nested)) {
+        throw new Error("LOOP_BODY_INVALID");
+      }
+      if (nested.nodeId === "iterate") throw new Error("LOOP_BODY_INVALID_OR_NESTED_LOOP");
+      collected.push({ id: nested.id, nodeId: nested.nodeId, operationId: nested.operationId, kind: "action", input: nested.input });
+    }
+  }
+  return collected;
+}
+
 async function serverContext(workspaceId: string, steps: RegisteredWorkflowStep[]): Promise<Omit<NodeContext, "previousOutputs">> {
-  const credentials = await loadWorkspaceNodeCredentials(workspaceId, steps);
+  const credentials = await loadWorkspaceNodeCredentials(workspaceId, collectExecutableSteps(steps));
   if (!credentials.openai && process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
   if (!credentials.slack && process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
   if (!credentials.resend && process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
@@ -29,12 +46,36 @@ async function serverContext(workspaceId: string, steps: RegisteredWorkflowStep[
           const response = await fetch(args.url, {
             method: args.method,
             headers: args.headers,
-            body: args.body === undefined ? undefined : JSON.stringify(args.body),
+            body: args.body === undefined ? undefined : typeof args.body === "string" ? args.body : JSON.stringify(args.body),
             signal: controller.signal,
             redirect: "error",
           });
+          const maxResponseBytes = 1_048_576;
+          const declaredLength = Number(response.headers.get("content-length") ?? 0);
+          if (declaredLength > maxResponseBytes) throw new Error("NODE_HTTP_RESPONSE_TOO_LARGE");
+          let raw = "";
+          if (response.body) {
+            const reader = response.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let total = 0;
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                total += value.byteLength;
+                if (total > maxResponseBytes) {
+                  await reader.cancel();
+                  throw new Error("NODE_HTTP_RESPONSE_TOO_LARGE");
+                }
+                chunks.push(value);
+              }
+            } finally { reader.releaseLock(); }
+            const bytes = new Uint8Array(total);
+            let offset = 0;
+            for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+            raw = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+          }
           let body: unknown = null;
-          const raw = await response.text();
           try { body = raw ? JSON.parse(raw) : raw; } catch { body = raw; }
           return { status: response.status, body };
         } finally { clearTimeout(timer); }
@@ -89,7 +130,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       // node.operation entry in the server-side allowlist.
       const liveNodeAllowlist = new Set((process.env.AIVANTA_LIVE_NODE_ALLOWLIST ?? "")
         .split(",").map((item) => item.trim()).filter(Boolean));
-      const unsupportedLiveStep = steps.find((step) =>
+      const executableSteps = collectExecutableSteps(steps);
+      const unsupportedLiveStep = executableSteps.find((step) =>
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
         (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email") &&
           !liveNodeAllowlist.has(step.nodeId + "." + step.operationId))
@@ -98,7 +140,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         return NextResponse.json({ error: "This operation is not enabled for live execution. It remains available in dry-run." }, { status: 403 });
       }
       const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-      for (const step of steps) {
+      for (const step of collectExecutableSteps(steps)) {
         if (step.nodeId === "email" && step.operationId === "send_email") {
           const rawTo = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
           if (!rawTo || rawTo.includes("{{")) return NextResponse.json({ error: "Live email recipients must be literal addresses on the server-configured allowlist." }, { status: 403 });

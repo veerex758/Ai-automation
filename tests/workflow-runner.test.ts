@@ -110,3 +110,72 @@ test("registry dry-run simulates Slack and Email without calling their providers
   assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated"]);
   assert.equal(calls, 0);
 });
+
+test("Loop executes its registered downstream actions once per item with isolated outputs", async () => {
+  const prompts: string[] = [];
+  const result = await executeRegisteredWorkflow({
+    steps: [{
+      id: "batch",
+      nodeId: "loop",
+      operationId: "each",
+      kind: "action",
+      input: {
+        items: ["alpha", "beta"],
+        bodySteps: [{ id: "draft", nodeId: "openai", operationId: "generate_text", input: { prompt: "Summarize {{item}}" } }],
+      },
+    }],
+    context: {
+      ...context,
+      credentials: { openai: { apiKey: "test-only-key" } },
+      http: { async request(args) {
+        const body = args.body as { input?: string };
+        const prompt = body.input ?? "";
+        prompts.push(prompt);
+        return { status: 200, body: { output_text: "result:" + prompt, model: "test-model" } };
+      } },
+    },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded", JSON.stringify(result));
+  assert.deepEqual(prompts, ["Summarize alpha", "Summarize beta"]);
+  const loopOutput = result.outputs.batch as { iterations: number; results: Array<{ index: number; outputs: Record<string, unknown> }> };
+  assert.equal(loopOutput.iterations, 2);
+  assert.equal(loopOutput.results[0].index, 0);
+  assert.equal(loopOutput.results[1].index, 1);
+  assert.ok(loopOutput.results[0].outputs.draft);
+  assert.ok(loopOutput.results[1].outputs.draft);
+});
+
+test("Loop dry-run validates nested registered actions without executing them", async () => {
+  let calls = 0;
+  const result = await executeRegisteredWorkflow({
+    steps: [{
+      id: "batch",
+      nodeId: "loop",
+      operationId: "each",
+      kind: "action",
+      input: { items: ["alpha"], bodySteps: [{ id: "draft", nodeId: "openai", operationId: "generate_text", input: { prompt: "Summarize {{item}}" } }] },
+    }],
+    context: { ...context, http: { async request() { calls++; return { status: 200, body: {} }; } } },
+    dryRun: true,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.steps[0].status, "simulated");
+  assert.equal(calls, 0);
+});
+
+test("Loop rejects unknown nested operations during dry-run validation", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [{
+      id: "batch",
+      nodeId: "loop",
+      operationId: "each",
+      kind: "action",
+      input: { items: ["alpha"], bodySteps: [{ id: "bad", nodeId: "missing", operationId: "unknown", input: {} }] },
+    }],
+    context,
+    dryRun: true,
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.steps[0].error, "LOOP_BODY_OPERATION_NOT_FOUND");
+});

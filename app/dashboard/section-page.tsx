@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -39,7 +40,7 @@ export default async function DashboardSectionPage({section}:{section:Section}) 
  }
  return <main className="app-shell">
   <aside className="sidebar">
-   <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span><span>Aivanta</span></Link>
+   <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><Image width={32} height={32} className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span><span>Aivanta</span></Link>
    <div className="workspace-switch"><span className="workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></div>
    <div className="sidebar-label">WORKSPACE</div><nav className="side-nav" aria-label="Workspace navigation">{navigation.map(([label,href,icon])=><Link key={label} href={href} className={(label==="Integrations"&&section==="integrations")||(label==="Templates"&&section==="templates")||(label==="Analytics"&&section==="analytics")||(label==="Activity logs"&&section==="activity")||(label==="Billing"&&section==="billing")||(label==="Settings"&&section==="settings")?"side-link selected":"side-link"}><span className="side-icon">{icon}</span>{label}</Link>)}</nav>
    <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✺</span><strong>Build with confidence</strong><p>Review every step before connecting live services.</p><Link href="/dashboard/builder">Open builder ↗</Link></div></div>

@@ -95,7 +95,7 @@ test("preserves the safe timeout error for aborted provider requests", async () 
   await assert.rejects(
     sendResendEmail(message, {
       apiKey: "re_test", from: "Aivanta <hello@example.com>",
-      fetchImpl: async (_url, init) => {
+      fetchImpl: async () => {
         const error = new Error("aborted");
         error.name = "AbortError";
         throw error;
