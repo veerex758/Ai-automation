@@ -304,10 +304,17 @@ export async function runDurableWorker() {
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
         const workflowStepIds = new Set(steps.map((step) => step.id));
+        const resumableIterationIds = new Set<string>();
+        for (const step of steps) {
+          if (!step.loop) continue;
+          for (let index = 1; index <= Math.min(100, step.loop.maxIterations ?? 100); index++) {
+            resumableIterationIds.add(step.id + "__loop_" + index);
+          }
+        }
         const initialOutputs: Record<string, unknown> = {};
         const completedStepIds: string[] = [];
         for (const checkpoint of savedCheckpoints as Array<{ step_id: string; output: unknown }>) {
-          if (workflowStepIds.has(checkpoint.step_id)) {
+          if (workflowStepIds.has(checkpoint.step_id) || resumableIterationIds.has(checkpoint.step_id)) {
             initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
               ? checkpoint.output.__aivantaArray : checkpoint.output;
             completedStepIds.push(checkpoint.step_id);
