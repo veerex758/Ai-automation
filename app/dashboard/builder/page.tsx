@@ -160,7 +160,6 @@ export default function WorkflowBuilderPage() {
       };
 
       let workflowId = savedWorkflowId;
-      const isNewWorkflow = !workflowId;
       if (!workflowId) {
         const createResponse = await fetch("/api/workflows", {
           method: "POST",
@@ -181,7 +180,6 @@ export default function WorkflowBuilderPage() {
         setSavedWorkflowId(workflowId);
       }
 
-      if (!isNewWorkflow) {
       const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -192,8 +190,7 @@ export default function WorkflowBuilderPage() {
       if (!saveResponse.ok || !saved.success) {
         throw new Error(saved.error || "The workflow record was created, but its steps could not be saved. Please retry after checking the workflow list.");
       }
-      }
-
+      
       try {
         const raw = window.localStorage.getItem("aivanta-workflows");
         const existing = raw ? JSON.parse(raw) as Array<{ id: string | number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
