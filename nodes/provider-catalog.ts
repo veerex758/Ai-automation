@@ -739,7 +739,7 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "RSS Feed",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey",
+    "auth": "none",
     "registryId": "rss_feed"
   },
   {
