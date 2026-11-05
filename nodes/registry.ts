@@ -17,8 +17,9 @@ import { emailMarketingExtraNodes } from "./email-marketing-extra";
 import { commerceNodes } from "./commerce-finance";
 import { infrastructureNodes } from "./infrastructure";
 import { productivityNodes } from "./productivity";
+import { httpRequestNode } from "./http-request";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes, ...communicationMarketingNodes, ...crmMarketingNodes, ...analyticsNodes, ...analyticsExtraNodes, ...messagingDirectoryNodes, ...emailMarketingExtraNodes, ...commerceNodes, ...infrastructureNodes, ...productivityNodes];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, ...additionalNodes, ...utilityLogicNodes, ...fileDocumentNodes, ...aiProviderNodes, ...communicationMarketingNodes, ...crmMarketingNodes, ...analyticsNodes, ...analyticsExtraNodes, ...messagingDirectoryNodes, ...emailMarketingExtraNodes, ...commerceNodes, ...infrastructureNodes, ...productivityNodes, httpRequestNode];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
