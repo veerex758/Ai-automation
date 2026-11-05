@@ -383,7 +383,7 @@ test("Loop executes downstream registered actions for every item and exposes ite
       { id: "unique", nodeId: "deduplicate", operationId: "unique", input: { items: ["{{item}}", "{{item}}"] } },
     ] } },
   ] });
-  assert.equal(result.status, "succeeded");
+  assert.equal(result.status, "succeeded", JSON.stringify(result));
   const output = result.outputs.iterate as { iterations: number; results: Array<{ item: string; index: number; outputs: Record<string, unknown> }> };
   assert.equal(output.iterations, 3);
   assert.deepEqual(output.results.map((x) => [x.item, x.index]), [["a", 0], ["b", 1], ["a", 2]]);
@@ -424,11 +424,11 @@ test("HTTP Request uses workspace credentials and blocks private targets before 
   assert.ok(operation);
   const calls: Array<{ url: string; method: string; headers?: Record<string, string> }> = [];
   const context = { credentials: { http_request: { apiKey: "workspace-secret" } }, logger: { info() {}, error() {} }, previousOutputs: {}, http: { async request(args: { url: string; method: string; headers?: Record<string, string> }) { calls.push(args); return { status: 200, body: { ok: true } }; } } };
-  const result = await operation.run(context, { url: "https://8.8.8.8/v1/test", method: "POST", auth: "bearer", body: { value: 1 } }) as { status: number; body: { ok: boolean } };
+  const result = await operation.run(context, operation.inputSchema.parse({ url: "https://8.8.8.8/v1/test", method: "POST", auth: "bearer", body: { value: 1 } })) as { status: number; body: { ok: boolean } };
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
   assert.equal(calls[0].headers?.Authorization, "Bearer workspace-secret");
-  await assert.rejects(() => operation.run(context, { url: "https://127.0.0.1/admin", method: "GET", auth: "none" }), /HTTP_REQUEST_SSRF_BLOCKED/);
-  await assert.rejects(() => operation.run(context, { url: "http://8.8.8.8", method: "GET", auth: "none" }), /HTTP_REQUEST_SSRF_BLOCKED/);
+  await assert.rejects(() => operation.run(context, operation.inputSchema.parse({ url: "https://127.0.0.1/admin", method: "GET", auth: "none" })), /HTTP_REQUEST_SSRF_BLOCKED/);
+  await assert.rejects(() => operation.run(context, operation.inputSchema.parse({ url: "http://8.8.8.8", method: "GET", auth: "none" })), /HTTP_REQUEST_SSRF_BLOCKED/);
   assert.equal(calls.length, 1);
 });
