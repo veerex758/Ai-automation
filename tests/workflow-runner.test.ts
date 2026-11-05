@@ -78,7 +78,7 @@ test("OpenAI output can feed Slack and Email in one registry workflow", async ()
       logger: { info() {}, error() {} },
       http: { async request(args) {
         requests.push({ url: args.url, body: args.body });
-        if (args.url === "https://api.openai.com/v1/responses") return { status: 200, body: { output_text: "Your appointment is tomorrow at 10 AM.", model: "gpt-4o-mini", usage: { input_tokens: 10, output_tokens: 8 } } };
+        if (args.url === "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent") return { status: 200, body: { candidates: [{ content: { parts: [{ text: "Your appointment is tomorrow at 10 AM." }] } }], modelVersion: "gemini-2.5-flash", usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 8 } } };
         if (args.url === "https://api.resend.com/emails") return { status: 200, body: { id: "email_test_123" } };
         return { status: 200, body: "ok" };
       } },
