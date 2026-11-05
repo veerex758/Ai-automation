@@ -299,6 +299,31 @@ test("new provider actions use credential vault values and validate successful p
 });
 
 
+test("Vonage SMS sends form-encoded credentials without JSON wrapping", async () => {
+  const vonage = findOperation("vonage_sms", "send_sms", "action");
+  assert.ok(vonage);
+  const requests: Array<{ body?: unknown; headers?: Record<string, string> }> = [];
+  const context = {
+    credentials: { vonage_sms: { apiKey: "test-key", apiSecret: "test-secret" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args: { body?: unknown; headers?: Record<string, string> }) {
+      requests.push(args);
+      return { status: 200, body: { messages: [{ "message-id": "sms_1", status: "0" }] } };
+    } },
+    previousOutputs: {},
+  };
+  const result = await vonage.run(context, { from: "Aivanta", to: "+2348012345678", text: "Hello" });
+  assert.equal((result as { messageUuid: string }).messageUuid, "sms_1");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].headers?.["Content-Type"], "application/x-www-form-urlencoded");
+  assert.equal(typeof requests[0].body, "string");
+  const form = new URLSearchParams(requests[0].body as string);
+  assert.equal(form.get("api_key"), "test-key");
+  assert.equal(form.get("api_secret"), "test-secret");
+  assert.equal(form.get("text"), "Hello");
+});
+
+
 test("utility nodes perform deterministic bounded transformations", async () => {
   const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected network"); } }, previousOutputs: {} };
   const dedupe = findOperation("deduplicate", "unique", "action");
