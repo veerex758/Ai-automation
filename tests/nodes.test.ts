@@ -5,7 +5,7 @@ import { executeRegisteredOperation } from "../nodes/runner";
 import { executeRegisteredWorkflow } from "../nodes/workflow-runner";
 
 test("registry includes the original nodes and all requested node definitions", () => {
-  assert.equal(nodes.length, 73);
+  assert.equal(nodes.length, 74);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("openai", "generate_text", "action"));
@@ -217,7 +217,7 @@ test("Airtable, HubSpot and Trello actions create records, contacts and cards", 
 
 test("public node catalog exposes the complete registry and JSON schemas to the authenticated builder API", () => {
   const catalog = getPublicNodeCatalog();
-  assert.equal(catalog.length, 73);
+  assert.equal(catalog.length, 74);
   const expected = [
     ["google_sheets", "append_rows"],
     ["gmail", "send_email"],
