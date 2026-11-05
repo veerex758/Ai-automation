@@ -5,7 +5,7 @@ const context={credentials:{},logger:{info(){},error(){}},http:{async request(){
 test("utility pack exposes 20 registered, schema-backed operations",()=>{
  const ids=["deduplicate","sort","split_batches","crypto_hash","template","csv_parse","csv_stringify","markdown_html","text_transform","regex","array_ops","object_ops","math","uuid","base64","date_add","date_format","error_trigger","rate_limiter","json_encode"];
  assert.equal(ids.length,20);
- for(const id of ids)assert.ok(findOperation(id,id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":id==="rate_limiter"?"check":"encode","action"));
+ for(const id of ids)assert.ok(findOperation(id,id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":id==="rate_limiter"?"check":"encode",id==="error_trigger"?"trigger":"action"));
 });
 test("deduplicate and sort utilities operate deterministically",async()=>{
  const d=await findOperation("deduplicate","unique","action")!.run(context,{items:[1,1,2,3,2]});
@@ -30,4 +30,152 @@ test("CSV parse and stringify round trip simple quoted fields",async()=>{
 test("Math rejects division by zero and Base64 rejects malformed input",async()=>{
  await assert.rejects(()=>findOperation("math","calculate","action")!.run(context,{a:1,b:0,operation:"div"}),/MATH_INVALID_RESULT/);
  await assert.rejects(()=>findOperation("base64","convert","action")!.run(context,{value:"!!!",operation:"decode"}),/BASE64_INVALID/);
+});
+
+
+test("Split in Batches emits bounded batches and enforces batch count",async()=>{
+ const op=findOperation("split_batches","split","action")!;
+ const output=await op.run(context,{items:[1,2,3,4,5],batchSize:2});
+ assert.deepEqual(output,{batches:[[1,2],[3,4],[5]],count:3,itemCount:5,batchSize:2});
+ await assert.rejects(()=>op.run(context,{items:[1,2,3],batchSize:1,maxBatches:2}),/BATCH_COUNT_LIMIT_EXCEEDED/);
+});
+
+test("Rate Limiter fails closed without a shared atomic backend",async()=>{
+ const op=findOperation("rate_limiter","check","action")!;
+ await assert.rejects(()=>op.run(context,{key:"workspace:flow",limit:2,windowMs:1000}),/RATE_LIMIT_BACKEND_UNAVAILABLE/);
+});
+
+test("Rate Limiter delegates every decision to the shared atomic backend",async()=>{
+ const op=findOperation("rate_limiter","check","action")!;
+ const calls:Array<Record<string,unknown>>=[];
+ const result=await op.run({...context,rateLimit:{async consume(args){calls.push(args);return {allowed:false,remaining:0,retryAfterMs:250}}}},{key:"workspace:flow",limit:2,windowMs:1000});
+ assert.deepEqual(result,{allowed:false,remaining:0,retryAfterMs:250});
+ assert.deepEqual(calls,[{key:"workspace:flow",limit:2,windowMs:1000}]);
+});
+
+test("Error Trigger is a real trigger operation and normalizes failure metadata",async()=>{
+ const op=findOperation("error_trigger","capture","trigger")!;
+ assert.ok(op);
+ const output=await op.run(context,{code:"PROVIDER_TIMEOUT",message:"Provider timed out",workflowRunId:"00000000-0000-4000-8000-000000000001",stepId:"send"}) as {error:{code:string;stepId:string;eventId:string;occurredAt:string}};
+ assert.equal(output.error.code,"PROVIDER_TIMEOUT");
+ assert.equal(output.error.stepId,"send");
+ assert.match(output.error.eventId,/^[0-9a-f-]{36}$/);
+ assert.ok(Date.parse(output.error.occurredAt)>0);
+ await assert.rejects(()=>op.run(context,{code:"bad code",message:"invalid"}));
+});
+
+test("Regex rejects nested quantifiers and expensive pattern constructs",async()=>{
+ const op=findOperation("regex","match","action")!;
+ await assert.rejects(()=>op.run(context,{text:"aaaaaaaaaaaaaaaa!",pattern:"(a+)+$",flags:""}),/REGEX_UNSAFE/);
+ await assert.rejects(()=>op.run(context,{text:"a",pattern:"(a)\\\\1",flags:""}),/REGEX_UNSAFE/);
+ const output=await op.run(context,{text:"abc abc",pattern:"abc",flags:"g"});
+ assert.deepEqual(output,{matched:true,matches:["abc","abc"]});
+});
+
+test("Text replace rejects empty search and preserves literal replacement",async()=>{
+ const op=findOperation("text_transform","transform","action")!;
+ await assert.rejects(()=>op.run(context,{text:"abc",operation:"replace",search:""}),/TEXT_SEARCH_REQUIRED/);
+ assert.deepEqual(await op.run(context,{text:"a.b.a",operation:"replace",search:".",replacement:"-"}),{text:"a-b-a"});
+});
+
+test("Array and Object utilities enforce bounded safe transformations",async()=>{
+ const array=findOperation("array_ops","operate","action")!;
+ assert.deepEqual(await array.run(context,{items:[[1,2],[3]],operation:"flatten"}),{items:[1,2,3],count:3});
+ const object=findOperation("object_ops","operate","action")!;
+ await assert.rejects(()=>object.run(context,{data:{"__proto__":"bad",safe:1},operation:"pick",keys:["__proto__"]}),/OBJECT_UNSAFE_KEY/);
+});
+
+test("UUID utility emits cryptographically valid UUIDs",async()=>{
+ const output=await findOperation("uuid","generate","action")!.run(context,{}) as {uuid:string};
+ assert.match(output.uuid,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+});
+
+test("Date Add rejects overflow and Date Format rejects invalid timezones",async()=>{
+ const add=findOperation("date_add","add","action")!;
+ await assert.rejects(()=>add.run(context,{date:"2026-01-01T00:00:00.000Z",amount:1e20,unit:"d"}),/DATE_RANGE_INVALID/);
+ const format=findOperation("date_format","format","action")!;
+ await assert.rejects(()=>format.run(context,{date:"2026-01-01T00:00:00.000Z",timezone:"Mars/Olympus"}),/DATE_TIMEZONE_INVALID/);
+});
+
+test("Markdown converter escapes raw HTML before producing markup",async()=>{
+ const op=findOperation("markdown_html","convert","action")!;
+ assert.deepEqual(await op.run(context,{markdown:"<script>alert(1)</script>"}),{html:"<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>"});
+});
+
+
+test("Error Trigger redacts credential-shaped metadata and rejects non-primitive metadata", async () => {
+ const op=findOperation("error_trigger","capture","trigger")!;
+ const result=await op.run(context,{code:"STEP_FAILED",message:"Action failed",metadata:{apiKey:"do-not-leak",safe:"visible",attempt:2}}) as {error:{metadata:Record<string,unknown>}};
+ assert.deepEqual(result.error.metadata,{apiKey:"[REDACTED]",safe:"visible",attempt:2});
+ await assert.rejects(()=>op.run(context,{code:"STEP_FAILED",message:"Action failed",metadata:{nested:{secret:"x"}}}));
+});
+
+test("Rate Limiter rejects malformed backend responses instead of treating them as success", async () => {
+ const op=findOperation("rate_limiter","check","action")!;
+ await assert.rejects(()=>op.run({...context,rateLimit:{async consume(){return {allowed:true,remaining:-1,retryAfterMs:0}}}},{key:"flow",limit:1,windowMs:1000}),/RATE_LIMIT_BACKEND_INVALID_RESPONSE/);
+});
+
+test("Regex rejects backreferences and lookarounds and returns stable matched status", async () => {
+ const op=findOperation("regex","match","action")!;
+ await assert.rejects(()=>op.run(context,{text:"aa",pattern:"(a)\\\\1",flags:""}),/REGEX_UNSAFE/);
+ await assert.rejects(()=>op.run(context,{text:"aa",pattern:"(?=a)a",flags:""}),/REGEX_UNSAFE/);
+ const output=await op.run(context,{text:"abc",pattern:"abc",flags:"g"});
+ assert.deepEqual(output,{matched:true,matches:["abc"]});
+});
+
+test("Text Transform fails rather than silently truncating oversized output", async () => {
+ const op=findOperation("text_transform","transform","action")!;
+ await assert.rejects(()=>op.run(context,{text:"a".repeat(30000),operation:"replace",search:"a",replacement:"aa"}),/TEXT_OUTPUT_TOO_LARGE/);
+});
+
+test("Object operations reject unsafe keys already present in the input object", async () => {
+ const op=findOperation("object_ops","operate","action")!;
+ const data=JSON.parse('{"safe":1,"constructor":"polluted"}');
+ await assert.rejects(()=>op.run(context,{data,operation:"keys",keys:[]}),/OBJECT_UNSAFE_KEY/);
+});
+
+test("Date Add uses explicit elapsed-time semantics across daylight-saving boundaries", async () => {
+ const op=findOperation("date_add","add","action")!;
+ const result=await op.run(context,{date:"2026-03-08T06:30:00.000Z",amount:1,unit:"h"});
+ assert.deepEqual(result,{iso:"2026-03-08T07:30:00.000Z"});
+});
+
+test("Date Format uses the requested IANA timezone deterministically", async () => {
+ const op=findOperation("date_format","format","action")!;
+ const result=await op.run(context,{date:"2026-01-01T00:00:00.000Z",timezone:"Africa/Lagos"}) as {timezone:string;formatted:string};
+ assert.equal(result.timezone,"Africa/Lagos");
+ assert.match(result.formatted,/1 Jan 2026/);
+});
+
+test("Regex rejects patterns with excessive repeated quantifiers before execution", async () => {
+ const op=findOperation("regex","match","action")!;
+ await assert.rejects(()=>op.run(context,{text:"aaaaaaaaaaaaaaaa!",pattern:"a*a*a*a*a*b",flags:""}),/REGEX_UNSAFE/);
+});
+
+test("Markdown converter preserves escaped text and never emits raw HTML from input", async () => {
+ const op=findOperation("markdown_html","convert","action")!;
+ const result=await op.run(context,{markdown:"# Hello & welcome\n\n<script>bad()</script>"}) as {html:string};
+ assert.equal(result.html,"<h1>Hello &amp; welcome</h1>\n\n<p>&lt;script&gt;bad()&lt;/script&gt;</p>");
+});
+
+test("Regex rejects ambiguous repeated quantifiers but permits a single bounded quantifier", async () => {
+ const op=findOperation("regex","match","action")!;
+ await assert.rejects(()=>op.run(context,{text:"a".repeat(9999)+"!",pattern:"a+a+a+b",flags:""}),/REGEX_UNSAFE/);
+ assert.deepEqual(await op.run(context,{text:"aaaa",pattern:"a+",flags:""}),{matched:true,matches:["aaaa"]});
+});
+
+test("Text Transform rejects oversized replacement before allocating the expanded result", async () => {
+ const op=findOperation("text_transform","transform","action")!;
+ await assert.rejects(()=>op.run(context,{text:"x".repeat(1000),operation:"replace",search:"x",replacement:"y".repeat(50000)}),/TEXT_OUTPUT_TOO_LARGE/);
+});
+
+test("Array flatten is bounded even for deeply nested input", async () => {
+ const op=findOperation("array_ops","operate","action")!;
+ const nested=Array.from({length:11000},(_,index)=>index);
+ await assert.rejects(()=>op.run(context,{items:[nested],operation:"flatten"}),/ARRAY_TOO_LARGE/);
+});
+
+test("Split in Batches cannot exceed the workflow runner iteration limit", async () => {
+ const op=findOperation("split_batches","split","action")!;
+ await assert.rejects(()=>op.run(context,{items:Array.from({length:101},(_,index)=>index),batchSize:1}),/BATCH_COUNT_LIMIT_EXCEEDED/);
 });

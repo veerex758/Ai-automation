@@ -14,6 +14,8 @@ export type NodeContext = {
   };
   previousOutputs: Readonly<Record<string, unknown>>;
   webhook?: { verified: boolean };
+  /** Shared atomic rate-limit backend. Missing backend fails closed. */
+  rateLimit?: { consume(args: { key: string; limit: number; windowMs: number }): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> };
 };
 
 export type NodeOperation<I extends z.ZodTypeAny = z.ZodTypeAny, O extends z.ZodTypeAny = z.ZodTypeAny> = {
