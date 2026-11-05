@@ -16,18 +16,18 @@ async function call(ctx: NodeContext, provider: ProviderId, args: { url: string;
   return response.body;
 }
 function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
-  id: ProviderId; name: string; description: string; input: I; output: O;
+  id: ProviderId; name: string; description: string; input: I; output: O; auth?: NodeDefinition["auth"];
   run(ctx: NodeContext, input: z.infer<I>): Promise<unknown>;
 }): NodeDefinition {
   return { id: args.id, name: args.name, icon: "megaphone", category: "communication", version: 1,
-    auth: { type: "oauth2", scopes: ["provider.api"], refresh: "manual" }, triggers: [],
+    auth: args.auth ?? { type: "oauth2", scopes: ["provider.api"], refresh: "manual" }, triggers: [],
     actions: [{ id: "execute", name: args.name + " action", description: args.description, inputSchema: args.input, outputSchema: args.output,
       async run(ctx, raw) { const input = args.input.parse(raw); return args.output.parse(await args.run(ctx, input)); } }] };
 }
 
 export const catalogueMarketingNodes: NodeDefinition[] = [
   node({
-    id: "x_twitter", name: "X/Twitter",
+    id: "x_twitter", name: "X/Twitter", auth: { type: "oauth2", scopes: ["tweet.write", "users.read"], refresh: "manual" },
     description: "Publishes a text post to the connected X account using its OAuth access token.",
     input: z.object({ text: z.string().trim().min(1).max(280) }).strict(),
     output: z.object({ postId: z.string(), text: z.string() }).strict(),
@@ -38,7 +38,7 @@ export const catalogueMarketingNodes: NodeDefinition[] = [
     },
   }),
   node({
-    id: "linkedin", name: "LinkedIn",
+    id: "linkedin", name: "LinkedIn", auth: { type: "oauth2", scopes: ["openid", "profile", "email"], refresh: "manual" },
     description: "Reads the connected LinkedIn member profile using the account's OAuth access token; it does not publish or modify profile data.",
     input: z.object({}).strict(),
     output: z.object({ memberId: z.string(), name: z.string().optional(), email: z.string().email().optional() }).strict(),
@@ -49,7 +49,7 @@ export const catalogueMarketingNodes: NodeDefinition[] = [
     },
   }),
   node({
-    id: "facebook_pages", name: "Facebook Pages",
+    id: "facebook_pages", name: "Facebook Pages", auth: { type: "oauth2", scopes: ["pages_manage_posts", "pages_show_list"], refresh: "manual" },
     description: "Publishes a text post to the specified Facebook Page using a saved page access token.",
     input: z.object({ pageId: z.string().regex(/^\d{5,30}$/), message: z.string().trim().min(1).max(5000) }).strict(),
     output: z.object({ postId: z.string() }).strict(),
@@ -62,7 +62,7 @@ export const catalogueMarketingNodes: NodeDefinition[] = [
     },
   }),
   node({
-    id: "instagram", name: "Instagram",
+    id: "instagram", name: "Instagram", auth: { type: "oauth2", scopes: ["instagram_basic", "instagram_content_publish"], refresh: "manual" },
     description: "Publishes an image post to the connected Instagram professional account through the two-step Graph API media container flow.",
     input: z.object({ imageUrl: z.string().url(), caption: z.string().max(2200).optional() }).strict(),
     output: z.object({ mediaId: z.string() }).strict(),
@@ -80,7 +80,7 @@ export const catalogueMarketingNodes: NodeDefinition[] = [
     },
   }),
   node({
-    id: "tiktok", name: "TikTok",
+    id: "tiktok", name: "TikTok", auth: { type: "oauth2", scopes: ["user.info.basic", "video.list"], refresh: "manual" },
     description: "Lists recent TikTok videos for the connected creator account using the read-only video list API.",
     input: z.object({ maxCount: z.number().int().min(1).max(20).default(10) }).strict(),
     output: z.object({ videos: z.array(z.object({ id: z.string(), title: z.string().optional(), createTime: z.number().optional() }).strict()).max(20) }).strict(),
@@ -92,7 +92,7 @@ export const catalogueMarketingNodes: NodeDefinition[] = [
     },
   }),
   node({
-    id: "mailchimp", name: "Mailchimp",
+    id: "mailchimp", name: "Mailchimp", auth: { type: "apiKey", credentialKey: "apiKey" },
     description: "Adds or updates a Mailchimp audience member using the account API key and its server region.",
     input: z.object({ listId: z.string().trim().min(1).max(100), email: z.string().email(), status: z.enum(["subscribed", "pending"]).default("subscribed"), firstName: z.string().max(100).optional(), lastName: z.string().max(100).optional() }).strict(),
     output: z.object({ memberId: z.string(), email: z.string().email(), status: z.string() }).strict(),
@@ -108,7 +108,7 @@ export const catalogueMarketingNodes: NodeDefinition[] = [
     },
   }),
   node({
-    id: "typeform", name: "Typeform",
+    id: "typeform", name: "Typeform", auth: { type: "apiKey", credentialKey: "accessToken" },
     description: "Reads Typeform form metadata and question count using the connected account's read-only API access.",
     input: z.object({ formId: z.string().trim().min(1).max(100) }).strict(),
     output: z.object({ formId: z.string(), title: z.string(), questionCount: z.number().int().nonnegative() }).strict(),
