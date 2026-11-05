@@ -3,7 +3,7 @@ import type { NodeDefinition, NodeContext } from "./types";
 
 const str = (max = 10000) => z.string().min(1).max(max);
 const node = (id: string, name: string, auth: NodeDefinition["auth"]): NodeDefinition => ({ id, name, icon: "brain", category: "ai", version: 1, auth, triggers: [], actions: [] });
-const credential = (ctx: NodeContext, id: string) => {
+  if (!value || value.length > 4096 || value.includes("\r") || value.includes("\n")) throw new Error(id.toUpperCase() + "_CONNECTION_REQUIRED");
   const value = ctx.credentials[id]?.apiKey;
   if (!value || value.length > 4096 || /[\\r\\n]/.test(value)) throw new Error(id.toUpperCase() + "_CONNECTION_REQUIRED");
   return value;
