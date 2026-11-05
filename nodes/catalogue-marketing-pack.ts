@@ -39,16 +39,13 @@ export const catalogueMarketingNodes: NodeDefinition[] = [
   }),
   node({
     id: "linkedin", name: "LinkedIn",
-    description: "Publishes a text post for a connected LinkedIn member or organization URN using the LinkedIn Posts API.",
-    input: z.object({ authorUrn: z.string().regex(/^urn:li:(person|organization):[A-Za-z0-9_-]+$/), commentary: z.string().trim().min(1).max(3000), visibility: z.enum(["PUBLIC", "CONNECTIONS"]).default("PUBLIC") }).strict(),
-    output: z.object({ postId: z.string() }).strict(),
-    async run(ctx, input) {
-      const body = await call(ctx, "linkedin", { url: "https://api.linkedin.com/rest/posts", method: "POST",
-        headers: { Authorization: "Bearer " + secret(ctx, "linkedin"), "LinkedIn-Version": "202601", "X-Restli-Protocol-Version": "2.0.0", "Content-Type": "application/json" },
-        body: { author: input.authorUrn, commentary: input.commentary, visibility: input.visibility, distribution: { feedDistribution: "MAIN_FEED", targetEntities: [] }, lifecycleState: "PUBLISHED", isReshareDisabledByAuthor: false } }) as Record<string, unknown>;
-      const id = body?.id;
-      if (typeof id !== "string") throw new Error("LINKEDIN_INVALID_RESPONSE");
-      return { postId: id };
+    description: "Reads the connected LinkedIn member profile using the account's OAuth access token; it does not publish or modify profile data.",
+    input: z.object({}).strict(),
+    output: z.object({ memberId: z.string(), name: z.string().optional(), email: z.string().email().optional() }).strict(),
+    async run(ctx) {
+      const body = await call(ctx, "linkedin", { url: "https://api.linkedin.com/v2/userinfo", headers: { Authorization: "Bearer " + secret(ctx, "linkedin") } }) as Record<string, unknown>;
+      if (typeof body?.sub !== "string") throw new Error("LINKEDIN_INVALID_RESPONSE");
+      return { memberId: body.sub, ...(typeof body.name === "string" ? { name: body.name } : {}), ...(typeof body.email === "string" ? { email: body.email } : {}) };
     },
   }),
   node({
