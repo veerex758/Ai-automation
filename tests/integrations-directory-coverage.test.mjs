@@ -7,6 +7,7 @@ const directorySource = readFileSync("app/dashboard/registry-integrations-direct
 const credentialsSource = readFileSync("lib/integrations/workspace-credentials.ts", "utf8");
 const connectionsSource = readFileSync("app/dashboard/connections/page.tsx", "utf8");
 const connectionTestSource = readFileSync("app/api/integrations/workspace/test/route.ts", "utf8");
+const workerSource = readFileSync("lib/workflows/durable-worker.ts", "utf8");
 
 test("all 100 directory entries have official brand artwork or an explicit native icon path", () => {
   const ids = [...catalogSource.matchAll(/"id": "([^"]+)"/g)].map((match) => match[1]);
@@ -37,4 +38,11 @@ test("new provider-pack connection checks remain read-only and fail closed when 
     assert.match(connectionTestSource, new RegExp('"' + provider + '"'));
   }
   assert.match(connectionTestSource, /Perplexity does not expose a safe read-only credential check/);
+});
+
+test("durable live execution requires both a connected integration and a passed credential test", () => {
+  assert.match(workerSource, /select\("id,status,last_test_status"\)/);
+  assert.match(workerSource, /integration\.status !== "connected" \|\| integration\.last_test_status !== "passed"/);
+  assert.match(directorySource, /record\.last_test_status === "passed"/);
+  assert.match(directorySource, /liveExecutionEnabled && liveProvidersEnabled\.includes\(providerPermissionKey\)/);
 });
