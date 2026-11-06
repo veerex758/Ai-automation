@@ -84,7 +84,11 @@ test("Firebase get_document validates the document path and normalizes the resul
   }), { documentPath: "contacts/7" });
   assert.match(args.url, /documents\/contacts\/7$/);
   assert.deepEqual(result, { name: "projects/aivanta-demo1/databases/(default)/documents/contacts/7", fields: { name: { stringValue: "Ada" } } });
-  await assert.rejects(() => op.run(context({ firebase: { projectId: "aivanta-demo1", accessToken: "x" } }, () => { throw new Error("network must not run"); }), { documentPath: "../secrets" }), /invalid_string|Invalid/);
+  const noNetwork = context({ firebase: { projectId: "aivanta-demo1", accessToken: "x" } }, () => { throw new Error("network must not run"); });
+  await assert.rejects(() => op.run(noNetwork, { documentPath: "../secrets" }), /invalid_string|Invalid/);
+  await assert.rejects(() => op.run(noNetwork, { documentPath: "contacts/7/subcollection" }), /custom|Invalid/);
+  await assert.rejects(() => op.run(noNetwork, { documentPath: "contacts/7/subcollection/8/extra" }), /custom|Invalid/);
+  await assert.rejects(() => op.run(noNetwork, { documentPath: "contacts" }), /invalid_string|Invalid/);
 });
 
 test("Dropbox get_file_metadata calls metadata endpoint without downloading file content", async () => {
