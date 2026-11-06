@@ -263,7 +263,7 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
         .limit(1)
         .maybeSingle();
       if (error) throw new Error("WORKSPACE_OPERATION_APPROVAL_LOOKUP_FAILED");
-      if (!data || data.decision !== "approved") throw new Error("WORKSPACE_OPERATION_NOT_APPROVED");
+      if (!data || data.decision !== "approved") throw new Error("WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED");
     },
     rateLimit: { async consume(args) {
       const { data, error } = await db.rpc("consume_execution_rate_limit", {
