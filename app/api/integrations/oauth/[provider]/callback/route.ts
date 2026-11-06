@@ -3,12 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
+import { encryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import {
   exchangeProviderOAuthCode,
   exchangeMetaLongLivedToken,
   PROVIDER_OAUTH_CONFIG,
   verifyOAuthState,
+  selectInstagramBusinessAccount,
 } from "@/lib/integrations/provider-oauth";
 
 export const runtime = "nodejs";
@@ -72,6 +73,35 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     }
 
     const credentials: Record<string, string> = { accessToken: token.access_token };
+    if (provider === "facebook_pages" || provider === "instagram") {
+      const pagesUrl = new URL("https://graph.facebook.com/v21.0/me/accounts");
+      pagesUrl.searchParams.set("fields", "id,name,access_token,instagram_business_account{id,username}");
+      const pagesResponse = await fetch(pagesUrl, {
+        headers: { Authorization: "Bearer " + token.access_token },
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000),
+      });
+      const pagePayload = await pagesResponse.json().catch(() => null) as { data?: unknown };
+      if (!pagesResponse.ok || !Array.isArray(pagePayload?.data)) throw new Error("META_PAGE_LOOKUP_FAILED");
+      if (provider === "facebook_pages") {
+        const page = pagePayload.data.find((item) => item && typeof item === "object" &&
+          typeof (item as Record<string, unknown>).access_token === "string") as Record<string, unknown> | undefined;
+        if (!page) throw new Error("FACEBOOK_PAGE_NOT_FOUND");
+        credentials.pageAccessToken = page.access_token as string;
+      } else {
+        const accounts = pagePayload.data.flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const account = (item as Record<string, unknown>).instagram_business_account;
+          return account && typeof account === "object" ? [account] : [];
+        });
+        const account = selectInstagramBusinessAccount(accounts);
+        const page = pagePayload.data.find((item) => item && typeof item === "object" &&
+          (item as Record<string, unknown>).instagram_business_account &&
+          ((item as Record<string, unknown>).instagram_business_account as Record<string, unknown>).id === account.id) as Record<string, unknown> | undefined;
+        if (!page || typeof page.access_token !== "string") throw new Error("INSTAGRAM_PAGE_TOKEN_NOT_FOUND");
+        credentials.accessToken = page.access_token;
+        credentials.igUserId = account.id;
+      }
+    }
     if (typeof token.refresh_token === "string") credentials.refreshToken = token.refresh_token;
     if (typeof token.expires_in === "number" && Number.isFinite(token.expires_in)) credentials.expiresAt = new Date(Date.now() + token.expires_in * 1000).toISOString();
     if (typeof token.token_type === "string") credentials.tokenType = token.token_type;
@@ -80,13 +110,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
 
     const key = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
     if (!key) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
-    const encrypted = encryptWorkspaceCredentials({ [provider]: credentials } as Record<WorkspaceCredentialProvider, Record<string, string>>, key, workspace.id + ":" + provider);
+    const encrypted = encryptWorkspaceCredentials({ [provider]: credentials }, key, workspace.id + ":" + provider);
     const admin = serviceClient();
     const { data: integration, error: integrationError } = await admin.from("workspace_integrations")
       .upsert({
         workspace_id: workspace.id,
         provider,
-        status: "connected",
+        status: "needs_attention",
         display_name: provider.replace(/_/g, " "),
         metadata: { connected_at: new Date().toISOString(), expires_at: credentials.expiresAt ?? null, scope: credentials.scope ?? null },
         created_by: user.id,
