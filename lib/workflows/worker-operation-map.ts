@@ -40,4 +40,5 @@ export function getWorkerOperationMapping(
 }
 
 export function getWorkerProvider(step: { kind: WorkerOperationKind; nodeId: string; operationId: string }): string | null {
-  return getWorkerOperatio¶»§q«^
+  return getWorkerOperationMapping(step)?.provider ?? null;
+}
