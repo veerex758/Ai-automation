@@ -16,18 +16,25 @@ const rows = nodes.flatMap((node) => {
   }));
 });
 const missing = rows.filter((row) => row.mapping === "MISSING");
+const registeredProviderCount = providerCatalog.filter((entry) => Boolean(entry.registryId)).length;
+const comingSoonProviderCount = providerCatalog.length - registeredProviderCount;
 const report = [
   "# Aivanta provider execution verification",
   "",
   "- Catalogue entries: " + providerCatalog.length,
+  "- Registered provider entries: " + registeredProviderCount,
+  "- Coming-soon provider entries: " + comingSoonProviderCount,
   "- Native registry nodes: " + nodes.length,
   "- All native registry operations: " + rows.length,
   "- Worker operation mappings: " + (rows.length - missing.length),
   "- Missing mappings: " + missing.length,
-  "- Authenticated staging/live verification: BLOCKED",
+  "- CI run #1831 (tests, lint, TypeScript, production build): PASS",
+  "- Database service run #72 (MySQL/MongoDB authenticated TLS integration): PASS",
+  "- Supabase migration replay run #498: PASS",
+  "- Authenticated staging E2E: BLOCKED",
   "- No provider is labelled live-verified",
   "",
-  "The report verifies static registry-to-worker mapping only. It does not imply credentials, external provider consent, database service execution, or authenticated staging have been tested.",
+  "The report distinguishes static registry/worker mapping and local authenticated TLS database integration from external provider verification. OAuth consent, production credentials, and authenticated staging E2E have not been performed.",
   "",
   "| Provider | Operation | Worker mapping |",
   "|---|---|---|",
@@ -35,12 +42,12 @@ const report = [
   "",
   "## Database adapters",
   "",
-  "- MySQL (mysql): registered real-driver adapter; live database verification requires the authenticated TLS service workflow.",
-  "- MongoDB (mongodb): registered real-driver adapter; live database verification requires the authenticated TLS service workflow.",
+  "- MySQL (mysql): registered real-driver adapter; authenticated TLS service integration passed in run #72; staging E2E not run.",
+  "- MongoDB (mongodb): registered real-driver adapter; authenticated TLS service integration passed in run #72; staging E2E not run.",
   "",
   "## Release gate",
   "",
-  "Do not enable live execution or merge based on this static report. Require green complete CI, passing MySQL/MongoDB TLS integration tests, and authenticated staging evidence.",
+  "Do not enable live execution or merge based on this report. Authenticated staging E2E with a dedicated test account and provider credentials remains required.",
   "",
 ].join("\n");
 if (missing.length) throw new Error("PROVIDER_OPERATION_MAPPING_MISSING");
