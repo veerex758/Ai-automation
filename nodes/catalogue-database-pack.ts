@@ -19,12 +19,12 @@ async function request(ctx: NodeContext, provider: ProviderId, args: { url: stri
   return response;
 }
 function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
-  id: ProviderId; name: string; description: string; input: I; output: O; auth: NodeDefinition["auth"];
+  id: ProviderId; name: string; description: string; input: I; output: O; auth: NodeDefinition["auth"]; additionalActions?: NodeDefinition["actions"];
   run(ctx: NodeContext, input: z.infer<I>): Promise<unknown>;
 }): NodeDefinition {
   return { id: args.id, name: args.name, icon: "database", category: "data", version: 1, auth: args.auth, triggers: [],
     actions: [{ id: "execute", name: args.name + " action", description: args.description, inputSchema: args.input, outputSchema: args.output,
-      async run(ctx, raw) { const input = args.input.parse(raw); return args.output.parse(await args.run(ctx, input)); } }] };
+      async run(ctx, raw) { const input = args.input.parse(raw); return args.output.parse(await args.run(ctx, input)); } }, ...(args.additionalActions ?? [])] };
 }
 function sha256(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function hmac(key: Buffer | string, value: string): Buffer { return createHmac("sha256", key).update(value).digest(); }
