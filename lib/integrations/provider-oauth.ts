@@ -196,3 +196,39 @@ export function selectInstagramBusinessAccount(accounts: unknown): { id: string;
   if (!selected) throw new Error("INSTAGRAM_BUSINESS_ACCOUNT_NOT_FOUND");
   return { id: selected.id as string, ...(typeof selected.username === "string" ? { username: selected.username } : {}) };
 }
+
+
+export async function refreshProviderOAuthToken(args: {
+  provider: string;
+  config: ProviderOAuthConfig;
+  refreshToken: string;
+}): Promise<OAuthTokenResponse> {
+  const clientId = process.env[args.config.clientIdEnv];
+  const clientSecret = process.env[args.config.clientSecretEnv];
+  if (!clientId || !clientSecret || !args.refreshToken) throw new Error("OAUTH_PROVIDER_NOT_CONFIGURED");
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: args.refreshToken,
+    ...(args.config.clientIdParam === "client_key" ? { client_key: clientId } : { client_id: clientId }),
+    client_secret: clientSecret,
+  });
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
+  if (args.config.tokenAuth === "basic") {
+    headers.Authorization = "Basic " + Buffer.from(clientId + ":" + clientSecret).toString("base64");
+    body.delete("client_secret");
+    body.delete("client_id");
+    body.delete("client_key");
+  }
+  const response = await fetch(args.config.tokenUrl, {
+    method: "POST", headers, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000),
+  });
+  const raw = await response.json().catch(() => null) as unknown;
+  if (!response.ok || !raw || typeof raw !== "object") {
+    throw new Error(response.status === 400 || response.status === 401 ? "OAUTH_REAUTH_REQUIRED" : "OAUTH_TOKEN_REFRESH_FAILED");
+  }
+  const payload = args.config.tokenResponsePath === "data" ? (raw as { data?: unknown }).data : raw;
+  if (!payload || typeof payload !== "object" || typeof (payload as Record<string, unknown>).access_token !== "string") {
+    throw new Error("OAUTH_TOKEN_RESPONSE_INVALID");
+  }
+  return payload as OAuthTokenResponse;
+}
