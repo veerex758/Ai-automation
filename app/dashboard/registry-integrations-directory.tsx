@@ -530,7 +530,8 @@ export default function RegistryIntegrationsDirectory() {
               {node.auth.type !== "none" && <div className="registry-approval-control">
                 {(() => {
                   const kind = operation.kind.toLowerCase() as "trigger" | "action";
-                  const latest = approvals.filter((item) => item.node_id === node.id && item.operation_id === operation.id).at(-1);
+                  const matchingApprovals = approvals.filter((item) => item.node_id === node.id && item.operation_id === operation.id);
+                  const latest = matchingApprovals[matchingApprovals.length - 1];
                   const approved = latest?.decision === "approved";
                   return <><span>{approved ? "Workspace approved" : latest?.decision === "revoked" ? "Approval revoked" : "Approval required"}</span>
                     <button type="button" onClick={() => void changeApproval(node, operation, kind, approved ? "revoked" : "approved")}>
