@@ -9,7 +9,7 @@ export const PROVIDER_PACK_LIVE_IDS = [
 const providerPackIds = new Set<string>(PROVIDER_PACK_LIVE_IDS);
 
 export function providerPackLiveId(step: ProviderPackStep): string | null {
-  return step.kind === "action" && step.operationId === "execute" && providerPackIds.has(step.nodeId)
+  return step.kind === "action" && /^[a-z][a-z0-9_]{0,63}$/.test(step.operationId) && providerPackIds.has(step.nodeId)
     ? step.nodeId
     : null;
 }
