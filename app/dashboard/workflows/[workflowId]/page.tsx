@@ -8,11 +8,12 @@ import RunTestPanel from "./run-test-panel";
 
 type NodeType = "trigger" | "action" | "condition";
 type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string> };
-type Definition = { version: 1; nodes: WorkflowNode[] };
+type WorkflowEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
+type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
 type Workflow = { id: string; name: string; description: string; status: string };
 type WorkflowVersion = { version: number; created_at: string };
 
-const starterDefinition: Definition = { version: 1, nodes: [
+const starterDefinition: Definition = { version: 1, edges: [], nodes: [
   { id: "trigger-1", type: "trigger", title: "When this happens", description: "Choose an event that starts your workflow.", settings: { event: "manual" } },
 ] };
 const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> = {
@@ -66,8 +67,8 @@ export default function WorkflowBuilderPage() {
       if (!response.ok) throw new Error(result.error || "Could not load this workflow.");
       setWorkflow(result.workflow);
       const nextDefinition = result.definition as Definition;
-      setDefinition(nextDefinition);
-      setSavedFingerprint(JSON.stringify(nextDefinition));
+      setDefinition({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) });
+      setSavedFingerprint(JSON.stringify({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) }));
       setSelectedId(nextDefinition.nodes[0]?.id ?? "");
       const versionsResponse = await fetch(`/api/workflows/${workflowId}/versions`, { cache: "no-store" });
       if (versionsResponse.ok) {
@@ -112,7 +113,7 @@ export default function WorkflowBuilderPage() {
         ? { provider: "internal", operation: "create_task", recipient: "", message: "", url: "" }
         : { field: "", operator: "equals", value: "" },
     };
-    setDefinition((current) => ({ ...current, nodes: [...current.nodes, node] }));
+    setDefinition((current) => { const previous = current.nodes[current.nodes.length - 1]; return { ...current, nodes: [...current.nodes, node], edges: [...(current.edges ?? []), ...(previous ? [{ id: `edge-${previous.id}-${id}`, source: previous.id, target: id, label: "next" as const }] : [])] }; });
     setSelectedId(id);
     setNotice("Step added. Save your changes when you're ready.");
   }
@@ -121,7 +122,7 @@ export default function WorkflowBuilderPage() {
     if (!selectedNode || selectedNode.type === "trigger") return;
     draftRevision.current += 1;
     setValidation(null);
-    setDefinition((current) => ({ ...current, nodes: current.nodes.filter((node) => node.id !== selectedNode.id) }));
+    setDefinition((current) => { const nodes = current.nodes.filter((node) => node.id !== selectedNode.id); const edges = (current.edges ?? []).filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id); return { ...current, nodes, edges }; });
     setSelectedId(definition.nodes.find((node) => node.type === "trigger")?.id ?? "");
     setNotice("Step removed. Save your changes to keep this update.");
   }
@@ -256,15 +257,29 @@ export default function WorkflowBuilderPage() {
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
             <div className="canvas-label"><span>CANVAS</span><span>{definition.nodes.length} / 30 steps</span></div>
-            <div className="node-stack">
-              {definition.nodes.map((node, index) => <div className="node-slot" key={node.id}>
-                {index > 0 && <div className="node-connector"><span>↓</span></div>}
-                <button className={`builder-node node-${node.type} ${selectedId === node.id ? "node-selected" : ""}`} onClick={() => setSelectedId(node.id)} aria-pressed={selectedId === node.id}>
-                  <span className="node-icon">{nodeMeta[node.type].icon}</span><span className="node-copy"><small>{nodeMeta[node.type].label.toUpperCase()} · STEP {index + 1}</small><strong>{node.title}</strong><span>{node.description || nodeMeta[node.type].help}</span></span><span className="node-chevron">›</span>
-                </button>
-                {index === definition.nodes.length - 1 && <div className="node-endpoint"><span>＋</span> Add the next step from the panel</div>}
-              </div>)}
-              {definition.nodes.length === 0 && <div className="builder-empty"><span>✳</span><strong>Start with a trigger</strong><p>A trigger defines what starts your workflow.</p><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}`, settings: { event: "manual" } }; draftRevision.current += 1; setValidation(null); setDefinition({ version: 1, nodes: [trigger] }); setSelectedId(trigger.id); setNotice("Trigger added. Save your changes when you’re ready."); }}>Add trigger</button></div>}
+            <div className="graph-canvas" role="region" aria-label="Workflow graph canvas">
+              <div className="graph-grid" aria-hidden="true" />
+              <div className="graph-layout">
+                <svg className="graph-edges" aria-hidden="true">
+                  {(definition.edges ?? []).map((edge) => {
+                    const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
+                    const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target);
+                    if (sourceIndex < 0 || targetIndex < 0) return null;
+                    const source = { x: 170 + (sourceIndex % 3) * 300, y: 90 + Math.floor(sourceIndex / 3) * 210 };
+                    const target = { x: 170 + (targetIndex % 3) * 300, y: 90 + Math.floor(targetIndex / 3) * 210 };
+                    const sx = source.x + 105, sy = source.y + 62, tx = target.x + 105, ty = target.y + 62;
+                    const curve = Math.max(45, Math.abs(tx - sx) * .45);
+                    return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}><path d={`M ${sx} ${sy} C ${sx + curve} ${sy}, ${tx - curve} ${ty}, ${tx} ${ty}`} /><text x={(sx + tx) / 2} y={(sy + ty) / 2 - 12}>{edge.label === "next" ? "" : edge.label.toUpperCase()}</text></g>;
+                  })}
+                </svg>
+                {definition.nodes.map((node, index) => {
+                  const col = index % 3, row = Math.floor(index / 3);
+                  return <button key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""}`} style={{ left: 170 + col * 300, top: 90 + row * 210 }} onClick={() => setSelectedId(node.id)} aria-pressed={selectedId === node.id}>
+                    <span className="graph-node-port graph-port-in" aria-hidden="true" /><span className="graph-node-icon">{nodeMeta[node.type].icon}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {index + 1}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small><span className="graph-node-port graph-port-out" aria-hidden="true" />
+                  </button>;
+                })}
+                {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
+              </div>
             </div>
             <div className="canvas-footnote">Use the safe test panel to evaluate conditions and inspect simulated step results. External actions remain disabled.</div>
           </div>
