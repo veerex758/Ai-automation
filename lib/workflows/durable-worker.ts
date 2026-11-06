@@ -112,10 +112,12 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
     if (!decrypted[provider]) throw new Error("WORKSPACE_CREDENTIAL_PROVIDER_MISMATCH");
     let providerCredentials = decrypted[provider];
     const oauthConfig = PROVIDER_OAUTH_CONFIG[provider];
-    if (oauthConfig && providerCredentials.refreshToken && providerCredentials.expiresAt) {
+    if (oauthConfig && providerCredentials.expiresAt) {
       const expiry = Date.parse(providerCredentials.expiresAt);
-      if (Number.isFinite(expiry) && expiry <= Date.now() + 60_000) {
+      if (!Number.isFinite(expiry)) throw new Error("OAUTH_CREDENTIAL_EXPIRY_INVALID");
+      if (expiry <= Date.now() + 60_000) {
         try {
+          if (!providerCredentials.refreshToken) throw new Error("OAUTH_REAUTH_REQUIRED");
           const refreshed = await refreshProviderOAuthToken({
             provider, config: oauthConfig, refreshToken: providerCredentials.refreshToken,
           });
