@@ -79,6 +79,10 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
     "slug": "twilio",
     "label": "Twilio"
   },
+  "twilio_voice": {
+    "slug": "twilio",
+    "label": "Twilio"
+  },
   "shopify": {
     "slug": "shopify",
     "label": "shopify"
