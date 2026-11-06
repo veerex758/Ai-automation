@@ -19,6 +19,7 @@ async function get(ctx: NodeContext, provider: string, url: string): Promise<Rec
 function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
   id: string; name: string; scope: string; description: string; input: I; output: O;
   run(ctx: NodeContext, input: z.infer<I>): Promise<unknown>;
+  additionalActions?: NodeDefinition["actions"];
 }): NodeDefinition {
   return {
     id: args.id, name: args.name, icon: "app-window", category: "data", version: 1,
@@ -30,7 +31,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
         const input = args.input.parse(raw);
         return args.output.parse(await args.run(ctx, input));
       },
-    }],
+    }, ...(args.additionalActions ?? [])],
   };
 }
 
@@ -51,6 +52,20 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         ? [{ id: item.id, name: item.name, ...(typeof item.mimeType === "string" ? { mimeType: item.mimeType } : {}), ...(typeof item.webViewLink === "string" ? { webViewLink: item.webViewLink } : {}) }] : []) : [];
       return { files: files.slice(0, input.pageSize ?? 20), ...(typeof body.nextPageToken === "string" ? { nextPageToken: body.nextPageToken } : {}) };
     },
+    additionalActions: [{
+      id: "get_file", name: "Get file metadata",
+      description: "Retrieves metadata for one Google Drive file using the existing read-only Drive OAuth scope.",
+      inputSchema: z.object({ fileId: z.string().trim().min(1).max(300) }).strict(),
+      outputSchema: z.object({ id: z.string(), name: z.string(), mimeType: z.string().optional(), webViewLink: z.string().url().optional(), modifiedTime: z.string().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ fileId: z.string().trim().min(1).max(300) }).strict().parse(raw);
+        const url = new URL("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(input.fileId));
+        url.searchParams.set("fields", "id,name,mimeType,webViewLink,modifiedTime");
+        const body = await get(ctx, "google_drive", url.toString());
+        if (typeof body.id !== "string" || typeof body.name !== "string") throw new Error("GOOGLE_DRIVE_INVALID_RESPONSE");
+        return { id: body.id, name: body.name, ...(typeof body.mimeType === "string" ? { mimeType: body.mimeType } : {}), ...(typeof body.webViewLink === "string" ? { webViewLink: body.webViewLink } : {}), ...(typeof body.modifiedTime === "string" ? { modifiedTime: body.modifiedTime } : {}) };
+      },
+    }],
   }),
   node({
     id: "google_calendar", name: "Google Calendar",
@@ -68,6 +83,19 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
       return { events: events.slice(0, input.maxResults ?? 20) };
     },
+    additionalActions: [{
+      id: "get_event", name: "Get event",
+      description: "Retrieves one event from a selected Google Calendar using the existing read-only Calendar OAuth scope.",
+      inputSchema: z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), eventId: z.string().trim().min(1).max(300) }).strict(),
+      outputSchema: z.object({ id: z.string(), summary: z.string().optional(), description: z.string().max(10000).optional(), start: z.unknown().optional(), end: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), eventId: z.string().trim().min(1).max(300) }).strict().parse(raw);
+        const url = "https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId) + "/events/" + encodeURIComponent(input.eventId);
+        const body = await get(ctx, "google_calendar", url);
+        if (typeof body.id !== "string") throw new Error("GOOGLE_CALENDAR_INVALID_RESPONSE");
+        return { id: body.id, ...(typeof body.summary === "string" ? { summary: body.summary } : {}), ...(typeof body.description === "string" ? { description: body.description.slice(0, 10000) } : {}), ...(body.start !== undefined ? { start: body.start } : {}), ...(body.end !== undefined ? { end: body.end } : {}), ...(typeof body.htmlLink === "string" ? { htmlLink: body.htmlLink } : {}) };
+      },
+    }],
   }),
   node({
     id: "google_docs", name: "Google Docs",
