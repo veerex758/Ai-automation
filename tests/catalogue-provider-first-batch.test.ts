@@ -59,3 +59,32 @@ test("new Google and CRM actions fail closed without workspace credentials", asy
   await assert.rejects(() => gmail.run(context, { messageId: "message-1" }), /GMAIL_CONNECTION_REQUIRED/);
   await assert.rejects(() => hubspot.run(context, { email: "person@example.test" }), /HUBSPOT_CONNECTION_REQUIRED/);
 });
+
+test("Google Drive get_file uses read-only metadata lookup", async () => {
+  let request: any;
+  const operation = findOperation("google_drive", "get_file", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { google_drive: { accessToken: "drive-test-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { id: "file-1", name: "Quarterly report", mimeType: "application/pdf", modifiedTime: "2026-11-01T12:00:00Z" } }; } },
+    previousOutputs: {},
+  }, { fileId: "file-1" });
+  assert.equal(request.method, "GET");
+  assert.match(request.url, /drive\/v3\/files\/file-1/);
+  assert.equal(request.headers.Authorization, "Bearer drive-test-token");
+  assert.deepEqual(result, { id: "file-1", name: "Quarterly report", mimeType: "application/pdf", modifiedTime: "2026-11-01T12:00:00Z" });
+});
+
+test("Google Calendar get_event safely encodes calendar and event identifiers", async () => {
+  let request: any;
+  const operation = findOperation("google_calendar", "get_event", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { google_calendar: { accessToken: "calendar-test-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { id: "event-1", summary: "Planning", start: { dateTime: "2026-11-07T10:00:00Z" }, end: { dateTime: "2026-11-07T10:30:00Z" } } }; } },
+    previousOutputs: {},
+  }, { calendarId: "primary", eventId: "event/1" });
+  assert.equal(request.method, "GET");
+  assert.match(request.url, /calendars\/primary\/events\/event%2F1/);
+  assert.deepEqual(result, { id: "event-1", summary: "Planning", start: { dateTime: "2026-11-07T10:00:00Z" }, end: { dateTime: "2026-11-07T10:30:00Z" } });
+});
