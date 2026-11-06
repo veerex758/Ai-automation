@@ -185,3 +185,32 @@ test("Intercom search_contacts uses the contacts search endpoint", async () => {
   assert.deepEqual(request.body.query, { field: "email", operator: "=", value: "person@example.test" });
   assert.deepEqual(result, { contacts: [{ contactId: "intercom-1", email: "person@example.test", firstName: "Ada Lovelace" }] });
 });
+
+test("Freshsales search_contacts uses the exact email lookup endpoint", async () => {
+  let request: any;
+  const operation = findOperation("freshsales", "search_contacts", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { freshsales: { accessToken: "freshsales-token", domain: "acme.myfreshworks.com" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { contacts: [{ id: 77, email: "person@example.test", name: "Ada Lovelace" }] } }; } },
+    previousOutputs: {},
+  }, { email: "person@example.test" });
+  assert.match(request.url, /api\/lookup\?q=person%40example\.test/);
+  assert.equal(request.headers.Authorization, "Token token=freshsales-token");
+  assert.deepEqual(result, { contacts: [{ contactId: "77", email: "person@example.test", firstName: "Ada Lovelace" }] });
+});
+
+test("Apollo search_contacts searches saved workspace contacts with bounded pagination", async () => {
+  let request: any;
+  const operation = findOperation("apollo", "search_contacts", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { apollo: { apiKey: "apollo-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { contacts: [{ id: "apollo-1", email: "person@example.test", first_name: "Ada", last_name: "Lovelace" }] } }; } },
+    previousOutputs: {},
+  }, { email: "person@example.test" });
+  assert.equal(request.url, "https://api.apollo.io/api/v1/contacts/search");
+  assert.equal(request.headers["x-api-key"], "apollo-token");
+  assert.deepEqual(request.body, { q_keywords: "person@example.test", page: 1, per_page: 20 });
+  assert.deepEqual(result, { contacts: [{ contactId: "apollo-1", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
+});
