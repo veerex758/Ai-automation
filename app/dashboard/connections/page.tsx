@@ -31,6 +31,7 @@ export default function ConnectionsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [workflowId, setWorkflowId] = useState("");
 
   useEffect(() => {
@@ -48,7 +49,10 @@ export default function ConnectionsPage() {
     fetch("/api/integrations/google/connections", { cache: "no-store" })
       .then(async response => {
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Could not load connections.");
+        if (!response.ok) {
+          setErrorCode(typeof payload.code === "string" ? payload.code : "CONNECTIONS_UNAVAILABLE");
+          throw new Error(payload.error ?? "Could not load connections.");
+        }
         setConnections(payload.connections ?? []);
       })
       .catch(reason => setError(reason instanceof Error ? reason.message : "Could not load connections."))
@@ -66,7 +70,7 @@ export default function ConnectionsPage() {
       </section>
 
       {notice && <p className="connections-notice" role="status">{notice}</p>}
-      {error && <p className="connections-error" role="alert">{error}</p>}
+      {error && <div className="connections-error" role="alert"><strong>Connections unavailable</strong><p>{error}</p><small>Diagnostic: {errorCode || "CONNECTIONS_UNAVAILABLE"}</small><button type="button" onClick={() => window.location.reload()}>Try again</button></div>}
 
       <section className="connections-grid" aria-label="Available integrations">
         <article className="connection-card">
