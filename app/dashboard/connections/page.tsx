@@ -31,9 +31,19 @@ export default function ConnectionsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
 
   useEffect(() => {
-    const status = new URLSearchParams(window.location.search).get("google");
+    const params = new URLSearchParams(window.location.search);
+    const requestedWorkflow = params.get("workflowId");
+    let rememberedWorkflow = "";
+    try { rememberedWorkflow = window.sessionStorage.getItem("aivanta-return-workflow") || ""; } catch { /* Continue without a remembered return target. */ }
+    const nextWorkflow = requestedWorkflow && /^[0-9a-f-]{36}$/i.test(requestedWorkflow) ? requestedWorkflow : rememberedWorkflow;
+    if (nextWorkflow) {
+      setWorkflowId(nextWorkflow);
+      try { window.sessionStorage.setItem("aivanta-return-workflow", nextWorkflow); } catch { /* The workflow ID remains in the current page state. */ }
+    }
+    const status = params.get("google");
     if (status) setNotice(statusMessages[status] ?? "Google authorization returned.");
     fetch("/api/integrations/google/connections", { cache: "no-store" })
       .then(async response => {
@@ -52,6 +62,7 @@ export default function ConnectionsPage() {
         <div className="connections-eyebrow">YOUR WORKSPACE, CONNECTED</div>
         <h1>Connect your tools.</h1>
         <p>Authorize services using their official sign-in screens. Aivanta never asks for your provider password.</p>
+        {workflowId && <Link className="connections-return" href={`/dashboard/workflows/${workflowId}`}>Return to your workflow <span aria-hidden="true">→</span></Link>}
       </section>
 
       {notice && <p className="connections-notice" role="status">{notice}</p>}
