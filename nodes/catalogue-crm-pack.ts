@@ -138,7 +138,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
           if (typeof row?.id !== "number" && typeof row?.id !== "string") return [];
           const emails = Array.isArray(row.email) ? row.email : [];
           const emailValue = emails.find((value: any) => typeof value?.value === "string")?.value;
-          const names = typeof row.name === "string" ? row.name.split(/\\s+/, 2) : [];
+          const names = typeof row.name === "string" ? row.name.split(/\s+/, 2) : [];
           return [{ contactId: String(row.id), ...(typeof emailValue === "string" ? { email: emailValue } : {}), ...(names[0] ? { firstName: names[0] } : {}), ...(names[1] ? { lastName: names[1] } : {}) }];
         });
         return { contacts: contacts.slice(0, 20) };
@@ -201,7 +201,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
         const url = new URL("https://" + domain + "/crm/sales/api/lookup");
         url.searchParams.set("q", input.email); url.searchParams.set("f", "email"); url.searchParams.set("entities", "contact");
         const body = await call(ctx, "freshsales", { url: url.toString(), headers: { Authorization: "Token token=" + token } });
-        const contacts = Array.isArray(body.contacts) ? body.contacts.flatMap((row: any) => typeof row?.id === "number" || typeof row?.id === "string" ? [{ contactId: String(row.id), ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.name === "string" ? { firstName: row.name } : {}) }] : []) : [];
+        const contacts = Array.isArray(body.contacts) ? body.contacts.flatMap((row: any) => typeof row?.id === "number" || typeof row?.id === "string" ? [{ contactId: String(row.id), ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.name === "string" ? { firstName: row.name.trim().split(/\s+/, 2)[0], ...(row.name.trim().split(/\s+/, 2)[1] ? { lastName: row.name.trim().split(/\s+/, 2)[1] } : {}) } : {}) }] : []) : [];
         return { contacts: contacts.slice(0, 20) };
       },
     }],
