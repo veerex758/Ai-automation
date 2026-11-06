@@ -133,8 +133,16 @@ export async function POST(request: NextRequest) {
       p_encrypted_credentials: encrypted,
       p_created_by: user.id,
     });
-    if (error || !data) throw error ?? new Error("INTEGRATION_SAVE_FAILED");
-    return json({ integration: data }, 201);
+    if (error || !data || typeof data.id !== "string") throw error ?? new Error("INTEGRATION_SAVE_FAILED");
+    // Replacing a secret invalidates any previous successful test. A new
+    // credential must pass a fresh provider check before the worker will use it.
+    const { error: invalidateError } = await db.from("workspace_integrations").update({
+      status: "needs_attention",
+      last_tested_at: null,
+      last_test_status: null,
+    }).eq("id", data.id).eq("workspace_id", workspace.id);
+    if (invalidateError) throw invalidateError;
+    return json({ integration: { ...data, status: "needs_attention", last_tested_at: null, last_test_status: null } }, 201);
   } catch {
     return json({ error: "Could not securely save this workspace integration." }, 500);
   }
