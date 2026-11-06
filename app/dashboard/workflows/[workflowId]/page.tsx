@@ -273,7 +273,7 @@ export default function WorkflowBuilderPage() {
                   })}
                 </svg>
                 {definition.nodes.map((node, index) => {
-                  const col = index % 3, row = Math.floor(index / 3);
+                  const incomingBranch = (definition.edges ?? []).find((edge) => edge.target === node.id && edge.label !== "next"); const col = incomingBranch?.label === "false" ? 2 : incomingBranch?.label === "true" ? 0 : index % 3; const row = Math.floor(index / 3);
                   return <button key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""}`} style={{ left: 170 + col * 300, top: 90 + row * 210 }} onClick={() => setSelectedId(node.id)} aria-pressed={selectedId === node.id}>
                     <span className="graph-node-port graph-port-in" aria-hidden="true" /><span className="graph-node-icon">{nodeMeta[node.type].icon}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {index + 1}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small><span className="graph-node-port graph-port-out" aria-hidden="true" />
                   </button>;
