@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -64,6 +64,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
 
   try {
     const stateData = verifyOAuthState(state, provider);
+    const actualChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+    if (!sameSecret(actualChallenge, stateData.codeChallenge)) return finish(request, provider, false);
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user || user.id !== stateData.userId) return finish(request, provider, false);
