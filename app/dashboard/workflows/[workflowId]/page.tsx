@@ -138,7 +138,7 @@ export default function WorkflowBuilderPage() {
       ...current,
       nodes: current.nodes.map((node) => node.id !== target || label === "next" ? node : {
         ...node,
-        position: { x: label === "true" ? 170 : 770, y: node.position?.y ?? 90 + current.nodes.findIndex((item) => item.id === node.id) * 210 },
+        position: { x: label === "true" ? 170 : 770, y: node.position?.y ?? 90 + Math.floor(current.nodes.findIndex((item) => item.id === node.id) / 3) * 210 },
       }),
       edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source, target, label }],
     }));
