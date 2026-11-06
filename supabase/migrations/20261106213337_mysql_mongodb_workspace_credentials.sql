@@ -23,7 +23,8 @@ create or replace function public.save_workspace_database_credentials(
   p_workspace_id uuid,
   p_provider text,
   p_display_name text,
-  p_encrypted_credential text
+  p_encrypted_credential text,
+  p_created_by uuid
 )
 returns uuid
 language plpgsql
@@ -49,7 +50,7 @@ begin
     workspace_id, provider, status, display_name, metadata, created_by
   )
   values (
-    p_workspace_id, p_provider, 'needs_attention', trim(p_display_name), '{}'::jsonb, null
+    p_workspace_id, p_provider, 'needs_attention', trim(p_display_name), '{}'::jsonb, p_created_by
   )
   on conflict (workspace_id, provider) do update
     set display_name = excluded.display_name,
@@ -74,5 +75,5 @@ begin
 end;
 $$;
 
-revoke all on function public.save_workspace_database_credentials(uuid, text, text, text) from public, anon, authenticated;
-grant execute on function public.save_workspace_database_credentials(uuid, text, text, text) to service_role;
+revoke all on function public.save_workspace_database_credentials(uuid, text, text, text, uuid) from public, anon, authenticated;
+grant execute on function public.save_workspace_database_credentials(uuid, text, text, text, uuid) to service_role;
