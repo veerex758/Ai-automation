@@ -315,3 +315,11 @@
 .registry-connection-state.state-coming-soon{background:#f5f1e9;color:#88724c}
 .registry-connection-state.state-no-connection{background:#edf4e8;color:#537b38}
 .registry-connection-state.state-setup-required{background:#fff3e2;color:#9a682c}
+
+.registry-connect-link{display:inline-flex;align-items:center;justify-content:center;margin-top:12px;padding:8px 10px;border:1px solid #dce8d7;border-radius:7px;color:#426c39;background:#fbfdf9;font:700 9px 'DM Sans',sans-serif;text-decoration:none}
+.registry-connect-link:hover{border-color:#a8c99a;background:#f4f9f1}
+.registry-operation-schema{margin-top:9px;border-top:1px solid #e8eee6;padding-top:8px}
+.registry-operation-schema summary{color:#4d7047;font-size:9px;font-weight:700;cursor:pointer}
+.registry-operation-schema>div{margin-top:8px}
+.registry-operation-schema>div>strong{display:block;color:#64776a;font-size:8px;text-transform:uppercase;letter-spacing:.4px}
+.registry-operation-schema pre{max-height:190px;overflow:auto;margin:5px 0 0;padding:9px;border:1px solid #e7ede4;border-radius:6px;background:#f6f8f5;color:#4b5d50;font:8px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
