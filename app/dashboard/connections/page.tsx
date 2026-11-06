@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "http" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -105,6 +105,25 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   dropbox: { label: "Dropbox", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
   aws_s3: { label: "AWS S3", fields: [{ name: "accessKeyId", label: "Access key ID", type: "text" }, { name: "secretAccessKey", label: "Secret access key", type: "password" }, { name: "region", label: "AWS region", type: "text" }] },
   cloudflare_r2: { label: "Cloudflare R2", fields: [{ name: "accountId", label: "Cloudflare account ID", type: "text" }, { name: "accessKeyId", label: "R2 access key ID", type: "text" }, { name: "secretAccessKey", label: "R2 secret access key", type: "password" }] },
+  http: { label: "HTTP API", fields: [{ name: "baseUrl", label: "Base URL (HTTPS)", type: "url" }, { name: "apiKey", label: "API key", type: "password", required: false }, { name: "username", label: "Basic auth username", type: "text", required: false }, { name: "password", label: "Basic auth password", type: "password", required: false }] },
+  mistral: { label: "Mistral", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  groq: { label: "Groq", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  perplexity: { label: "Perplexity", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  discord: { label: "Discord", fields: [{ name: "botToken", label: "Bot token", type: "password" }] },
+  telegram: { label: "Telegram", fields: [{ name: "botToken", label: "Bot token", type: "password" }] },
+  whatsapp_business: { label: "WhatsApp Business", fields: [{ name: "accessToken", label: "System user access token", type: "password" }, { name: "phoneNumberId", label: "Phone number ID", type: "text" }] },
+  sendgrid: { label: "SendGrid", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
+  mailgun: { label: "Mailgun", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "domain", label: "Sending domain", type: "text" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
+  postmark: { label: "Postmark", fields: [{ name: "serverToken", label: "Server token", type: "password" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
+  github: { label: "GitHub", fields: [{ name: "token", label: "Personal access token", type: "password" }] },
+  gitlab: { label: "GitLab", fields: [{ name: "token", label: "Personal access token", type: "password" }] },
+  sentry: { label: "Sentry", fields: [{ name: "authToken", label: "Auth token", type: "password" }] },
+  vercel: { label: "Vercel", fields: [{ name: "token", label: "Access token", type: "password" }] },
+  calendly: { label: "Calendly", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  zendesk: { label: "Zendesk", fields: [{ name: "subdomain", label: "Zendesk subdomain", type: "text" }, { name: "email", label: "Account email", type: "email" }, { name: "apiToken", label: "API token", type: "password" }] },
+  freshdesk: { label: "Freshdesk", fields: [{ name: "domain", label: "Freshdesk domain", type: "text" }, { name: "apiKey", label: "API key", type: "password" }] },
+  serpapi: { label: "SerpAPI", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  openweather: { label: "OpenWeather", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
 };
 
 function WorkspaceIntegrationManager() {
@@ -118,6 +137,14 @@ function WorkspaceIntegrationManager() {
   const [sendingResendTest, setSendingResendTest] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("provider");
+    if (requested && Object.prototype.hasOwnProperty.call(providerFields, requested)) {
+      setProvider(requested as WorkspaceProvider);
+      setValues({});
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/integrations/workspace", { cache: "no-store" })
