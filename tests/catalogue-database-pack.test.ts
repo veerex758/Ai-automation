@@ -114,6 +114,21 @@ test("AWS S3 get_object_metadata uses SigV4 and returns metadata only for an exa
   await assert.rejects(() => op.run(context({ aws_s3: { region: "eu-west-1", accessKeyId: "x", secretAccessKey: "y" } }, () => ({ status: 200, body: "<ListBucketResult><Contents><Key>other</Key></Contents></ListBucketResult>" })), { bucket: "aivanta-data", key: "reports/a.csv" }), /AWS_S3_OBJECT_NOT_FOUND/);
 });
 
+test("AWS S3 and R2 list requests enforce the 100-object provider-side cap", async () => {
+  let awsArgs: any; let r2Args: any;
+  const aws = findOperation("aws_s3", "execute", "action");
+  const r2 = findOperation("cloudflare_r2", "execute", "action");
+  assert.ok(aws && r2);
+  await aws.run(context({ aws_s3: { region: "eu-west-1", accessKeyId: "AKIATEST", secretAccessKey: "secret" } }, request => {
+    awsArgs = request; return { status: 200, body: "<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>one.txt</Key></Contents></ListBucketResult>" };
+  }), { bucket: "aivanta-data", prefix: "reports/" });
+  await r2.run(context({ cloudflare_r2: { accountId: "a".repeat(32), accessKeyId: "R2ACCESS", secretAccessKey: "secret" } }, request => {
+    r2Args = request; return { status: 200, body: "<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>one.txt</Key></Contents></ListBucketResult>" };
+  }), { bucket: "assets", prefix: "reports/" });
+  assert.equal(new URL(awsArgs.url).searchParams.get("max-keys"), "100");
+  assert.equal(new URL(r2Args.url).searchParams.get("max-keys"), "100");
+});
+
 test("Cloudflare R2 get_object_metadata signs against account endpoint and exposes metadata only", async () => {
   let args: any;
   const op = findOperation("cloudflare_r2", "get_object_metadata", "action");
