@@ -92,7 +92,7 @@ async function check(provider: Provider, c: Credentials) {
       case "freshdesk": {
         const domain = required(c, "domain");
         let parsed: URL; try { parsed = new URL(domain.startsWith("https://") ? domain : "https://" + domain); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
-        if (parsed.protocol !== "https:" || parsed.username || parsed.password) throw new Error("CREDENTIAL_FIELD_INVALID");
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port || !(parsed.hostname.endsWith(".freshdesk.com") || parsed.hostname.endsWith(".myfreshworks.com"))) throw new Error("CREDENTIAL_FIELD_INVALID");
         url = parsed.origin + "/api/v2/agents/me";
         headers.Authorization = "Basic " + Buffer.from(required(c, "apiKey") + ":X").toString("base64"); break;
       }
