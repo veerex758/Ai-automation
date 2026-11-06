@@ -26,4 +26,16 @@ export type NodeOperation<I extends z.ZodTypeAny = z.ZodTypeAny, O extends z.Zod
   description: string;
   inputSchema: I;
   outputSchema: O;
-  run(ctx: NodeContext, input: z.infer<¶»§q«^
+  run(ctx: NodeContext, input: z.infer<I>): Promise<z.infer<O>>;
+};
+
+export type NodeDefinition = {
+  id: string;
+  name: string;
+  icon: string;
+  category: "triggers" | "ai" | "communication" | "data" | "developer";
+  version: number;
+  auth: AuthConfig;
+  triggers: NodeOperation[];
+  actions: NodeOperation[];
+};
