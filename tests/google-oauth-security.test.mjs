@@ -125,3 +125,25 @@ test("restore caller environment after this test file", () => {
   if (originalGoogleConfig.redirectUri === undefined) delete process.env.GOOGLE_REDIRECT_URI;
   else process.env.GOOGLE_REDIRECT_URI = originalGoogleConfig.redirectUri;
 });
+
+test("Google OAuth callback distinguishes missing state cookies from state mismatch safely", async () => {
+  const callback = await readFile(new URL("../app/api/integrations/google/callback/route.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/dashboard/connections/page.tsx", import.meta.url), "utf8");
+  assert.match(callback, /state_cookie_missing/);
+  assert.match(callback, /state_mismatch/);
+  assert.match(callback, /stateCookiePresent: Boolean\(expectedState\)/);
+  assert.match(page, /state_cookie_missing:/);
+  assert.match(page, /state_mismatch:/);
+  assert.match(callback, /clearCookies\(connectionsUrl\(request, "state_cookie_missing"\)\)/);
+  assert.match(callback, /clearCookies\(connectionsUrl\(request, "state_mismatch"\)\)/);
+});
+
+test("Google OAuth callback validates state before token exchange and clears cookies on failures", async () => {
+  const callback = await readFile(new URL("../app/api/integrations/google/callback/route.ts", import.meta.url), "utf8");
+  const stateCheck = callback.indexOf('if (!state || !expectedState)');
+  const mismatchCheck = callback.indexOf('if (state !== expectedState)');
+  const tokenExchange = callback.indexOf('https://oauth2.googleapis.com/token');
+  assert.ok(stateCheck >= 0 && mismatchCheck > stateCheck && tokenExchange > mismatchCheck);
+  assert.match(callback, /callback_context_missing/);
+  assert.match(callback, /clearCookies\(connectionsUrl\(request, "callback_context_missing"\)\)/);
+});
