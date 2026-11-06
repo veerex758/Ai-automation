@@ -234,6 +234,8 @@ export default function RegistryIntegrationsDirectory() {
       setWorkspace(Array.isArray(payload.integrations)?payload.integrations:[]);
     } catch(error) {
       setConnectionMessage(error instanceof Error?error.message:"Connection setup failed.");
+      const response = await fetch("/api/integrations/workspace",{cache:"no-store"}).catch(() => null);
+      if (response?.ok) { const payload = await response.json().catch(() => ({})); setWorkspace(Array.isArray(payload.integrations)?payload.integrations:[]); }
     } finally { setConnectionBusy(false); }
   };
 
