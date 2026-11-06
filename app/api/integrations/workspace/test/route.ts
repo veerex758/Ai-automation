@@ -329,7 +329,13 @@ async function check(provider: Provider, c: Credentials) {
       case "mysql": {
         const connectionString = required(c, "connectionString");
         if (!/^mysql:\/\//i.test(connectionString)) throw new Error("CREDENTIAL_FIELD_INVALID");
-        const connection = await createMysqlConnection({ uri: connectionString, ssl: { rejectUnauthorized: true }, connectTimeout: 5000, multipleStatements: false });
+        const parsed = new URL(connectionString);
+        const connection = await createMysqlConnection({
+          host: parsed.hostname, port: Number(parsed.port || 3306),
+          user: decodeURIComponent(parsed.username), password: decodeURIComponent(parsed.password),
+          database: decodeURIComponent(parsed.pathname.replace(/^\\//, "")) || undefined,
+          ssl: { rejectUnauthorized: true }, connectTimeout: 5000, multipleStatements: false,
+        });
         try { await connection.query("SELECT 1"); } finally { await connection.end(); }
         return { ok: true, message: "MySQL connection verified over TLS.", status: 200 };
       }
