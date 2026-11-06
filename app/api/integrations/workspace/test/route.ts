@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { decryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
+import { performSafeHttpRequest } from "@/nodes/safe-http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ function signedS3Headers(url: URL, accessKeyId: string, secretAccessKey: string,
 }
 
 
-const TESTABLE = new Set(["openai", "gemini", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+const TESTABLE = new Set(["openai", "gemini", "claude", "http", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
 type Provider = WorkspaceCredentialProvider;
 type Credentials = Record<string, string>;
 
@@ -62,6 +63,19 @@ async function check(provider: Provider, c: Credentials) {
         headers["x-api-key"] = required(c, "apiKey");
         headers["anthropic-version"] = "2023-06-01";
         break;
+      case "http": {
+        let target: URL;
+        try { target = new URL(required(c, "baseUrl")); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (target.protocol !== "https:" || target.username || target.password || target.hash) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const authHeaders: Record<string, string> = {};
+        if (c.apiKey) authHeaders.Authorization = "Bearer " + c.apiKey;
+        else if (c.username && c.password) authHeaders.Authorization = "Basic " + Buffer.from(c.username + ":" + c.password).toString("base64");
+        else if (c.username || c.password) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const result = await performSafeHttpRequest({ url: target.toString(), method: "GET", headers: authHeaders, timeoutMs: 8000 });
+        return result.status >= 200 && result.status < 300
+          ? { ok: true, message: "HTTP endpoint returned a successful read-only response.", status: result.status }
+          : { ok: false, message: "HTTP endpoint returned status " + result.status + ". Check the URL and authentication.", status: result.status };
+      }
       case "slack": {
         // Incoming webhooks are write-only: validating one requires posting a message.
         // Never send a surprise message from a read-only "Test connection" control.
