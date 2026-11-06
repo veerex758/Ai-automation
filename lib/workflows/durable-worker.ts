@@ -87,6 +87,11 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
       google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
     };
     const googleProduct = googleProductByProvider[provider];
+    if (provider === "rss_feed") {
+      // RSS is a credential-free read operation; it still requires the explicit provider live gate.
+      credentials[provider] = {};
+      continue;
+    }
     if (googleProduct) {
       credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;
