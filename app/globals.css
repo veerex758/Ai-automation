@@ -373,3 +373,31 @@ h1 span{color:#809e65}
 :where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:2px solid #a8d85a;outline-offset:3px}
 @media(max-width:680px){.reference-home .brand-mark{width:30px;height:30px;padding:2px}.reference-home .brand{font-size:17px;gap:8px}.reference-nav-inner{gap:8px}.reference-auth{gap:9px}}
 @media(prefers-reduced-motion:reduce){.reference-nav-links a,.reference-auth a,.reference-footer a,.reference-primary,.reference-secondary,.reference-nav-cta{transition:none}}
+
+
+/* Integration directory: responsive provider cards, operation schemas and safe connection dialog. */
+.registry-connect-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(5,18,14,.68);display:grid;place-items:center;padding:20px;backdrop-filter:blur(5px)}
+.registry-connect-dialog{width:min(100%,520px);max-height:min(86vh,820px);overflow:auto;background:#fbfcf9;color:#19231f;border:1px solid #dce6dc;border-radius:18px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+.registry-connect-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.registry-connect-heading span{font-size:9px;font-weight:800;letter-spacing:1.4px;color:#718077}
+.registry-connect-heading h2{font-size:23px;letter-spacing:-.7px;margin:6px 0 0}
+.registry-connect-heading>button{border:1px solid #dce5dc;background:#fff;border-radius:9px;width:34px;height:34px;font-size:21px;color:#34433a;cursor:pointer}
+.registry-connect-dialog>p{font-size:12px;line-height:1.65;color:#65736a}
+.registry-connect-warning{padding:11px 12px;border:1px solid #e6d6a6;background:#fff9e8;border-radius:9px;color:#72591a!important}
+.registry-credential-field{display:grid;gap:6px;margin:13px 0}
+.registry-credential-field span{font-size:11px;font-weight:700;color:#36453b}
+.registry-credential-field input{width:100%;min-height:42px;padding:10px 12px;border:1px solid #d6e0d7;border-radius:9px;background:#fff;color:#19231f;font:inherit;font-size:13px}
+.registry-connect-message{padding:10px 12px;border-radius:8px;background:#eef4ed;color:#314a38!important}
+.registry-connect-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+.registry-connect-actions button{border:1px solid #d7e1d8;border-radius:9px;padding:10px 14px;background:#fff;color:#26372c;font-weight:700;cursor:pointer}
+.registry-connect-actions button:last-child{background:#0b3026;color:#fff;border-color:#0b3026}
+.registry-connect-actions button:disabled{opacity:.55;cursor:not-allowed}
+.registry-operation-schema{margin-top:9px;border-top:1px solid rgba(120,140,125,.2);padding-top:8px}
+.registry-operation-schema summary{font-size:10px;font-weight:750;cursor:pointer;color:#4b6354}
+.registry-operation-schema>div{display:grid;gap:5px;margin-top:8px}
+.registry-operation-schema strong{font-size:10px}
+.registry-operation-schema pre{max-height:190px;overflow:auto;padding:10px;border-radius:8px;background:#f1f4ef;color:#34443a;font-size:9px;white-space:pre-wrap;overflow-wrap:anywhere}
+.registry-brand-mark img{max-width:100%;max-height:100%}
+.integration-brand-mark[data-logo-fallback]:after{content:attr(data-logo-fallback);font-weight:800;color:#24382c}
+.registry-native-mark{display:grid;place-items:center;font-weight:800;font-size:18px;color:#244b38}
+@media(max-width:600px){.registry-connect-backdrop{padding:10px;align-items:end}.registry-connect-dialog{max-height:90vh;border-radius:17px 17px 12px 12px;padding:19px}.registry-connect-heading h2{font-size:20px}}
