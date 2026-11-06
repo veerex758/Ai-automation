@@ -23,8 +23,8 @@ function signedS3Headers(url: URL, accessKeyId: string, secretAccessKey: string,
 }
 
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
+const TESTABLE = new Set(["sendgrid", "mailgun", "postmark", "discord", "telegram", "whatsapp_business", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+type Provider = "sendgrid" | "mailgun" | "postmark" | "discord" | "telegram" | "whatsapp_business" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -49,6 +49,45 @@ async function check(provider: Provider, c: Credentials) {
     const headers: Record<string, string> = {};
     let method: "GET" | "POST" = "GET", body: string | undefined;
     switch (provider) {
+      case "sendgrid":
+        url = "https://api.sendgrid.com/v3/user/profile"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "mailgun":
+        url = "https://api.mailgun.net/v3/domains/" + encodeURIComponent(required(c, "domain"));
+        headers.Authorization = "Basic " + Buffer.from("api:" + required(c, "apiKey")).toString("base64"); break;
+      case "postmark":
+        url = "https://api.postmarkapp.com/server"; headers["X-Postmark-Server-Token"] = required(c, "serverToken"); break;
+      case "discord":
+        url = "https://discord.com/api/v10/users/@me"; headers.Authorization = "Bot " + required(c, "botToken"); break;
+      case "telegram":
+        url = "https://api.telegram.org/bot" + required(c, "botToken") + "/getMe"; break;
+      case "whatsapp_business":
+        url = "https://graph.facebook.com/v21.0/" + encodeURIComponent(required(c, "phoneNumberId")) + "?fields=id,display_phone_number";
+        headers.Authorization = "Bearer " + required(c, "accessToken"); break;
+      case "gitlab":
+        url = "https://gitlab.com/api/v4/user"; headers["PRIVATE-TOKEN"] = required(c, "token"); break;
+      case "sentry":
+        url = "https://sentry.io/api/0/organizations/"; headers.Authorization = "Bearer " + required(c, "authToken"); break;
+      case "vercel":
+        url = "https://api.vercel.com/v2/user"; headers.Authorization = "Bearer " + required(c, "token"); break;
+      case "calendly":
+        url = "https://api.calendly.com/users/me"; headers.Authorization = "Bearer " + required(c, "accessToken"); break;
+      case "zendesk": {
+        const subdomain = required(c, "subdomain");
+        if (!/^[a-z0-9-]+$/i.test(subdomain)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + subdomain + ".zendesk.com/api/v2/users/me.json";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "email") + "/token:" + required(c, "apiToken")).toString("base64"); break;
+      }
+      case "freshdesk": {
+        const domain = required(c, "domain");
+        let parsed: URL; try { parsed = new URL(domain.startsWith("https://") ? domain : "https://" + domain); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/api/v2/agents/me";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "apiKey") + ":X").toString("base64"); break;
+      }
+      case "serpapi":
+        url = "https://serpapi.com/account?api_key=" + encodeURIComponent(required(c, "apiKey")); break;
+      case "openweather":
+        url = "https://api.openweathermap.org/data/2.5/weather?q=London&appid=" + encodeURIComponent(required(c, "apiKey")); break;
       case "openai":
         url = "https://api.openai.com/v1/models";
         headers.Authorization = "Bearer " + required(c, "apiKey");
