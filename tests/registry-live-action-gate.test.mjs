@@ -4,12 +4,14 @@ import { readFile } from "node:fs/promises";
 
 const routeUrl = new URL("../app/api/workflows/[workflowId]/registry-run/route.ts", import.meta.url);
 
-test("live registry execution remains limited to the guarded manual-to-Resend path", async () => {
+test("live registry execution requires the server-side per-operation allowlist", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /unsupportedLiveStep\s*=\s*steps\.find/);
   assert.match(source, /step\.nodeId === "manual" && step\.operationId === "start"/);
   assert.match(source, /step\.nodeId === "email" && step\.operationId === "send_email"/);
-  assert.match(source, /available in dry-run only until its live integration is explicitly enabled/);
+  assert.match(source, /AIVANTA_LIVE_NODE_ALLOWLIST/);
+  assert.match(source, /nodeId \+ "\." \+ step\.operationId/);
+  assert.match(source, /This operation is not enabled for live execution/);
   assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
 });
 
