@@ -560,14 +560,16 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "MySQL",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "connectionString",
+    "registryId": "mysql"
   },
   {
     "id": "mongodb",
     "name": "MongoDB",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "connectionString",
+    "registryId": "mongodb"
   },
   {
     "id": "redis",
