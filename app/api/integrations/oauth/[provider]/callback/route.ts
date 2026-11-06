@@ -34,6 +34,13 @@ function finish(request: NextRequest, provider: string, success: boolean) {
     path: "/api/integrations/oauth/" + provider + "/callback",
     maxAge: 0,
   });
+  response.cookies.set("aivanta_oauth_verifier_" + provider, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/integrations/oauth/" + provider + "/callback",
+    maxAge: 0,
+  });
   return response;
 }
 
@@ -50,7 +57,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
   const state = params.get("state");
   const code = params.get("code");
   const cookieState = request.cookies.get("aivanta_oauth_" + provider)?.value;
-  if (params.has("error") || !state || !code || !cookieState || !sameSecret(state, cookieState)) {
+  const codeVerifier = request.cookies.get("aivanta_oauth_verifier_" + provider)?.value;
+  if (params.has("error") || !state || !code || !cookieState || !codeVerifier || !sameSecret(state, cookieState)) {
     return finish(request, provider, false);
   }
 
@@ -66,7 +74,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     let token = await exchangeProviderOAuthCode({
       provider, config, code,
       redirectUri: new URL("/api/integrations/oauth/" + encodeURIComponent(provider) + "/callback", request.url).toString(),
-      codeVerifier: stateData.codeVerifier,
+      codeVerifier,
     });
     if (config.tokenExchangeMode === "meta-long-lived") {
       token = await exchangeMetaLongLivedToken({ provider, accessToken: token.access_token, config });
