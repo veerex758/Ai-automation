@@ -3,44 +3,29 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/workspace-credentials.test.ts tests/provider-catalog.test.ts tests/provider-pack.test.ts tests/catalogue-provider-first-batch.test.ts tests/catalogue-database-pack.test.ts tests/utility-pack.test.ts tests/safe-http-durable-worker.test.ts tests/cron.test.ts && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/workspace-credentials.test.ts tests/provider-catalog.test.ts tests/provider-pack.test.ts tests/catalogue-provider-first-batch.test.ts tests/catalogue-database-pack.test.ts tests/worker-operation-parity.test.ts tests/sql-document-databases.test.ts tests/provider-oauth.test.ts tests/utility-pack.test.ts tests/safe-http-durable-worker.test.ts tests/cron.test.ts tests/workflow-authorization.test.ts && node --test --test-concurrency=1 tests/*.test.mjs",
     "dev": "next dev",
     "build": "npm run validate:nodes && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "staging:smoke": "node scripts/staging-smoke.mjs",
-    "validate:nodes": "tsx scripts/validate-nodes.ts"
+    "validate:nodes": "tsx scripts/validate-nodes.ts",
+    "report:providers": "tsx scripts/generate-provider-verification-report.ts"
   },
   "dependencies": {
+    "@googleapis/gmail": "22.0.2",
+    "@googleapis/sheets": "18.1.2",
+    "@hubspot/api-client": "14.0.1",
+    "@linear/sdk": "100.0.0",
+    "@notionhq/client": "5.28.0",
+    "@shopify/shopify-api": "15.0.1",
+    "@slack/web-api": "8.2.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.57.0",
     "@vercel/sandbox": "^3.9.1",
+    "mongodb": "6.20.0",
+    "mysql2": "3.15.3",
     "next": "^15.5.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
     "pg": "^8.16.3",
-    "zod": "^4.1.12",
-    "@googleapis/gmail": "22.0.2",
-    "@googleapis/sheets": "18.1.2",
-    "@slack/web-api": "8.2.0",
-    "@notionhq/client": "5.28.0",
-    "@hubspot/api-client": "14.0.1",
-    "twilio": "6.2.0",
-    "@shopify/shopify-api": "15.0.1",
-    "stripe": "23.0.1",
-    "resend": "6.37.0",
-    "@linear/sdk": "100.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.15.0",
-    "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.0",
-    "eslint": "^9.28.0",
-    "eslint-config-next": "^15.5.0",
-    "typescript": "^5.8.3",
-    "@eslint/eslintrc": "^3.3.1",
-    "@types/pg": "^8.15.5",
-    "tsx": "^4.20.6"
-  }
-}
+  ¶»§q«^
