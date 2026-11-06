@@ -15,7 +15,9 @@ test("only native registry implementations are marked as registered", () => {
   const catalog = getPublicNodeCatalog();
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
-  assert.equal(registered.length, 98);
+  assert.equal(registered.length, 100);
+  assert.ok(registered.some((node) => node.id === "mysql"));
+  assert.ok(registered.some((node) => node.id === "mongodb"));
   assert.equal(comingSoon.length, 100 - registered.length);
   assert.ok(comingSoon.every((node) => node.triggers.length === 0 && node.actions.length === 0));
 });
@@ -106,17 +108,17 @@ test("native executable inventory has one authoritative count, separate from dir
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
 
-  // 118 is the native registry after adding 51 provider adapters across the seven catalogue batches:
+  // 120 is the native registry after adding 51 provider adapters across the seven catalogue batches:
   // 20 utility-pack nodes and 20 provider-pack nodes, plus 51 new catalogue adapters.
-  assert.equal(nodes.length, 118);
-  assert.equal(executable.length, 118);
-  assert.equal(new Set(nodes.map((node) => node.id)).size, 118);
+  assert.equal(nodes.length, 120);
+  assert.equal(executable.length, 120);
+  assert.equal(new Set(nodes.map((node) => node.id)).size, 120);
 
-  // The 100-entry provider directory is a different inventory. Its 98
-  // mapped entries do not include the 20 internal utility-pack nodes.
+  // The 100-entry provider directory is a different inventory. MySQL and
+  // MongoDB are now mapped; internal utility nodes remain outside that list.
   assert.equal(catalog.length, 100);
-  assert.equal(registered.length, 98);
-  assert.equal(comingSoon.length, 2);
-  assert.equal(new Set(registered.map((node) => node.registryNodeId)).size, 98);
+  assert.equal(registered.length, 100);
+  assert.equal(comingSoon.length, 0);
+  assert.equal(new Set(registered.map((node) => node.registryNodeId)).size, 100);
   assert.ok(registered.every((node) => nodes.some((implementation) => implementation.id === node.registryNodeId)));
 });

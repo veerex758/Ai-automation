@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "http" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "http" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "mysql" | "mongodb" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -99,6 +99,8 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   mailchimp: { label: "Mailchimp", fields: [{ name: "apiKey", label: "API key (includes server region suffix)", type: "password" }] },
   typeform: { label: "Typeform", fields: [{ name: "accessToken", label: "Personal access token", type: "password" }] },
   supabase: { label: "Supabase", fields: [{ name: "projectUrl", label: "Project URL (https://project.supabase.co)", type: "url" }, { name: "apiKey", label: "API key (scoped key preferred)", type: "password" }] },
+  mysql: { label: "MySQL", fields: [{ name: "connectionString", label: "MySQL connection string", type: "password" }] },
+  mongodb: { label: "MongoDB", fields: [{ name: "connectionString", label: "MongoDB connection string", type: "password" }] },
   postgresql: { label: "PostgreSQL", fields: [{ name: "connectionString", label: "Connection string (TLS required)", type: "password" }] },
   redis: { label: "Redis (Upstash REST)", fields: [{ name: "restUrl", label: "Upstash REST URL", type: "url" }, { name: "token", label: "REST token", type: "password" }] },
   firebase: { label: "Firebase / Firestore", fields: [{ name: "projectId", label: "Firebase project ID", type: "text" }, { name: "accessToken", label: "Google access token with datastore scope", type: "password" }] },

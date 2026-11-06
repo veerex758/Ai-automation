@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { decryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { decryptWorkspaceCredentials, encryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { PROVIDER_OAUTH_CONFIG, refreshProviderOAuthToken } from "@/lib/integrations/provider-oauth";
 import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
 import { GOOGLE_PRODUCTS, type GoogleProduct } from "@/lib/integrations/google-oauth";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
@@ -10,6 +11,7 @@ import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
 import { isProviderLiveEnabled, providerPackLiveId } from "@/lib/workflows/provider-live-gates";
 import { performSafeHttpRequest } from "@/nodes/safe-http";
+import { getWorkerOperationMapping, getWorkerProvider } from "@/lib/workflows/worker-operation-map";
 
 
 type Job = {
@@ -91,7 +93,7 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
       credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;
     }
-    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
+    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
@@ -108,47 +110,47 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
     try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspaceId}:${provider}`); }
     catch { throw new Error("WORKSPACE_CREDENTIALS_DECRYPT_FAILED"); }
     if (!decrypted[provider]) throw new Error("WORKSPACE_CREDENTIAL_PROVIDER_MISMATCH");
-    credentials[provider] = decrypted[provider];
+    let providerCredentials = decrypted[provider];
+    const oauthConfig = PROVIDER_OAUTH_CONFIG[provider];
+    if (oauthConfig && providerCredentials.expiresAt) {
+      const expiry = Date.parse(providerCredentials.expiresAt);
+      if (!Number.isFinite(expiry)) throw new Error("OAUTH_CREDENTIAL_EXPIRY_INVALID");
+      if (expiry <= Date.now() + 60_000) {
+        try {
+          if (!providerCredentials.refreshToken) throw new Error("OAUTH_REAUTH_REQUIRED");
+          const refreshed = await refreshProviderOAuthToken({
+            provider, config: oauthConfig, refreshToken: providerCredentials.refreshToken,
+          });
+          if (typeof refreshed.expires_in !== "number" || !Number.isFinite(refreshed.expires_in)) {
+            throw new Error("OAUTH_TOKEN_RESPONSE_INVALID");
+          }
+          providerCredentials = {
+            ...providerCredentials,
+            accessToken: refreshed.access_token,
+            refreshToken: typeof refreshed.refresh_token === "string" ? refreshed.refresh_token : providerCredentials.refreshToken,
+            expiresAt: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
+            ...(typeof refreshed.token_type === "string" ? { tokenType: refreshed.token_type } : {}),
+            ...(typeof refreshed.scope === "string" ? { scope: refreshed.scope } : {}),
+          };
+          const encrypted = encryptWorkspaceCredentials({ [provider]: providerCredentials }, undefined, `${workspaceId}:${provider}`);
+          const { error: refreshSaveError } = await db.from("workspace_integration_secrets").update({
+            encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
+          }).eq("integration_id", integration.id);
+          if (refreshSaveError) throw new Error("OAUTH_TOKEN_REFRESH_SAVE_FAILED");
+        } catch {
+          await db.from("workspace_integrations").update({ status: "needs_reauth", last_tested_at: null, last_test_status: null })
+            .eq("id", integration.id).eq("workspace_id", workspaceId);
+          throw new Error("OAUTH_REAUTH_REQUIRED");
+        }
+      }
+    }
+    credentials[provider] = providerCredentials;
   }
   return credentials;
 }
 
 function providerForStep(step: RegisteredWorkflowStep): string | null {
-  const providerPackProvider = providerPackLiveId(step);
-  if (providerPackProvider) return providerPackProvider;
-  if (step.nodeId === "openai" && step.operationId === "generate_text") return "openai";
-  if (step.nodeId === "gemini" && step.operationId === "generate_text") return "gemini";
-  if (step.nodeId === "slack" && ["send_message", "post_message"].includes(step.operationId)) return "slack";
-  if (step.nodeId === "email" && step.operationId === "send_email") return "resend";
-  if (step.nodeId === "gmail" && ["list_messages", "get_message"].includes(step.operationId)) return "gmail";
-  if (step.nodeId === "google_sheets" && ["get_values", "get_spreadsheet"].includes(step.operationId)) return "sheets";
-  if (step.nodeId === "google_drive" && ["execute", "get_file"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "google_calendar" && ["execute", "get_event"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "google_docs" && ["execute", "get_document_text"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "youtube" && ["execute", "get_video"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "google_contacts" && ["execute", "get_person"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "google_forms" && step.operationId === "execute") return step.nodeId;
-  if (step.nodeId === "notion" && step.operationId === "create_page") return "notion";
-  if (step.nodeId === "hubspot" && ["create_contact", "search_contacts"].includes(step.operationId)) return "hubspot";
-  if (step.nodeId === "twilio" && step.operationId === "send_sms") return "twilio";
-  if (step.nodeId === "shopify" && step.operationId === "list_products") return "shopify";
-  if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
-  if (step.nodeId === "linear" && step.operationId === "create_issue") return "linear";
-  if (step.nodeId === "close" && ["execute", "get_contact"].includes(step.operationId)) return step.nodeId;
-  if (["elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "apollo", "intercom"].includes(step.nodeId) && ["execute", step.nodeId === "salesforce" ? "search_leads" : "search_contacts"].includes(step.operationId)) return step.nodeId;
-  if (["jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
-  if (["woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
-  if (["x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
-  if (step.nodeId === "supabase" && ["execute", "get_row"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "postgresql" && ["execute", "get_database_info"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "redis" && ["execute", "get_many"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "firebase" && ["execute", "get_document"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "dropbox" && ["execute", "get_file_metadata"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "aws_s3" && ["execute", "get_object_metadata"].includes(step.operationId)) return step.nodeId;
-  if (step.nodeId === "cloudflare_r2" && ["execute", "get_object_metadata"].includes(step.operationId)) return step.nodeId;
-  if (["claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "rss_feed"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
-  if (step.nodeId === "http_request" && step.operationId === "request") return "http";
-  return null;
+  return providerPackLiveId(step) ?? getWorkerProvider(step);
 }
 
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
@@ -247,6 +249,23 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
         });
         return { status: response.status, body: response.body };
       },
+    },
+    authorizeOperation: async ({ nodeId, operationId, kind }) => {
+      const mapping = getWorkerOperationMapping({ nodeId, operationId, kind });
+      if (!mapping) throw new Error("WORKER_OPERATION_MAPPING_MISSING");
+      if (!mapping.provider) return;
+      const { data, error } = await db.from("workspace_provider_operation_approvals")
+        .select("decision")
+        .eq("workspace_id", workspaceId)
+        .eq("provider", mapping.provider)
+        .eq("node_id", mapping.nodeId)
+        .eq("operation_id", mapping.operationId)
+        .order("decided_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error("WORKSPACE_OPERATION_APPROVAL_LOOKUP_FAILED");
+      if (!data || data.decision !== "approved") throw new Error("WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED");
     },
     rateLimit: { async consume(args) {
       const { data, error } = await db.rpc("consume_execution_rate_limit", {

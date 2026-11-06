@@ -1,5 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { Pool } from "pg";
+import { createConnection as createMysqlConnection } from "mysql2/promise";
+import { MongoClient } from "mongodb";
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -24,7 +26,7 @@ function signedS3Headers(url: URL, accessKeyId: string, secretAccessKey: string,
 }
 
 
-const TESTABLE = new Set(["openai", "gemini", "claude", "http", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+const TESTABLE = new Set(["openai", "gemini", "claude", "http", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
 type Provider = WorkspaceCredentialProvider;
 type Credentials = Record<string, string>;
 
@@ -323,6 +325,26 @@ async function check(provider: Provider, c: Credentials) {
         url = project.origin + "/rest/v1/";
         const key = required(c, "apiKey"); headers.apikey = key; headers.Authorization = "Bearer " + key;
         break;
+      }
+      case "mysql": {
+        const connectionString = required(c, "connectionString");
+        if (!/^mysql:\/\//i.test(connectionString)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const parsed = new URL(connectionString);
+        const connection = await createMysqlConnection({
+          host: parsed.hostname, port: Number(parsed.port || 3306),
+          user: decodeURIComponent(parsed.username), password: decodeURIComponent(parsed.password),
+          database: decodeURIComponent(parsed.pathname.replace(/^\//, "")) || undefined,
+          ssl: { rejectUnauthorized: true }, connectTimeout: 5000, multipleStatements: false,
+        });
+        try { await connection.query("SELECT 1"); } finally { await connection.end(); }
+        return { ok: true, message: "MySQL connection verified over TLS.", status: 200 };
+      }
+      case "mongodb": {
+        const connectionString = required(c, "connectionString");
+        if (!/^mongodb(?:\+srv)?:\/\//i.test(connectionString)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const client = new MongoClient(connectionString, { tls: true, tlsAllowInvalidCertificates: false, serverSelectionTimeoutMS: 5000, maxPoolSize: 1 });
+        try { await client.connect(); await client.db().command({ ping: 1 }); } finally { await client.close(); }
+        return { ok: true, message: "MongoDB connection verified over TLS.", status: 200 };
       }
       case "postgresql": {
         const connectionString = required(c, "connectionString");
