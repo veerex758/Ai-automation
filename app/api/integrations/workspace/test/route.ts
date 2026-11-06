@@ -333,7 +333,7 @@ async function check(provider: Provider, c: Credentials) {
         const connection = await createMysqlConnection({
           host: parsed.hostname, port: Number(parsed.port || 3306),
           user: decodeURIComponent(parsed.username), password: decodeURIComponent(parsed.password),
-          database: decodeURIComponent(parsed.pathname.replace(/^\\//, "")) || undefined,
+          database: decodeURIComponent(parsed.pathname.replace(/^\//, "")) || undefined,
           ssl: { rejectUnauthorized: true }, connectTimeout: 5000, multipleStatements: false,
         });
         try { await connection.query("SELECT 1"); } finally { await connection.end(); }
