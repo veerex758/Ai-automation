@@ -47,7 +47,7 @@ function connectionString(ctx: NodeContext, provider: "mysql" | "mongodb"): stri
 
 function validateReadOnlySql(query: string): string {
   const sql = query.trim().replace(/;\s*$/, "");
-  if (!/^select\b/i.test(sql) || /;|--|\/\*|\*\/|\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|copy|call|do|execute|set|reset|vacuum|analyze|into\s+outfile|load_file|sleep|benchmark)\b/i.test(sql)) {
+  if (!/^select\b/i.test(sql) || /;|--|\/\*|\*\/|\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|copy|call|do|execute|set|reset|vacuum|analyze|into\s+(?:outfile|dumpfile)|load_file|sleep|benchmark|get_lock|release_lock)\b/i.test(sql)) {
     throw new Error("MYSQL_READ_ONLY_QUERY_REQUIRED");
   }
   return sql;
