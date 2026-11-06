@@ -122,7 +122,10 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "google_sheets" && step.operationId === "get_values") return "sheets";
   if (step.nodeId === "google_drive" && ["execute", "get_file"].includes(step.operationId)) return step.nodeId;
   if (step.nodeId === "google_calendar" && ["execute", "get_event"].includes(step.operationId)) return step.nodeId;
-  if (["google_docs", "google_forms", "youtube", "google_contacts"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (step.nodeId === "google_docs" && ["execute", "get_document_text"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "youtube" && ["execute", "get_video"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "google_contacts" && ["execute", "get_person"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "google_forms" && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "notion" && step.operationId === "create_page") return "notion";
   if (step.nodeId === "hubspot" && ["create_contact", "search_contacts"].includes(step.operationId)) return "hubspot";
   if (step.nodeId === "twilio" && step.operationId === "send_sms") return "twilio";
