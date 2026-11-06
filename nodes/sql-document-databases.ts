@@ -61,7 +61,7 @@ function validateMongoFilter(value: unknown, depth = 0): Record<string, unknown>
   if (entries.length > 50) throw new Error("MONGODB_FILTER_INVALID");
   const result: Record<string, unknown> = {};
   for (const [key, item] of entries) {
-    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,119}$/.test(key) || key.startsWith("$")) throw new Error("MONGODB_FILTER_INVALID");
+    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,119}$/.test(key) || key.startsWith("$") || ["__proto__", "prototype", "constructor"].includes(key)) throw new Error("MONGODB_FILTER_INVALID");
     if (item && typeof item === "object") throw new Error("MONGODB_FILTER_INVALID");
     if (typeof item === "string" && item.length > 2000) throw new Error("MONGODB_FILTER_INVALID");
     if (typeof item === "number" && !Number.isFinite(item)) throw new Error("MONGODB_FILTER_INVALID");
