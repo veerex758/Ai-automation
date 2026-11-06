@@ -118,11 +118,11 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "gemini" && step.operationId === "generate_text") return "gemini";
   if (step.nodeId === "slack" && ["send_message", "post_message"].includes(step.operationId)) return "slack";
   if (step.nodeId === "email" && step.operationId === "send_email") return "resend";
-  if (step.nodeId === "gmail" && step.operationId === "list_messages") return "gmail";
+  if (step.nodeId === "gmail" && ["list_messages", "get_message"].includes(step.operationId)) return "gmail";
   if (step.nodeId === "google_sheets" && step.operationId === "get_values") return "sheets";
   if (["google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "notion" && step.operationId === "create_page") return "notion";
-  if (step.nodeId === "hubspot" && step.operationId === "create_contact") return "hubspot";
+  if (step.nodeId === "hubspot" && ["create_contact", "search_contacts"].includes(step.operationId)) return "hubspot";
   if (step.nodeId === "twilio" && step.operationId === "send_sms") return "twilio";
   if (step.nodeId === "shopify" && step.operationId === "list_products") return "shopify";
   if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
