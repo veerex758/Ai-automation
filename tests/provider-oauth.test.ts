@@ -16,7 +16,8 @@ test("provider OAuth state is signed, time-bound and bound to the provider", () 
     const payload = verifyOAuthState(created.state, "salesforce");
     assert.equal(payload.workspaceId, "workspace-1");
     assert.equal(payload.userId, "user-1");
-    assert.equal(typeof payload.codeVerifier, "string");
+    assert.equal(typeof created.codeVerifier, "string");
+    assert.equal(Object.hasOwn(payload, "codeVerifier"), false);
     assert.throws(() => verifyOAuthState(created.state, "dropbox"), /OAUTH_STATE_INVALID/);
     const [encoded, signature] = created.state.split(".");
     const changedSignature = (signature[0] === "a" ? "b" : "a") + signature.slice(1);
