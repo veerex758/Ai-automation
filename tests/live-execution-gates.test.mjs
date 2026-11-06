@@ -18,6 +18,9 @@ test("durable live execution explicitly opts in every mapped external provider",
   assert.match(durableWorker, /length > MAX_LIVE_ACTION_STEPS/);
   assert.match(durableWorker, /return isProviderLiveEnabled\(provider, process\.env\.AIVANTA_LIVE_INTEGRATIONS\);/);
   assert.match(durableWorker, /AIVANTA_LIVE_VOICE_RECIPIENTS/);
+  assert.match(durableWorker, /AIVANTA_LIVE_PUBLISHING_ENABLED/);
+  assert.match(durableWorker, /LIVE_PUBLISHING_NOT_ENABLED/);
+  assert.match(durableWorker, /"x_twitter", "facebook_pages", "instagram"/);
   assert.match(durableWorker, /LIVE_VOICE_RECIPIENT_NOT_ALLOWED/);
   assert.match(durableWorker, /step.nodeId === "twilio_voice"/);
   assert.doesNotMatch(durableWorker, /const SERVER_ENABLED_INTEGRATIONS/);
