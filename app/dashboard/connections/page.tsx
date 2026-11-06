@@ -106,6 +106,7 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   aws_s3: { label: "AWS S3", fields: [{ name: "accessKeyId", label: "Access key ID", type: "text" }, { name: "secretAccessKey", label: "Secret access key", type: "password" }, { name: "region", label: "AWS region", type: "text" }] },
   cloudflare_r2: { label: "Cloudflare R2", fields: [{ name: "accountId", label: "Cloudflare account ID", type: "text" }, { name: "accessKeyId", label: "R2 access key ID", type: "text" }, { name: "secretAccessKey", label: "R2 secret access key", type: "password" }] },
   http: { label: "HTTP API", fields: [{ name: "baseUrl", label: "Base URL (HTTPS)", type: "url" }, { name: "apiKey", label: "API key", type: "password", required: false }, { name: "username", label: "Basic auth username", type: "text", required: false }, { name: "password", label: "Basic auth password", type: "password", required: false }] },
+  claude: { label: "Claude", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   mistral: { label: "Mistral", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   groq: { label: "Groq", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   perplexity: { label: "Perplexity", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
