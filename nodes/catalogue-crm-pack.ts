@@ -131,7 +131,8 @@ export const catalogueCrmNodes: NodeDefinition[] = [
         const url = new URL("https://api.pipedrive.com/v1/persons/search");
         url.searchParams.set("term", input.email); url.searchParams.set("fields", "email"); url.searchParams.set("exact_match", "true"); url.searchParams.set("limit", "20");
         const body = await call(ctx, "pipedrive", { url: url.toString(), headers: { Authorization: "Bearer " + token } });
-        const items = Array.isArray(body.data) ? body.data : [];
+        const data = body.data as any;
+        const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
         const contacts = items.flatMap((entry: any) => {
           const row = entry?.item ?? entry;
           if (typeof row?.id !== "number" && typeof row?.id !== "string") return [];
@@ -189,6 +190,21 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof contact?.id !== "number" && typeof contact?.id !== "string") throw new Error("FRESHSALES_INVALID_RESPONSE");
       return { contactId: String(contact.id) };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search contacts by email",
+      description: "Looks up Freshsales contacts by exact email through the account lookup API.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "freshsales", "accessToken"), domain = secret(ctx, "freshsales", "domain");
+        if (!/^[a-z0-9-]+\\.myfreshworks\\.com$/i.test(domain)) throw new Error("FRESHSALES_CONNECTION_INVALID");
+        const url = new URL("https://" + domain + "/crm/sales/api/lookup");
+        url.searchParams.set("q", input.email); url.searchParams.set("f", "email"); url.searchParams.set("entities", "contact");
+        const body = await call(ctx, "freshsales", { url: url.toString(), headers: { Authorization: "Token token=" + token } });
+        const contacts = Array.isArray(body.contacts) ? body.contacts.flatMap((row: any) => typeof row?.id === "number" || typeof row?.id === "string" ? [{ contactId: String(row.id), ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.name === "string" ? { firstName: row.name } : {}) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "close", name: "Close",
@@ -234,6 +250,21 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof contact?.id !== "string") throw new Error("APOLLO_INVALID_RESPONSE");
       return { contactId: contact.id };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search saved contacts",
+      description: "Searches contacts already saved in the connected Apollo workspace by email keyword; does not run prospect discovery or consume enrichment credits.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const key = secret(ctx, "apollo", "apiKey");
+        const body = await call(ctx, "apollo", { url: "https://api.apollo.io/api/v1/contacts/search", method: "POST",
+          headers: { "x-api-key": key, "Content-Type": "application/json", Accept: "application/json" },
+          body: { q_keywords: input.email, page: 1, per_page: 20 } });
+        const rows = Array.isArray(body.contacts) ? body.contacts : [];
+        const contacts = rows.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.first_name === "string" ? { firstName: row.first_name } : {}), ...(typeof row.last_name === "string" ? { lastName: row.last_name } : {}) }] : []);
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "intercom", name: "Intercom",
