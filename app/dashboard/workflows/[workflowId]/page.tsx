@@ -7,7 +7,7 @@ import "./builder.css";
 import RunTestPanel from "./run-test-panel";
 
 type NodeType = "trigger" | "action" | "condition";
-type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string> };
+type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string>; position?: { x: number; y: number } };
 type WorkflowEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
 type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
 type Workflow = { id: string; name: string; description: string; status: string };
@@ -38,6 +38,10 @@ export default function WorkflowBuilderPage() {
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<{ valid: boolean; message: string; checkedAt: string; counts?: { triggers: number; actions: number; conditions: number } } | null>(null);
   const draftRevision = useRef(0);
+  const graphCanvasRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ id: string; pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
+  const [connectionLabel, setConnectionLabel] = useState<"true" | "false" | "next">("next");
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
   const isDirty = JSON.stringify(definition) !== savedFingerprint;
@@ -83,6 +87,57 @@ export default function WorkflowBuilderPage() {
   }, [workflowId]);
 
   useEffect(() => { void loadWorkflow(); }, [loadWorkflow]);
+
+  function nodePosition(node: WorkflowNode, index: number) {
+    if (node.position) return node.position;
+    const incomingBranch = (definition.edges ?? []).find((edge) => edge.target === node.id && edge.label !== "next");
+    const col = incomingBranch?.label === "false" ? 2 : incomingBranch?.label === "true" ? 0 : index % 3;
+    return { x: 170 + col * 300, y: 90 + Math.floor(index / 3) * 210 };
+  }
+
+  function updateNodePosition(id: string, x: number, y: number) {
+    draftRevision.current += 1;
+    setValidation(null);
+    setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, position: { x: Math.max(120, Math.min(1900, x)), y: Math.max(70, Math.min(1800, y)) } } : node) }));
+  }
+
+  function beginNodeDrag(event: React.PointerEvent<HTMLDivElement>, node: WorkflowNode, index: number) {
+    if ((event.target as HTMLElement).closest("button")) return;
+    const point = nodePosition(node, index);
+    dragState.current = { id: node.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: point.x, originY: point.y, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveNodeDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    drag.moved = true;
+    updateNodePosition(drag.id, drag.originX + dx, drag.originY + dy);
+  }
+
+  function endNodeDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.moved) setSelectedId(drag.id);
+    else setNotice("Node position updated. Save your changes to keep this layout.");
+    dragState.current = null;
+  }
+
+  function connectNodes(source: string, target: string, label: "true" | "false" | "next") {
+    if (source === target) return;
+    const duplicate = (definition.edges ?? []).some((edge) => edge.source === source && edge.target === target);
+    if (duplicate) { setNotice("Those nodes are already connected."); setConnectingFrom(null); return; }
+    const sourceNode = definition.nodes.find((node) => node.id === source);
+    if (!sourceNode || (label !== "next" && sourceNode.type !== "condition")) return;
+    draftRevision.current += 1;
+    setValidation(null);
+    setDefinition((current) => ({ ...current, edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source, target, label }] }));
+    setConnectingFrom(null);
+    setNotice("Connection added. Save your changes when ready.");
+  }
 
   function updateSelected(updates: Partial<Pick<WorkflowNode, "title" | "description">>) {
     if (!selectedNode) return;
@@ -256,33 +311,29 @@ export default function WorkflowBuilderPage() {
           />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
-            <div className="canvas-label"><span>CANVAS</span><span>{definition.nodes.length} / 30 steps</span></div>
+            <div className="canvas-label"><span>CANVAS · DRAG NODES TO REPOSITION</span><span>{definition.nodes.length} / 30 steps</span></div>
             <div className="graph-canvas" role="region" aria-label="Workflow graph canvas">
               <div className="graph-grid" aria-hidden="true" />
-              <div className="graph-layout">
+              <div className="graph-layout" ref={graphCanvasRef} style={{ height: Math.max(680, ...definition.nodes.map((node, index) => nodePosition(node, index).y + 180)) }}>
                 <svg className="graph-edges" aria-hidden="true"><defs><marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#9ab78a" /></marker></defs>
                   {(definition.edges ?? []).map((edge) => {
                     const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
                     const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target);
                     if (sourceIndex < 0 || targetIndex < 0) return null;
-                    const sourceNode = definition.nodes[sourceIndex];
-                    const targetNode = definition.nodes[targetIndex];
-                    const sourceBranch = (definition.edges ?? []).find((item) => item.target === sourceNode.id && item.label !== "next");
-                    const targetBranch = (definition.edges ?? []).find((item) => item.target === targetNode.id && item.label !== "next");
-                    const sourceCol = sourceBranch?.label === "false" ? 2 : sourceBranch?.label === "true" ? 0 : sourceIndex % 3;
-                    const targetCol = targetBranch?.label === "false" ? 2 : targetBranch?.label === "true" ? 0 : targetIndex % 3;
-                    const source = { x: 170 + sourceCol * 300, y: 90 + Math.floor(sourceIndex / 3) * 210 };
-                    const target = { x: 170 + targetCol * 300, y: 90 + Math.floor(targetIndex / 3) * 210 };
+                    const source = nodePosition(definition.nodes[sourceIndex], sourceIndex);
+                    const target = nodePosition(definition.nodes[targetIndex], targetIndex);
                     const sx = source.x + 105, sy = source.y + 62, tx = target.x + 105, ty = target.y + 62;
                     const curve = Math.max(45, Math.abs(tx - sx) * .45);
                     return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}><path d={`M ${sx} ${sy} C ${sx + curve} ${sy}, ${tx - curve} ${ty}, ${tx} ${ty}`} /><text x={(sx + tx) / 2} y={(sy + ty) / 2 - 12}>{edge.label === "next" ? "" : edge.label.toUpperCase()}</text></g>;
                   })}
                 </svg>
                 {definition.nodes.map((node, index) => {
-                  const incomingBranch = (definition.edges ?? []).find((edge) => edge.target === node.id && edge.label !== "next"); const col = incomingBranch?.label === "false" ? 2 : incomingBranch?.label === "true" ? 0 : index % 3; const row = Math.floor(index / 3);
-                  return <button key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""}`} style={{ left: 170 + col * 300, top: 90 + row * 210 }} onClick={() => setSelectedId(node.id)} aria-pressed={selectedId === node.id}>
-                    <span className="graph-node-port graph-port-in" aria-hidden="true" /><span className="graph-node-icon">{nodeMeta[node.type].icon}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {index + 1}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small><span className="graph-node-port graph-port-out" aria-hidden="true" />
-                  </button>;
+                  const point = nodePosition(node, index);
+                  return <div key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`} style={{ left: point.x, top: point.y }} onPointerDown={(event) => beginNodeDrag(event, node, index)} onPointerMove={moveNodeDrag} onPointerUp={endNodeDrag} onPointerCancel={() => { dragState.current = null; }} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }} aria-pressed={selectedId === node.id} aria-label={`Select and drag ${node.title}`}>
+                    <button type="button" className="graph-node-port graph-port-in" aria-label={`Connect into ${node.title}`} title={connectingFrom ? "Complete connection" : "Choose a source node"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!connectingFrom) { setNotice("Choose an output handle first."); return; } connectNodes(connectingFrom, node.id, connectionLabel); }} />
+                    <span className="graph-node-icon">{nodeMeta[node.type].icon}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {index + 1}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small>
+                    <button type="button" className="graph-node-port graph-port-out" aria-label={`Connect from ${node.title}`} title="Start a connection" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSelectedId(node.id); setConnectingFrom(node.id); setConnectionLabel(node.type === "condition" ? "true" : "next"); setNotice(node.type === "condition" ? "Choose the branch label, then select a destination handle." : "Select a destination input handle."); }} />
+                  </div>;
                 })}
                 {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
               </div>
@@ -345,8 +396,10 @@ export default function WorkflowBuilderPage() {
               <div className="config-section-title">Connections</div>
               <p className="config-note">Connect this node to another node. Conditions can create true and false paths.</p>
               {(definition.edges ?? []).filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).map((edge) => <div className="graph-edge-row" key={edge.id}><span><b>{edge.label === "next" ? "Next" : edge.label.toUpperCase()}</b> · {definition.nodes.find((node) => node.id === edge.source)?.title} → {definition.nodes.find((node) => node.id === edge.target)?.title}</span><button type="button" aria-label="Remove connection" onClick={() => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: (current.edges ?? []).filter((item) => item.id !== edge.id) })); }}>×</button></div>)}
+              {selectedNode.type === "condition" && <><label htmlFor="connection-branch">Branch label</label><select id="connection-branch" value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value as "true" | "false" | "next")}><option value="true">True path</option><option value="false">False path</option></select></>}
+              <button type="button" className="builder-validate" onClick={() => { setConnectingFrom(selectedNode.id); setConnectionLabel(selectedNode.type === "condition" ? connectionLabel : "next"); setNotice("Select an input handle on the destination node."); }}>Start connection from this node</button>
               <label htmlFor="connect-target">Connect to node</label>
-              <select id="connect-target" defaultValue="" onChange={(event) => { const target = event.target.value; if (!target || !selectedNode || target === selectedNode.id) return; const label = selectedNode.type === "condition" ? window.prompt("Branch label: type true or false", "true") : "next"; if (label !== "next" && label !== "true" && label !== "false") { event.currentTarget.value = ""; return; } const exists = (definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.target === target && edge.label === label); if (exists) { event.currentTarget.value = ""; return; } draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source: selectedNode.id, target, label: label as "next" | "true" | "false" }] })); setNotice("Connection added. Save your changes when ready."); event.currentTarget.value = ""; }}>
+              <select id="connect-target" defaultValue="" onChange={(event) => { const target = event.target.value; if (target) connectNodes(selectedNode.id, target, selectedNode.type === "condition" ? connectionLabel : "next"); event.currentTarget.value = ""; }}>
                 <option value="">Choose destination…</option>{definition.nodes.filter((node) => node.id !== selectedNode.id).map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}
               </select>
             </section>
