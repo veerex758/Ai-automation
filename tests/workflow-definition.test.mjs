@@ -87,3 +87,15 @@ test("requires valid condition fields and operators", () => {
   assert.match(validateDefinition(valid(trigger(), condition({ field: "status", operator: "equals", value: "" }))).error, /expected value/i);
   assert.ok(validateDefinition(valid(trigger(), condition({ field: "status", operator: "is_set" }))).definition);
 });
+
+
+test("preserves valid node coordinates for save and reload", () => {
+  const positioned = { ...trigger(), position: { x: 640, y: 320 } };
+  const result = validateDefinition(valid(positioned));
+  assert.deepEqual(result.definition.nodes[0].position, { x: 640, y: 320 });
+});
+
+test("rejects invalid or out-of-range node coordinates", () => {
+  assert.match(validateDefinition(valid({ ...trigger(), position: { x: Number.NaN, y: 20 } })).error, /finite coordinates/i);
+  assert.match(validateDefinition(valid({ ...trigger(), position: { x: 2100, y: 20 } })).error, /between 0 and 2000/i);
+});
