@@ -19,6 +19,7 @@ type Job = {
 };
 
 type DbClient = ReturnType<typeof client>;
+const MAX_LIVE_ACTION_STEPS = 30;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
@@ -300,7 +301,7 @@ export async function runDurableWorker() {
         if (!validated.steps) throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
         let steps: RegisteredWorkflowStep[] = validated.steps;
         if (job.execution_mode === "live") {
-          if (steps.some((step) => !liveStepAllowed(step)) || steps.filter((step) => step.kind === "action").length > 4) {
+          if (steps.some((step) => !liveStepAllowed(step)) || steps.filter((step) => step.kind === "action").length > MAX_LIVE_ACTION_STEPS) {
             throw new Error("LIVE_OPERATION_NOT_ENABLED");
           }
           const smsSteps = steps.filter((step) => step.nodeId === "twilio" && step.operationId === "send_sms");
