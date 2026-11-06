@@ -362,7 +362,7 @@ const googleProductForNode: Record<string, string> = {
 };
 const providerForNode: Record<string, string> = {
   resend: "resend", http_request: "http", webhook_trigger: "webhooks", manual_trigger: "manual",
-  twilio_sms: "twilio", twilio_voice: "twilio",
+  twilio_sms: "twilio", twilio_voice: "twilio_voice",
 };
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 
