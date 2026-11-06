@@ -43,7 +43,7 @@ test("Supabase get_row uses HTTPS PostgREST exact equality and one-row cap", asy
   assert.equal(url.pathname, "/rest/v1/contacts");
   assert.equal(url.searchParams.get("id"), "eq.7");
   assert.equal(url.searchParams.get("limit"), "1");
-  assert.equal(result.row.id, 7);
+  assert.equal((result as { row: { id: number } }).row.id, 7);
   await assert.rejects(() => op.run(context({ supabase: { projectUrl: "http://project.supabase.co", apiKey: "x" } }, () => { throw new Error("network must not run"); }), { table: "contacts", column: "id", value: "7" }), /SUPABASE_CONNECTION_INVALID/);
   const serviceRole = "header." + Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url") + ".signature";
   await assert.rejects(() => op.run(context({ supabase: { projectUrl: "https://project.supabase.co", apiKey: serviceRole } }, () => { throw new Error("network must not run"); }), { table: "contacts", column: "id", value: "7" }), /SUPABASE_RESTRICTED_KEY_REQUIRED/);
