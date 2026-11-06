@@ -4,9 +4,8 @@ import { z } from "zod";
 import type { NodeContext, NodeDefinition } from "./types";
 
 type MysqlSession = {
-  query(sql: string): Promise<unknown>;
+  query(sql: string, values: unknown[]): Promise<[unknown, unknown]>;
   beginTransaction(): Promise<void>;
-  execute(sql: string, values: unknown[]): Promise<[unknown, unknown]>;
   commit(): Promise<void>;
   rollback(): Promise<void>;
   end(): Promise<void>;
@@ -88,9 +87,8 @@ const defaultDependencies: DriverDependencies = {
       multipleStatements: false,
     });
     return {
-      query: async (sql) => { await connection.query(sql); },
+      query: (query, values) => connection.query(query, values),
       beginTransaction: () => connection.beginTransaction(),
-      execute: (query, values) => connection.execute(query, values),
       commit: () => connection.commit(),
       rollback: () => connection.rollback(),
       end: () => connection.end(),
@@ -131,11 +129,11 @@ function makeMysqlNode(deps: DriverDependencies): NodeDefinition {
         const session = await deps.connectMysql(uri);
         let transactionStarted = false;
         try {
-          await session.query("SET TRANSACTION READ ONLY");
+          await session.query("SET TRANSACTION READ ONLY", []);
           await session.beginTransaction();
           transactionStarted = true;
           const bounded = "SELECT * FROM (" + sql + ") AS aivanta_read_only_result LIMIT ?";
-          const [rawRows] = await session.execute(bounded, [...input.parameters, input.limit]);
+          const [rawRows] = await session.query(bounded, [...input.parameters, input.limit]);
           if (!Array.isArray(rawRows)) throw new Error("MYSQL_INVALID_RESPONSE");
           const rows = rawRows.slice(0, input.limit).filter((row): row is Record<string, unknown> => !!row && typeof row === "object" && !Array.isArray(row));
           await session.commit();
