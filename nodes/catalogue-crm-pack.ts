@@ -202,7 +202,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       async run(ctx, raw) {
         const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
         const token = secret(ctx, "freshsales", "accessToken"), domain = secret(ctx, "freshsales", "domain");
-        if (!/^[a-z0-9-]+\\.myfreshworks\\.com$/i.test(domain)) throw new Error("FRESHSALES_CONNECTION_INVALID");
+        if (!/^[a-z0-9-]+\.myfreshworks\.com$/i.test(domain)) throw new Error("FRESHSALES_CONNECTION_INVALID");
         const url = new URL("https://" + domain + "/crm/sales/api/lookup");
         url.searchParams.set("q", input.email); url.searchParams.set("f", "email"); url.searchParams.set("entities", "contact");
         const body = await call(ctx, "freshsales", { url: url.toString(), headers: { Authorization: "Token token=" + token } });
