@@ -23,7 +23,9 @@ test("database rollback refuses to discard customer credentials before narrowing
   assert.match(rollback, /where provider in \('mysql','mongodb'\)/);
   assert.match(rollback, /raise exception/);
   assert.match(rollback, /drop function if exists public\.save_workspace_database_credentials/);
-  assert.doesNotMatch(rollback, /'mysql','mongodb'/);
+  const narrowedConstraint = rollback.slice(rollback.indexOf("check (provider in"));
+  assert.ok(narrowedConstraint.length > 0);
+  assert.doesNotMatch(narrowedConstraint, /'mysql'|'mongodb'/);
 });
 
 test("connection verification uses real MySQL and MongoDB drivers with TLS validation", () => {
