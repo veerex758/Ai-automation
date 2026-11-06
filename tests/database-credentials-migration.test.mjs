@@ -7,16 +7,30 @@ const rollback = await readFile(new URL("../supabase/rollback/20261106213337_mys
 const workspaceRoute = await readFile(new URL("../app/api/integrations/workspace/route.ts", import.meta.url), "utf8");
 const connectionTest = await readFile(new URL("../app/api/integrations/workspace/test/route.ts", import.meta.url), "utf8");
 
-test("MySQL and MongoDB credential migration extends the provider allowlist and uses a server-only saver", () => {
-  assert.ok(migration.includes("'mysql','mongodb'"));
-  assert.ok(migration.includes("create or replace function public.save_workspace_database_credentials"));
-  assert.ok(migration.includes("security invoker"));
-  assert.ok(migration.includes("p_provider not in ('mysql','mongodb')"));
-  assert.ok(migration.includes("workspace_members wm"));
-  assert.ok(migration.includes("wm.role in ('owner','admin')"));
-  assert.ok(migration.includes("encrypted_credentials"));
-  assert.ok(migration.includes("grant execute on function public.save_workspace_database_credentials"));
-  assert.ok(workspaceRoute.includes("save_workspace_database_credentials"));
+test("MySQL and MongoDB credential migration adds only the intended provider values and a server-only RPC", () => {
+  assert.match(migration, /'mysql','mongodb'/);
+  assert.match(migration, /create or replace function public\.save_workspace_database_credentials/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /p_provider not in \('mysql', 'mongodb'\)/);
+  assert.match(migration, /revoke all on function public\.save_workspace_database_credentials/);
+  assert.match(migration, /grant execute on function public\.save_workspace_database_credentials/);
+  assert.match(workspaceRoute, /workspace_members/);
+  assert.match(workspaceRoute, /save_workspace_database_credentials/);
+  assert.match(workspaceRoute, /p_encrypted_credential: encrypted/);
 });
 
-test("database credential rollback refuses to remove provider support ¶»§q«^
+test("database rollback refuses to discard customer credentials before narrowing the provider constraint", () => {
+  assert.match(rollback, /where provider in \('mysql','mongodb'\)/);
+  assert.match(rollback, /raise exception/);
+  assert.match(rollback, /drop function if exists public\.save_workspace_database_credentials/);
+  assert.doesNotMatch(rollback, /'mysql','mongodb'/);
+});
+
+test("connection verification uses real MySQL and MongoDB drivers with TLS validation", () => {
+  assert.match(connectionTest, /createMysqlConnection/);
+  assert.match(connectionTest, /new MongoClient/);
+  assert.match(connectionTest, /ssl: \{ rejectUnauthorized: true \}/);
+  assert.match(connectionTest, /tlsAllowInvalidCertificates: false/);
+  assert.match(connectionTest, /case "mysql":/);
+  assert.match(connectionTest, /case "mongodb":/);
+});
