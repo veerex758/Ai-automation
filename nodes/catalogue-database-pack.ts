@@ -27,7 +27,21 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
       async run(ctx, raw) { const input = args.input.parse(raw); return args.output.parse(await args.run(ctx, input)); } }, ...(args.additionalActions ?? [])] };
 }
 function sha256(value: string): string { return createHash("sha256").update(value).digest("hex"); }
+function assertSupabaseReadKey(key: string): void {
+  if (key.startsWith("sb_secret_")) throw new Error("SUPABASE_RESTRICTED_KEY_REQUIRED");
+  const parts = key.split(".");
+  if (parts.length === 3) {
+    try {
+      const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as Record<string, unknown>;
+      if (claims.role === "service_role") throw new Error("SUPABASE_RESTRICTED_KEY_REQUIRED");
+    } catch (error) {
+      if (error instanceof Error && error.message === "SUPABASE_RESTRICTED_KEY_REQUIRED") throw error;
+    }
+  }
+}
 function hmac(key: Buffer | string, value: string): Buffer { return createHmac("sha256", key).update(value).digest(); }
+function awsEncode(value: string): string { return encodeURIComponent(value).replace(/[!'()*]/g, char => "%" + char.charCodeAt(0).toString(16).toUpperCase()); }
+function awsCanonicalQuery(url: URL): string { return Array.from(url.searchParams.entries()).sort(([ak, av], [bk, bv]) => ak.localeCompare(bk) || av.localeCompare(bv)).map(([key, value]) => awsEncode(key) + "=" + awsEncode(value)).join("&"); }
 function awsSignedHeaders(args: { method: string; url: URL; accessKeyId: string; secretAccessKey: string; region: string; now?: Date }): Record<string, string> {
   const now = args.now ?? new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -35,7 +49,7 @@ function awsSignedHeaders(args: { method: string; url: URL; accessKeyId: string;
   const payloadHash = sha256("");
   const canonicalHeaders = "host:" + args.url.host + "\n" + "x-amz-content-sha256:" + payloadHash + "\n" + "x-amz-date:" + amzDate + "\n";
   const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
-  const canonicalRequest = [args.method, args.url.pathname, args.url.searchParams.toString(), canonicalHeaders, signedHeaders, payloadHash].join("\n");
+  const canonicalRequest = [args.method, args.url.pathname, awsCanonicalQuery(args.url), canonicalHeaders, signedHeaders, payloadHash].join("\n");
   const scope = date + "/" + args.region + "/s3/aws4_request";
   const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256(canonicalRequest)].join("\n");
   const kDate = hmac("AWS4" + args.secretAccessKey, date);
@@ -58,10 +72,10 @@ export const catalogueDatabaseNodes: NodeDefinition[] = [
     async run(ctx, input) {
       const base = secret(ctx, "supabase", "projectUrl");
       let origin: URL; try { origin = new URL(base); } catch { throw new Error("SUPABASE_CONNECTION_INVALID"); }
-      if (origin.protocol !== "https:" || !origin.hostname.endsWith(".supabase.co")) throw new Error("SUPABASE_CONNECTION_INVALID");
+      if (origin.protocol !== "https:" || !origin.hostname.endsWith(".supabase.co") || origin.username || origin.password || origin.hash || origin.search || (origin.pathname !== "/" && origin.pathname !== "")) throw new Error("SUPABASE_CONNECTION_INVALID");
       const url = new URL(origin.origin + "/rest/v1/" + encodeURIComponent(input.table));
       url.searchParams.set("select", "*"); url.searchParams.set("limit", String(input.limit ?? 20));
-      const key = secret(ctx, "supabase", "apiKey");
+      const key = secret(ctx, "supabase", "apiKey"); assertSupabaseReadKey(key);
       const response = await request(ctx, "supabase", { url: url.toString(), headers: { apikey: key, Authorization: "Bearer " + key, Accept: "application/json" } });
       if (!Array.isArray(response.body)) throw new Error("SUPABASE_INVALID_RESPONSE");
       return { rows: response.body.slice(0, input.limit ?? 20), count: Math.min(response.body.length, input.limit ?? 20) };
@@ -75,7 +89,7 @@ export const catalogueDatabaseNodes: NodeDefinition[] = [
         const base = secret(ctx, "supabase", "projectUrl"); let origin: URL; try { origin = new URL(base); } catch { throw new Error("SUPABASE_CONNECTION_INVALID"); }
         if (origin.protocol !== "https:" || !origin.hostname.endsWith(".supabase.co")) throw new Error("SUPABASE_CONNECTION_INVALID");
         const url = new URL(origin.origin + "/rest/v1/" + encodeURIComponent(input.table)); url.searchParams.set("select", "*"); url.searchParams.set(input.column, "eq." + input.value); url.searchParams.set("limit", "1");
-        const key = secret(ctx, "supabase", "apiKey"); const response = await request(ctx, "supabase", { url: url.toString(), headers: { apikey: key, Authorization: "Bearer " + key, Accept: "application/json" } });
+        const key = secret(ctx, "supabase", "apiKey"); assertSupabaseReadKey(key); const response = await request(ctx, "supabase", { url: url.toString(), headers: { apikey: key, Authorization: "Bearer " + key, Accept: "application/json" } });
         if (!Array.isArray(response.body)) throw new Error("SUPABASE_INVALID_RESPONSE"); const row = response.body[0];
         return { row: row && typeof row === "object" && !Array.isArray(row) ? row as Record<string, unknown> : null };
       },
