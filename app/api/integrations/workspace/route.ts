@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
           ? labels[item.provider as WorkspaceCredentialProvider] : "Integration",
       })),
       liveExecutionEnabled: process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true",
+      liveProvidersEnabled: (process.env.AIVANTA_LIVE_INTEGRATIONS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
       emailRecipientAllowed: Boolean(recipient) && allowedRecipients.has(recipient),
     });
   } catch {
