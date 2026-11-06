@@ -31,7 +31,7 @@ const report = [
   "- CI run #1831 (tests, lint, TypeScript, production build): PASS",
   "- Database service run #72 (MySQL/MongoDB authenticated TLS integration): PASS",
   "- Supabase migration replay run #498: PASS",
-  "- Authenticated staging E2E: BLOCKED",
+  "- Authenticated staging/live verification: BLOCKED (staging E2E not run)",
   "- No provider is labelled live-verified",
   "",
   "The report distinguishes static registry/worker mapping and local authenticated TLS database integration from external provider verification. OAuth consent, production credentials, and authenticated staging E2E have not been performed.",
