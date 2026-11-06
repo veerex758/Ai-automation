@@ -62,6 +62,7 @@ function nameFields(value: unknown): { firstName?: string; lastName?: string } {
 export const catalogueCrmNodes: NodeDefinition[] = [
   node({
     id: "microsoft_teams", name: "Microsoft Teams",
+    auth: { type: "oauth2", scopes: ["ChatMessage.Send"], refresh: "manual" },
     description: "Posts a text message to a specified Microsoft Teams chat using a workspace Microsoft Graph access token.",
     input: z.object({ chatId: z.string().trim().min(1).max(200), content: z.string().trim().min(1).max(4000) }).strict(),
     output: z.object({ messageId: z.string(), chatId: z.string() }).strict(),
@@ -78,6 +79,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
   }),
   node({
     id: "salesforce", name: "Salesforce",
+    auth: { type: "oauth2", scopes: ["api", "refresh_token"], refresh: "manual" },
     description: "Creates a Salesforce Lead with validated name, email and optional phone fields using a manually connected OAuth access token.",
     input: z.object({ firstName: z.string().max(40).optional(), lastName: z.string().trim().min(1).max(80), company: z.string().trim().min(1).max(255), email: z.string().email().optional(), phone: z.string().max(40).optional() }).strict(),
     output: z.object({ leadId: z.string(), success: z.boolean() }).strict(),
@@ -114,6 +116,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
   }),
   node({
     id: "pipedrive", name: "Pipedrive",
+    auth: { type: "oauth2", scopes: ["contacts:full"], refresh: "manual" },
     description: "Creates a Pipedrive person using the connected OAuth access token and returns the person ID.",
     input: contactInput,
     output: contactOutput,
@@ -152,6 +155,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
   }),
   node({
     id: "zoho_crm", name: "Zoho CRM",
+    auth: { type: "oauth2", scopes: ["ZohoCRM.modules.contacts.ALL"], refresh: "manual" },
     description: "Creates a Zoho CRM Contact using the connected OAuth access token and returns the provider record ID.",
     input: contactInput,
     output: contactOutput,
@@ -181,6 +185,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
   }),
   node({
     id: "freshsales", name: "Freshsales",
+    auth: { type: "apiKey", credentialKey: "accessToken" },
     description: "Creates a Freshsales contact using the workspace access token and validated Freshsales account domain.",
     input: contactInput,
     output: contactOutput,
@@ -273,6 +278,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
   }),
   node({
     id: "intercom", name: "Intercom",
+    auth: { type: "oauth2", scopes: ["read_write_users"], refresh: "manual" },
     description: "Creates an Intercom contact using the connected OAuth access token and returns the contact ID.",
     input: z.object({ email: z.string().email().max(254), name: z.string().trim().min(1).max(200) }).strict(),
     output: contactOutput,
