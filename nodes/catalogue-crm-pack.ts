@@ -53,6 +53,7 @@ const contactInput = z.object({
 }).strict();
 const contactOutput = z.object({ contactId: z.string().min(1) }).strict();
 const searchContactsOutput = z.object({ contacts: z.array(z.object({ contactId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
+const searchLeadsOutput = z.object({ leads: z.array(z.object({ leadId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
 function nameFields(value: unknown): { firstName?: string; lastName?: string } {
   if (typeof value !== "string" || !value.trim()) return {};
   const parts = value.trim().split(/\s+/);
@@ -100,7 +101,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     additionalActions: [{
       id: "search_leads", name: "Search leads by email",
       description: "Searches Salesforce Leads for an exact email match using SOQL and the connected API-scoped OAuth token.",
-      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchLeadsOutput,
       async run(ctx, raw) {
         const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
         const token = secret(ctx, "salesforce", "accessToken"), instance = secret(ctx, "salesforce", "instanceUrl");
@@ -109,7 +110,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
         const email = input.email.replace(/\\/g, "\\\\").replace(/'/g, "\\\\'");
         const query = "SELECT Id,FirstName,LastName,Email FROM Lead WHERE Email = '" + email + "' LIMIT 20";
         const body = await call(ctx, "salesforce", { url: base.origin + "/services/data/v60.0/query?q=" + encodeURIComponent(query), headers: { Authorization: "Bearer " + token } });
-        const contacts = Array.isArray(body.records) ? body.records.flatMap((item: any) => typeof item?.Id === "string" ? [{ contactId: item.Id, ...(typeof item.Email === "string" ? { email: item.Email } : {}), ...(typeof item.FirstName === "string" ? { firstName: item.FirstName } : {}), ...(typeof item.LastName === "string" ? { lastName: item.LastName } : {}) }] : []) : [];
+        const contacts = Array.isArray(body.records) ? body.records.flatMap((item: any) => typeof item?.Id === "string" ? [{ leadId: item.Id, ...(typeof item.Email === "string" ? { email: item.Email } : {}), ...(typeof item.FirstName === "string" ? { firstName: item.FirstName } : {}), ...(typeof item.LastName === "string" ? { lastName: item.LastName } : {}) }] : []) : [];
         return { leads: contacts.slice(0, 20) };
       },
     }],
