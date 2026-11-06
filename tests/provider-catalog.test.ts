@@ -114,8 +114,8 @@ test("native executable inventory has one authoritative count, separate from dir
   assert.equal(executable.length, 120);
   assert.equal(new Set(nodes.map((node) => node.id)).size, 120);
 
-  // The 100-entry provider directory is a different inventory. Its 98
-  // mapped entries do not include the 20 internal utility-pack nodes.
+  // The 100-entry provider directory is a different inventory. MySQL and
+  // MongoDB are now mapped; internal utility nodes remain outside that list.
   assert.equal(catalog.length, 100);
   assert.equal(registered.length, 100);
   assert.equal(comingSoon.length, 0);
