@@ -96,6 +96,25 @@ export const sheetsNode: NodeDefinition = {
       const body = await request(ctx, { url, method: "GET", headers: { Authorization: "Bearer " + token } }, "GOOGLE_SHEETS");
       return sheetsOutput.parse({ range: typeof body.range === "string" ? body.range : input.range, values: Array.isArray(body.values) ? body.values : [] });
     },
+  }, {
+    id: "get_spreadsheet", name: "Get spreadsheet metadata",
+    description: "Retrieves spreadsheet title and bounded sheet metadata using the existing read-only Sheets OAuth scope.",
+    inputSchema: z.object({ spreadsheetId: z.string().regex(/^[a-zA-Z0-9_-]{10,200}$/) }).strict(),
+    outputSchema: z.object({ spreadsheetId: z.string(), title: z.string(), sheets: z.array(z.object({ sheetId: z.number().int(), title: z.string(), index: z.number().int() }).strict()).max(100) }).strict(),
+    async run(ctx, raw) {
+      const input = z.object({ spreadsheetId: z.string().regex(/^[a-zA-Z0-9_-]{10,200}$/) }).strict().parse(raw);
+      const token = required(ctx, "sheets", "accessToken", "GOOGLE_SHEETS");
+      const url = "https://sheets.googleapis.com/v4/spreadsheets/" + encodeURIComponent(input.spreadsheetId) + "?fields=spreadsheetId,properties(title),sheets(properties(sheetId,title,index))";
+      const body = await request(ctx, { url, method: "GET", headers: { Authorization: "Bearer " + token } }, "GOOGLE_SHEETS");
+      const properties = body.properties as Record<string, unknown> | undefined;
+      if (typeof body.spreadsheetId !== "string" || typeof properties?.title !== "string") throw new Error("GOOGLE_SHEETS_INVALID_RESPONSE");
+      const sheets = Array.isArray(body.sheets) ? body.sheets.flatMap((entry) => {
+        const props = (entry as Record<string, unknown> | undefined)?.properties as Record<string, unknown> | undefined;
+        return typeof props?.sheetId === "number" && typeof props.title === "string" && typeof props.index === "number"
+          ? [{ sheetId: props.sheetId, title: props.title, index: props.index }] : [];
+      }) : [];
+      return { spreadsheetId: body.spreadsheetId, title: properties.title, sheets: sheets.slice(0, 100) };
+    },
   }],
 };
 
