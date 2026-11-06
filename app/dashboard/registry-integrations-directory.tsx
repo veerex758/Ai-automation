@@ -16,7 +16,8 @@ type ConnectionRecord = {
 };
 type CatalogPayload = { nodes?: RegistryNode[]; error?: string };
 type WorkspacePayload = { integrations?: ConnectionRecord[]; error?: string };
-type GooglePayload = { connections?: ConnectionRecord[]; error?: string };\ntype CredentialField = { key: string; label: string; secret?: boolean };
+type GooglePayload = { connections?: ConnectionRecord[]; error?: string };
+type CredentialField = { key: string; label: string; secret?: boolean };
 
 const officialBrandAssets: Record<string, { slug: string; label: string }> = {
   openai:{slug:"openai",label:"OpenAI"},gemini:{slug:"googlegemini",label:"Google Gemini"},
@@ -60,13 +61,16 @@ const providerForNode: Record<string, string> = {
   resend: "resend",
   webhook_trigger: "webhooks",
   manual_trigger: "manual",
-  twilio_sms: "twilio",\n  http_request: "http",
+  twilio_sms: "twilio",
+  http_request: "http",
 };
-const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";\nconst googleOAuthProduct: Record<string,string> = { gmail:"gmail",google_sheets:"sheets",google_drive:"drive",google_calendar:"calendar",google_docs:"docs",google_forms:"forms",youtube:"youtube",google_contacts:"contacts" };
+const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
+const googleOAuthProduct: Record<string,string> = { gmail:"gmail",google_sheets:"sheets",google_drive:"drive",google_calendar:"calendar",google_docs:"docs",google_forms:"forms",youtube:"youtube",google_contacts:"contacts" };
 const credentialProvider: Record<string,string> = {
-  twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
+  http_request:"http",twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
 };
-const credentialFields: Record<string,CredentialField[]> = {\n  http:[{key:"baseUrl",label:"Base URL"},{key:"apiKey",label:"API key",secret:true},{key:"username",label:"Basic-auth username"},{key:"password",label:"Basic-auth password",secret:true}],
+const credentialFields: Record<string,CredentialField[]> = {
+  http:[{key:"baseUrl",label:"Base URL"},{key:"apiKey",label:"API key",secret:true},{key:"username",label:"Basic-auth username"},{key:"password",label:"Basic-auth password",secret:true}],
   openai:[{key:"apiKey",label:"API key",secret:true}],gemini:[{key:"apiKey",label:"API key",secret:true}],
   resend:[{key:"apiKey",label:"API key",secret:true},{key:"fromEmail",label:"Verified sender email"}],
   slack:[{key:"botToken",label:"Bot token",secret:true},{key:"webhookUrl",label:"Incoming webhook URL",secret:true}],
@@ -161,7 +165,11 @@ export default function RegistryIntegrationsDirectory() {
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<string[]>([]);\n  const [connecting, setConnecting] = useState<RegistryNode | null>(null);\n  const [credentialValues, setCredentialValues] = useState<Record<string,string>>({});\n  const [connectionBusy, setConnectionBusy] = useState(false);\n  const [connectionMessage, setConnectionMessage] = useState("");
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [connecting, setConnecting] = useState<RegistryNode | null>(null);
+  const [credentialValues, setCredentialValues] = useState<Record<string,string>>({});
+  const [connectionBusy, setConnectionBusy] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -257,7 +265,8 @@ export default function RegistryIntegrationsDirectory() {
               ? `${operations.length} registered ${operations.length === 1 ? "operation" : "operations"} · ${node.auth.type === "none" ? "No account credentials" : node.auth.type === "oauth2" ? "OAuth authorization" : node.auth.type === "connectionString" ? "Encrypted connection string" : "Workspace credentials"}`
               : "Provider listed · native adapter and provider security checks not yet enabled"}
           </p>
-          {node.executionStatus === "registered" && connectionRequired(node) && (credentialFields[credentialProvider[node.id] ?? node.id] || googleOAuthProduct[node.id]) && <button className="registry-expand-button" type="button" onClick={() => beginConnect(node)}>Connect account</button>}\n          {node.executionStatus === "registered" && <div className="registry-operation-preview">
+          {node.executionStatus === "registered" && connectionRequired(node) && (credentialFields[credentialProvider[node.id] ?? node.id] || googleOAuthProduct[node.id]) && <button className="registry-expand-button" type="button" onClick={() => beginConnect(node)}>Connect account</button>}
+          {node.executionStatus === "registered" && <div className="registry-operation-preview">
             {operations.slice(0, 2).map((operation) => <span key={operation.kind + operation.id}>{operation.name}</span>)}
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
