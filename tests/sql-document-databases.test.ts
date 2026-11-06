@@ -68,6 +68,7 @@ test("MySQL rejects non-read-only SQL and malformed connection strings", async (
   const [mysql] = createSqlDocumentDatabaseNodes();
   const ctx = context({ mysql: { connectionString: "mysql://worker:secret@db.example.test/app" } });
   await assert.rejects(() => mysql.actions[0].run(ctx, { query: "DELETE FROM contacts", parameters: [], limit: 1 }), /MYSQL_READ_ONLY_QUERY_REQUIRED/);
+  await assert.rejects(() => mysql.actions[0].run(ctx, { query: "SELECT 'secret' INTO DUMPFILE '/tmp/leak'", parameters: [], limit: 1 }), /MYSQL_READ_ONLY_QUERY_REQUIRED/);
   await assert.rejects(() => mysql.actions[0].run(context({ mysql: { connectionString: "https://example.test" } }), { query: "SELECT 1", parameters: [], limit: 1 }), /MYSQL_CONNECTION_INVALID/);
 });
 
