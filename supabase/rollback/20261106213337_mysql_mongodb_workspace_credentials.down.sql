@@ -28,4 +28,5 @@ alter table public.workspace_integrations
     'jira','asana','trello','clickup','monday','todoist','airtable','bitbucket','netlify',
     'woocommerce','paypal','paddle','lemon_squeezy','square','razorpay','zoom','cal_com','twilio_voice','docusign',
     'x_twitter','linkedin','facebook_pages','instagram','tiktok','mailchimp','typeform',
-    'supa¶»§q«^
+    'supabase','postgresql','redis','firebase','dropbox','aws_s3','cloudflare_r2'
+  ));
