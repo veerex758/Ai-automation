@@ -8,6 +8,7 @@ const credentialsSource = readFileSync("lib/integrations/workspace-credentials.t
 const connectionsSource = readFileSync("app/dashboard/connections/page.tsx", "utf8");
 const connectionTestSource = readFileSync("app/api/integrations/workspace/test/route.ts", "utf8");
 const workerSource = readFileSync("lib/workflows/durable-worker.ts", "utf8");
+const resendTestSource = readFileSync("app/api/integrations/workspace/resend/test/route.ts", "utf8");
 
 test("all 100 directory entries have official brand artwork or an explicit native icon path", () => {
   const ids = [...catalogSource.matchAll(/"id": "([^"]+)"/g)].map((match) => match[1]);
@@ -33,7 +34,7 @@ test("every workspace credential provider has a connection form", () => {
 });
 
 test("new provider-pack connection checks remain read-only and fail closed when no safe check exists", () => {
-  for (const provider of ["mistral", "groq", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"]) {
+  for (const provider of ["claude", "http", "mistral", "groq", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"]) {
     assert.match(connectionTestSource, new RegExp('case "' + provider + '":'));
     assert.match(connectionTestSource, new RegExp('"' + provider + '"'));
   }
@@ -45,4 +46,16 @@ test("durable live execution requires both a connected integration and a passed 
   assert.match(workerSource, /integration\.status !== "connected" \|\| integration\.last_test_status !== "passed"/);
   assert.match(directorySource, /record\.last_test_status === "passed"/);
   assert.match(directorySource, /liveExecutionEnabled && liveProvidersEnabled\.includes\(providerPermissionKey\)/);
+});
+
+test("every credential provider has a non-destructive verification path or an explicit safe exception", () => {
+  const providerUnion = credentialsSource.match(/export type WorkspaceCredentialProvider =([\\s\\S]*?);/);
+  assert.ok(providerUnion);
+  const providers = [...providerUnion[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  const testableBlock = connectionTestSource.match(/const TESTABLE = new Set\\(\\[([\\s\\S]*?)\\]\\);/);
+  assert.ok(testableBlock);
+  const testable = [...testableBlock[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(providers.filter((provider) => !testable.includes(provider)), ["resend"]);
+  assert.match(resendTestSource, /last_test_status: "passed"/);
+  assert.match(connectionTestSource, /Perplexity does not expose a safe read-only credential check/);
 });
