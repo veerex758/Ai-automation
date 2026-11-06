@@ -305,6 +305,15 @@ export async function runDurableWorker() {
             const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
             if (!to || to.includes("{{") || !allowedSmsRecipients.has(to)) throw new Error("LIVE_SMS_RECIPIENT_NOT_ALLOWED");
           }
+          const voiceSteps = steps.filter((step) => step.nodeId === "twilio_voice" && step.operationId === "execute");
+          const allowedVoiceRecipients = new Set((process.env.AIVANTA_LIVE_VOICE_RECIPIENTS ?? "")
+            .split(",").map((item) => item.trim()).filter(Boolean));
+          for (const step of voiceSteps) {
+            const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
+            if (!/^\\+[1-9]\\d{7,14}$/.test(to) || !allowedVoiceRecipients.has(to)) {
+              throw new Error("LIVE_VOICE_RECIPIENT_NOT_ALLOWED");
+            }
+          }
           const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
           const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
             .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
