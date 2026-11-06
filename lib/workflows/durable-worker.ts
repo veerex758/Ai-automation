@@ -9,6 +9,7 @@ import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
 import { isProviderLiveEnabled, providerPackLiveId } from "@/lib/workflows/provider-live-gates";
+import { performSafeHttpRequest } from "@/nodes/safe-http";
 
 
 type Job = {
@@ -197,22 +198,15 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
     },
     http: {
       async request(args) {
-        const controller = new AbortController();
-        const timeout = Math.max(1000, Math.min(args.timeoutMs ?? 15000, 30000));
-        const timer = setTimeout(() => controller.abort(), timeout);
-        try {
-          const response = await fetch(args.url, {
-            method: args.method,
-            headers: args.headers,
-            body: args.body === undefined ? undefined : (typeof args.body === "string" ? args.body : JSON.stringify(args.body)),
-            signal: controller.signal,
-            redirect: "error",
-          });
-          const raw = await response.text();
-          let body: unknown = raw;
-          try { body = raw ? JSON.parse(raw) : raw; } catch { /* preserve plain-text provider response */ }
-          return { status: response.status, body };
-        } finally { clearTimeout(timer); }
+        const timeoutMs = Math.max(1000, Math.min(args.timeoutMs ?? 15000, 30000));
+        const response = await performSafeHttpRequest({
+          url: args.url,
+          method: args.method,
+          headers: args.headers ?? {},
+          body: args.body,
+          timeoutMs,
+        });
+        return { status: response.status, body: response.body };
       },
     },
     rateLimit: { async consume(args) {
