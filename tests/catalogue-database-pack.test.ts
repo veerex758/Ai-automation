@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { findNode, findOperation } from "../nodes/registry";
 
 const logger = { info() {}, error() {} };
-function context(credentials: Record<string, Record<string, string>>, respond: (args: any) => unknown) {
+function context(credentials: Record<string, Record<string, string>>, respond: (args: any) => { status: number; body: unknown }) {
   return {
     credentials, logger, previousOutputs: {},
     http: { async request(args: any) { return respond(args); } },
@@ -104,7 +104,7 @@ test("AWS S3 get_object_metadata uses SigV4 and returns metadata only for an exa
   const result = await op.run(context({ aws_s3: { region: "eu-west-1", accessKeyId: "AKIATEST", secretAccessKey: "secret" } }, request => {
     args = request; return { status: 200, body: "<ListBucketResult><Contents><Key>reports/a.csv</Key><LastModified>2026-11-01T00:00:00Z</LastModified><ETag>&quot;abc&quot;</ETag><Size>12</Size></Contents></ListBucketResult>" };
   }), { bucket: "aivanta-data", key: "reports/a.csv" });
-  assert.equal(args.method, undefined);
+  assert.equal(args.method, "GET");
   assert.match(args.headers.Authorization, /^AWS4-HMAC-SHA256 Credential=AKIATEST\//);
   assert.equal(new URL(args.url).searchParams.get("max-keys"), "1");
   assert.deepEqual(result, { key: "reports/a.csv", size: 12, lastModified: "2026-11-01T00:00:00Z", etag: '"abc"' });
