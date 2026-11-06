@@ -257,3 +257,17 @@ test("Google Contacts get_person reads one validated People API resource", async
   assert.equal(request.headers.Authorization, "Bearer people-token");
   assert.deepEqual(result, { resourceName: "people/c123", displayName: "Ada Lovelace", email: "ada@example.test", phone: "+15550001111" });
 });
+
+test("Google Sheets get_spreadsheet returns validated spreadsheet and sheet metadata", async () => {
+  let request: any;
+  const operation = findOperation("google_sheets", "get_spreadsheet", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { sheets: { accessToken: "sheets-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { spreadsheetId: "spreadsheet_123456", properties: { title: "Leads" }, sheets: [{ properties: { sheetId: 0, title: "Sheet1", index: 0 } }] } }; } },
+    previousOutputs: {},
+  }, { spreadsheetId: "spreadsheet_123456" });
+  assert.match(request.url, /spreadsheets\/spreadsheet_123456\?fields=/);
+  assert.equal(request.headers.Authorization, "Bearer sheets-token");
+  assert.deepEqual(result, { spreadsheetId: "spreadsheet_123456", title: "Leads", sheets: [{ sheetId: 0, title: "Sheet1", index: 0 }] });
+});
