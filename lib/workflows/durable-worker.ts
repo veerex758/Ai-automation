@@ -149,21 +149,28 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   return null;
 }
 
-const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "rss_feed"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
   }
   if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture"))) return true;
-  if (step.kind === "action" && new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time", "loop.iterate", "wait.delay"]).has(step.nodeId + "." + step.operationId)) return true;
+  if (step.kind === "action" && new Set([
+    "if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields",
+    "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time",
+    "loop.iterate", "wait.delay",
+    "deduplicate.unique", "sort.sort_items", "split_batches.split", "crypto_hash.hash",
+    "template.render", "csv_parse.parse", "csv_stringify.stringify", "markdown_html.convert",
+    "text_transform.transform", "regex.match", "array_ops.operate", "object_ops.operate",
+    "math.calculate", "uuid.generate", "base64.convert", "date_add.add", "date_format.format",
+    "rate_limiter.check", "json_encode.encode",
+  ]).has(step.nodeId + "." + step.operationId)) return true;
   const providerPackProvider = providerPackLiveId(step);
   if (providerPackProvider) return isProviderLiveEnabled(providerPackProvider, process.env.AIVANTA_LIVE_INTEGRATIONS);
   const provider = step.kind === "action" ? providerForStep(step) : null;
   if (!provider) return false;
-  if (SERVER_ENABLED_INTEGRATIONS.has(provider) || (step.nodeId === "slack" && step.operationId === "post_message")) {
-    return isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS);
-  }
-  return true;
+  // Every external provider, including OpenAI, Gemini, Resend and both Slack
+  // actions, must have its own explicit server-side opt-in. Unknown paths fail closed.
+  return isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS);
 }
 
 function boundedOutput(value: unknown): Record<string, unknown> {
