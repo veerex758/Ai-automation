@@ -281,3 +281,17 @@ test("CRM nodes declare provider-specific credential scopes and auth types", () 
   assert.deepEqual(findNode("freshsales")?.auth, { type: "apiKey", credentialKey: "accessToken" });
   assert.deepEqual(findNode("intercom")?.auth, { type: "oauth2", scopes: ["read_write_users"], refresh: "manual" });
 });
+
+test("Close get_contact retrieves a single contact with Basic API-key auth", async () => {
+  let request: any;
+  const operation = findOperation("close", "get_contact", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { close: { apiKey: "close-test-key" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { id: "cont_1234567890", name: "Ada Lovelace", emails: [{ email: "ada@example.test" }], phones: [{ phone: "+15550001111" }], lead_id: "lead_1234567890" } }; } },
+    previousOutputs: {},
+  }, { contactId: "cont_1234567890" });
+  assert.equal(request.url, "https://api.close.com/api/v1/contact/cont_1234567890/");
+  assert.equal(request.headers.Authorization, "Basic " + Buffer.from("close-test-key:").toString("base64"));
+  assert.deepEqual(result, { contactId: "cont_1234567890", name: "Ada Lovelace", email: "ada@example.test", phone: "+15550001111", leadId: "lead_1234567890" });
+});
