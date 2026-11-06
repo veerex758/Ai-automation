@@ -49,10 +49,10 @@ test("durable live execution requires both a connected integration and a passed 
 });
 
 test("every credential provider has a non-destructive verification path or an explicit safe exception", () => {
-  const providerUnion = credentialsSource.match(/export type WorkspaceCredentialProvider =([\\s\\S]*?);/);
+  const providerUnion = credentialsSource.match(/export type WorkspaceCredentialProvider =([\s\S]*?);/);
   assert.ok(providerUnion);
   const providers = [...providerUnion[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-  const testableBlock = connectionTestSource.match(/const TESTABLE = new Set\\(\\[([\\s\\S]*?)\\]\\);/);
+  const testableBlock = connectionTestSource.match(/const TESTABLE = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(testableBlock);
   const testable = [...testableBlock[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(providers.filter((provider) => !testable.includes(provider)), ["resend"]);
