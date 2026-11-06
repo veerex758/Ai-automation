@@ -27,6 +27,9 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
       async run(ctx, raw) { const input = args.input.parse(raw); return args.output.parse(await args.run(ctx, input)); } }, ...(args.additionalActions ?? [])] };
 }
 function sha256(value: string): string { return createHash("sha256").update(value).digest("hex"); }
+const firestoreDocumentPath = z.string()
+  .regex(/^[A-Za-z0-9_-]{1,100}(?:\/[A-Za-z0-9_-]{1,100}){1,9}$/)
+  .refine((value) => value.split("/").length % 2 === 0, "Firestore document paths must end in a document ID");
 function assertSupabaseReadKey(key: string): void {
   if (key.startsWith("sb_secret_")) throw new Error("SUPABASE_RESTRICTED_KEY_REQUIRED");
   const parts = key.split(".");
@@ -177,10 +180,10 @@ export const catalogueDatabaseNodes: NodeDefinition[] = [
     },
     additionalActions: [{
       id: "get_document", name: "Get document", description: "Reads one Firestore document by a validated collection/document path using the connected Google token.",
-      inputSchema: z.object({ documentPath: z.string().regex(/^[A-Za-z0-9_-]{1,100}(?:\/[A-Za-z0-9_-]{1,100}){1,9}$/) }).strict(),
+      inputSchema: z.object({ documentPath: firestoreDocumentPath }).strict(),
       outputSchema: z.object({ name: z.string(), fields: z.record(z.string(), z.unknown()).optional() }).strict(),
       async run(ctx, raw) {
-        const input = z.object({ documentPath: z.string().regex(/^[A-Za-z0-9_-]{1,100}(?:\/[A-Za-z0-9_-]{1,100}){1,9}$/) }).strict().parse(raw);
+        const input = z.object({ documentPath: firestoreDocumentPath }).strict().parse(raw);
         const project = secret(ctx, "firebase", "projectId"); if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project)) throw new Error("FIREBASE_CONNECTION_INVALID");
         const path = input.documentPath.split("/").map(encodeURIComponent).join("/"); const url = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(project) + "/databases/(default)/documents/" + path;
         const response = await request(ctx, "firebase", { url, headers: { Authorization: "Bearer " + secret(ctx, "firebase", "accessToken") } }); const doc = response.body as Record<string, unknown>;
