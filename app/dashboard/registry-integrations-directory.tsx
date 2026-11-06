@@ -125,8 +125,8 @@ function connectionState(node: RegistryNode, workspace: ConnectionRecord[], goog
   if (node.id === "webhook_trigger") return "setup-required";
   if (!connectionRequired(node)) return "no-connection";
   if (failed) return "unverified";
-  if (node.id === "gmail" || node.id === "google_sheets") {
-    const product = node.id === "gmail" ? "gmail" : "sheets";
+  if (googleOAuthProduct[node.id]) {
+    const product = googleOAuthProduct[node.id];
     return google.some((item) => item.product === product && item.status === "connected") ? "connected" : "not-connected";
   }
   const provider = providerForNode[node.id] ?? node.id;
