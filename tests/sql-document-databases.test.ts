@@ -15,10 +15,9 @@ test("MySQL executes a parameterized SELECT in a read-only transaction and caps 
     async connectMysql(uri) {
       assert.equal(uri, "mysql://worker:secret@db.example.test/app");
       return {
-        async query(sql) { calls.push({ sql, values: [] }); },
-        async beginTransaction() { began = true; },
-        async execute(sql, values) {
+        async query(sql, values) {
           calls.push({ sql, values });
+          if (sql.startsWith("SET TRANSACTION")) return [[], []];
           return calls.length === 1 ? [[], []] : [[{ id: 1 }, { id: 2 }, { id: 3 }], []];
         },
         async commit() { committed = true; },
@@ -49,9 +48,8 @@ test("MySQL rolls back failed queries and always closes the driver", async () =>
   const [mysql] = createSqlDocumentDatabaseNodes({
     async connectMysql() {
       return {
-        async query() {},
+        async query(sql) { if (sql.startsWith("SELECT")) throw new Error("query failed"); return [[], []]; },
         async beginTransaction() {},
-        async execute(sql) { if (sql.startsWith("SELECT")) throw new Error("query failed"); return [[], []]; },
         async commit() {},
         async rollback() { rolledBack = true; },
         async end() { closed = true; },
