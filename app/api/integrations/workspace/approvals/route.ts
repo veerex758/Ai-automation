@@ -23,7 +23,7 @@ async function authenticatedWorkspace() {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { response: json({ error: "Authentication required." }, 401) } as const;
   const workspace = await getOrCreateDefaultWorkspace(supabase);
-  return { user, workspace } as const;
+  return { user, workspace, supabase } as const;
 }
 
 export async function GET() {
@@ -54,6 +54,12 @@ export async function POST(request: NextRequest) {
         typeof body.decision !== "string" || !["approved", "revoked"].includes(body.decision) ||
         (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 500))) {
       return json({ error: "Invalid approval request." }, 400);
+    }
+    const { data: membership, error: membershipError } = await auth.supabase.from("workspace_members")
+      .select("role").eq("workspace_id", auth.workspace.id).eq("user_id", auth.user.id).maybeSingle();
+    if (membershipError) return json({ error: "Unable to verify workspace permissions." }, 503);
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      return json({ error: "Only workspace owners and admins can change provider approvals." }, 403);
     }
     const mapping = getWorkerOperationMapping({
       nodeId: body.nodeId,
