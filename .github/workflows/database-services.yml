@@ -33,7 +33,9 @@ jobs:
           mkdir -p "$CERT_DIR"
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
             -keyout "$CERT_DIR/ca.key" -out "$CERT_DIR/ca.pem" \
-            -subj "/CN=Aivanta CI Database CA"
+            -subj "/CN=Aivanta CI Database CA" \\
+            -addext "basicConstraints=critical,CA:TRUE" \\
+            -addext "keyUsage=critical,keyCertSign,cRLSign"
           openssl req -newkey rsa:2048 -nodes \
             -keyout "$CERT_DIR/server.key" -out "$CERT_DIR/server.csr" \
             -subj "/CN=localhost"
