@@ -28,7 +28,7 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
   google_calendar:{slug:"googlecalendar",label:"Google Calendar"},google_docs:{slug:"googledocs",label:"Google Docs"},google_forms:{slug:"googleforms",label:"Google Forms"},
   youtube:{slug:"youtube",label:"YouTube"},google_contacts:{slug:"googlecontacts",label:"Google Contacts"},
   slack:{slug:"slack",label:"Slack"},discord:{slug:"discord",label:"Discord"},telegram:{slug:"telegram",label:"Telegram"},
-  whatsapp_business:{slug:"whatsapp",label:"WhatsApp Business"},twilio_sms:{slug:"twilio",label:"Twilio"},
+  whatsapp_business:{slug:"whatsapp",label:"WhatsApp Business"},twilio_sms:{slug:"twilio",label:"Twilio SMS"},
   microsoft_teams:{slug:"microsoftteams",label:"Microsoft Teams"},resend:{slug:"resend",label:"Resend"},
   sendgrid:{slug:"sendgrid",label:"SendGrid"},mailgun:{slug:"mailgun",label:"Mailgun"},postmark:{slug:"postmark",label:"Postmark"},
   hubspot:{slug:"hubspot",label:"HubSpot"},salesforce:{slug:"salesforce",label:"Salesforce"},pipedrive:{slug:"pipedrive",label:"Pipedrive"},
@@ -64,6 +64,7 @@ const providerForNode: Record<string, string> = {
   twilio_sms: "twilio",
   http_request: "http",
 };
+const providerDisplayName = (node: RegistryNode) => officialBrandAssets[node.id]?.label ?? node.name;
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 const googleOAuthProduct: Record<string,string> = { gmail:"gmail",google_sheets:"sheets",google_drive:"drive",google_calendar:"calendar",google_docs:"docs",google_forms:"forms",youtube:"youtube",google_contacts:"contacts" };
 const credentialProvider: Record<string,string> = {
@@ -196,7 +197,7 @@ export default function RegistryIntegrationsDirectory() {
   }, []);
 
   const filtered = useMemo(() => nodes.filter((node) => {
-    const haystack = [node.name, node.id, node.category, node.group, ...node.actions.map((item) => item.name), ...node.triggers.map((item) => item.name)].join(" ").toLowerCase();
+    const haystack = [node.name, providerDisplayName(node), node.id, node.category, node.group, ...node.actions.map((item) => item.name), ...node.triggers.map((item) => item.name)].join(" ").toLowerCase();
     return haystack.includes(query.trim().toLowerCase());
   }), [nodes, query]);
 
@@ -260,7 +261,7 @@ export default function RegistryIntegrationsDirectory() {
         return <article className="registry-node-card" key={node.id}>
           <div className="registry-node-heading">
             <BrandMark node={node} />
-            <div className="registry-node-name"><h3>{node.name}</h3><span>{node.group} · v{node.version}</span></div>
+            <div className="registry-node-name"><h3>{providerDisplayName(node)}</h3><span>{node.group} · v{node.version}</span></div>
             <span className={"registry-connection-state state-" + state}>{stateLabel(state)}</span>
           </div>
           <p className="registry-node-summary">
@@ -287,7 +288,7 @@ export default function RegistryIntegrationsDirectory() {
     </div>}
     {connecting && <div className="registry-connect-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !connectionBusy) setConnecting(null); }}>
       <section className="registry-connect-dialog" role="dialog" aria-modal="true" aria-labelledby="registry-connect-title">
-        <div className="registry-connect-heading"><div><span>WORKSPACE CONNECTION</span><h2 id="registry-connect-title">Connect {connecting.name}</h2></div><button type="button" onClick={() => setConnecting(null)} disabled={connectionBusy} aria-label="Close">×</button></div>
+        <div className="registry-connect-heading"><div><span>WORKSPACE CONNECTION</span><h2 id="registry-connect-title">Connect {providerDisplayName(connecting)}</h2></div><button type="button" onClick={() => setConnecting(null)} disabled={connectionBusy} aria-label="Close">×</button></div>
         <p>Credentials are encrypted on the server and stored against this workspace. Secret values are never returned to this page.</p>
         {connecting.auth.type === "oauth2" && <p className="registry-connect-warning">This provider is labelled OAuth in the catalogue, but this form only stores an existing access token. It does not perform OAuth consent or token refresh. Use it only if you already have a valid token; otherwise wait for the provider-specific OAuth flow.</p>}
         {(credentialFields[credentialProvider[connecting.id] ?? connecting.id] ?? []).map((field) => <label className="registry-credential-field" key={field.key}><span>{field.label}</span><input type={field.secret ? "password" : "text"} autoComplete="off" value={credentialValues[field.key] ?? ""} onChange={(event) => setCredentialValues((current) => ({...current,[field.key]:event.target.value}))} /></label>)}
