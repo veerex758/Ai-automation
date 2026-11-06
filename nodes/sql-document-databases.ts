@@ -28,7 +28,7 @@ const mysqlInput = z.object({
 }).strict();
 const mongoInput = z.object({
   collection: z.string().regex(/^[A-Za-z_][A-Za-z0-9_$-]{0,119}$/),
-  filter: z.record(z.string().max(120), z.unknown()).default({}),
+  filter: z.record(z.string().max(120), z.union([z.string().max(2000), z.number().finite(), z.boolean(), z.null()])).default({}),
   limit: z.number().int().min(1).max(MAX_RESULT_ROWS).default(25),
 }).strict();
 
