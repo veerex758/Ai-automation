@@ -88,7 +88,7 @@ export const catalogueDatabaseNodes: NodeDefinition[] = [
     output: z.object({ rows: z.array(z.record(z.string(), z.unknown())).max(100), rowCount: z.number().int().nonnegative() }).strict(),
     async run(ctx, input) {
       const sql = input.query.trim().replace(/;\s*$/, "");
-      if (!/^select\b/i.test(sql) || /;|--|\/\*|\*\/|\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|copy|call|do|execute|set|reset|vacuum|analyze|pg_sleep|lo_import|lo_export)\b/i.test(sql)) throw new Error("POSTGRESQL_READ_ONLY_QUERY_REQUIRED");
+      if (!/^select\b/i.test(sql) || /;|--|\/\*|\*\/|\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|copy|call|do|execute|set|reset|vacuum|analyze|pg_sleep|lo_import|lo_export|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|dblink|pg_advisory_[a-z_]+|pg_cancel_backend|pg_terminate_backend|pg_reload_conf|pg_rotate_logfile|set_config|nextval|setval|pg_notify)\b/i.test(sql)) throw new Error("POSTGRESQL_READ_ONLY_QUERY_REQUIRED");
       const pool = new Pool({ connectionString: secret(ctx, "postgresql", "connectionString"), max: 1, connectionTimeoutMillis: 5000, idleTimeoutMillis: 1000, statement_timeout: 5000, ssl: { rejectUnauthorized: true } });
       const client = await pool.connect();
       try {
