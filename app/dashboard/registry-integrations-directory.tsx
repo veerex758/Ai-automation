@@ -142,8 +142,8 @@ function BrandMark({ node }: { node: RegistryNode }) {
       <img src={`https://cdn.simpleicons.org/${asset.slug.trim()}`} alt={`${asset.label} logo`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement?.setAttribute("data-logo-fallback", node.name.slice(0, 1).toUpperCase()); }} />
     </span>;
   }
-  return <span className={"integration-brand-mark registry-native-mark native-" + node.id} aria-hidden="true">
-    {node.name.slice(0, 1).toUpperCase()}
+  return <span className={"integration-brand-mark registry-native-mark native-" + node.id} aria-label={`${node.name} native icon`}>
+    {nativeNodeGlyphs[node.id] ?? node.name.slice(0, 1).toUpperCase()}
   </span>;
 }
 
@@ -204,6 +204,7 @@ export default function RegistryIntegrationsDirectory() {
   const registeredCount = nodes.filter((node) => node.executionStatus === "registered").length;
   const toggle = (id: string) => setExpanded((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   const beginConnect = (node: RegistryNode) => {
+    if (googleOAuthProduct[node.id]) { window.location.assign("/api/integrations/google/start?product=" + encodeURIComponent(googleOAuthProduct[node.id])); return; }
     const provider = credentialProvider[node.id] ?? node.id;
     setConnecting(node); setCredentialValues({}); setConnectionMessage("");
     if (node.auth.type === "oauth2") setConnectionMessage("OAuth provider: this form accepts an existing access token only. Aivanta will not claim OAuth authorization or refresh-token support unless that provider's OAuth flow is implemented.");
