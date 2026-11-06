@@ -137,7 +137,13 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (["jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (["woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (["x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
-  if (["supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (step.nodeId === "supabase" && ["execute", "get_row"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "postgresql" && ["execute", "get_database_info"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "redis" && ["execute", "get_many"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "firebase" && ["execute", "get_document"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "dropbox" && ["execute", "get_file_metadata"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "aws_s3" && ["execute", "get_object_metadata"].includes(step.operationId)) return step.nodeId;
+  if (step.nodeId === "cloudflare_r2" && ["execute", "get_object_metadata"].includes(step.operationId)) return step.nodeId;
   if (["claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "rss_feed"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "http_request" && step.operationId === "request") return "http";
   return null;
