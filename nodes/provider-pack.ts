@@ -111,10 +111,10 @@ export const providerPack: NodeDefinition[] = [
     additionalActions: [{
       id: "get_channel", name: "Get channel",
       description: "Reads metadata for a Discord channel accessible to the connected bot.",
-      inputSchema: z.object({ channelId: z.string().regex(/^\\d{5,25}$/) }).strict(),
+      inputSchema: z.object({ channelId: z.string().regex(/^\d{5,25}$/) }).strict(),
       outputSchema: z.object({ channelId: z.string(), name: z.string().optional(), type: z.number().int().optional(), guildId: z.string().optional() }).strict(),
       async run(ctx, raw) {
-        const input = z.object({ channelId: z.string().regex(/^\\d{5,25}$/) }).strict().parse(raw);
+        const input = z.object({ channelId: z.string().regex(/^\d{5,25}$/) }).strict().parse(raw);
         const token = secret(ctx, "discord", "botToken");
         const body = await call(ctx, "discord", { url: "https://discord.com/api/v10/channels/" + encodeURIComponent(input.channelId),
           headers: { Authorization: "Bot " + token } });
