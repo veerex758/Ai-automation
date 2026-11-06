@@ -21,13 +21,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     const { state, codeVerifier } = createOAuthState({ provider, workspaceId: workspace.id, userId: user.id });
     const authorizeUrl = createProviderAuthorizeUrl({ provider, config, redirectUri, state, codeVerifier });
     const response = NextResponse.redirect(authorizeUrl);
-    response.cookies.set("aivanta_oauth_" + provider, state, {
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "lax" as const,
       path: callbackPath,
       maxAge: 10 * 60,
-    });
+    };
+    response.cookies.set("aivanta_oauth_" + provider, state, cookieOptions);
+    response.cookies.set("aivanta_oauth_verifier_" + provider, codeVerifier, cookieOptions);
     return response;
   } catch (error) {
     const code = error instanceof Error ? error.message : "OAUTH_START_FAILED";
