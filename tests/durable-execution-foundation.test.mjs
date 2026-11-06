@@ -104,7 +104,8 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
   assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
   assert.match(workerService, /p_limit: 1/);
-  assert.match(workerService, /length > 4/);
+  assert.match(workerService, /length > MAX_LIVE_ACTION_STEPS/);
+  assert.match(workerService, /MAX_LIVE_ACTION_STEPS = 30/);
 });
 
 
@@ -118,8 +119,12 @@ test("workflow run panel dispatches live runs through the durable queue and poll
 test("dispatch validates registered definitions and guards legacy live email", () => {
   assert.match(dispatch, /isRegistryDefinition/);
   assert.match(dispatch, /findOperation/);
-  assert.match(dispatch, /isLiveRegistryOperationAllowed/);
-  assert.match(dispatch, /length > 4/);
+  assert.match(dispatch, /validateDurableLiveSteps/);
+  assert.match(workerService, /export function validateDurableLiveSteps/);
+  assert.match(workerService, /LIVE_PUBLISHING_NOT_ENABLED/);
+  assert.match(workerService, /LIVE_VOICE_RECIPIENT_NOT_ALLOWED/);
+  assert.doesNotMatch(dispatch, /isLiveRegistryOperationAllowed/);
+  assert.doesNotMatch(dispatch, /length > 4/);
   assert.match(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
   assert.match(dispatch, /Durable legacy live execution currently supports one manual-trigger Resend email action/);
 });

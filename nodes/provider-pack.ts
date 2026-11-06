@@ -34,6 +34,7 @@ function actionNode(args: {
   id: Provider; name: string; icon: string; category: NodeDefinition["category"];
   description: string; input: z.ZodTypeAny; output: z.ZodTypeAny; auth?: NodeDefinition["auth"];
   run(ctx: NodeContext, input: any): Promise<unknown>;
+  additionalActions?: NodeDefinition["actions"];
 }): NodeDefinition {
   return {
     id: args.id, name: args.name, icon: args.icon, category: args.category, version: 1,
@@ -51,7 +52,7 @@ function actionNode(args: {
         const input = args.input.parse(raw);
         return args.output.parse(await args.run(ctx, input));
       },
-    }],
+    }, ...(args.additionalActions ?? [])],
   };
 }
 
@@ -107,6 +108,20 @@ export const providerPack: NodeDefinition[] = [
       if (typeof body.id !== "string") throw new Error("DISCORD_INVALID_RESPONSE");
       return { messageId: body.id, channelId: i.channelId };
     },
+    additionalActions: [{
+      id: "get_channel", name: "Get channel",
+      description: "Reads metadata for a Discord channel accessible to the connected bot.",
+      inputSchema: z.object({ channelId: z.string().regex(/^\d{5,25}$/) }).strict(),
+      outputSchema: z.object({ channelId: z.string(), name: z.string().optional(), type: z.number().int().optional(), guildId: z.string().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ channelId: z.string().regex(/^\d{5,25}$/) }).strict().parse(raw);
+        const token = secret(ctx, "discord", "botToken");
+        const body = await call(ctx, "discord", { url: "https://discord.com/api/v10/channels/" + encodeURIComponent(input.channelId),
+          headers: { Authorization: "Bot " + token } });
+        if (typeof body.id !== "string") throw new Error("DISCORD_INVALID_RESPONSE");
+        return { channelId: body.id, ...(typeof body.name === "string" ? { name: body.name } : {}), ...(typeof body.type === "number" ? { type: body.type } : {}), ...(typeof body.guild_id === "string" ? { guildId: body.guild_id } : {}) };
+      },
+    }],
   }),
   actionNode({
     id: "telegram", name: "Telegram", icon: "send", category: "communication",
@@ -121,6 +136,20 @@ export const providerPack: NodeDefinition[] = [
       if (body.ok !== true || typeof result?.message_id !== "number") throw new Error("TELEGRAM_INVALID_RESPONSE");
       return { messageId: result.message_id, chatId: (result.chat as Record<string, unknown>)?.id as string | number };
     },
+    additionalActions: [{
+      id: "get_chat", name: "Get chat",
+      description: "Retrieves Telegram chat metadata for a chat the connected bot can access.",
+      inputSchema: z.object({ chatId: z.union([z.string().min(1).max(100), z.number().int()]) }).strict(),
+      outputSchema: z.object({ chatId: z.union([z.string(), z.number()]), type: z.string(), title: z.string().optional(), username: z.string().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ chatId: z.union([z.string().min(1).max(100), z.number().int()]) }).strict().parse(raw);
+        const token = secret(ctx, "telegram", "botToken");
+        const body = await call(ctx, "telegram", { url: "https://api.telegram.org/bot" + token + "/getChat?chat_id=" + encodeURIComponent(String(input.chatId)) });
+        const chat = body.result as Record<string, unknown> | undefined;
+        if (body.ok !== true || (typeof chat?.id !== "number" && typeof chat?.id !== "string") || typeof chat.type !== "string") throw new Error("TELEGRAM_INVALID_RESPONSE");
+        return { chatId: chat.id, type: chat.type, ...(typeof chat.title === "string" ? { title: chat.title } : {}), ...(typeof chat.username === "string" ? { username: chat.username } : {}) };
+      },
+    }],
   }),
   actionNode({
     id: "whatsapp_business", name: "WhatsApp Business", icon: "message-circle", category: "communication",
@@ -137,6 +166,20 @@ export const providerPack: NodeDefinition[] = [
       if (typeof message?.id !== "string") throw new Error("WHATSAPP_INVALID_RESPONSE");
       return { messageId: message.id };
     },
+    additionalActions: [{
+      id: "get_phone_number", name: "Get phone number metadata",
+      description: "Reads the connected WhatsApp Business phone number metadata using the saved Cloud API access token.",
+      inputSchema: z.object({}).strict(),
+      outputSchema: z.object({ phoneNumberId: z.string(), displayPhoneNumber: z.string().optional(), verifiedName: z.string().optional() }).strict(),
+      async run(ctx) {
+        const token = secret(ctx, "whatsapp_business", "accessToken");
+        const phone = secret(ctx, "whatsapp_business", "phoneNumberId");
+        const body = await call(ctx, "whatsapp_business", { url: "https://graph.facebook.com/v22.0/" + encodeURIComponent(phone) + "?fields=id,display_phone_number,verified_name",
+          headers: { Authorization: "Bearer " + token } });
+        if (typeof body.id !== "string") throw new Error("WHATSAPP_INVALID_RESPONSE");
+        return { phoneNumberId: body.id, ...(typeof body.display_phone_number === "string" ? { displayPhoneNumber: body.display_phone_number } : {}), ...(typeof body.verified_name === "string" ? { verifiedName: body.verified_name } : {}) };
+      },
+    }],
   }),
   actionNode({
     id: "sendgrid", name: "SendGrid", icon: "mail", category: "communication",

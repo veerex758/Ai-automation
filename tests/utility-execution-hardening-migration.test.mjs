@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const sql = await readFile(new URL("../supabase/migrations/20261105120000_aivanta_utility_execution_hardening.sql", import.meta.url), "utf8");
+const sql = await readFile(new URL("../supabase/migrations/20261105045346_aivanta_utility_execution_hardening.sql", import.meta.url), "utf8");
 
 test("utility hardening migration adds a workspace-scoped atomic sliding-window limiter", () => {
   assert.match(sql, /create table if not exists public\.execution_rate_limit_hits/i);

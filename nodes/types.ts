@@ -10,7 +10,7 @@ export type NodeContext = {
   credentials: Readonly<Record<string, Readonly<Record<string, string>>>>;
   logger: { info(message: string, meta?: Record<string, unknown>): void; error(message: string, meta?: Record<string, unknown>): void };
   http: {
-    request(args: { url: string; method: "GET" | "POST"; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
+    request(args: { url: string; method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
   };
   previousOutputs: Readonly<Record<string, unknown>>;
   webhook?: { verified: boolean };
