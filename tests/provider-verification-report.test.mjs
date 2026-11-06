@@ -6,8 +6,8 @@ const report = await readFile(new URL("../docs/integrations/provider-verificatio
 
 test("provider verification report publishes all registry mappings and clearly blocks unverified live execution", () => {
   assert.ok(report.includes("- Catalogue entries: 100"));
-  assert.ok(report.includes("- All native registry operations: 146"));
-  assert.ok(report.includes("- Worker operation mappings: 146"));
+  assert.ok(report.includes("- All native registry operations: 148"));
+  assert.ok(report.includes("- Worker operation mappings: 148"));
   assert.ok(report.includes("- Missing mappings: 0"));
   assert.ok(report.includes("Authenticated staging/live verification: BLOCKED"));
   assert.ok(report.includes("No provider is labelled live-verified"));
