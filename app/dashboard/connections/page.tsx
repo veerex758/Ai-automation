@@ -28,6 +28,7 @@ const statusMessages: Record<string, string> = {
   save_failed: "Google authorization completed, but Aivanta could not save the connection. See the diagnostic code below.",
   connection_failed: "The connection could not be completed. No credentials were shown.",
   not_configured: "Google OAuth is not configured for this environment yet.",
+  redirect_uri_host_mismatch: "This Preview hostname does not match the configured Google OAuth callback hostname. Use the registered Aivanta hostname or add this exact Preview callback URI in Google Cloud OAuth settings.",
   scope_mismatch: "Google returned permissions that do not match the requested read-only access.",
 };
 
