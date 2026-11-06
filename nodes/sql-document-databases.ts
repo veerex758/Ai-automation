@@ -27,7 +27,7 @@ const mysqlInput = z.object({
 }).strict();
 const mongoInput = z.object({
   collection: z.string().regex(/^[A-Za-z_][A-Za-z0-9_$-]{0,119}$/),
-  filter: z.unknown().default({}),
+  filter: z.record(z.string().max(120), z.unknown()).default({}),
   limit: z.number().int().min(1).max(MAX_RESULT_ROWS).default(25),
 }).strict();
 
@@ -57,6 +57,8 @@ function validateMongoFilter(value: unknown, depth = 0): Record<string, unknown>
   if (!value || typeof value !== "object" || Array.isArray(value) || depth > 5) {
     throw new Error("MONGODB_FILTER_INVALID");
   }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new Error("MONGODB_FILTER_INVALID");
   const entries = Object.entries(value as Record<string, unknown>);
   if (entries.length > 50) throw new Error("MONGODB_FILTER_INVALID");
   const result: Record<string, unknown> = {};
