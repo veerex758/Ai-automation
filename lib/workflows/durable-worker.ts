@@ -129,7 +129,7 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "shopify" && step.operationId === "list_products") return "shopify";
   if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
   if (step.nodeId === "linear" && step.operationId === "create_issue") return "linear";
-  if (["elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"].includes(step.nodeId) && ["execute", "search_contacts"].includes(step.operationId)) return step.nodeId;
   if (["jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (["woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (["x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
