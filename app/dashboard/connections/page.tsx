@@ -36,11 +36,12 @@ export default function ConnectionsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedWorkflow = params.get("workflowId");
-    const rememberedWorkflow = window.sessionStorage.getItem("aivanta-return-workflow") || "";
+    let rememberedWorkflow = "";
+    try { rememberedWorkflow = window.sessionStorage.getItem("aivanta-return-workflow") || ""; } catch { /* Continue without a remembered return target. */ }
     const nextWorkflow = requestedWorkflow && /^[0-9a-f-]{36}$/i.test(requestedWorkflow) ? requestedWorkflow : rememberedWorkflow;
     if (nextWorkflow) {
       setWorkflowId(nextWorkflow);
-      window.sessionStorage.setItem("aivanta-return-workflow", nextWorkflow);
+      try { window.sessionStorage.setItem("aivanta-return-workflow", nextWorkflow); } catch { /* The workflow ID remains in the current page state. */ }
     }
     const status = params.get("google");
     if (status) setNotice(statusMessages[status] ?? "Google authorization returned.");
