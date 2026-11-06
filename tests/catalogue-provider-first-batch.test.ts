@@ -88,3 +88,44 @@ test("Google Calendar get_event safely encodes calendar and event identifiers", 
   assert.match(request.url, /calendars\/primary\/events\/event%2F1/);
   assert.deepEqual(result, { id: "event-1", summary: "Planning", start: { dateTime: "2026-11-07T10:00:00Z" }, end: { dateTime: "2026-11-07T10:30:00Z" } });
 });
+
+test("Discord get_channel reads only bounded channel metadata", async () => {
+  let request: any;
+  const operation = findOperation("discord", "get_channel", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { discord: { botToken: "discord-test-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { id: "123456789", name: "general", type: 0, guild_id: "987654321", topic: "private topic" } }; } },
+    previousOutputs: {},
+  }, { channelId: "123456789" });
+  assert.equal(request.method, "GET");
+  assert.equal(request.headers.Authorization, "Bot discord-test-token");
+  assert.deepEqual(result, { channelId: "123456789", name: "general", type: 0, guildId: "987654321" });
+});
+
+test("Telegram get_chat calls Bot API and returns normalized chat metadata", async () => {
+  let request: any;
+  const operation = findOperation("telegram", "get_chat", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { telegram: { botToken: "telegram-test-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { ok: true, result: { id: -123, type: "supergroup", title: "Aivanta team", username: "aivanta_team" } } }; } },
+    previousOutputs: {},
+  }, { chatId: "-123" });
+  assert.match(request.url, /getChat\?chat_id=-123/);
+  assert.deepEqual(result, { chatId: -123, type: "supergroup", title: "Aivanta team", username: "aivanta_team" });
+});
+
+test("WhatsApp Business get_phone_number uses configured phone ID and token", async () => {
+  let request: any;
+  const operation = findOperation("whatsapp_business", "get_phone_number", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { whatsapp_business: { accessToken: "wa-test-token", phoneNumberId: "555000111" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { id: "555000111", display_phone_number: "+1555000111", verified_name: "Aivanta" } }; } },
+    previousOutputs: {},
+  }, {});
+  assert.match(request.url, /555000111\?fields=/);
+  assert.equal(request.headers.Authorization, "Bearer wa-test-token");
+  assert.deepEqual(result, { phoneNumberId: "555000111", displayPhoneNumber: "+1555000111", verifiedName: "Aivanta" });
+});
