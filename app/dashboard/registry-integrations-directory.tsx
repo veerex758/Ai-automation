@@ -15,7 +15,7 @@ type ConnectionRecord = {
   last_tested_at?: string | null; account_email?: string | null; product?: string;
 };
 type CatalogPayload = { nodes?: RegistryNode[]; error?: string };
-type WorkspacePayload = { integrations?: ConnectionRecord[]; error?: string };
+type WorkspacePayload = { integrations?: ConnectionRecord[]; liveExecutionEnabled?: boolean; liveProvidersEnabled?: string[]; error?: string };
 type GooglePayload = { connections?: ConnectionRecord[]; error?: string };
 
 const officialBrandAssets: Record<string, { slug: string; label: string }> = {
@@ -378,7 +378,7 @@ function connectionState(node: RegistryNode, workspace: ConnectionRecord[], goog
   const provider = providerForNode[node.id] ?? node.id;
   const record = workspace.find((item) => item.provider === provider);
   if (!record) return "not-connected";
-  return record.status === "connected" && record.last_test_status === "success" ? "connected" : "not-connected";
+  return record.status === "connected" && record.last_test_status === "passed" ? "connected" : "not-connected";
 }
 
 function BrandMark({ node }: { node: RegistryNode }) {
@@ -410,6 +410,8 @@ export default function RegistryIntegrationsDirectory() {
   const [google, setGoogle] = useState<ConnectionRecord[]>([]);
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
   const [statusUnavailable, setStatusUnavailable] = useState(false);
+  const [liveExecutionEnabled, setLiveExecutionEnabled] = useState(false);
+  const [liveProvidersEnabled, setLiveProvidersEnabled] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string[]>([]);
 
@@ -431,6 +433,8 @@ export default function RegistryIntegrationsDirectory() {
       else { setNodes(catalogData.nodes); setCatalogState("ready"); }
       if (!workspaceResponse.ok || !googleResponse.ok) setStatusUnavailable(true);
       setWorkspace(Array.isArray(workspaceData.integrations) ? workspaceData.integrations : []);
+      setLiveExecutionEnabled(workspaceData.liveExecutionEnabled === true);
+      setLiveProvidersEnabled(Array.isArray(workspaceData.liveProvidersEnabled) ? workspaceData.liveProvidersEnabled : []);
       setGoogle(Array.isArray(googleData.connections) ? googleData.connections : []);
     }
     void load().catch(() => { if (active) { setCatalogState("error"); setStatusUnavailable(true); } });
@@ -450,7 +454,7 @@ export default function RegistryIntegrationsDirectory() {
     <div className="registry-directory-toolbar">
       <div>
         <strong>{nodes.length} providers</strong>
-        <span>{registeredCount} registered adapters · {connectedCount} verified connections</span>
+        <span>{registeredCount} registered adapters · {connectedCount} verified connections · {liveExecutionEnabled ? "global live gate on" : "global live gate off"}</span>
       </div>
       <label className="registry-search">
         <span aria-hidden="true">⌕</span>
@@ -464,6 +468,8 @@ export default function RegistryIntegrationsDirectory() {
         const state = connectionState(node, workspace, google, statusUnavailable);
         const isExpanded = expanded.includes(node.id);
         const operations = [...node.triggers.map((operation) => ({ ...operation, kind: "Trigger" })), ...node.actions.map((operation) => ({ ...operation, kind: "Action" }))];
+        const providerPermissionKey = googleProductForNode[node.id] === "sheets" ? "sheets" : googleProductForNode[node.id] ?? providerForNode[node.id] ?? node.id;
+        const livePermissionEnabled = node.auth.type === "none" || (liveExecutionEnabled && liveProvidersEnabled.includes(providerPermissionKey));
         return <article className="registry-node-card" key={node.id}>
           <div className="registry-node-heading">
             <BrandMark node={node} />
@@ -479,6 +485,7 @@ export default function RegistryIntegrationsDirectory() {
             {operations.slice(0, 2).map((operation) => <span key={operation.kind + operation.id}>{operation.name}</span>)}
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
+          {node.executionStatus === "registered" && connectionRequired(node) && <span className={livePermissionEnabled ? "registry-live-permission permission-enabled" : "registry-live-permission"}>{livePermissionEnabled ? "Live permission enabled" : "Live permission locked"}</span>}
           {node.executionStatus === "registered" && connectionRequired(node) && <a className="registry-connect-link" href={googleProductForNode[node.id] ? `/api/integrations/google/start?product=${googleProductForNode[node.id]}` : `/dashboard/connections?provider=${encodeURIComponent(providerForNode[node.id] ?? node.id)}`}>Configure connection ↗</a>}
           {node.executionStatus === "registered" && <button className="registry-expand-button" type="button" aria-expanded={isExpanded} onClick={() => toggle(node.id)}>
             {isExpanded ? "Hide operations" : "View operations"} <span>{isExpanded ? "−" : "+"}</span>
