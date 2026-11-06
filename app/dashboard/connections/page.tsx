@@ -16,6 +16,9 @@ type Connection = {
 const statusMessages: Record<string, string> = {
   connected: "Google account authorized. Credentials are stored encrypted on the server.",
   cancelled: "Authorization was cancelled. No connection was added.",
+  state_cookie_missing: "Google returned to Aivanta, but the browser OAuth state cookie was missing. Restart authorization in the same browser tab.",
+  state_mismatch: "Google returned an OAuth state value that did not match this browser session. Start again for your security.",
+  callback_context_missing: "The Google callback was missing required authorization context. Start the connection again.",
   invalid_state: "The authorization response could not be verified. Start again for your security.",
   sign_in_required: "Your session expired. Sign in and try again.",
   user_changed: "The signed-in account changed during authorization. Start again.",
@@ -34,6 +37,8 @@ const diagnosticHelp: Record<string, string> = {
   CONNECTION_TABLE_MISSING: "The google_connections table is missing from the configured Supabase project. Confirm the Phase 0 migrations were applied to this project.",
   CONNECTION_QUERY_FAILED: "Supabase rejected the connection query. Check the Preview service key, project URL, grants, and RLS configuration.",
   CONNECTIONS_UNAVAILABLE: "The server failed before it could load workspace connections. Check the Preview function logs.",
+  CONNECTION_WORKSPACE_FAILED: "Aivanta could not resolve your workspace. Check workspace membership and server logs.",
+  CONNECTION_RESPONSE_INVALID: "The connections endpoint returned an unexpected response. Retry and inspect Preview logs.",
 };
 
 export default function ConnectionsPage() {
@@ -59,12 +64,13 @@ export default function ConnectionsPage() {
     if (status) setNotice(statusMessages[status] ?? "Google authorization returned.");
     fetch("/api/integrations/google/connections", { cache: "no-store" })
       .then(async response => {
-        const payload = await response.json();
+        const payload = await response.json().catch(() => null);
         if (!response.ok) {
-          setErrorCode(typeof payload.code === "string" ? payload.code : "CONNECTIONS_UNAVAILABLE");
-          throw new Error(payload.error ?? "Could not load connections.");
+          setErrorCode(typeof payload?.code === "string" ? payload.code : "CONNECTION_RESPONSE_INVALID");
+          throw new Error(typeof payload?.error === "string" ? payload.error : "Could not load connections.");
         }
-        setConnections(payload.connections ?? []);
+        if (!Array.isArray(payload?.connections)) { setErrorCode("CONNECTION_RESPONSE_INVALID"); throw new Error("The connections response was incomplete."); }
+        setConnections(payload.connections);
       })
       .catch(reason => setError(reason instanceof Error ? reason.message : "Could not load connections."))
       .finally(() => setLoading(false));
