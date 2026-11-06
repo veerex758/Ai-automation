@@ -131,9 +131,9 @@ test("WhatsApp Business get_phone_number uses configured phone ID and token", as
   assert.deepEqual(result, { phoneNumberId: "555000111", displayPhoneNumber: "+1555000111", verifiedName: "Aivanta" });
 });
 
-test("Salesforce search_contacts uses escaped SOQL email lookup", async () => {
+test("Salesforce search_leads uses escaped SOQL email lookup and returns lead records", async () => {
   let request: any;
-  const operation = findOperation("salesforce", "search_contacts", "action");
+  const operation = findOperation("salesforce", "search_leads", "action");
   assert.ok(operation);
   const result = await operation.run({
     credentials: { salesforce: { accessToken: "sf-token", instanceUrl: "https://example.my.salesforce.com" } }, logger,
@@ -142,7 +142,7 @@ test("Salesforce search_contacts uses escaped SOQL email lookup", async () => {
   }, { email: "person@example.test" });
   assert.match(request.url, /services\/data\/v60\.0\/query/);
   assert.equal(request.headers.Authorization, "Bearer sf-token");
-  assert.deepEqual(result, { contacts: [{ contactId: "lead-1", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
+  assert.deepEqual(result, { leads: [{ leadId: "lead-1", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
 });
 
 test("Pipedrive search_contacts normalizes the persons search response", async () => {
