@@ -260,7 +260,7 @@ export default function WorkflowBuilderPage() {
             <div className="graph-canvas" role="region" aria-label="Workflow graph canvas">
               <div className="graph-grid" aria-hidden="true" />
               <div className="graph-layout">
-                <svg className="graph-edges" aria-hidden="true">
+                <svg className="graph-edges" aria-hidden="true"><defs><marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#9ab78a" /></marker></defs>
                   {(definition.edges ?? []).map((edge) => {
                     const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
                     const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target);
@@ -334,6 +334,16 @@ export default function WorkflowBuilderPage() {
               </>}
               <p className="config-note">Rules are stored in your draft. They will not be evaluated until execution is implemented.</p>
             </div>}
+            <div className="panel-divider" />
+            <section className="graph-connection-editor" aria-label="Node connections">
+              <div className="config-section-title">Connections</div>
+              <p className="config-note">Connect this node to another node. Conditions can create true and false paths.</p>
+              {(definition.edges ?? []).filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).map((edge) => <div className="graph-edge-row" key={edge.id}><span><b>{edge.label === "next" ? "Next" : edge.label.toUpperCase()}</b> · {definition.nodes.find((node) => node.id === edge.source)?.title} → {definition.nodes.find((node) => node.id === edge.target)?.title}</span><button type="button" aria-label="Remove connection" onClick={() => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: (current.edges ?? []).filter((item) => item.id !== edge.id) })); }}>×</button></div>)}
+              <label htmlFor="connect-target">Connect to node</label>
+              <select id="connect-target" defaultValue="" onChange={(event) => { const target = event.target.value; if (!target || !selectedNode || target === selectedNode.id) return; const label = selectedNode.type === "condition" ? window.prompt("Branch label: type true or false", "true") : "next"; if (label !== "next" && label !== "true" && label !== "false") { event.currentTarget.value = ""; return; } const exists = (definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.target === target && edge.label === label); if (exists) { event.currentTarget.value = ""; return; } draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source: selectedNode.id, target, label: label as "next" | "true" | "false" }] })); setNotice("Connection added. Save your changes when ready."); event.currentTarget.value = ""; }}>
+                <option value="">Choose destination…</option>{definition.nodes.filter((node) => node.id !== selectedNode.id).map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}
+              </select>
+            </section>
             <div className="panel-divider" />
             <div className="step-order"><span>Step order</span><div><button aria-label="Move step up" disabled={definition.nodes.findIndex((node) => node.id === selectedNode.id) <= 1} onClick={() => moveNode(definition.nodes.findIndex((node) => node.id === selectedNode.id), -1)}>↑</button><button aria-label="Move step down" disabled={definition.nodes.findIndex((node) => node.id === selectedNode.id) >= definition.nodes.length - 1} onClick={() => moveNode(definition.nodes.findIndex((node) => node.id === selectedNode.id), 1)}>↓</button></div></div>
             {selectedNode.type !== "trigger" && <button className="remove-step" onClick={removeSelected}>Remove this step</button>}
