@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type Operation = { id: string; name: string; description: string };
+type Operation = { id: string; name: string; description: string; inputSchema?: unknown; outputSchema?: unknown };
 type RegistryNode = {
   id: string; name: string; icon: string; category: string; group: string; version: number;
   executionStatus: "registered" | "coming_soon";
@@ -19,18 +19,40 @@ type WorkspacePayload = { integrations?: ConnectionRecord[]; error?: string };
 type GooglePayload = { connections?: ConnectionRecord[]; error?: string };
 
 const officialBrandAssets: Record<string, { slug: string; label: string }> = {
-  openai: { slug: "openai", label: "OpenAI" },
-  gemini: { slug: "googlegemini", label: "Google Gemini" },
-  slack: { slug: "slack", label: "Slack" },
-  resend: { slug: "resend", label: "Resend" },
-  gmail: { slug: "gmail", label: "Gmail" },
-  google_sheets: { slug: "googlesheets", label: "Google Sheets" },
-  notion: { slug: "notion", label: "Notion" },
-  hubspot: { slug: "hubspot", label: "HubSpot" },
-  twilio_sms: { slug: "twilio", label: "Twilio" },
-  shopify: { slug: "shopify", label: "Shopify" },
-  stripe: { slug: "stripe", label: "Stripe" },
-  linear: { slug: "linear", label: "Linear" },
+  openai:{slug:"openai",label:"OpenAI"},gemini:{slug:"googlegemini",label:"Google Gemini"},
+  claude:{slug:"anthropic",label:"Claude"},mistral:{slug:"mistral",label:"Mistral"},groq:{slug:"groq",label:"Groq"},
+  perplexity:{slug:"perplexity",label:"Perplexity"},elevenlabs:{slug:"elevenlabs",label:"ElevenLabs"},
+  stability_ai:{slug:"stabilityai",label:"Stability AI"},hugging_face:{slug:"huggingface",label:"Hugging Face"},pinecone:{slug:"pinecone",label:"Pinecone"},
+  gmail:{slug:"gmail",label:"Gmail"},google_sheets:{slug:"googlesheets",label:"Google Sheets"},google_drive:{slug:"googledrive",label:"Google Drive"},
+  google_calendar:{slug:"googlecalendar",label:"Google Calendar"},google_docs:{slug:"googledocs",label:"Google Docs"},google_forms:{slug:"googleforms",label:"Google Forms"},
+  youtube:{slug:"youtube",label:"YouTube"},google_contacts:{slug:"googlecontacts",label:"Google Contacts"},
+  slack:{slug:"slack",label:"Slack"},discord:{slug:"discord",label:"Discord"},telegram:{slug:"telegram",label:"Telegram"},
+  whatsapp_business:{slug:"whatsapp",label:"WhatsApp Business"},twilio_sms:{slug:"twilio",label:"Twilio"},
+  microsoft_teams:{slug:"microsoftteams",label:"Microsoft Teams"},resend:{slug:"resend",label:"Resend"},
+  sendgrid:{slug:"sendgrid",label:"SendGrid"},mailgun:{slug:"mailgun",label:"Mailgun"},postmark:{slug:"postmark",label:"Postmark"},
+  hubspot:{slug:"hubspot",label:"HubSpot"},salesforce:{slug:"salesforce",label:"Salesforce"},pipedrive:{slug:"pipedrive",label:"Pipedrive"},
+  zoho_crm:{slug:"zoho",label:"Zoho CRM"},freshsales:{slug:"freshworks",label:"Freshsales"},close:{slug:"close",label:"Close"},
+  apollo:{slug:"apollo",label:"Apollo"},intercom:{slug:"intercom",label:"Intercom"},notion:{slug:"notion",label:"Notion"},
+  linear:{slug:"linear",label:"Linear"},jira:{slug:"jira",label:"Jira"},asana:{slug:"asana",label:"Asana"},
+  trello:{slug:"trello",label:"Trello"},clickup:{slug:"clickup",label:"ClickUp"},monday:{slug:" monday",label:"Monday.com"},
+  todoist:{slug:"todoist",label:"Todoist"},airtable:{slug:"airtable",label:"Airtable"},github:{slug:"github",label:"GitHub"},
+  gitlab:{slug:"gitlab",label:"GitLab"},bitbucket:{slug:"bitbucket",label:"Bitbucket"},sentry:{slug:"sentry",label:"Sentry"},
+  vercel:{slug:"vercel",label:"Vercel"},netlify:{slug:"netlify",label:"Netlify"},supabase:{slug:"supabase",label:"Supabase"},
+  postgresql:{slug:"postgresql",label:"PostgreSQL"},mysql:{slug:"mysql",label:"MySQL"},mongodb:{slug:"mongodb",label:"MongoDB"},
+  redis:{slug:"redis",label:"Redis"},firebase:{slug:"firebase",label:"Firebase"},dropbox:{slug:"dropbox",label:"Dropbox"},
+  aws_s3:{slug:"amazons3",label:"AWS S3"},cloudflare_r2:{slug:"cloudflare",label:"Cloudflare R2"},
+  stripe:{slug:"stripe",label:"Stripe"},shopify:{slug:"shopify",label:"Shopify"},woocommerce:{slug:"woocommerce",label:"WooCommerce"},
+  paypal:{slug:"paypal",label:"PayPal"},paddle:{slug:"paddle",label:"Paddle"},lemon_squeezy:{slug:"lemonsqueezy",label:"Lemon Squeezy"},
+  square:{slug:"square",label:"Square"},razorpay:{slug:"razorpay",label:"Razorpay"},x_twitter:{slug:"x",label:"X"},
+  linkedin:{slug:"linkedin",label:"LinkedIn"},facebook_pages:{slug:"facebook",label:"Facebook Pages"},instagram:{slug:"instagram",label:"Instagram"},
+  tiktok:{slug:"tiktok",label:"TikTok"},mailchimp:{slug:"mailchimp",label:"Mailchimp"},typeform:{slug:"typeform",label:"Typeform"},
+  calendly:{slug:"calendly",label:"Calendly"},zendesk:{slug:"zendesk",label:"Zendesk"},freshdesk:{slug:"freshdesk",label:"Freshdesk"},
+  zoom:{slug:"zoom",label:"Zoom"},cal_com:{slug:"caldotcom",label:"Cal.com"},twilio_voice:{slug:"twilio",label:"Twilio Voice"},
+  docusign:{slug:"docusign",label:"DocuSign"},serpapi:{slug:"google",label:"SerpAPI"},openweather:{slug:"openweathermap",label:"OpenWeather"},
+};
+const nativeNodeGlyphs: Record<string,string> = {
+  webhook_trigger:"↗",schedule_cron:"◷",manual_trigger:"▶",http_request:"⇄",if:"◇",switch:"⇄",loop:"↻",merge:"⊕",
+  wait_delay:"◷",code_js:"</>",set_fields:"≡",json_parse:"{}",filter:"⌕",aggregate:"∑",date_time:"◷",
 };
 const providerForNode: Record<string, string> = {
   gmail: "google:gmail",
@@ -61,7 +83,7 @@ function BrandMark({ node }: { node: RegistryNode }) {
   const asset = officialBrandAssets[node.id];
   if (asset) {
     return <span className="integration-brand-mark official-brand-mark">
-      <img src={`https://cdn.simpleicons.org/${asset.slug}`} alt={`${asset.label} logo`} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+      <img src={`https://cdn.simpleicons.org/${asset.slug.trim()}`} alt={`${asset.label} logo`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.display = "none"; }} />
     </span>;
   }
   return <span className={"integration-brand-mark registry-native-mark native-" + node.id} aria-hidden="true">
@@ -160,7 +182,7 @@ export default function RegistryIntegrationsDirectory() {
           </button>}
           {isExpanded && <div className="registry-operation-list">
             {operations.length === 0 ? <p>No operations are registered yet.</p> : operations.map((operation) => <div className="registry-operation" key={operation.kind + operation.id}>
-              <div><span>{operation.kind}</span><strong>{operation.name}</strong><code>{operation.id}</code></div><p>{operation.description}</p>
+              <div><span>{operation.kind}</span><strong>{operation.name}</strong><code>{operation.id}</code></div><p>{operation.description}</p><details className="registry-operation-schema"><summary>Input and output schema</summary><div><strong>Input</strong><pre>{JSON.stringify(operation.inputSchema ?? {}, null, 2)}</pre><strong>Output</strong><pre>{JSON.stringify(operation.outputSchema ?? {}, null, 2)}</pre></div></details>
             </div>)}
           </div>}
         </article>;
