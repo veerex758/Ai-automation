@@ -46,6 +46,7 @@ test("durable live execution requires both a connected integration and a passed 
   assert.match(workerSource, /integration\.status !== "connected" \|\| integration\.last_test_status !== "passed"/);
   assert.match(directorySource, /record\.last_test_status === "passed"/);
   assert.match(directorySource, /liveExecutionEnabled && liveProvidersEnabled\.includes\(providerPermissionKey\)/);
+  assert.match(directorySource, /state === "connected" && livePermissionEnabled/);
 });
 
 test("every credential provider has a non-destructive verification path or an explicit safe exception", () => {
