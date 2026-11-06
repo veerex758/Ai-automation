@@ -41,7 +41,7 @@ function assertSupabaseReadKey(key: string): void {
 }
 function hmac(key: Buffer | string, value: string): Buffer { return createHmac("sha256", key).update(value).digest(); }
 function awsEncode(value: string): string { return encodeURIComponent(value).replace(/[!'()*]/g, char => "%" + char.charCodeAt(0).toString(16).toUpperCase()); }
-function awsCanonicalQuery(url: URL): string { return Array.from(url.searchParams.entries()).sort(([ak, av], [bk, bv]) => ak.localeCompare(bk) || av.localeCompare(bv)).map(([key, value]) => awsEncode(key) + "=" + awsEncode(value)).join("&"); }
+function awsCanonicalQuery(url: URL): string { return Array.from(url.searchParams.entries()).sort(([ak, av], [bk, bv]) => ak < bk ? -1 : ak > bk ? 1 : av < bv ? -1 : av > bv ? 1 : 0).map(([key, value]) => awsEncode(key) + "=" + awsEncode(value)).join("&"); }
 function awsSignedHeaders(args: { method: string; url: URL; accessKeyId: string; secretAccessKey: string; region: string; now?: Date }): Record<string, string> {
   const now = args.now ?? new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
