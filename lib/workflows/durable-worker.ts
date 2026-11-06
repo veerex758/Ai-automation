@@ -119,7 +119,7 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "slack" && ["send_message", "post_message"].includes(step.operationId)) return "slack";
   if (step.nodeId === "email" && step.operationId === "send_email") return "resend";
   if (step.nodeId === "gmail" && ["list_messages", "get_message"].includes(step.operationId)) return "gmail";
-  if (step.nodeId === "google_sheets" && step.operationId === "get_values") return "sheets";
+  if (step.nodeId === "google_sheets" && ["get_values", "get_spreadsheet"].includes(step.operationId)) return "sheets";
   if (step.nodeId === "google_drive" && ["execute", "get_file"].includes(step.operationId)) return step.nodeId;
   if (step.nodeId === "google_calendar" && ["execute", "get_event"].includes(step.operationId)) return step.nodeId;
   if (step.nodeId === "google_docs" && ["execute", "get_document_text"].includes(step.operationId)) return step.nodeId;
