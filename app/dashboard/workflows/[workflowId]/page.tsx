@@ -265,8 +265,14 @@ export default function WorkflowBuilderPage() {
                     const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
                     const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target);
                     if (sourceIndex < 0 || targetIndex < 0) return null;
-                    const source = { x: 170 + (sourceIndex % 3) * 300, y: 90 + Math.floor(sourceIndex / 3) * 210 };
-                    const target = { x: 170 + (targetIndex % 3) * 300, y: 90 + Math.floor(targetIndex / 3) * 210 };
+                    const sourceNode = definition.nodes[sourceIndex];
+                    const targetNode = definition.nodes[targetIndex];
+                    const sourceBranch = (definition.edges ?? []).find((item) => item.target === sourceNode.id && item.label !== "next");
+                    const targetBranch = (definition.edges ?? []).find((item) => item.target === targetNode.id && item.label !== "next");
+                    const sourceCol = sourceBranch?.label === "false" ? 2 : sourceBranch?.label === "true" ? 0 : sourceIndex % 3;
+                    const targetCol = targetBranch?.label === "false" ? 2 : targetBranch?.label === "true" ? 0 : targetIndex % 3;
+                    const source = { x: 170 + sourceCol * 300, y: 90 + Math.floor(sourceIndex / 3) * 210 };
+                    const target = { x: 170 + targetCol * 300, y: 90 + Math.floor(targetIndex / 3) * 210 };
                     const sx = source.x + 105, sy = source.y + 62, tx = target.x + 105, ty = target.y + 62;
                     const curve = Math.max(45, Math.abs(tx - sx) * .45);
                     return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}><path d={`M ${sx} ${sy} C ${sx + curve} ${sy}, ${tx - curve} ${ty}, ${tx} ${ty}`} /><text x={(sx + tx) / 2} y={(sy + ty) / 2 - 12}>{edge.label === "next" ? "" : edge.label.toUpperCase()}</text></g>;
