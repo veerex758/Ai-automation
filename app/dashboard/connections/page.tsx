@@ -239,6 +239,7 @@ function WorkspaceIntegrationManager() {
         <div><h2>Workflow connections</h2><p>Save provider credentials to this workspace. They are encrypted at rest and only decrypted by the server during an authorized run.</p></div>
         <span>{integrations.length} saved</span>
       </div>
+      <p className="connections-footnote">Google connections use Aivanta-managed OAuth. For other OAuth-based providers, this manager currently accepts a manually issued access token; provider-specific consent screens and automatic token refresh are not yet available. A token must pass its read-only connection test before live execution is permitted.</p>
       {notice && <p className="connections-notice" role="status">{notice}</p>}
       {error && <p className="connections-error" role="alert">{error}</p>}
       <div className="workspace-integration-layout">
