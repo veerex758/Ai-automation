@@ -14,8 +14,8 @@ export async function GET() {
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL);
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY);
     if (!url || !key) return NextResponse.json({ error: "Connection storage is not configured." }, { status: 503, headers });
 
     const admin = createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
