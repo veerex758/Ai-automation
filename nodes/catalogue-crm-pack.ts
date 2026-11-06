@@ -29,6 +29,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
   id: ProviderId; name: string; description: string; input: I; output: O;
   auth?: NodeDefinition["auth"];
   run(ctx: NodeContext, input: z.infer<I>): Promise<unknown>;
+  additionalActions?: NodeDefinition["actions"];
 }): NodeDefinition {
   return {
     id: args.id, name: args.name, icon: "plug", category: args.id === "microsoft_teams" ? "communication" : "data", version: 1,
@@ -40,7 +41,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
         const input = args.input.parse(raw);
         return args.output.parse(await args.run(ctx, input));
       },
-    }],
+    }, ...(args.additionalActions ?? [])],
   };
 }
 
@@ -51,6 +52,7 @@ const contactInput = z.object({
   phone: z.string().max(40).optional(),
 }).strict();
 const contactOutput = z.object({ contactId: z.string().min(1) }).strict();
+const searchContactsOutput = z.object({ contacts: z.array(z.object({ contactId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
 
 export const catalogueCrmNodes: NodeDefinition[] = [
   node({
@@ -88,6 +90,22 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof body.id !== "string" || body.success !== true) throw new Error("SALESFORCE_INVALID_RESPONSE");
       return { leadId: body.id, success: true };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search leads by email",
+      description: "Searches Salesforce Leads for an exact email match using SOQL and the connected API-scoped OAuth token.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "salesforce", "accessToken"), instance = secret(ctx, "salesforce", "instanceUrl");
+        let base: URL; try { base = new URL(instance); } catch { throw new Error("SALESFORCE_CONNECTION_INVALID"); }
+        if (base.protocol !== "https:" || base.username || base.password || !(base.hostname.endsWith(".salesforce.com") || base.hostname.endsWith(".force.com"))) throw new Error("SALESFORCE_CONNECTION_INVALID");
+        const email = input.email.replace(/\\/g, "\\\\").replace(/'/g, "\\\\'");
+        const query = "SELECT Id,FirstName,LastName,Email FROM Lead WHERE Email = '" + email + "' LIMIT 20";
+        const body = await call(ctx, "salesforce", { url: base.origin + "/services/data/v60.0/query?q=" + encodeURIComponent(query), headers: { Authorization: "Bearer " + token } });
+        const contacts = Array.isArray(body.records) ? body.records.flatMap((item: any) => typeof item?.Id === "string" ? [{ contactId: item.Id, ...(typeof item.Email === "string" ? { email: item.Email } : {}), ...(typeof item.FirstName === "string" ? { firstName: item.FirstName } : {}), ...(typeof item.LastName === "string" ? { lastName: item.LastName } : {}) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "pipedrive", name: "Pipedrive",
@@ -103,6 +121,28 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof data?.id !== "number" && typeof data?.id !== "string") throw new Error("PIPEDRIVE_INVALID_RESPONSE");
       return { contactId: String(data.id) };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search persons by email",
+      description: "Searches Pipedrive persons by email using the connected OAuth token and returns bounded contact fields.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "pipedrive", "accessToken");
+        const url = new URL("https://api.pipedrive.com/v1/persons/search");
+        url.searchParams.set("term", input.email); url.searchParams.set("fields", "email"); url.searchParams.set("exact_match", "true"); url.searchParams.set("limit", "20");
+        const body = await call(ctx, "pipedrive", { url: url.toString(), headers: { Authorization: "Bearer " + token } });
+        const items = Array.isArray(body.data) ? body.data : [];
+        const contacts = items.flatMap((entry: any) => {
+          const row = entry?.item ?? entry;
+          if (typeof row?.id !== "number" && typeof row?.id !== "string") return [];
+          const emails = Array.isArray(row.email) ? row.email : [];
+          const emailValue = emails.find((value: any) => typeof value?.value === "string")?.value;
+          const names = typeof row.name === "string" ? row.name.split(/\\s+/, 2) : [];
+          return [{ contactId: String(row.id), ...(typeof emailValue === "string" ? { email: emailValue } : {}), ...(names[0] ? { firstName: names[0] } : {}), ...(names[1] ? { lastName: names[1] } : {}) }];
+        });
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "zoho_crm", name: "Zoho CRM",
@@ -119,6 +159,19 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (row?.status !== "success" || typeof details?.id !== "string") throw new Error("ZOHO_CRM_INVALID_RESPONSE");
       return { contactId: details.id };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search contacts by email",
+      description: "Searches Zoho CRM Contacts by exact email using the connected OAuth access token.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "zoho_crm", "accessToken");
+        const url = new URL("https://www.zohoapis.com/crm/v6/Contacts/search"); url.searchParams.set("email", input.email);
+        const body = await call(ctx, "zoho_crm", { url: url.toString(), headers: { Authorization: "Zoho-oauthtoken " + token } });
+        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.Email === "string" ? { email: row.Email } : {}), ...(typeof row.First_Name === "string" ? { firstName: row.First_Name } : {}), ...(typeof row.Last_Name === "string" ? { lastName: row.Last_Name } : {}) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "freshsales", name: "Freshsales",
@@ -151,6 +204,20 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof body.id !== "string") throw new Error("CLOSE_INVALID_RESPONSE");
       return { contactId: body.id };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search contacts by email",
+      description: "Searches Intercom contacts for an exact email match using the connected OAuth token.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "intercom", "accessToken");
+        const body = await call(ctx, "intercom", { url: "https://api.intercom.io/contacts/search", method: "POST",
+          headers: { Authorization: "Bearer " + token, "Intercom-Version": "2.11", "Content-Type": "application/json" },
+          body: { query: { field: "email", operator: "=", value: input.email }, pagination: { per_page: 20 } } });
+        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.name === "string" ? { firstName: row.name } : {}) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "apollo", name: "Apollo",
