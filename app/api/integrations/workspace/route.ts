@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
           ? labels[item.provider as WorkspaceCredentialProvider] : "Integration",
       })),
       liveExecutionEnabled: process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true",
+      liveProvidersEnabled: (process.env.AIVANTA_LIVE_INTEGRATIONS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
       emailRecipientAllowed: Boolean(recipient) && allowedRecipients.has(recipient),
     });
   } catch {
@@ -125,6 +126,17 @@ export async function POST(request: NextRequest) {
     }
 
     const db = serviceClient();
+    // Revoke readiness before replacing a saved secret so no worker can race
+    // the credential update using the previous successful verification.
+    const { data: existing, error: existingError } = await db.from("workspace_integrations")
+      .select("id").eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      const { error: invalidateError } = await db.from("workspace_integrations").update({
+        status: "needs_attention", last_tested_at: null, last_test_status: null,
+      }).eq("id", existing.id).eq("workspace_id", workspace.id);
+      if (invalidateError) throw invalidateError;
+    }
     const { data, error } = await db.rpc("save_workspace_integration_credentials", {
       p_workspace_id: workspace.id,
       p_provider: provider,
@@ -132,8 +144,16 @@ export async function POST(request: NextRequest) {
       p_encrypted_credentials: encrypted,
       p_created_by: user.id,
     });
-    if (error || !data) throw error ?? new Error("INTEGRATION_SAVE_FAILED");
-    return json({ integration: data }, 201);
+    if (error || !data || typeof data.id !== "string") throw error ?? new Error("INTEGRATION_SAVE_FAILED");
+    // Replacing a secret invalidates any previous successful test. A new
+    // credential must pass a fresh provider check before the worker will use it.
+    const { error: invalidateError } = await db.from("workspace_integrations").update({
+      status: "needs_attention",
+      last_tested_at: null,
+      last_test_status: null,
+    }).eq("id", data.id).eq("workspace_id", workspace.id);
+    if (invalidateError) throw invalidateError;
+    return json({ integration: { ...data, status: "needs_attention", last_tested_at: null, last_test_status: null } }, 201);
   } catch {
     return json({ error: "Could not securely save this workspace integration." }, 500);
   }
