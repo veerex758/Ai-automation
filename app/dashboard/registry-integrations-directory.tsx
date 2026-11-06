@@ -452,7 +452,7 @@ export default function RegistryIntegrationsDirectory() {
       setLiveExecutionEnabled(workspaceData.liveExecutionEnabled === true);
       setLiveProvidersEnabled(Array.isArray(workspaceData.liveProvidersEnabled) ? workspaceData.liveProvidersEnabled : []);
       setGoogle(Array.isArray(googleData.connections) ? googleData.connections : []);
-      setApprovals(Array.isArray(approvalsData.approvals) ? approvalsData.approvals : []);
+      setApprovals(Array.isArray(approvalsData.approvals) ? [...approvalsData.approvals].reverse() : []);
     }
     void load().catch(() => { if (active) { setCatalogState("error"); setStatusUnavailable(true); } });
     return () => { active = false; };
@@ -530,7 +530,7 @@ export default function RegistryIntegrationsDirectory() {
               {node.auth.type !== "none" && <div className="registry-approval-control">
                 {(() => {
                   const kind = operation.kind.toLowerCase() as "trigger" | "action";
-                  const latest = [...approvals].reverse().find((item) => item.node_id === node.id && item.operation_id === operation.id);
+                  const latest = approvals.filter((item) => item.node_id === node.id && item.operation_id === operation.id).at(-1);
                   const approved = latest?.decision === "approved";
                   return <><span>{approved ? "Workspace approved" : latest?.decision === "revoked" ? "Approval revoked" : "Approval required"}</span>
                     <button type="button" onClick={() => void changeApproval(node, operation, kind, approved ? "revoked" : "approved")}>
