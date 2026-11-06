@@ -43,7 +43,7 @@ jobs:
           openssl x509 -req -in "$CERT_DIR/server.csr" \
             -CA "$CERT_DIR/ca.pem" -CAkey "$CERT_DIR/ca.key" -CAcreateserial \
             -out "$CERT_DIR/server.pem" -days 2 -sha256 -extfile "$CERT_DIR/server.ext"
-          cat "$CERT_DIR/server.key" "$CERT_DIR/server.pem" > "$CERT_DIR/mongo-server.pem"
+          cat "$CERT_DIR/server.pem" "$CERT_DIR/server.key" > "$CERT_DIR/mongo-server.pem"
           chmod 644 "$CERT_DIR/ca.pem" "$CERT_DIR/server.pem" "$CERT_DIR/server.key" "$CERT_DIR/mongo-server.pem"
           echo "AIVANTA_DB_CERT_DIR=$CERT_DIR" >> "$GITHUB_ENV"
           echo "NODE_EXTRA_CA_CERTS=$CERT_DIR/ca.pem" >> "$GITHUB_ENV"
