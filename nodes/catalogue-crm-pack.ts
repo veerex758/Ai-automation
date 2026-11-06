@@ -110,8 +110,8 @@ export const catalogueCrmNodes: NodeDefinition[] = [
         const email = input.email.replace(/\\/g, "\\\\").replace(/'/g, "\\\\'");
         const query = "SELECT Id,FirstName,LastName,Email FROM Lead WHERE Email = '" + email + "' LIMIT 20";
         const body = await call(ctx, "salesforce", { url: base.origin + "/services/data/v60.0/query?q=" + encodeURIComponent(query), headers: { Authorization: "Bearer " + token } });
-        const contacts = Array.isArray(body.records) ? body.records.flatMap((item: any) => typeof item?.Id === "string" ? [{ leadId: item.Id, ...(typeof item.Email === "string" ? { email: item.Email } : {}), ...(typeof item.FirstName === "string" ? { firstName: item.FirstName } : {}), ...(typeof item.LastName === "string" ? { lastName: item.LastName } : {}) }] : []) : [];
-        return { leads: contacts.slice(0, 20) };
+        const leads = Array.isArray(body.records) ? body.records.flatMap((item: any) => typeof item?.Id === "string" ? [{ leadId: item.Id, ...(typeof item.Email === "string" ? { email: item.Email } : {}), ...(typeof item.FirstName === "string" ? { firstName: item.FirstName } : {}), ...(typeof item.LastName === "string" ? { lastName: item.LastName } : {}) }] : []) : [];
+        return { leads: leads.slice(0, 20) };
       },
     }],
   }),
