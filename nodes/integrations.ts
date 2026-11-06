@@ -148,7 +148,7 @@ export const hubspotNode: NodeDefinition = {
       if (typeof body.id !== "string") throw new Error("HUBSPOT_INVALID_RESPONSE");
       return hubspotOutput.parse({ contactId: body.id });
     },
-    {
+  }, {
       id: "search_contacts", name: "Search contacts",
       description: "Searches HubSpot contacts by exact email using the connected private-app token and returns bounded contact properties.",
       inputSchema: z.object({ email: z.string().email().max(254) }).strict(),
