@@ -56,7 +56,7 @@ export default function AIAssistantPage() {
       const saveResponse=await fetch(`/api/workflows/${workflowId}/definition`,{method:"PATCH",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({definition:draft})});
       const saved=await saveResponse.json() as {success?:boolean;error?:string};
       if(!saveResponse.ok||!saved.success)throw new Error(saved.error||"The workflow record exists, but its steps could not be saved. Retry to finish saving.");
-      router.push(`/dashboard/workflows/${workflowId}`);
+      router.push(`/dashboard/connections?workflowId=${encodeURIComponent(workflowId)}`);
     } catch(caught) {
       setError(caught instanceof Error?caught.message:"Could not save this draft. It has not been executed.");
     } finally { setSavingDraft(false); }
