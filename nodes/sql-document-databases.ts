@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { NodeContext, NodeDefinition } from "./types";
 
 type MysqlSession = {
+  query(sql: string): Promise<unknown>;
   beginTransaction(): Promise<void>;
   execute(sql: string, values: unknown[]): Promise<[unknown, unknown]>;
   commit(): Promise<void>;
@@ -87,6 +88,7 @@ const defaultDependencies: DriverDependencies = {
       multipleStatements: false,
     });
     return {
+      query: async (sql) => { await connection.query(sql); },
       beginTransaction: () => connection.beginTransaction(),
       execute: (query, values) => connection.execute(query, values),
       commit: () => connection.commit(),
@@ -129,7 +131,7 @@ function makeMysqlNode(deps: DriverDependencies): NodeDefinition {
         const session = await deps.connectMysql(uri);
         let transactionStarted = false;
         try {
-          await session.execute("SET TRANSACTION READ ONLY", []);
+          await session.query("SET TRANSACTION READ ONLY");
           await session.beginTransaction();
           transactionStarted = true;
           const bounded = "SELECT * FROM (" + sql + ") AS aivanta_read_only_result LIMIT ?";
