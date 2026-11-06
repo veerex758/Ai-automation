@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findOperation } from "../nodes/registry";
+import { findNode, findOperation } from "../nodes/registry";
 
 const logger = { info() {}, error() {} };
 
@@ -271,4 +271,13 @@ test("Google Sheets get_spreadsheet returns validated spreadsheet and sheet meta
   assert.match(request.url, /spreadsheets\/spreadsheet_123456\?fields=/);
   assert.equal(request.headers.Authorization, "Bearer sheets-token");
   assert.deepEqual(result, { spreadsheetId: "spreadsheet_123456", title: "Leads", sheets: [{ sheetId: 0, title: "Sheet1", index: 0 }] });
+});
+
+test("CRM nodes declare provider-specific credential scopes and auth types", () => {
+  assert.deepEqual(findNode("microsoft_teams")?.auth, { type: "oauth2", scopes: ["ChatMessage.Send"], refresh: "manual" });
+  assert.deepEqual(findNode("salesforce")?.auth, { type: "oauth2", scopes: ["api", "refresh_token"], refresh: "manual" });
+  assert.deepEqual(findNode("pipedrive")?.auth, { type: "oauth2", scopes: ["contacts:full"], refresh: "manual" });
+  assert.deepEqual(findNode("zoho_crm")?.auth, { type: "oauth2", scopes: ["ZohoCRM.modules.contacts.ALL"], refresh: "manual" });
+  assert.deepEqual(findNode("freshsales")?.auth, { type: "apiKey", credentialKey: "accessToken" });
+  assert.deepEqual(findNode("intercom")?.auth, { type: "oauth2", scopes: ["read_write_users"], refresh: "manual" });
 });
