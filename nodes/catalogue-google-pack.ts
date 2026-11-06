@@ -203,10 +203,10 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
     additionalActions: [{
       id: "get_person", name: "Get person",
       description: "Retrieves one Google Contact by People API resource name using the existing read-only Contacts scope.",
-      inputSchema: z.object({ resourceName: z.string().regex(/^people\\/[A-Za-z0-9_-]{1,200}$/) }).strict(),
+      inputSchema: z.object({ resourceName: z.string().regex(/^people\//[A-Za-z0-9_-]{1,200}$/) }).strict(),
       outputSchema: z.object({ resourceName: z.string(), displayName: z.string().optional(), email: z.string().optional(), phone: z.string().optional() }).strict(),
       async run(ctx, raw) {
-        const input = z.object({ resourceName: z.string().regex(/^people\\/[A-Za-z0-9_-]{1,200}$/) }).strict().parse(raw);
+        const input = z.object({ resourceName: z.string().regex(/^people\//[A-Za-z0-9_-]{1,200}$/) }).strict().parse(raw);
         const url = new URL("https://people.googleapis.com/v1/" + input.resourceName);
         url.searchParams.set("personFields", "names,emailAddresses,phoneNumbers");
         const body = await get(ctx, "google_contacts", url.toString());
