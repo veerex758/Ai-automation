@@ -49,6 +49,28 @@ export const gmailNode: NodeDefinition = {
           : []) : [];
       return gmailOutput.parse({ messages, ...(typeof body.resultSizeEstimate === "number" ? { resultSizeEstimate: body.resultSizeEstimate } : {}) });
     },
+  }, {
+    id: "get_message", name: "Get message",
+    description: "Retrieves one Gmail message's metadata and selected headers by message ID using the connected read-only Gmail scope.",
+    inputSchema: z.object({ messageId: z.string().trim().min(1).max(200) }).strict(),
+    outputSchema: z.object({ id: z.string(), threadId: z.string().optional(), snippet: z.string().optional(), headers: z.record(z.string(), z.string()).default({}) }).strict(),
+    async run(ctx, raw) {
+      const input = z.object({ messageId: z.string().trim().min(1).max(200) }).strict().parse(raw);
+      const token = required(ctx, "gmail", "accessToken", "GMAIL");
+      const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages/" + encodeURIComponent(input.messageId));
+      url.searchParams.set("format", "metadata");
+      for (const header of ["Subject", "From", "To", "Date"]) url.searchParams.append("metadataHeaders", header);
+      const body = await request(ctx, { url: url.toString(), method: "GET", headers: { Authorization: "Bearer " + token } }, "GMAIL");
+      if (typeof body.id !== "string") throw new Error("GMAIL_INVALID_RESPONSE");
+      const payload = body.payload as Record<string, unknown> | undefined;
+      const rawHeaders = Array.isArray(payload?.headers) ? payload.headers : [];
+      const headers = Object.fromEntries(rawHeaders.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const row = item as Record<string, unknown>;
+        return typeof row.name === "string" && typeof row.value === "string" ? [[row.name.toLowerCase(), row.value.slice(0, 2000)]] : [];
+      }));
+      return { id: body.id, ...(typeof body.threadId === "string" ? { threadId: body.threadId } : {}), ...(typeof body.snippet === "string" ? { snippet: body.snippet.slice(0, 5000) } : {}), headers };
+    },
   }],
 };
 
@@ -126,7 +148,30 @@ export const hubspotNode: NodeDefinition = {
       if (typeof body.id !== "string") throw new Error("HUBSPOT_INVALID_RESPONSE");
       return hubspotOutput.parse({ contactId: body.id });
     },
-  }],
+    {
+      id: "search_contacts", name: "Search contacts",
+      description: "Searches HubSpot contacts by exact email using the connected private-app token and returns bounded contact properties.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(),
+      outputSchema: z.object({ contacts: z.array(z.object({ contactId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = required(ctx, "hubspot", "accessToken", "HUBSPOT");
+        const body = await request(ctx, { url: "https://api.hubapi.com/crm/v3/objects/contacts/search", method: "POST",
+          headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+          body: { filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: input.email }] }], properties: ["email", "firstname", "lastname"], limit: 20 } }, "HUBSPOT");
+        const contacts = Array.isArray(body.results) ? body.results.flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const row = item as Record<string, unknown>;
+          const properties = row.properties as Record<string, unknown> | undefined;
+          return typeof row.id === "string" ? [{ contactId: row.id,
+            ...(typeof properties?.email === "string" ? { email: properties.email } : {}),
+            ...(typeof properties?.firstname === "string" ? { firstName: properties.firstname } : {}),
+            ...(typeof properties?.lastname === "string" ? { lastName: properties.lastname } : {}) }] : [];
+        }) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    },
+  ],
 };
 
 const twilioInput = z.object({
