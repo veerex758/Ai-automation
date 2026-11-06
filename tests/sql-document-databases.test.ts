@@ -95,4 +95,7 @@ test("MongoDB uses a real driver adapter, validates equality filters, caps resul
   await assert.rejects(() => mongo.actions[0].run(context({ mongodb: { connectionString: "mongodb://worker:secret@db.example.test/app" } }), {
     collection: "contacts", filter: { "$where": "evil" }, limit: 2,
   }), /MONGODB_FILTER_INVALID/);
+  await assert.rejects(() => mongo.actions[0].run(context({ mongodb: { connectionString: "mongodb://worker:secret@db.example.test/app" } }), {
+    collection: "contacts", filter: JSON.parse('{"__proto__":{"polluted":true}}'), limit: 2,
+  }), /MONGODB_FILTER_INVALID/);
 });
