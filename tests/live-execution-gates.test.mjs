@@ -22,6 +22,7 @@ test("durable live execution explicitly opts in every mapped external provider",
   assert.match(durableWorker, /LIVE_PUBLISHING_NOT_ENABLED/);
   assert.match(durableWorker, /"x_twitter", "facebook_pages", "instagram"/);
   assert.match(durableWorker, /LIVE_VOICE_RECIPIENT_NOT_ALLOWED/);
+  assert.ok(durableWorker.includes("if (!/^\\+[1-9]\\d{7,14}$/.test(to)"), "SMS and voice recipients must use strict E.164 validation");
   assert.match(durableWorker, /step.nodeId === "twilio_voice"/);
   assert.doesNotMatch(durableWorker, /const SERVER_ENABLED_INTEGRATIONS/);
   assert.match(durableWorker, /if \(!provider\) return false;/);
