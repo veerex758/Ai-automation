@@ -55,7 +55,7 @@ const contactOutput = z.object({ contactId: z.string().min(1) }).strict();
 const searchContactsOutput = z.object({ contacts: z.array(z.object({ contactId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
 function nameFields(value: unknown): { firstName?: string; lastName?: string } {
   if (typeof value !== "string" || !value.trim()) return {};
-  const parts = value.trim().split(/\\s+/);
+  const parts = value.trim().split(/\s+/);
   return { firstName: parts[0], ...(parts.length > 1 ? { lastName: parts.slice(1).join(" ") } : {}) };
 }
 
