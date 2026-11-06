@@ -214,3 +214,46 @@ test("Apollo search_contacts searches saved workspace contacts with bounded pagi
   assert.deepEqual(request.body, { q_keywords: "person@example.test", page: 1, per_page: 20 });
   assert.deepEqual(result, { contacts: [{ contactId: "apollo-1", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
 });
+
+test("Google Docs get_document_text extracts bounded textRun content", async () => {
+  let request: any;
+  const operation = findOperation("google_docs", "get_document_text", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { google_docs: { accessToken: "docs-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { documentId: "document-123456", title: "Brief", body: { content: [{ paragraph: { elements: [{ textRun: { content: "Hello " } }, { textRun: { content: "Aivanta" } }] } }] } } }; } },
+    previousOutputs: {},
+  }, { documentId: "document-123456" });
+  assert.match(request.url, /documents\/document-123456/);
+  assert.equal(request.headers.Authorization, "Bearer docs-token");
+  assert.deepEqual(result, { documentId: "document-123456", title: "Brief", text: "Hello Aivanta" });
+});
+
+test("YouTube get_video retrieves one video using the read-only API", async () => {
+  let request: any;
+  const operation = findOperation("youtube", "get_video", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { youtube: { accessToken: "youtube-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { items: [{ id: "abcdefghijk", snippet: { title: "Aivanta demo", channelTitle: "Aivanta", description: "Demo description", publishedAt: "2026-11-01T00:00:00Z" } }] } }; } },
+    previousOutputs: {},
+  }, { videoId: "abcdefghijk" });
+  assert.equal(request.method, "GET");
+  assert.equal(request.headers.Authorization, "Bearer youtube-token");
+  assert.match(request.url, /videos\?part=snippet&id=abcdefghijk/);
+  assert.deepEqual(result, { videoId: "abcdefghijk", title: "Aivanta demo", channelTitle: "Aivanta", description: "Demo description", publishedAt: "2026-11-01T00:00:00Z" });
+});
+
+test("Google Contacts get_person reads one validated People API resource", async () => {
+  let request: any;
+  const operation = findOperation("google_contacts", "get_person", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { google_contacts: { accessToken: "people-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { resourceName: "people/c123", names: [{ displayName: "Ada Lovelace" }], emailAddresses: [{ value: "ada@example.test" }], phoneNumbers: [{ value: "+15550001111" }] } }; } },
+    previousOutputs: {},
+  }, { resourceName: "people/c123" });
+  assert.match(request.url, /people\/c123\?personFields=/);
+  assert.equal(request.headers.Authorization, "Bearer people-token");
+  assert.deepEqual(result, { resourceName: "people/c123", displayName: "Ada Lovelace", email: "ada@example.test", phone: "+15550001111" });
+});
