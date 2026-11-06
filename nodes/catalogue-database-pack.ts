@@ -220,7 +220,7 @@ export const catalogueDatabaseNodes: NodeDefinition[] = [
       const region = secret(ctx, "aws_s3", "region");
       if (!/^[a-z]{2}-[a-z]+-\d$/.test(region)) throw new Error("AWS_S3_CONNECTION_INVALID");
       const url = new URL("https://" + input.bucket + ".s3." + region + ".amazonaws.com/");
-      url.searchParams.set("list-type", "2"); if (input.prefix) url.searchParams.set("prefix", input.prefix);
+      url.searchParams.set("list-type", "2"); url.searchParams.set("max-keys", "100"); if (input.prefix) url.searchParams.set("prefix", input.prefix);
       const headers = awsSignedHeaders({ method: "GET", url, accessKeyId: secret(ctx, "aws_s3", "accessKeyId"), secretAccessKey: secret(ctx, "aws_s3", "secretAccessKey"), region });
       const response = await request(ctx, "aws_s3", { url: url.toString(), headers });
       if (typeof response.body !== "string") throw new Error("AWS_S3_INVALID_RESPONSE");
@@ -252,7 +252,7 @@ export const catalogueDatabaseNodes: NodeDefinition[] = [
       const account = secret(ctx, "cloudflare_r2", "accountId");
       if (!/^[a-f0-9]{32}$/i.test(account)) throw new Error("CLOUDFLARE_R2_CONNECTION_INVALID");
       const url = new URL("https://" + account + ".r2.cloudflarestorage.com/" + encodeURIComponent(input.bucket));
-      url.searchParams.set("list-type", "2"); if (input.prefix) url.searchParams.set("prefix", input.prefix);
+      url.searchParams.set("list-type", "2"); url.searchParams.set("max-keys", "100"); if (input.prefix) url.searchParams.set("prefix", input.prefix);
       const headers = awsSignedHeaders({ method: "GET", url, accessKeyId: secret(ctx, "cloudflare_r2", "accessKeyId"), secretAccessKey: secret(ctx, "cloudflare_r2", "secretAccessKey"), region: "auto" });
       const response = await request(ctx, "cloudflare_r2", { url: url.toString(), headers });
       if (typeof response.body !== "string") throw new Error("CLOUDFLARE_R2_INVALID_RESPONSE");
