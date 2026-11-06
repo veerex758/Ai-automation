@@ -1,22 +1,21 @@
-# Aivanta provider verification report
-
-Generated from the current provider catalogue, native node registry, worker mapping, and test source files.
-
-## Summary
+# Aivanta provider execution verification
 
 - Catalogue entries: 100
-- Native registry definitions represented in the catalogue: 100
-- Catalogue provider operations: 126
-- All native registry operations: 146
-- Worker operation mappings: 146
+- Native registry nodes: 120
+- All native registry operations: 148
+- Worker operation mappings: 148
 - Missing mappings: 0
-- Staging migrations: APPLIED (20261106213337_mysql_mongodb_workspace_credentials; 20261106213345_workspace_provider_operation_approvals).
-- Database service verification: real MySQL/MongoDB CI integration workflow added; execution result pending GitHub Actions.
-- OAuth implementation: provider-specific start/callback and encrypted refresh-token rotation are implemented and unit-tested; real provider consent/accounts remain unverified.
-- Authenticated staging/live verification: BLOCKED until a dedicated staging test account and provider client credentials are available, then each connection is tested, enabled, and approved.
+- Authenticated staging/live verification: BLOCKED
+- No provider is labelled live-verified
 
-A PASS in the mapping column means the exact trigger/action pair has a worker mapping. Test-file matches are evidence pointers, not proof of a successful live provider call. No provider is labelled live-verified by this report. Workspace approval checks run in the durable worker immediately before each live provider handler; absent, revoked, or unreadable decisions fail closed.
+This report separates static registration from live verification. A registry operation and worker mapping do not prove that provider credentials, OAuth consent, token refresh, external permissions, database TLS, or authenticated staging execution have passed.
 
-## Provider-by-provider status
+| Provider | Registry status | Worker mapping | Live verification |
+|---|---|---|---|
+| MySQL (mysql) | Registered real-driver adapter | Present | Pending authenticated TLS service integration |
+| MongoDB (mongodb) | Registered real-driver adapter | Present | Pending authenticated TLS service integration |
+| All other registered providers | Registered only where present in the native registry | Present where parity test passes | Not live-verified |
 
-| Catalogue provider | Registry node | Operations | Worker mapping | Mock¶»§q«^
+## Release gate
+
+Keep PR #148 in draft until the full CI suite passes, MySQL and MongoDB TLS integration tests pass, and authenticated staging E2E evidence is recorded. No production migration or deployment is authorized by this report.
