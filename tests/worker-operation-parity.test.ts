@@ -20,4 +20,6 @@ test("every registered trigger and action has exactly one worker provider mappin
       : operation.nodeId === "google_sheets" ? "sheets"
       : operation.nodeId === "http_request" ? "http"
       : operation.nodeId;
-    assert.equal(mapping.provider, expectedProvi¶»§q«^
+    assert.equal(mapping.provider, expectedProvider);
+  }
+});
