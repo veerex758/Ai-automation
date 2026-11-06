@@ -479,7 +479,8 @@ export default function RegistryIntegrationsDirectory() {
         const isExpanded = expanded.includes(node.id);
         const operations = [...node.triggers.map((operation) => ({ ...operation, kind: "Trigger" })), ...node.actions.map((operation) => ({ ...operation, kind: "Action" }))];
         const providerPermissionKey = googleProductForNode[node.id] ? (node.id === "google_sheets" ? "sheets" : node.id) : providerForNode[node.id] ?? node.id;
-        const livePermissionEnabled = node.auth.type === "none" || (liveExecutionEnabled && liveProvidersEnabled.includes(providerPermissionKey));
+        const livePermissionEnabled = liveExecutionEnabled && liveProvidersEnabled.includes(providerPermissionKey);
+        const liveActionReady = state === "connected" && livePermissionEnabled;
         return <article className="registry-node-card" key={node.id}>
           <div className="registry-node-heading">
             <BrandMark node={node} />
@@ -495,7 +496,7 @@ export default function RegistryIntegrationsDirectory() {
             {operations.slice(0, 2).map((operation) => <span key={operation.kind + operation.id}>{operation.name}</span>)}
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
-          {node.executionStatus === "registered" && connectionRequired(node) && <span className={livePermissionEnabled ? "registry-live-permission permission-enabled" : "registry-live-permission"}>{livePermissionEnabled ? "Live permission enabled" : "Live permission locked"}</span>}
+          {node.executionStatus === "registered" && connectionRequired(node) && <span className={liveActionReady ? "registry-live-permission permission-enabled" : "registry-live-permission"}>{liveActionReady ? "Live action ready" : "Live action locked"}</span>}
           {node.executionStatus === "registered" && connectionRequired(node) && <a className="registry-connect-link" href={googleProductForNode[node.id] ? `/api/integrations/google/start?product=${googleProductForNode[node.id]}` : `/dashboard/connections?provider=${encodeURIComponent(providerForNode[node.id] ?? node.id)}`}>Configure connection ↗</a>}
           {node.executionStatus === "registered" && <button className="registry-expand-button" type="button" aria-expanded={isExpanded} onClick={() => toggle(node.id)}>
             {isExpanded ? "Hide operations" : "View operations"} <span>{isExpanded ? "−" : "+"}</span>
