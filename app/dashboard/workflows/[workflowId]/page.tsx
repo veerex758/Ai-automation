@@ -134,7 +134,14 @@ export default function WorkflowBuilderPage() {
     if (!sourceNode || (label !== "next" && sourceNode.type !== "condition")) return;
     draftRevision.current += 1;
     setValidation(null);
-    setDefinition((current) => ({ ...current, edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source, target, label }] }));
+    setDefinition((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) => node.id !== target || label === "next" ? node : {
+        ...node,
+        position: { x: label === "true" ? 170 : 770, y: node.position?.y ?? 90 + current.nodes.findIndex((item) => item.id === node.id) * 210 },
+      }),
+      edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source, target, label }],
+    }));
     setConnectingFrom(null);
     setNotice("Connection added. Save your changes when ready.");
   }
