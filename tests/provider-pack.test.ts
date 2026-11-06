@@ -564,6 +564,10 @@ test("all 20 provider-pack adapters resolve to an exact, opt-in live gate", () =
   }
   assert.equal(providerPackLiveId({ kind: "trigger", nodeId: "claude", operationId: "execute" }), null);
   assert.equal(providerPackLiveId({ kind: "action", nodeId: "claude", operationId: "other" }), null);
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "discord", operationId: "get_channel" }), "discord");
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "telegram", operationId: "get_chat" }), "telegram");
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "whatsapp_business", operationId: "get_phone_number" }), "whatsapp_business");
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "discord", operationId: "delete_everything" }), null);
 });
 
 const providerSpecificCases: Array<{
