@@ -16,30 +16,62 @@ type Connection = {
 const statusMessages: Record<string, string> = {
   connected: "Google account authorized. Credentials are stored encrypted on the server.",
   cancelled: "Authorization was cancelled. No connection was added.",
+  state_cookie_missing: "Google returned to Aivanta, but the browser OAuth state cookie was missing. Restart authorization in the same browser tab.",
+  state_mismatch: "Google returned an OAuth state value that did not match this browser session. Start again for your security.",
+  callback_context_missing: "The Google callback was missing required authorization context. Start the connection again.",
   invalid_state: "The authorization response could not be verified. Start again for your security.",
   sign_in_required: "Your session expired. Sign in and try again.",
-  token_exchange_failed: "Google could not complete authorization. Please try again.",
+  user_changed: "The signed-in account changed during authorization. Start again.",
+  token_exchange_failed: "Google could not complete authorization. Check the OAuth client and redirect URI configuration.",
   profile_failed: "A verified Google account profile could not be confirmed.",
   server_not_configured: "Connection storage is not configured for this environment.",
-  save_failed: "Authorization succeeded, but Aivanta could not save the connection.",
+  save_failed: "Google authorization completed, but Aivanta could not save the connection. See the diagnostic code below.",
   connection_failed: "The connection could not be completed. No credentials were shown.",
   not_configured: "Google OAuth is not configured for this environment yet.",
+  redirect_uri_host_mismatch: "This Preview hostname does not match the configured Google OAuth callback hostname. Use the registered Aivanta hostname or add this exact Preview callback URI in Google Cloud OAuth settings.",
+  scope_mismatch: "Google returned permissions that do not match the requested read-only access.",
+};
+
+const diagnosticHelp: Record<string, string> = {
+  CONNECTION_AUTH_REQUIRED: "Your Aivanta session is missing or expired. Sign in again.",
+  CONNECTION_STORAGE_NOT_CONFIGURED: "The Preview deployment is missing a Supabase URL or server-side service key.",
+  CONNECTION_TABLE_MISSING: "The google_connections table is missing from the configured Supabase project. Confirm the Phase 0 migrations were applied to this project.",
+  CONNECTION_QUERY_FAILED: "Supabase rejected the connection query. Check the Preview service key, project URL, grants, and RLS configuration.",
+  CONNECTIONS_UNAVAILABLE: "The server failed before it could load workspace connections. Check the Preview function logs.",
+  CONNECTION_WORKSPACE_FAILED: "Aivanta could not resolve your workspace. Check workspace membership and server logs.",
+  CONNECTION_RESPONSE_INVALID: "The connections endpoint returned an unexpected response. Retry and inspect Preview logs.",
 };
 
 export default function ConnectionsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
 
   useEffect(() => {
-    const status = new URLSearchParams(window.location.search).get("google");
+    const params = new URLSearchParams(window.location.search);
+    const requestedWorkflow = params.get("workflowId");
+    let rememberedWorkflow = "";
+    try { rememberedWorkflow = window.sessionStorage.getItem("aivanta-return-workflow") || ""; } catch { /* Continue without a remembered return target. */ }
+    const nextWorkflow = requestedWorkflow && /^[0-9a-f-]{36}$/i.test(requestedWorkflow) ? requestedWorkflow : rememberedWorkflow;
+    if (nextWorkflow) {
+      setWorkflowId(nextWorkflow);
+      try { window.sessionStorage.setItem("aivanta-return-workflow", nextWorkflow); } catch { /* Current-page state remains available. */ }
+    }
+
+    const status = params.get("google");
     if (status) setNotice(statusMessages[status] ?? "Google authorization returned.");
     fetch("/api/integrations/google/connections", { cache: "no-store" })
       .then(async response => {
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Could not load connections.");
-        setConnections(payload.connections ?? []);
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          setErrorCode(typeof payload?.code === "string" ? payload.code : "CONNECTION_RESPONSE_INVALID");
+          throw new Error(typeof payload?.error === "string" ? payload.error : "Could not load connections.");
+        }
+        if (!Array.isArray(payload?.connections)) { setErrorCode("CONNECTION_RESPONSE_INVALID"); throw new Error("The connections response was incomplete."); }
+        setConnections(payload.connections);
       })
       .catch(reason => setError(reason instanceof Error ? reason.message : "Could not load connections."))
       .finally(() => setLoading(false));
@@ -52,10 +84,17 @@ export default function ConnectionsPage() {
         <div className="connections-eyebrow">YOUR WORKSPACE, CONNECTED</div>
         <h1>Connect your tools.</h1>
         <p>Authorize services using their official sign-in screens. Aivanta never asks for your provider password.</p>
+        {workflowId && <Link className="connections-return" href={`/dashboard/workflows/${workflowId}`}>Return to your workflow <span aria-hidden="true">→</span></Link>}
       </section>
 
       {notice && <p className="connections-notice" role="status">{notice}</p>}
-      {error && <p className="connections-error" role="alert">{error}</p>}
+      {error && <div className="connections-error" role="alert">
+        <strong>Connections unavailable</strong>
+        <p>{error}</p>
+        <small>Diagnostic: {errorCode || "CONNECTIONS_UNAVAILABLE"}</small>
+        {diagnosticHelp[errorCode] && <p>{diagnosticHelp[errorCode]}</p>}
+        <button type="button" onClick={() => window.location.reload()}>Try again</button>
+      </div>}
 
       <section className="connections-grid" aria-label="Available integrations">
         <article className="connection-card">

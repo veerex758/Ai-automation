@@ -33,8 +33,22 @@ export async function GET(request: NextRequest) {
   const product = request.cookies.get("aivanta_google_oauth_product")?.value;
   const initiatingUserId = request.cookies.get("aivanta_google_oauth_user")?.value;
 
-  if (!state || !expectedState || state !== expectedState || !code || !verifier || !initiatingUserId || !isGoogleProduct(product)) {
-    return clearCookies(connectionsUrl(request, "invalid_state"));
+  if (!state || !expectedState) {
+    console.warn("[google-oauth] state cookie or response state missing", {
+      responseStatePresent: Boolean(state), stateCookiePresent: Boolean(expectedState),
+    });
+    return clearCookies(connectionsUrl(request, "state_cookie_missing"));
+  }
+  if (state !== expectedState) {
+    console.warn("[google-oauth] OAuth state mismatch");
+    return clearCookies(connectionsUrl(request, "state_mismatch"));
+  }
+  if (!code || !verifier || !initiatingUserId || !isGoogleProduct(product)) {
+    console.warn("[google-oauth] callback context incomplete", {
+      codePresent: Boolean(code), verifierPresent: Boolean(verifier),
+      userCookiePresent: Boolean(initiatingUserId), productValid: isGoogleProduct(product),
+    });
+    return clearCookies(connectionsUrl(request, "callback_context_missing"));
   }
 
   try {
