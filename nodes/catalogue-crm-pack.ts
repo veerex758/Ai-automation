@@ -53,6 +53,11 @@ const contactInput = z.object({
 }).strict();
 const contactOutput = z.object({ contactId: z.string().min(1) }).strict();
 const searchContactsOutput = z.object({ contacts: z.array(z.object({ contactId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
+function nameFields(value: unknown): { firstName?: string; lastName?: string } {
+  if (typeof value !== "string" || !value.trim()) return {};
+  const parts = value.trim().split(/\\s+/);
+  return { firstName: parts[0], ...(parts.length > 1 ? { lastName: parts.slice(1).join(" ") } : {}) };
+}
 
 export const catalogueCrmNodes: NodeDefinition[] = [
   node({
@@ -230,7 +235,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
         const body = await call(ctx, "intercom", { url: "https://api.intercom.io/contacts/search", method: "POST",
           headers: { Authorization: "Bearer " + token, "Intercom-Version": "2.11", "Content-Type": "application/json" },
           body: { query: { field: "email", operator: "=", value: input.email }, pagination: { per_page: 20 } } });
-        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.name === "string" ? { firstName: row.name } : {}) }] : []) : [];
+        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...nameFields(row.name) }] : []) : [];
         return { contacts: contacts.slice(0, 20) };
       },
     }],
