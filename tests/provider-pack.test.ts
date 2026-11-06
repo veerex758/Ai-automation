@@ -8,12 +8,13 @@ import { isProviderLiveEnabled, providerPackLiveId, PROVIDER_PACK_LIVE_IDS } fro
 test("20 additional catalogue providers have executable schema-backed actions", () => {
   assert.equal(providerPack.length, 20);
   for (const node of providerPack) {
-    assert.equal(node.actions.length, 1, node.id);
-    const action = node.actions[0];
-    assert.ok(action.id);
-    assert.ok(action.inputSchema);
-    assert.ok(action.outputSchema);
-    assert.equal(typeof action.run, "function");
+    assert.ok(node.actions.length >= 1, node.id);
+    for (const action of node.actions) {
+      assert.ok(action.id);
+      assert.ok(action.inputSchema);
+      assert.ok(action.outputSchema);
+      assert.equal(typeof action.run, "function");
+    }
   }
 });
 
