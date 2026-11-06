@@ -178,3 +178,15 @@
 .workflow-builder-main .graph-edge-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:8px 9px;border:1px solid #e3ebe0;border-radius:8px;background:#fbfdfb;font-size:10px;color:#637663}
 .workflow-builder-main .graph-edge-row b{color:#5c8950;margin-right:5px}
 .workflow-builder-main .graph-edge-row button{border:0;background:#f7e9e5;color:#a45f4a;border-radius:6px;width:24px;height:24px;font-size:16px;cursor:pointer;flex:0 0 auto}
+
+
+/* Interactive graph editor: draggable nodes and actionable connection handles. */
+.workflow-builder-main .graph-node{touch-action:none;user-select:none;cursor:grab}
+.workflow-builder-main .graph-node:active{cursor:grabbing}
+.workflow-builder-main .graph-node-connecting{border-color:#78a95b;box-shadow:0 0 0 4px #c9f26f55,0 8px 24px #284c1718}
+.workflow-builder-main .graph-node-port{z-index:2;display:block;padding:0;cursor:crosshair;touch-action:manipulation}
+.workflow-builder-main .graph-node-port:hover,.workflow-builder-main .graph-node-port:focus-visible{width:15px;height:15px;outline:2px solid #b8df91;outline-offset:2px}
+.workflow-builder-main .graph-port-in{left:-8px;top:calc(50% - 5px)}
+.workflow-builder-main .graph-port-out{right:-8px;top:calc(50% - 5px)}
+.workflow-builder-main .graph-layout{min-width:1000px}
+.workflow-builder-main .graph-node-connecting .graph-port-out{background:#5a9d48}
