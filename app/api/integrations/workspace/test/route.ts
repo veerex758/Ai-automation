@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { decryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,8 +23,8 @@ function signedS3Headers(url: URL, accessKeyId: string, secretAccessKey: string,
 }
 
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
+const TESTABLE = new Set(["openai", "gemini", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+type Provider = WorkspaceCredentialProvider;
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -350,6 +350,53 @@ async function check(provider: Provider, c: Credentials) {
         Object.assign(headers, signedS3Headers(target, required(c, "accessKeyId"), required(c, "secretAccessKey"), "auto"));
         break;
       }
+      case "mistral":
+        url = "https://api.mistral.ai/v1/models"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "groq":
+        url = "https://api.groq.com/openai/v1/models"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "perplexity":
+        return { ok: false, message: "Perplexity does not expose a safe read-only credential check. No paid generation request was sent; this connection remains unverified and live execution stays blocked.", status: 409 };
+      case "discord":
+        url = "https://discord.com/api/v10/users/@me"; headers.Authorization = "Bot " + required(c, "botToken"); break;
+      case "telegram":
+        url = "https://api.telegram.org/bot" + encodeURIComponent(required(c, "botToken")) + "/getMe"; break;
+      case "whatsapp_business":
+        url = "https://graph.facebook.com/v22.0/" + encodeURIComponent(required(c, "phoneNumberId")) + "?fields=display_phone_number,verified_name";
+        headers.Authorization = "Bearer " + required(c, "accessToken"); break;
+      case "sendgrid":
+        url = "https://api.sendgrid.com/v3/user/profile"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "mailgun":
+        url = "https://api.mailgun.net/v3/domains/" + encodeURIComponent(required(c, "domain"));
+        headers.Authorization = "Basic " + Buffer.from("api:" + required(c, "apiKey")).toString("base64"); break;
+      case "postmark":
+        url = "https://api.postmarkapp.com/server"; headers["X-Postmark-Server-Token"] = required(c, "serverToken"); break;
+      case "github":
+        url = "https://api.github.com/user"; headers.Authorization = "Bearer " + required(c, "token"); headers.Accept = "application/vnd.github+json"; break;
+      case "gitlab":
+        url = "https://gitlab.com/api/v4/user"; headers["PRIVATE-TOKEN"] = required(c, "token"); break;
+      case "sentry":
+        url = "https://sentry.io/api/0/"; headers.Authorization = "Bearer " + required(c, "authToken"); break;
+      case "vercel":
+        url = "https://api.vercel.com/v2/user"; headers.Authorization = "Bearer " + required(c, "token"); break;
+      case "calendly":
+        url = "https://api.calendly.com/users/me"; headers.Authorization = "Bearer " + required(c, "accessToken"); break;
+      case "zendesk": {
+        const subdomain = required(c, "subdomain");
+        if (!/^[a-z0-9][a-z0-9-]*$/i.test(subdomain)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + subdomain + ".zendesk.com/api/v2/users/me.json";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "email") + "/token:" + required(c, "apiToken")).toString("base64"); break;
+      }
+      case "freshdesk": {
+        const domain = required(c, "domain");
+        if (!/^[a-z0-9][a-z0-9-]*$/i.test(domain)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + domain + ".freshdesk.com/api/v2/agents/me";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "apiKey") + ":X").toString("base64"); break;
+      }
+      case "serpapi":
+        url = "https://serpapi.com/account.json?api_key=" + encodeURIComponent(required(c, "apiKey")); break;
+      case "openweather":
+        url = "https://api.openweathermap.org/data/2.5/weather?q=London&appid=" + encodeURIComponent(required(c, "apiKey")); break;
+
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) {
