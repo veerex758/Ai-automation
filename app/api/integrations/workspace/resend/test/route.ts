@@ -47,6 +47,10 @@ export async function POST(_request: NextRequest) {
       .select("id,display_name").eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save your Resend connection before testing it." }, 404);
+    const { error: invalidateError } = await db.from("workspace_integrations").update({
+      status: "needs_attention", last_tested_at: null, last_test_status: null,
+    }).eq("id", integration.id).eq("workspace_id", workspace.id);
+    if (invalidateError) throw invalidateError;
     integrationId = integration.id;
 
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
