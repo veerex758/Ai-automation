@@ -231,17 +231,21 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       return { contactId: body.id };
     },
     additionalActions: [{
-      id: "search_contacts", name: "Search contacts by email",
-      description: "Searches Intercom contacts for an exact email match using the connected OAuth token.",
-      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      id: "get_contact", name: "Get contact",
+      description: "Retrieves one Close CRM contact by ID and returns bounded identity and communication fields.",
+      inputSchema: z.object({ contactId: z.string().trim().min(10).max(100) }).strict(),
+      outputSchema: z.object({ contactId: z.string(), name: z.string().optional(), email: z.string().email().optional(), phone: z.string().optional(), leadId: z.string().optional() }).strict(),
       async run(ctx, raw) {
-        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
-        const token = secret(ctx, "intercom", "accessToken");
-        const body = await call(ctx, "intercom", { url: "https://api.intercom.io/contacts/search", method: "POST",
-          headers: { Authorization: "Bearer " + token, "Intercom-Version": "2.11", "Content-Type": "application/json" },
-          body: { query: { field: "email", operator: "=", value: input.email }, pagination: { per_page: 20 } } });
-        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...nameFields(row.name) }] : []) : [];
-        return { contacts: contacts.slice(0, 20) };
+        const input = z.object({ contactId: z.string().trim().min(10).max(100) }).strict().parse(raw);
+        const key = secret(ctx, "close", "apiKey");
+        const body = await call(ctx, "close", { url: "https://api.close.com/api/v1/contact/" + encodeURIComponent(input.contactId) + "/",
+          headers: { Authorization: "Basic " + Buffer.from(key + ":").toString("base64") } });
+        if (typeof body.id !== "string") throw new Error("CLOSE_INVALID_RESPONSE");
+        const emails = Array.isArray(body.emails) ? body.emails : [];
+        const phones = Array.isArray(body.phones) ? body.phones : [];
+        const email = emails.find((item: any) => typeof item?.email === "string")?.email;
+        const phone = phones.find((item: any) => typeof item?.phone === "string")?.phone;
+        return { contactId: body.id, ...(typeof body.name === "string" ? { name: body.name } : {}), ...(typeof email === "string" ? { email } : {}), ...(typeof phone === "string" ? { phone } : {}), ...(typeof body.lead_id === "string" ? { leadId: body.lead_id } : {}) };
       },
     }],
   }),
@@ -290,5 +294,19 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof body.id !== "string") throw new Error("INTERCOM_INVALID_RESPONSE");
       return { contactId: body.id };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search contacts by email",
+      description: "Searches Intercom contacts for an exact email match using the connected OAuth token.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "intercom", "accessToken");
+        const body = await call(ctx, "intercom", { url: "https://api.intercom.io/contacts/search", method: "POST",
+          headers: { Authorization: "Bearer " + token, "Intercom-Version": "2.11", "Content-Type": "application/json" },
+          body: { query: { field: "email", operator: "=", value: input.email }, pagination: { per_page: 20 } } });
+        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...nameFields(row.name) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
 ];
