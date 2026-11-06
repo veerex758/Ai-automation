@@ -468,7 +468,7 @@ export default function RegistryIntegrationsDirectory() {
         const state = connectionState(node, workspace, google, statusUnavailable);
         const isExpanded = expanded.includes(node.id);
         const operations = [...node.triggers.map((operation) => ({ ...operation, kind: "Trigger" })), ...node.actions.map((operation) => ({ ...operation, kind: "Action" }))];
-        const providerPermissionKey = googleProductForNode[node.id] === "sheets" ? "sheets" : googleProductForNode[node.id] ?? providerForNode[node.id] ?? node.id;
+        const providerPermissionKey = googleProductForNode[node.id] ? (node.id === "google_sheets" ? "sheets" : node.id) : providerForNode[node.id] ?? node.id;
         const livePermissionEnabled = node.auth.type === "none" || (liveExecutionEnabled && liveProvidersEnabled.includes(providerPermissionKey));
         return <article className="registry-node-card" key={node.id}>
           <div className="registry-node-heading">
