@@ -175,6 +175,45 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   return isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS);
 }
 
+export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): string | null {
+  if (!Array.isArray(steps) || steps.length < 1 || steps.length > 30 ||
+      steps.filter((step) => step.kind === "action").length > MAX_LIVE_ACTION_STEPS) {
+    return "LIVE_WORKFLOW_STEP_LIMIT_EXCEEDED";
+  }
+  if (steps.some((step) => !liveStepAllowed(step))) return "LIVE_OPERATION_NOT_ENABLED";
+
+  const smsSteps = steps.filter((step) => step.nodeId === "twilio" && step.operationId === "send_sms");
+  const allowedSmsRecipients = new Set((process.env.AIVANTA_LIVE_SMS_RECIPIENTS ?? "")
+    .split(",").map((item) => item.trim()).filter(Boolean));
+  for (const step of smsSteps) {
+    const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
+    if (!/^\\+[1-9]\\d{7,14}$/.test(to) || !allowedSmsRecipients.has(to)) return "LIVE_SMS_RECIPIENT_NOT_ALLOWED";
+  }
+
+  const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
+  const allowedEmailRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
+    .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+  for (const step of emailSteps) {
+    const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
+    if (!to || to.includes("{{") || !allowedEmailRecipients.has(to)) return "LIVE_EMAIL_RECIPIENT_NOT_ALLOWED";
+  }
+
+  const voiceSteps = steps.filter((step) => step.nodeId === "twilio_voice" && step.operationId === "execute");
+  const allowedVoiceRecipients = new Set((process.env.AIVANTA_LIVE_VOICE_RECIPIENTS ?? "")
+    .split(",").map((item) => item.trim()).filter(Boolean));
+  for (const step of voiceSteps) {
+    const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
+    if (!/^\\+[1-9]\\d{7,14}$/.test(to) || !allowedVoiceRecipients.has(to)) return "LIVE_VOICE_RECIPIENT_NOT_ALLOWED";
+  }
+
+  const publishingSteps = steps.filter((step) =>
+    ["x_twitter", "facebook_pages", "instagram"].includes(step.nodeId) && step.operationId === "execute");
+  if (publishingSteps.length && process.env.AIVANTA_LIVE_PUBLISHING_ENABLED !== "true") {
+    return "LIVE_PUBLISHING_NOT_ENABLED";
+  }
+  return null;
+}
+
 function boundedOutput(value: unknown): Record<string, unknown> {
   if (Array.isArray(value)) {
     try {
@@ -295,37 +334,8 @@ export async function runDurableWorker() {
         if (!validated.steps) throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
         let steps: RegisteredWorkflowStep[] = validated.steps;
         if (job.execution_mode === "live") {
-          if (steps.some((step) => !liveStepAllowed(step)) || steps.filter((step) => step.kind === "action").length > MAX_LIVE_ACTION_STEPS) {
-            throw new Error("LIVE_OPERATION_NOT_ENABLED");
-          }
-          const smsSteps = steps.filter((step) => step.nodeId === "twilio" && step.operationId === "send_sms");
-          const allowedSmsRecipients = new Set((process.env.AIVANTA_LIVE_SMS_RECIPIENTS ?? "")
-            .split(",").map((item) => item.trim()).filter(Boolean));
-          for (const step of smsSteps) {
-            const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
-            if (!to || to.includes("{{") || !allowedSmsRecipients.has(to)) throw new Error("LIVE_SMS_RECIPIENT_NOT_ALLOWED");
-          }
-          const publishingSteps = steps.filter((step) =>
-            ["x_twitter", "facebook_pages", "instagram"].includes(step.nodeId) && step.operationId === "execute");
-          if (publishingSteps.length && process.env.AIVANTA_LIVE_PUBLISHING_ENABLED !== "true") {
-            throw new Error("LIVE_PUBLISHING_NOT_ENABLED");
-          }
-          const voiceSteps = steps.filter((step) => step.nodeId === "twilio_voice" && step.operationId === "execute");
-          const allowedVoiceRecipients = new Set((process.env.AIVANTA_LIVE_VOICE_RECIPIENTS ?? "")
-            .split(",").map((item) => item.trim()).filter(Boolean));
-          for (const step of voiceSteps) {
-            const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
-            if (!/^\\+[1-9]\\d{7,14}$/.test(to) || !allowedVoiceRecipients.has(to)) {
-              throw new Error("LIVE_VOICE_RECIPIENT_NOT_ALLOWED");
-            }
-          }
-          const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
-          const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
-            .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-          for (const step of emailSteps) {
-            const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
-            if (!to || to.includes("{{") || !allowedRecipients.has(to)) throw new Error("LIVE_EMAIL_RECIPIENT_NOT_ALLOWED");
-          }
+          const livePolicyError = validateDurableLiveSteps(steps);
+          if (livePolicyError) throw new Error(livePolicyError);
         }
         const source = job.payload?.source;
         if (source === "webhook" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "webhooks" || steps[0]?.operationId !== "receive_event")) {
