@@ -368,6 +368,12 @@ const providerForNode: Record<string, string> = {
   resend: "resend", http_request: "http", webhook_trigger: "webhooks", manual_trigger: "manual",
   twilio_sms: "twilio", twilio_voice: "twilio_voice",
 };
+const nativeIconGlyphs: Record<string, string> = {
+  webhook: "↗", "calendar-clock": "◷", play: "▶", globe: "◎", "git-branch": "⑂",
+  workflow: "◇", combine: "⇄", repeat: "⟳", code: "⌘", wrench: "⚒",
+  "alert-triangle": "△", "list-checks": "☷", braces: "{ }", filter: "▽", sigma: "Σ",
+  timer: "◴", "list-plus": "＋", "file-json": "{ }", "calendar-days": "▦",
+};
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 
 function connectionState(node: RegistryNode, workspace: ConnectionRecord[], google: ConnectionRecord[], failed: boolean): ConnectionState {
@@ -389,11 +395,11 @@ function BrandMark({ node }: { node: RegistryNode }) {
   const asset = officialBrandAssets[node.id];
   if (asset) {
     return <span className="integration-brand-mark official-brand-mark">
-      <img src={`https://cdn.simpleicons.org/${asset.slug}`} alt={`${asset.label} logo`} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+      <img src={`https://cdn.simpleicons.org/${asset.slug}`} alt={`${node.name} logo`} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
     </span>;
   }
   return <span className={"integration-brand-mark registry-native-mark native-" + node.id} aria-hidden="true">
-    {node.icon || node.name.slice(0, 1).toUpperCase()}
+    {nativeIconGlyphs[node.icon] || node.name.slice(0, 1).toUpperCase()}
   </span>;
 }
 
@@ -482,7 +488,7 @@ export default function RegistryIntegrationsDirectory() {
           </div>
           <p className="registry-node-summary">
             {node.executionStatus === "registered"
-              ? `${operations.length} registered ${operations.length === 1 ? "operation" : "operations"} · ${node.auth.type === "none" ? "No account credentials" : node.auth.type === "oauth2" ? "OAuth authorization" : node.auth.type === "connectionString" ? "Encrypted connection string" : "Workspace credentials"}`
+              ? `${operations.length} registered ${operations.length === 1 ? "operation" : "operations"} · ${node.auth.type === "none" ? "No account credentials" : node.auth.type === "oauth2" ? "OAuth access token" : node.auth.type === "connectionString" ? "Encrypted connection string" : "Workspace credentials"}`
               : "Provider listed · native adapter and provider security checks not yet enabled"}
           </p>
           {node.executionStatus === "registered" && <div className="registry-operation-preview">
