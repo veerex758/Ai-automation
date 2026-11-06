@@ -24,20 +24,26 @@ if (baseUrl.protocol !== "https:") {
 }
 
 const host = baseUrl.hostname.toLowerCase();
+const approvedPreviewHosts = new Set([
+  // Verified READY preview alias from merged PR #52; keep workflow and script allowlists aligned.
+  // Change this allowlist only after verifying and recording the replacement deployment.
+  "ai-automation-git-fix-staging-smoke-preview-target-veerex-org.vercel.app",
+]);
 const knownProductionHosts = new Set([
   "ai-automation-veerex-org.vercel.app",
   "ai-automation-git-main-veerex-org.vercel.app",
 ]);
-const explicitlyApprovedPreviewHosts = new Set([
-  "ai-automation-3oo2aepz3-veerex-org.vercel.app",
-]);
-const identifiesNonProduction = host.includes("staging")
-  || host.includes("preview")
-  || host.includes("-git-")
-  || explicitlyApprovedPreviewHosts.has(host);
 
-if (knownProductionHosts.has(host) || !identifiesNonProduction) {
-  console.error("Refusing to run smoke tests: hostname must clearly identify a staging or preview deployment.");
+// A hostname containing "preview", "staging", or "-git-" is not proof of ownership.
+// Restrict execution to one explicitly approved preview and reject URL tricks.
+if (
+  knownProductionHosts.has(host)
+  || !approvedPreviewHosts.has(host)
+  || baseUrl.username
+  || baseUrl.password
+  || baseUrl.port
+) {
+  console.error("Refusing to run smoke tests: target must be the explicitly approved Aivanta preview hostname.");
   process.exit(2);
 }
 
