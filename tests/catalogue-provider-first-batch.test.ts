@@ -183,7 +183,7 @@ test("Intercom search_contacts uses the contacts search endpoint", async () => {
   assert.equal(request.method, "POST");
   assert.equal(request.headers.Authorization, "Bearer intercom-token");
   assert.deepEqual(request.body.query, { field: "email", operator: "=", value: "person@example.test" });
-  assert.deepEqual(result, { contacts: [{ contactId: "intercom-1", email: "person@example.test", firstName: "Ada Lovelace" }] });
+  assert.deepEqual(result, { contacts: [{ contactId: "intercom-1", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
 });
 
 test("Freshsales search_contacts uses the exact email lookup endpoint", async () => {
@@ -197,7 +197,7 @@ test("Freshsales search_contacts uses the exact email lookup endpoint", async ()
   }, { email: "person@example.test" });
   assert.match(request.url, /api\/lookup\?q=person%40example\.test/);
   assert.equal(request.headers.Authorization, "Token token=freshsales-token");
-  assert.deepEqual(result, { contacts: [{ contactId: "77", email: "person@example.test", firstName: "Ada Lovelace" }] });
+  assert.deepEqual(result, { contacts: [{ contactId: "77", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
 });
 
 test("Apollo search_contacts searches saved workspace contacts with bounded pagination", async () => {
