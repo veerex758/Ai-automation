@@ -9,6 +9,7 @@ const connectionsSource = readFileSync("app/dashboard/connections/page.tsx", "ut
 const connectionTestSource = readFileSync("app/api/integrations/workspace/test/route.ts", "utf8");
 const workerSource = readFileSync("lib/workflows/durable-worker.ts", "utf8");
 const resendTestSource = readFileSync("app/api/integrations/workspace/resend/test/route.ts", "utf8");
+const saveRouteSource = readFileSync("app/api/integrations/workspace/route.ts", "utf8");
 
 test("all 100 directory entries have official brand artwork or an explicit native icon path", () => {
   const ids = [...catalogSource.matchAll(/"id": "([^"]+)"/g)].map((match) => match[1]);
@@ -59,4 +60,11 @@ test("every credential provider has a non-destructive verification path or an ex
   assert.deepEqual(providers.filter((provider) => !testable.includes(provider)), ["resend"]);
   assert.match(resendTestSource, /last_test_status: "passed"/);
   assert.match(connectionTestSource, /Perplexity does not expose a safe read-only credential check/);
+});
+
+test("saving or re-testing credentials invalidates any previous success before the next live run", () => {
+  assert.ok(saveRouteSource.indexOf('const { data: existing') < saveRouteSource.indexOf('db.rpc("save_workspace_integration_credentials"'));
+  assert.match(saveRouteSource, /last_test_status: null/);
+  assert.match(connectionTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
+  assert.match(resendTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
 });
