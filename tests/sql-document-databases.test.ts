@@ -18,9 +18,9 @@ test("MySQL executes a parameterized SELECT in a read-only transaction and caps 
         async query(sql, values) {
           calls.push({ sql, values });
           if (sql.startsWith("SET TRANSACTION")) return [[], []];
-        async beginTransaction() { began = true; },
           return calls.length === 1 ? [[], []] : [[{ id: 1 }, { id: 2 }, { id: 3 }], []];
         },
+        async beginTransaction() { began = true; },
         async commit() { committed = true; },
         async rollback() { rolledBack = true; },
         async end() { closed = true; },
