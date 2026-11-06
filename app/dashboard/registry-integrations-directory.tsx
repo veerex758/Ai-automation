@@ -62,7 +62,7 @@ const providerForNode: Record<string, string> = {
   manual_trigger: "manual",
   twilio_sms: "twilio",
 };
-const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
+const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";\nconst googleOAuthProduct: Record<string,string> = { gmail:"gmail",google_sheets:"sheets",google_drive:"drive",google_calendar:"calendar",google_docs:"docs",google_forms:"forms",youtube:"youtube",google_contacts:"contacts" };
 const credentialProvider: Record<string,string> = {
   twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
 };
@@ -257,7 +257,7 @@ export default function RegistryIntegrationsDirectory() {
               ? `${operations.length} registered ${operations.length === 1 ? "operation" : "operations"} · ${node.auth.type === "none" ? "No account credentials" : node.auth.type === "oauth2" ? "OAuth authorization" : node.auth.type === "connectionString" ? "Encrypted connection string" : "Workspace credentials"}`
               : "Provider listed · native adapter and provider security checks not yet enabled"}
           </p>
-          {node.executionStatus === "registered" && connectionRequired(node) && credentialFields[credentialProvider[node.id] ?? node.id] && <button className="registry-expand-button" type="button" onClick={() => beginConnect(node)}>Connect account</button>}\n          {node.executionStatus === "registered" && <div className="registry-operation-preview">
+          {node.executionStatus === "registered" && connectionRequired(node) && (credentialFields[credentialProvider[node.id] ?? node.id] || googleOAuthProduct[node.id]) && <button className="registry-expand-button" type="button" onClick={() => beginConnect(node)}>Connect account</button>}\n          {node.executionStatus === "registered" && <div className="registry-operation-preview">
             {operations.slice(0, 2).map((operation) => <span key={operation.kind + operation.id}>{operation.name}</span>)}
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
