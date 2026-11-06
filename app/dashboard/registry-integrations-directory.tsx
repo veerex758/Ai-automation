@@ -60,13 +60,13 @@ const providerForNode: Record<string, string> = {
   resend: "resend",
   webhook_trigger: "webhooks",
   manual_trigger: "manual",
-  twilio_sms: "twilio",
+  twilio_sms: "twilio",\n  http_request: "http",
 };
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";\nconst googleOAuthProduct: Record<string,string> = { gmail:"gmail",google_sheets:"sheets",google_drive:"drive",google_calendar:"calendar",google_docs:"docs",google_forms:"forms",youtube:"youtube",google_contacts:"contacts" };
 const credentialProvider: Record<string,string> = {
   twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
 };
-const credentialFields: Record<string,CredentialField[]> = {
+const credentialFields: Record<string,CredentialField[]> = {\n  http:[{key:"baseUrl",label:"Base URL"},{key:"apiKey",label:"API key",secret:true},{key:"username",label:"Basic-auth username"},{key:"password",label:"Basic-auth password",secret:true}],
   openai:[{key:"apiKey",label:"API key",secret:true}],gemini:[{key:"apiKey",label:"API key",secret:true}],
   resend:[{key:"apiKey",label:"API key",secret:true},{key:"fromEmail",label:"Verified sender email"}],
   slack:[{key:"botToken",label:"Bot token",secret:true},{key:"webhookUrl",label:"Incoming webhook URL",secret:true}],
