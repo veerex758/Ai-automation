@@ -79,6 +79,8 @@ test("Google OAuth scope validation allows only identity plus the requested read
   assert.equal(isGoogleProduct("drive"), false);
   assert.equal(isGoogleProduct(null), false);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email profile " + gmail), true);
+  assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile " + gmail), true);
+  assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid https://www.googleapis.com/auth/userinfo.email " + gmail), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", gmail), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", null), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email " + sheets), false);
