@@ -10,7 +10,7 @@ const connectionTestSource = readFileSync("app/api/integrations/workspace/test/r
 
 test("all 100 directory entries have official brand artwork or an explicit native icon path", () => {
   const ids = [...catalogSource.matchAll(/"id": "([^"]+)"/g)].map((match) => match[1]);
-  const assetsBlock = directorySource.match(/const officialBrandAssets:[\\s\\S]*?= (\\{[\\s\\S]*?\\});\\nconst googleProductForNode/);
+  const assetsBlock = directorySource.match(/const officialBrandAssets:[\s\S]*?= (\{[\s\S]*?\});\nconst googleProductForNode/);
   assert.ok(assetsBlock, "official brand asset map must remain machine-readable");
   const assets = JSON.parse(assetsBlock[1]);
   const native = new Set([
@@ -23,10 +23,10 @@ test("all 100 directory entries have official brand artwork or an explicit nativ
 });
 
 test("every workspace credential provider has a connection form", () => {
-  const providerUnion = credentialsSource.match(/export type WorkspaceCredentialProvider =([\\s\\S]*?);/);
+  const providerUnion = credentialsSource.match(/export type WorkspaceCredentialProvider =([\s\S]*?);/);
   assert.ok(providerUnion);
   const providers = [...providerUnion[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-  const formKeys = [...connectionsSource.matchAll(/^\\s{2}([a-z0-9_]+): \\{ label:/gm)].map((match) => match[1]);
+  const formKeys = [...connectionsSource.matchAll(/^\s{2}([a-z0-9_]+): \{ label:/gm)].map((match) => match[1]);
   assert.equal(new Set(formKeys).size, formKeys.length);
   assert.deepEqual(providers.filter((provider) => !formKeys.includes(provider)), []);
 });
