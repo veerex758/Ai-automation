@@ -14,6 +14,8 @@ const utilityActions = [
 ];
 
 test("durable live execution explicitly opts in every mapped external provider", () => {
+  assert.match(durableWorker, /MAX_LIVE_ACTION_STEPS = 30/);
+  assert.match(durableWorker, /length > MAX_LIVE_ACTION_STEPS/);
   assert.match(durableWorker, /return isProviderLiveEnabled\(provider, process\.env\.AIVANTA_LIVE_INTEGRATIONS\);/);
   assert.doesNotMatch(durableWorker, /const SERVER_ENABLED_INTEGRATIONS/);
   assert.match(durableWorker, /if \(!provider\) return false;/);
