@@ -129,3 +129,59 @@ test("WhatsApp Business get_phone_number uses configured phone ID and token", as
   assert.equal(request.headers.Authorization, "Bearer wa-test-token");
   assert.deepEqual(result, { phoneNumberId: "555000111", displayPhoneNumber: "+1555000111", verifiedName: "Aivanta" });
 });
+
+test("Salesforce search_contacts uses escaped SOQL email lookup", async () => {
+  let request: any;
+  const operation = findOperation("salesforce", "search_contacts", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { salesforce: { accessToken: "sf-token", instanceUrl: "https://example.my.salesforce.com" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { records: [{ Id: "lead-1", Email: "person@example.test", FirstName: "Ada", LastName: "Lovelace" }] } }; } },
+    previousOutputs: {},
+  }, { email: "person@example.test" });
+  assert.match(request.url, /services\/data\/v60\.0\/query/);
+  assert.equal(request.headers.Authorization, "Bearer sf-token");
+  assert.deepEqual(result, { contacts: [{ contactId: "lead-1", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
+});
+
+test("Pipedrive search_contacts normalizes the persons search response", async () => {
+  let request: any;
+  const operation = findOperation("pipedrive", "search_contacts", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { pipedrive: { accessToken: "pd-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { data: [{ item: { id: 123, name: "Ada Lovelace", email: [{ value: "person@example.test" }] } }] } }; } },
+    previousOutputs: {},
+  }, { email: "person@example.test" });
+  assert.equal(request.headers.Authorization, "Bearer pd-token");
+  assert.match(request.url, /exact_match=true/);
+  assert.deepEqual(result, { contacts: [{ contactId: "123", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
+});
+
+test("Zoho CRM search_contacts maps provider contact fields", async () => {
+  let request: any;
+  const operation = findOperation("zoho_crm", "search_contacts", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { zoho_crm: { accessToken: "zoho-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { data: [{ id: "zoho-1", Email: "person@example.test", First_Name: "Ada", Last_Name: "Lovelace" }] } }; } },
+    previousOutputs: {},
+  }, { email: "person@example.test" });
+  assert.equal(request.headers.Authorization, "Zoho-oauthtoken zoho-token");
+  assert.deepEqual(result, { contacts: [{ contactId: "zoho-1", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
+});
+
+test("Intercom search_contacts uses the contacts search endpoint", async () => {
+  let request: any;
+  const operation = findOperation("intercom", "search_contacts", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { intercom: { accessToken: "intercom-token" } }, logger,
+    http: { async request(args: any) { request = args; return { status: 200, body: { data: [{ id: "intercom-1", email: "person@example.test", name: "Ada Lovelace" }] } }; } },
+    previousOutputs: {},
+  }, { email: "person@example.test" });
+  assert.equal(request.method, "POST");
+  assert.equal(request.headers.Authorization, "Bearer intercom-token");
+  assert.deepEqual(request.body.query, { field: "email", operator: "=", value: "person@example.test" });
+  assert.deepEqual(result, { contacts: [{ contactId: "intercom-1", email: "person@example.test", firstName: "Ada Lovelace" }] });
+});
