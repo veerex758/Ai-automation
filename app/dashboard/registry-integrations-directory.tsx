@@ -52,7 +52,7 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
 };
 const nativeNodeGlyphs: Record<string,string> = {
   webhook_trigger:"↗",schedule_cron:"◷",manual_trigger:"▶",http_request:"⇄",if:"◇",switch:"⇄",loop:"↻",merge:"⊕",
-  wait_delay:"◷",code_js:"</>",set_fields:"≡",json_parse:"{}",filter:"⌕",aggregate:"∑",date_time:"◷",
+  wait_delay:"◷",code_js:"</>",set_fields:"≡",json_parse:"{}",filter:"⌕",aggregate:"∑",date_time:"◷",rss_feed:"◔",
 };
 const providerForNode: Record<string, string> = {
   gmail: "google:gmail",
@@ -113,7 +113,7 @@ const credentialFields: Record<string,CredentialField[]> = {
   aws_s3:[{key:"accessKeyId",label:"Access key ID"},{key:"secretAccessKey",label:"Secret access key",secret:true},{key:"region",label:"AWS region"}],
   cloudflare_r2:[{key:"accountId",label:"Account ID"},{key:"accessKeyId",label:"Access key ID"},{key:"secretAccessKey",label:"Secret access key",secret:true}],
 };
-const credentialTestable = new Set(["openai","gemini","slack","notion","hubspot","twilio","shopify","stripe","linear","elevenlabs","stability_ai","hugging_face","pinecone","microsoft_teams","salesforce","pipedrive","zoho_crm","freshsales","close","apollo","intercom","jira","asana","trello","clickup","monday","todoist","airtable","bitbucket","netlify","woocommerce","paypal","paddle","lemon_squeezy","square","razorpay","zoom","cal_com","twilio_voice","docusign","x_twitter","linkedin","facebook_pages","instagram","tiktok","mailchimp","typeform","supabase","postgresql","redis","firebase","dropbox","aws_s3","cloudflare_r2"]);
+const credentialTestable = new Set(["sendgrid","mailgun","postmark","discord","telegram","whatsapp_business","gitlab","sentry","vercel","calendly","zendesk","freshdesk","serpapi","openweather","openai","gemini","slack","notion","hubspot","twilio","shopify","stripe","linear","elevenlabs","stability_ai","hugging_face","pinecone","microsoft_teams","salesforce","pipedrive","zoho_crm","freshsales","close","apollo","intercom","jira","asana","trello","clickup","monday","todoist","airtable","bitbucket","netlify","woocommerce","paypal","paddle","lemon_squeezy","square","razorpay","zoom","cal_com","twilio_voice","docusign","x_twitter","linkedin","facebook_pages","instagram","tiktok","mailchimp","typeform","supabase","postgresql","redis","firebase","dropbox","aws_s3","cloudflare_r2"]);
 
 
 function connectionState(node: RegistryNode, workspace: ConnectionRecord[], google: ConnectionRecord[], failed: boolean): ConnectionState {
