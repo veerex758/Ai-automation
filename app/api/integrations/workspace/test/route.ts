@@ -23,8 +23,8 @@ function signedS3Headers(url: URL, accessKeyId: string, secretAccessKey: string,
 }
 
 
-const TESTABLE = new Set(["sendgrid", "mailgun", "postmark", "discord", "telegram", "whatsapp_business", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
-type Provider = "sendgrid" | "mailgun" | "postmark" | "discord" | "telegram" | "whatsapp_business" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
+const TESTABLE = new Set(["resend", "claude", "mistral", "groq", "perplexity", "github", "sendgrid", "mailgun", "postmark", "discord", "telegram", "whatsapp_business", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+type Provider = "resend" | "claude" | "mistral" | "groq" | "perplexity" | "github" | "sendgrid" | "mailgun" | "postmark" | "discord" | "telegram" | "whatsapp_business" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather" | "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -49,6 +49,18 @@ async function check(provider: Provider, c: Credentials) {
     const headers: Record<string, string> = {};
     let method: "GET" | "POST" = "GET", body: string | undefined;
     switch (provider) {
+      case "resend":
+        url = "https://api.resend.com/domains"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "claude":
+        url = "https://api.anthropic.com/v1/models"; headers["x-api-key"] = required(c, "apiKey"); headers["anthropic-version"] = "2023-06-01"; break;
+      case "mistral":
+        url = "https://api.mistral.ai/v1/models"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "groq":
+        url = "https://api.groq.com/openai/v1/models"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "perplexity":
+        url = "https://api.perplexity.ai/v1/models"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
+      case "github":
+        url = "https://api.github.com/user"; headers.Authorization = "Bearer " + required(c, "token"); headers.Accept = "application/vnd.github+json"; break;
       case "sendgrid":
         url = "https://api.sendgrid.com/v3/user/profile"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
       case "mailgun":
