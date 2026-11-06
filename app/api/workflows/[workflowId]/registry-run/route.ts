@@ -9,7 +9,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 function serverContext(): Omit<NodeContext, "previousOutputs"> {
   const credentials: Record<string, Record<string, string>> = {};
-  if (process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
+  if (process.env.GEMINI_API_KEY) credentials.gemini = { apiKey: process.env.GEMINI_API_KEY };
   if (process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
   if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
     credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
@@ -87,11 +87,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       // keep production execution restricted to the existing guarded Resend email action.
       const unsupportedLiveStep = steps.find((step) =>
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
-        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email"))
+        (step.kind === "action" && !((step.nodeId === "email" && step.operationId === "send_email") || (step.nodeId === "gemini" && step.operationId === "qualify_real_estate_lead")) )
       );
       if (unsupportedLiveStep) {
         return NextResponse.json({ error: "This registry operation is available in dry-run only until its live integration is explicitly enabled." }, { status: 403 });
       }
+      if (steps.some((step) => step.nodeId === "gemini") && !process.env.GEMINI_API_KEY) return NextResponse.json({ error: "Gemini is not configured for live execution." }, { status: 503 });
+      if (steps.some((step) => step.nodeId === "email") && (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL)) return NextResponse.json({ error: "Resend is not configured for live execution." }, { status: 503 });
       const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
       for (const step of steps) {
         if (step.nodeId === "email" && step.operationId === "send_email") {

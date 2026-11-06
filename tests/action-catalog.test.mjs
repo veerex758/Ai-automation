@@ -7,6 +7,7 @@ const { getActionCatalog, findAction } = catalog;
 test("exposes a stable catalog of supported provider-operation pairs", () => {
   const actions = getActionCatalog();
   assert.deepEqual(actions.map(({ provider, operation }) => [provider, operation]), [
+    ["gemini", "qualify_real_estate_lead"],
     ["internal", "create_task"],
     ["email", "send_email"],
     ["slack", "send_message"],
@@ -15,13 +16,15 @@ test("exposes a stable catalog of supported provider-operation pairs", () => {
   assert.equal(new Set(actions.map((action) => action.id)).size, actions.length);
 });
 
-test("documents live email guardrails and keeps other connectors dry-run only", () => {
+test("documents Gemini and email live guardrails while keeping unsupported connectors dry-run only", () => {
   const actions = getActionCatalog();
   assert.equal(findAction("email", "send_email").execution, "live_guarded");
+  assert.equal(findAction("gemini", "qualify_real_estate_lead").execution, "live_guarded");
+  assert.ok(findAction("gemini", "qualify_real_estate_lead").requirements.includes("server_gemini_key"));
   assert.deepEqual(findAction("email", "send_email").requirements, [
     "server_credentials", "verified_sender", "recipient_allowlist", "explicit_live_execution_flag",
   ]);
-  assert.ok(actions.filter((action) => action.provider !== "email").every((action) => action.execution === "dry_run_only"));
+  assert.ok(actions.filter((action) => !["email", "gemini"].includes(action.provider)).every((action) => action.execution === "dry_run_only"));
 });
 
 test("describes fields without including credentials or secret values", () => {

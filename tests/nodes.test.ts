@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { nodes, findOperation } from "../nodes/registry";
 import { executeRegisteredOperation } from "../nodes/runner";
 
-test("registry includes versioned webhook, OpenAI, Slack and Email operations", () => {
+test("registry includes versioned webhook, Gemini, Slack and Email operations", () => {
   assert.equal(nodes.length, 5);
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
-  assert.ok(findOperation("openai", "generate_text", "action"));
+  assert.ok(findOperation("gemini", "generate_text", "action"));
   assert.ok(findOperation("slack", "send_message", "action"));
   assert.ok(findOperation("email", "send_email", "action"));
 });
@@ -40,17 +40,17 @@ test("registry runner resolves an operation by node and operation IDs", async ()
   assert.equal((result as { eventType: string }).eventType, "signup");
 });
 
-test("OpenAI action makes a real Responses API request and validates actual output", async () => {
-  const operation = findOperation("openai", "generate_text", "action");
+test("Gemini action makes a real Gemini API request and validates actual output", async () => {
+  const operation = findOperation("gemini", "generate_text", "action");
   assert.ok(operation);
   let requestedUrl = "";
   const result = await operation.run({
-    credentials: { openai: { apiKey: "test-only-key" } },
+    credentials: { gemini: { apiKey: "test-only-key" } },
     logger: { info() {}, error() {} },
-    http: { async request(args) { requestedUrl = args.url; return { status: 200, body: { output_text: "Hello from provider", model: "gpt-4o-mini", usage: { input_tokens: 2, output_tokens: 4 } } }; } },
+    http: { async request(args) { requestedUrl = args.url; return { status: 200, body: { candidates: [{ content: { parts: [{ text: "Hello from provider" }] } }], modelVersion: "gemini-2.5-flash", usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 4 } } }; } },
     previousOutputs: {},
-  }, { prompt: "Say hello", model: "gpt-4o-mini", maxOutputTokens: 50 });
-  assert.equal(requestedUrl, "https://api.openai.com/v1/responses");
+  }, { prompt: "Say hello", model: "gemini-2.5-flash", maxOutputTokens: 50 });
+  assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
   assert.equal((result as { text: string }).text, "Hello from provider");
   assert.equal((result as { outputTokens?: number }).outputTokens, 4);
 });
@@ -85,4 +85,32 @@ test("Email action sends through Resend and returns provider message ID", async 
   }, { to: "recipient@example.com", subject: "Test", text: "Test message" });
   assert.equal(requestedUrl, "https://api.resend.com/emails");
   assert.equal((result as { messageId: string }).messageId, "email_test_123");
+});
+
+test("Gemini qualifies a real-estate enquiry with structured output and token usage", async () => {
+  const operation = findOperation("gemini", "qualify_real_estate_lead", "action");
+  assert.ok(operation);
+  let sentBody: unknown;
+  const qualification = {
+    fullName: "Ada Buyer", email: "ada@example.com", phone: null,
+    propertyType: "apartment", location: "Lekki", budget: "₦80m",
+    timeframe: "within_30_days", temperature: "hot",
+    reason: "Specific property type, location, budget and near-term timeline.",
+    missingInformation: ["Phone number"],
+    suggestedReply: "Thanks for your enquiry. May we have your phone number?",
+    summary: "HOT lead: Ada Buyer wants an apartment in Lekki within 30 days; budget ₦80m. Phone number missing.",
+  };
+  const result = await operation.run({
+    credentials: { gemini: { apiKey: "test-only-key" } },
+    logger: { info() {}, error() {} },
+    http: { async request(args) {
+      sentBody = args.body;
+      return { status: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify(qualification) }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 80 } } };
+    } },
+    previousOutputs: {},
+  }, { leadData: "Ada wants an apartment in Lekki, budget ₦80m, needs it within 30 days." });
+  assert.equal((result as { temperature: string }).temperature, "hot");
+  assert.equal((result as { email: string }).email, "ada@example.com");
+  assert.equal((result as { inputTokens: number }).inputTokens, 100);
+  assert.ok((sentBody as { generationConfig: { responseJsonSchema: unknown } }).generationConfig.responseJsonSchema);
 });
