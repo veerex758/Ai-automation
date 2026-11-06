@@ -187,7 +187,7 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
     .split(",").map((item) => item.trim()).filter(Boolean));
   for (const step of smsSteps) {
     const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
-    if (!/^\\+[1-9]\\d{7,14}$/.test(to) || !allowedSmsRecipients.has(to)) return "LIVE_SMS_RECIPIENT_NOT_ALLOWED";
+    if (!/^\+[1-9]\d{7,14}$/.test(to) || !allowedSmsRecipients.has(to)) return "LIVE_SMS_RECIPIENT_NOT_ALLOWED";
   }
 
   const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
@@ -203,7 +203,7 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
     .split(",").map((item) => item.trim()).filter(Boolean));
   for (const step of voiceSteps) {
     const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
-    if (!/^\\+[1-9]\\d{7,14}$/.test(to) || !allowedVoiceRecipients.has(to)) return "LIVE_VOICE_RECIPIENT_NOT_ALLOWED";
+    if (!/^\+[1-9]\d{7,14}$/.test(to) || !allowedVoiceRecipients.has(to)) return "LIVE_VOICE_RECIPIENT_NOT_ALLOWED";
   }
 
   const publishingSteps = steps.filter((step) =>
