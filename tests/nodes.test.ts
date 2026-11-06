@@ -5,7 +5,9 @@ import { executeRegisteredOperation } from "../nodes/runner";
 import type { NodeContext } from "../nodes/types";
 
 test("registry includes versioned provider and data utility operations", () => {
-  assert.equal(nodes.length, 118);
+  assert.equal(nodes.length, 120);
+  assert.ok(findOperation("mysql", "query", "action"));
+  assert.ok(findOperation("mongodb", "find", "action"));
   assert.ok(findOperation("manual", "start", "trigger"));
   assert.ok(findOperation("webhooks", "receive_event", "trigger"));
   assert.ok(findOperation("http_request", "request", "action"));
