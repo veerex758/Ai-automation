@@ -361,7 +361,7 @@ const googleProductForNode: Record<string, string> = {
   google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
 };
 const providerForNode: Record<string, string> = {
-  resend: "resend", webhook_trigger: "webhooks", manual_trigger: "manual",
+  resend: "resend", http_request: "http", webhook_trigger: "webhooks", manual_trigger: "manual",
   twilio_sms: "twilio", twilio_voice: "twilio",
 };
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
