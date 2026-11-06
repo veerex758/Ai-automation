@@ -21,4 +21,4 @@ create index if not exists workspace_provider_operation_approvals_latest_idx
 alter table public.workspace_provider_operation_approvals enable row level security;
 revoke all on table public.workspace_provider_operation_approvals from public, anon, authenticated;
 revoke update, delete, truncate on table public.workspace_provider_operation_approvals from service_role;
-grant select, i¶»§q«^
+grant select, insert on table public.workspace_provider_operation_approvals to service_role;
