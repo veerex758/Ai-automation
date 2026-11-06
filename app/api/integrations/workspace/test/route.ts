@@ -449,6 +449,12 @@ export async function POST(request: Request) {
       .eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save this integration before testing it." }, 404);
+    // A re-test must not leave a previously passed credential marked ready
+    // while the new verification attempt is still in flight or has failed.
+    const { error: invalidateError } = await db.from("workspace_integrations").update({
+      status: "needs_attention", last_tested_at: null, last_test_status: null,
+    }).eq("id", integration.id).eq("workspace_id", workspace.id);
+    if (invalidateError) throw invalidateError;
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets").select("encrypted_credentials,encryption_version")
       .eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
