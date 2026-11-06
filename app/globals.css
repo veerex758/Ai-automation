@@ -373,3 +373,113 @@ h1 span{color:#809e65}
 :where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:2px solid #a8d85a;outline-offset:3px}
 @media(max-width:680px){.reference-home .brand-mark{width:30px;height:30px;padding:2px}.reference-home .brand{font-size:17px;gap:8px}.reference-nav-inner{gap:8px}.reference-auth{gap:9px}}
 @media(prefers-reduced-motion:reduce){.reference-nav-links a,.reference-auth a,.reference-footer a,.reference-primary,.reference-secondary,.reference-nav-cta{transition:none}}
+
+
+/* AIVANTA REFINED ENTERPRISE — global design system */
+:root{
+  color-scheme:light;
+  --aivanta-bg:#F4F3EF;
+  --aivanta-surface:#FFFFFF;
+  --aivanta-ink:#202831;
+  --aivanta-muted:#52616D;
+  --aivanta-steel:#344B5B;
+  --aivanta-steel-hover:#293D4B;
+  --aivanta-bronze:#B18A60;
+  --aivanta-line:#E3E2DC;
+  --aivanta-soft:#ECEBE5;
+  --aivanta-success:#54816B;
+  --aivanta-warning:#B78B4B;
+  --aivanta-danger:#B65D58;
+  --aivanta-info:#607D99;
+  --aivanta-radius:10px;
+  --aivanta-shadow:0 8px 24px rgba(32,40,49,.06);
+}
+html,body{background:var(--aivanta-bg);color:var(--aivanta-ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{-webkit-font-smoothing:antialiased}
+:where(a,button,input,textarea,select,[role=button]):focus-visible{outline:2px solid rgba(177,138,96,.65);outline-offset:3px}
+::selection{background:#E8DCCB;color:var(--aivanta-ink)}
+/* Shared brand and controls */
+.brand-period,.nav-links a:hover,.text-link:hover{color:var(--aivanta-bronze)}
+.brand-mark,.auth-brand-mark,.builder-brand-mark{background:#fff!important;border:1px solid var(--aivanta-line)!important;border-radius:9px!important;box-shadow:none!important}
+.button-dark,.reference-primary,.create-button,.create-workflow-button,.primary-button,.assistant-apply-button{
+  background:var(--aivanta-steel)!important;color:#fff!important;border:1px solid var(--aivanta-steel)!important;
+  box-shadow:none!important;border-radius:8px!important
+}
+.button-dark:hover,.reference-primary:hover,.create-button:hover,.create-workflow-button:hover,.primary-button:hover,.assistant-apply-button:hover{background:var(--aivanta-steel-hover)!important}
+.nav-cta,.reference-secondary,.subtle-button,.secondary-button{background:#fff!important;color:var(--aivanta-ink)!important;border:1px solid var(--aivanta-line)!important;border-radius:8px!important;box-shadow:none!important}
+.status-pill,.environment-badge,.draft-pill,.assistant-status{background:#EEF2EE!important;color:var(--aivanta-success)!important;border:1px solid #DCE7DE!important;box-shadow:none!important}
+.pulse,.status-pill i,.environment-badge i{background:var(--aivanta-success)!important;box-shadow:none!important}
+/* Marketing site: restrained graphite, porcelain and steel */
+.reference-home{background:var(--aivanta-bg)!important;color:var(--aivanta-ink)!important}
+.reference-header,.reference-hero,.dark-section,.reference-workspace-section,.reference-footer{
+  background:var(--aivanta-ink)!important;color:#fff!important
+}
+.reference-header{border-bottom:1px solid rgba(255,255,255,.12)!important}
+.reference-hero{background:var(--aivanta-ink)!important;border-bottom:1px solid rgba(255,255,255,.12)!important}
+.reference-hero h1,.reference-workspace-copy h2,.dark-inner h2{color:#fff!important}
+.reference-hero h1 span,.reference-workspace-copy h2 span,.dark-inner h2 span{color:#D6C0A5!important}
+.reference-eyebrow,.eyebrow-light{color:#D6C0A5!important}
+.reference-hero-copy>p,.reference-trust-points,.dark-inner>div:first-child>p{color:#C6CDD1!important}
+.reference-primary{background:var(--aivanta-steel)!important;color:#fff!important;border-color:var(--aivanta-steel)!important}
+.reference-secondary{background:transparent!important;color:#fff!important;border-color:rgba(255,255,255,.28)!important}
+.reference-secondary:hover{background:rgba(255,255,255,.08)!important;border-color:#D6C0A5!important}
+.reference-hero-visual .floating-app-window{background:#29343D!important;border:1px solid #56636D!important;box-shadow:0 18px 45px rgba(0,0,0,.22)!important;transform:none!important}
+.reference-hero-visual .mini-workflow,.reference-hero-visual .mini-node{background:#202831!important;border-color:#46545E!important}
+.reference-hero-visual .mini-active{background:#344B5B!important;color:#fff!important}
+.reference-hero-visual .node-icon,.reference-chat-card,.reference-live-card{background:#344B5B!important;color:#fff!important;border-color:#56636D!important}
+.reference-chat-card a,.reference-live-card small{color:#D6C0A5!important}
+.chat-spark,.reference-live-card>span{background:#D6C0A5!important;color:#202831!important}
+.hero-orb,.preview-glow{display:none!important}
+.reference-features,.section,.trust-strip{background:var(--aivanta-bg)!important;color:var(--aivanta-ink)!important}
+.reference-section-heading h2,.section-heading h2{color:var(--aivanta-ink)!important}
+.reference-section-heading p,.section-heading>p{color:var(--aivanta-muted)!important}
+.reference-feature-icon,.capability-icon{background:#ECEBE5!important;color:var(--aivanta-steel)!important}
+.reference-feature-card p,.capability-card p{color:var(--aivanta-muted)!important}
+.reference-workspace-section{border-top:1px solid #46515A!important}
+.reference-dashboard-preview{border:1px solid #D8D9D4!important;box-shadow:0 12px 32px rgba(0,0,0,.18)!important}
+.preview-dashboard-sidebar{background:#202831!important}
+.preview-dashboard-sidebar>span.selected{background:#344B5B!important;color:#fff!important}
+.preview-welcome>a,.button-light{background:var(--aivanta-steel)!important;color:#fff!important}
+.preview-chart,.preview-success{background:#344B5B!important}
+.preview-chart svg path{stroke:#D6C0A5!important}
+.success-ring{background:conic-gradient(#B18A60 0deg,#748A98 280deg,#46515A 280deg)!important}
+.success-ring:before{background:#344B5B!important}
+.reference-footer{border-top:1px solid rgba(255,255,255,.14)!important;color:#C6CDD1!important}
+.cta-card{background:#29343D!important;border:1px solid #46515A!important}
+.cta-decoration{color:rgba(214,192,165,.06)!important}
+.cta-card .eyebrow{color:#D6C0A5!important}
+/* App workspace: graphite navigation, porcelain work area, white panels */
+.app-shell,.builder-shell{background:var(--aivanta-bg)!important;color:var(--aivanta-ink)!important}
+.sidebar,.builder-sidebar,.workflow-side-nav{
+  background:var(--aivanta-ink)!important;color:#E9ECEE!important;border-color:#3B4650!important
+}
+.dash-brand,.builder-brand,.workflow-side-brand{color:#fff!important}
+.sidebar-label,.workflow-side-label,.builder-sidebar-label{color:#AAB4BB!important}
+.workspace-switch,.builder-workspace{background:#29343D!important;border:1px solid #46515A!important;color:#fff!important;border-radius:9px!important}
+.workspace-copy small,.builder-workspace small{color:#B7C0C6!important}
+.workspace-avatar{background:#D6C0A5!important;color:#202831!important}
+.side-link,.workflow-side-link{color:#C6CDD1!important;border-radius:7px!important}
+.side-link:hover,.workflow-side-link:hover{background:#29343D!important;color:#fff!important}
+.side-link.selected,.workflow-side-link.active{background:#344B5B!important;color:#fff!important}
+.side-icon{color:#D6C0A5!important}
+.help-card,.builder-sidebar-bottom{background:#29343D!important;border:1px solid #46515A!important;color:#fff!important;border-radius:9px!important}
+.help-card p,.builder-sidebar-bottom p{color:#C6CDD1!important}
+.help-card a,.builder-sidebar-bottom a{color:#D6C0A5!important}
+.dashboard-main,.builder-main,.workflow-main{background:var(--aivanta-bg)!important;color:var(--aivanta-ink)!important}
+.dashboard-topbar,.builder-topbar,.workflow-topbar{background:rgba(255,255,255,.92)!important;border-bottom:1px solid var(--aivanta-line)!important;color:var(--aivanta-muted)!important}
+.breadcrumbs strong,.dashboard-content h1,.dashboard-content h2,.dashboard-content h3{color:var(--aivanta-ink)!important}
+.dashboard-content,.builder-content,.workflow-content{color:var(--aivanta-ink)!important}
+.dashboard-content p,.builder-content p{color:var(--aivanta-muted)}
+.metric-card,.stat-card,.panel,.workflow-card,.assistant-chat-panel,.assistant-side-panel,.auth-card,.capability-card,.marketing-sub-card{
+  background:var(--aivanta-surface)!important;border:1px solid var(--aivanta-line)!important;border-radius:10px!important;box-shadow:var(--aivanta-shadow)!important;color:var(--aivanta-ink)!important
+}
+.assistant-chat-header,.assistant-message-info,.assistant-tip,.generated-node,.workflow-node,.builder-panel{
+  background:#fff!important;border-color:var(--aivanta-line)!important;color:var(--aivanta-ink)!important
+}
+.assistant-message-info p,.assistant-side-panel small,.assistant-safety-note{color:var(--aivanta-muted)!important}
+.assistant-symbol,.assistant-avatar,.assistant-message-icon,.generated-node-icon{background:#ECEBE5!important;color:var(--aivanta-steel)!important}
+input,textarea,select{background:#fff!important;color:var(--aivanta-ink)!important;border:1px solid #D7D9D4!important;border-radius:8px!important}
+input::placeholder,textarea::placeholder{color:#89949C!important}
+table th{background:#ECEBE5!important;color:var(--aivanta-muted)!important}
+table td{border-color:var(--aivanta-line)!important}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
