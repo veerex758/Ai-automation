@@ -128,14 +128,14 @@ function connectionState(node: RegistryNode, workspace: ConnectionRecord[], goog
   const provider = providerForNode[node.id] ?? node.id;
   const record = workspace.find((item) => item.provider === provider);
   if (!record) return "not-connected";
-  return record.status === "connected" && record.last_test_status === "success" ? "connected" : "not-connected";
+  return record.status === "connected" && (record.last_test_status === "success" || record.last_test_status === "passed") ? "connected" : "not-connected";
 }
 
 function BrandMark({ node }: { node: RegistryNode }) {
   const asset = officialBrandAssets[node.id];
   if (asset) {
     return <span className="integration-brand-mark official-brand-mark">
-      <img src={`https://cdn.simpleicons.org/${asset.slug.trim()}`} alt={`${asset.label} logo`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.display = "none"; }} />
+      <img src={`https://cdn.simpleicons.org/${asset.slug.trim()}`} alt={`${asset.label} logo`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement?.setAttribute("data-logo-fallback", node.name.slice(0, 1).toUpperCase()); }} />
     </span>;
   }
   return <span className={"integration-brand-mark registry-native-mark native-" + node.id} aria-hidden="true">
