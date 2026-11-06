@@ -47,6 +47,7 @@ type OAuthStatePayload = {
   issuedAt: number;
   expiresAt: number;
   nonce: string;
+  codeChallenge: string;
 };
 
 function stateSecret(): string {
@@ -70,6 +71,7 @@ export function createOAuthState(args: { provider: string; workspaceId: string; 
     issuedAt: now,
     expiresAt: now + 10 * 60 * 1000,
     nonce: randomBytes(16).toString("base64url"),
+    codeChallenge: createHash("sha256").update(codeVerifier).digest("base64url"),
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return { state: encoded + "." + stateSignature(encoded).toString("base64url"), codeVerifier };
@@ -88,7 +90,7 @@ export function verifyOAuthState(state: string, expectedProvider: string): OAuth
   try { payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as OAuthStatePayload; } catch { throw new Error("OAUTH_STATE_INVALID"); }
   const now = Date.now();
   if (!payload || payload.provider !== expectedProvider || !payload.workspaceId || !payload.userId ||
-      !payload.nonce || !Number.isFinite(payload.issuedAt) ||
+      !payload.nonce || typeof payload.codeChallenge !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(payload.codeChallenge) || !Number.isFinite(payload.issuedAt) ||
       !Number.isFinite(payload.expiresAt) || payload.expiresAt <= now ||
       payload.issuedAt > now + 30_000 || payload.expiresAt - payload.issuedAt > 10 * 60 * 1000) {
     throw new Error("OAUTH_STATE_INVALID");
