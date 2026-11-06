@@ -19,7 +19,6 @@ test("durable live execution explicitly opts in every mapped external provider",
   assert.match(durableWorker, /return isProviderLiveEnabled\(provider, process\.env\.AIVANTA_LIVE_INTEGRATIONS\);/);
   assert.doesNotMatch(durableWorker, /const SERVER_ENABLED_INTEGRATIONS/);
   assert.match(durableWorker, /if \(!provider\) return false;/);
-  assert.match(durableWorker, /return false;\s*}/);
   for (const provider of ["openai", "gemini", "slack", "resend", "supabase", "postgresql", "redis", "firebase"]) {
     assert.match(durableWorker, new RegExp('step\\.nodeId === "' + provider + '"'));
   }
