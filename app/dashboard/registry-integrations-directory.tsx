@@ -297,7 +297,7 @@ export default function RegistryIntegrationsDirectory() {
       </section>
     </div>}
     <p className="registry-directory-note">
-      All 100 requested providers are listed. “Coming soon” means no native execution adapter is registered yet; it is not a working connection. The AI planner can select only registered operations; live execution remains subject to provider credentials, approval, and execution gates. A connected label requires a saved workspace connection and a successful provider test.
+      All 100 catalogue entries are listed. “Coming soon” means no native execution adapter is registered yet; it is not a working connection. The AI planner can select only registered operations. Saving credentials never enables live actions: the durable worker also requires a verified workspace connection, the server live-execution flag, and an explicit provider opt-in. Per-workspace live-approval persistence is not yet implemented. A connected label requires a saved workspace connection and a successful provider test.
     </p>
   </section>;
 }
