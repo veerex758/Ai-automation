@@ -4,8 +4,10 @@ import { webhooksNode } from "./webhooks";
 import { slackNode } from "./slack";
 import { emailNode } from "./email";
 import { manualNode } from "./manual";
+import { logicNode } from "./logic";
+import { dataNode } from "./data";
 
-export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode];
+export const nodes: NodeDefinition[] = [manualNode, webhooksNode, openaiNode, slackNode, emailNode, logicNode, dataNode];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
   return nodes.find((node) => node.id === nodeId);
