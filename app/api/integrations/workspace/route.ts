@@ -126,6 +126,17 @@ export async function POST(request: NextRequest) {
     }
 
     const db = serviceClient();
+    // Revoke readiness before replacing a saved secret so no worker can race
+    // the credential update using the previous successful verification.
+    const { data: existing, error: existingError } = await db.from("workspace_integrations")
+      .select("id").eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      const { error: invalidateError } = await db.from("workspace_integrations").update({
+        status: "needs_attention", last_tested_at: null, last_test_status: null,
+      }).eq("id", existing.id).eq("workspace_id", workspace.id);
+      if (invalidateError) throw invalidateError;
+    }
     const { data, error } = await db.rpc("save_workspace_integration_credentials", {
       p_workspace_id: workspace.id,
       p_provider: provider,
