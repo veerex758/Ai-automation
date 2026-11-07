@@ -6,6 +6,7 @@ import {
   PROVIDER_OAUTH_CONFIG,
   verifyOAuthState,
   selectInstagramBusinessAccount,
+  refreshProviderOAuthToken,
 } from "../lib/integrations/provider-oauth";
 
 test("provider OAuth state is signed, time-bound and bound to the provider", () => {
