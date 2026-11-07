@@ -37,7 +37,7 @@ on conflict(id) do nothing;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select lives_ok(
- $$select public.marketplace_finalize_payment('mock','evt-sql-1','a6666666-6666-4666-8666-666666666666','pay-sql-1',1000,'USD',repeat('c',64),now())$$,
+ $$$select public.marketplace_finalize_payment('mock','evt-sql-1','a6666666-6666-4666-8666-666666666666','pay-sql-1',1000,'USD',repeat('c',64),now())$$,
  'verified payment finalizes transactionally'
 );
 select is((select status from public.marketplace_purchases where id='a6666666-6666-4666-8666-666666666666'),'paid','purchase transitions to paid');
@@ -48,13 +48,13 @@ select is((select count(*)::integer from public.marketplace_financial_ledger whe
 
 -- Duplicate payment event must be recorded without duplicating ledger or entitlement.
 select lives_ok(
- $select public.marketplace_finalize_payment('mock','evt-sql-duplicate','a6666666-6666-4666-8666-666666666666','pay-sql-1',1000,'USD',repeat('d',64),now())$,
+ $$select public.marketplace_finalize_payment('mock','evt-sql-duplicate','a6666666-6666-4666-8666-666666666666','pay-sql-1',1000,'USD',repeat('d',64),now())$$,
  'duplicate provider payment event is safely acknowledged'
 );
 select is((select count(*)::integer from public.marketplace_payment_events where provider='mock' and provider_event_id='evt-sql-duplicate' and error_code='duplicate_payment'),1,'duplicate payment event is persisted in inbox');
 
 select lives_ok(
- $select public.marketplace_reverse_payment('mock','evt-sql-refund','a6666666-6666-4666-8666-666666666666','refund',1000,repeat('e',64),now())$,
+ $$select public.marketplace_reverse_payment('mock','evt-sql-refund','a6666666-6666-4666-8666-666666666666','refund',1000,repeat('e',64),now())$$,
  'full refund appends balanced reversals'
 );
 select is((select status from public.marketplace_purchases where id='a6666666-6666-4666-8666-666666666666'),'refunded','full refund updates purchase state');
