@@ -29,9 +29,12 @@ begin
  where workspace_id=p_workspace_id and product_id=p.id and status<>'removed' for update;
  if found then
   if existing.product_version_id<>v.id then
-   update public.marketplace_installations
-   set product_version_id=v.id,status='configuring',activated_at=null,workflow_id=null
-   where id=existing.id returning * into result;
+   return jsonb_build_object(
+    'installation_id',existing.id,'workspace_id',existing.workspace_id,
+    'product_id',existing.product_id,'product_version_id',existing.product_version_id,
+    'workflow_id',existing.workflow_id,'status',existing.status,
+    'update_available',true,'latest_version_id',v.id,'created_at',existing.installed_at
+   );
   else result:=existing;
   end if;
  else
