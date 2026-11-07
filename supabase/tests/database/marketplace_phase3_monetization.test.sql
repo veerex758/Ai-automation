@@ -1,5 +1,5 @@
 begin;
-select plan(35);
+select plan(36);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -15,6 +15,7 @@ select has_function('public','marketplace_set_creator_payout_profile','service-o
 select has_function('public','marketplace_my_subscriptions','buyer can read own subscription status through RPC');
 select has_function('public','marketplace_request_subscription_cancellation','buyer cancellation request RPC exists');
 select has_function('public','marketplace_my_creator_statements','creator statement read RPC exists');
+select has_function('public','marketplace_update_subscription_command','service-only cancellation command processor exists');
 select ok(not has_table_privilege('authenticated','public.marketplace_payout_requests','SELECT'),'payout rows are private');
 select ok(not has_table_privilege('authenticated','public.marketplace_subscription_events','SELECT'),'provider events are private');
 select ok(not has_function_privilege('anon','public.marketplace_request_payout(bigint,text)','EXECUTE'),'anon cannot request payouts');
