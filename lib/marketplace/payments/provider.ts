@@ -77,3 +77,29 @@ export function assertMarketplacePayment(
     throw new Error("invalid_payment_amount");
   }
 }
+
+export type ParsedMarketplaceSubscription = {
+  eventType: "subscription.active" | "subscription.renewed" | "subscription.past_due" |
+    "subscription.cancelled" | "subscription.expired" | "invoice.paid" | "invoice.payment_failed";
+  buyerUserId: string;
+  productId: string;
+  productVersionId: string;
+  providerSubscriptionId: string;
+  periodStart: string;
+  periodEnd: string;
+};
+
+/** Provider-specific mapping into the durable subscription lifecycle RPC. */
+export function assertMarketplaceSubscription(
+  subscription: ParsedMarketplaceSubscription | null,
+): asserts subscription is ParsedMarketplaceSubscription {
+  if (!subscription || !subscription.buyerUserId || !subscription.productId ||
+      !subscription.productVersionId || !subscription.providerSubscriptionId) {
+    throw new Error("invalid_subscription_payload");
+  }
+  if (!Number.isFinite(Date.parse(subscription.periodStart)) ||
+      !Number.isFinite(Date.parse(subscription.periodEnd)) ||
+      Date.parse(subscription.periodEnd) <= Date.parse(subscription.periodStart)) {
+    throw new Error("invalid_subscription_period");
+  }
+}
