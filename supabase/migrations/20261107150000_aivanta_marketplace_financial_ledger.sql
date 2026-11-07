@@ -92,7 +92,7 @@ begin
  if p_amount_minor<=0 or p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'invalid_reversal'; end if;
  select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
  if not found then raise exception 'purchase_not_found'; end if;
- if purchase.provider<>p_provider or purchase.status not in ('paid','refunded','disputed') then raise exception 'purchase_not_reversible'; end if;
+ if purchase.provider<>p_provider or purchase.provider_payment_id is null or purchase.status not in ('paid','refunded','disputed') then raise exception 'purchase_not_reversible'; end if;
  if exists(select 1 from public.marketplace_payment_events where provider=p_provider and provider_event_id=p_event_id) then return jsonb_build_object('status','duplicate_event','purchase_id',purchase.id); end if;
  select creator_id into creator from public.marketplace_products where id=purchase.product_id;
  select coalesce(sum(-amount_minor),0) into prior_refund from public.marketplace_financial_ledger where purchase_id=purchase.id and entry_type='refund';
