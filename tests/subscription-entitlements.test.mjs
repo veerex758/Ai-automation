@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const migration = await readFile(new URL("../supabase/migrations/20261107130000_aivanta_subscription_entitlements.sql", import.meta.url), "utf8");
+const hardeningMigration = await readFile(new URL("../supabase/migrations/20261107131500_aivanta_subscription_entitlement_hardening.sql", import.meta.url), "utf8");
 const workflowRoute = await readFile(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
 const agentRunRoute = await readFile(new URL("../app/api/agents/[agentId]/runs/route.ts", import.meta.url), "utf8");
 const aiRoute = await readFile(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
@@ -29,6 +30,12 @@ test("workflow creation, agent runs, and AI draft generation call the usage RPC"
   assert.match(workflowRoute, /consume_workspace_usage[\s\S]*workflow_created[\s\S]*usage\?\.allowed/);
   assert.match(agentRunRoute, /consume_workspace_usage[\s\S]*agent_run[\s\S]*usage\?\.allowed/);
   assert.match(aiRoute, /consume_workspace_usage[\s\S]*ai_generation[\s\S]*usage\?\.allowed/);
+});
+
+test("enterprise plan custom limits render without numeric formatting errors", async () => {
+  const billingPage = await readFile(new URL("../app/dashboard/billing/page.tsx", import.meta.url), "utf8");
+  assert.match(billingPage, /workflow_execution==null\?"Custom executions"/);
+  assert.match(billingPage, /ai_credit==null\?"Custom AI credits"/);
 });
 
 test("billing endpoint reports blueprint prices without enabling checkout", () => {
