@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(29);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -9,7 +9,7 @@ select has_function('public','marketplace_creator_earnings_summary','creator ear
 select has_function('public','marketplace_apply_subscription_event','subscription event dispatcher exists');
 select has_function('public','marketplace_request_payout','payout request RPC exists');
 select has_function('public','marketplace_review_payout_request','finance review RPC exists');
-select has_function('public','marketplace_generate_creator_statement','statement snapshot RPC exists');
+select has_function('public','marketplace_generate_creator_statement','statement snapshot RPC exists');\nselect has_table('public','marketplace_creator_payout_profiles','payout onboarding and compliance profile exists');\nselect has_function('public','marketplace_set_creator_payout_profile','service-only payout onboarding RPC exists');
 select ok(not has_table_privilege('authenticated','public.marketplace_payout_requests','SELECT'),'payout rows are private');
 select ok(not has_table_privilege('authenticated','public.marketplace_subscription_events','SELECT'),'provider events are private');
 select ok(not has_function_privilege('anon','public.marketplace_request_payout(bigint,text)','EXECUTE'),'anon cannot request payouts');
@@ -29,16 +29,16 @@ values('f5555555-5555-4555-8555-555555555555','e4444444-4444-4444-8444-444444444
 on conflict(id) do nothing;
 update public.marketplace_products set current_version_id='f5555555-5555-4555-8555-555555555555' where id='e4444444-4444-4444-8444-444444444444';
 insert into public.marketplace_financial_ledger(creator_id,entry_type,amount_minor,currency,memo)
-values('c2222222-2222-4222-8222-222222222222','creator_earning',1000,'USD','Phase 3 test balance');
+values('c2222222-2222-4222-8222-222222222222','creator_earning',3000,'USD','Phase 3 test balance');\ninsert into public.marketplace_creator_payout_profiles(creator_id,provider,provider_account_ref,country_code,onboarding_status,tax_status,payouts_enabled,minimum_payout_minor)\nvalues('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified','complete',true,1000);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','a2222222-2222-4222-8222-222222222222',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select lives_ok($$select public.marketplace_request_payout(600,'phase3-key-0001')$$,'creator can reserve available payout balance');
-select is((select count(*)::integer from public.marketplace_payout_requests where creator_id='c2222222-2222-4222-8222-222222222222' and amount_minor=600),1,'payout request is persisted once');
+select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'creator can reserve available payout balance');
+select is((select count(*)::integer from public.marketplace_payout_requests where creator_id='c2222222-2222-4222-8222-222222222222' and amount_minor=1000),1,'payout request is persisted once');
 select is(public.marketplace_request_payout(600,'phase3-key-0001'),(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'same idempotency key and amount returns original payout');
-select throws_ok($$select public.marketplace_request_payout(500,'phase3-key-0001')$$,'P0001','payout_idempotency_conflict','idempotency key cannot change payout amount');
-select throws_ok($$select public.marketplace_request_payout(500,'phase3-key-0002')$$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
+select throws_ok($$select public.marketplace_request_payout(900,'phase3-key-0001')$$,'P0001','payout_idempotency_conflict','idempotency key cannot change payout amount');
+select throws_ok($$select public.marketplace_request_payout(2500,'phase3-key-0002')$$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
 
 reset role;
 set local role service_role;
