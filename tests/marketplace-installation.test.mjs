@@ -31,3 +31,11 @@ test("reinstall does not silently replace a customer's pinned version",()=>{
  assert.match(migration,/existing\.product_version_id<>v\.id/);
  assert.doesNotMatch(migration,/set product_version_id=v\.id/);
 });
+
+const privileges=readFileSync(new URL("../supabase/migrations/20261107133100_aivanta_marketplace_installation_column_privileges.sql",import.meta.url),"utf8");
+test("workspace members can edit configuration but cannot alter install lifecycle or workflow linkage",()=>{
+ assert.match(privileges,/revoke update on public\.marketplace_installations from authenticated/);
+ assert.match(privileges,/grant update\(configuration\) on public\.marketplace_installations to authenticated/);
+ assert.match(privileges,/create policy marketplace_installations_workspace_update/);
+ assert.match(privileges,/private\.is_workspace_member\(workspace_id\)/);
+});
