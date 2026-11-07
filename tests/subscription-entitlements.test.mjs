@@ -53,3 +53,25 @@ test("billing endpoint reports blueprint prices without enabling checkout", () =
   assert.match(billingRoute, /monthly:79,annual:790/);
   assert.match(billingRoute, /checkout_enabled:false/);
 });
+
+const aiCreditWalletMigration = await readFile(new URL("../supabase/migrations/20261107140000_aivanta_ai_credit_wallet.sql", import.meta.url), "utf8");
+
+test("AI credit top-ups use a separate workspace wallet and immutable ledger", () => {
+  assert.match(aiCreditWalletMigration, /create table if not exists public\\.workspace_ai_credit_wallets/);
+  assert.match(aiCreditWalletMigration, /create table if not exists public\\.workspace_ai_credit_transactions/);
+  assert.match(aiCreditWalletMigration, /alter table public\\.workspace_ai_credit_wallets enable row level security/);
+  assert.match(aiCreditWalletMigration, /alter table public\\.workspace_ai_credit_transactions enable row level security/);
+  assert.match(aiCreditWalletMigration, /workspace_ai_credit_transactions_immutable/);
+  assert.match(aiCreditWalletMigration, /reject_ai_credit_ledger_mutation/);
+});
+
+test("AI credit top-ups are provider-neutral, service-role-only, and idempotent", () => {
+  for (const provider of ["paddle", "stripe", "paystack", "flutterwave"]) {
+    assert.ok(aiCreditWalletMigration.includes("'" + provider + "'"), "missing provider " + provider);
+  }
+  assert.match(aiCreditWalletMigration, /auth\\.role\\(\\) <> 'service_role'/);
+  assert.match(aiCreditWalletMigration, /grant execute on function public\\.grant_workspace_ai_credit_topup[\\s\\S]*to service_role/i);
+  assert.match(aiCreditWalletMigration, /on conflict \\(workspace_id, idempotency_key\\) do nothing/);
+  assert.match(aiCreditWalletMigration, /payment reference was already recorded with different top-up details/);
+  assert.match(aiCreditWalletMigration, /balance = balance \+ p_credits/);
+});
