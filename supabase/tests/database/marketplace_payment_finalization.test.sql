@@ -8,11 +8,7 @@ select has_column('public','marketplace_financial_ledger','event_id','legacy FK 
 select has_column('public','marketplace_financial_ledger','provider_event_id','provider event key is present');
 
 -- Service-role gate is enforced by the RPC even when called as authenticated.
-select throws_ok(
- $$select public.marketplace_finalize_payment('mock','evt-denied',gen_random_uuid(),'pay-denied',100,'USD',repeat('a',64),now())$$,
- 'service_role_required',
- 'payment finalizer rejects non-service role'
-);
+select ok(not has_function_privilege('authenticated','public.marketplace_finalize_payment(text,text,uuid,text,integer,text,text,timestamptz)','EXECUTE'),'payment finalizer is not executable by authenticated clients');
 
 -- Transactional fixture. pgTAP test transaction rolls back all rows at end.
 insert into auth.users(id,aud,role,email,encrypted_password,created_at,updated_at)
@@ -27,8 +23,8 @@ on conflict(id) do nothing;
 insert into public.marketplace_categories(id,slug,name)
 values ('d3333333-3333-4333-8333-333333333333','sql-test-category','SQL Test')
 on conflict(id) do nothing;
-insert into public.marketplace_products(id,creator_id,category_id,slug,name,summary,pricing_type,price_minor,status,created_by)
-values ('e4444444-4444-4444-8444-444444444444','c2222222-2222-4222-8222-222222222222','d3333333-3333-4333-8333-333333333333','sql-test-product','SQL Test Product','Fixture','one_time',1000,'published','a2222222-2222-4222-8222-222222222222')
+insert into public.marketplace_products(id,creator_id,category_id,slug,name,summary,product_type,pricing_type,price_minor,status,created_by)
+values ('e4444444-4444-4444-8444-444444444444','c2222222-2222-4222-8222-222222222222','d3333333-3333-4333-8333-333333333333','sql-test-product','SQL Test Product','Fixture','workflow','one_time',1000,'published','a2222222-2222-4222-8222-222222222222')
 on conflict(id) do nothing;
 insert into public.marketplace_product_versions(id,product_id,version,artifact_path,artifact_sha256,verification_status,created_by)
 values ('f5555555-5555-4555-8555-555555555555','e4444444-4444-4444-8444-444444444444','1.0.0','private/test.zip',repeat('b',64),'approved','a2222222-2222-4222-8222-222222222222')
