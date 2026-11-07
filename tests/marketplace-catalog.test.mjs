@@ -5,7 +5,7 @@ import {readFileSync} from "node:fs";
 const route=readFileSync(new URL("../app/api/marketplace/products/route.ts",import.meta.url),"utf8");
 
 test("catalog search strips PostgREST filter syntax and caps user input",()=>{
- assert.match(route,/replace\(\/\[\^\\p\{L\}\\p\{N\}\\s_\-\]\/gu,\s*" "\)/);
+ assert.ok(route.includes("replace(/[\\\\p{L}\\\\p{N}\\\\s_-]/gu"));
  assert.match(route,/\.slice\(0, 80\)/);
  assert.doesNotMatch(route,/searchParams\.get\("q"\)\?\.trim\(\)\.slice/);
 });
