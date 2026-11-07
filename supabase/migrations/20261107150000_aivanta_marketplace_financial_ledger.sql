@@ -78,3 +78,6 @@ begin
 end; $$;
 revoke all on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text) from public,anon,authenticated;
 grant execute on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text) to service_role;
+
+-- Event inbox writes are service-only; processing records are retained for audit.
+revoke update,delete on public.marketplace_payment_events from service_role;
