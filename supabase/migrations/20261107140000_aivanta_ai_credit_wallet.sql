@@ -41,30 +41,11 @@ create policy workspace_ai_credit_transactions_member_read
   on public.workspace_ai_credit_transactions for select to authenticated
   using (private.is_workspace_member(workspace_id));
 
-revoke all on public.workspace_ai_credit_wallets from anon, authenticated;
-revoke all on public.workspace_ai_credit_transactions from anon, authenticated;
+revoke all on public.workspace_ai_credit_wallets from anon, authenticated, service_role;
+revoke all on public.workspace_ai_credit_transactions from anon, authenticated, service_role;
 grant select on public.workspace_ai_credit_wallets to authenticated;
 grant select on public.workspace_ai_credit_transactions to authenticated;
-grant all on public.workspace_ai_credit_wallets to service_role;
-grant all on public.workspace_ai_credit_transactions to service_role;
 
-create or replace function private.reject_ai_credit_ledger_mutation()
-returns trigger
-language plpgsql
-security definer
-set search_path=public,private,pg_temp
-as $$
-begin
-  raise exception 'AI credit transactions are immutable; record a compensating entry instead'
-    using errcode='55000';
-end
-$$;
-
-revoke all on function private.reject_ai_credit_ledger_mutation() from public, anon, authenticated;
-drop trigger if exists workspace_ai_credit_transactions_immutable on public.workspace_ai_credit_transactions;
-create trigger workspace_ai_credit_transactions_immutable
-  before update or delete on public.workspace_ai_credit_transactions
-  for each row execute function private.reject_ai_credit_ledger_mutation();
 
 create or replace function public.grant_workspace_ai_credit_topup(
   p_workspace_id uuid,
@@ -88,14 +69,14 @@ declare
 begin
   -- This RPC is intentionally service-role-only. Its caller must verify the
   -- payment provider's webhook signature and successful-payment event first.
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'service role required' using errcode='42501';
   end if;
 
   if p_workspace_id is null
      or p_credits is null or p_credits < 1 or p_credits > 10000000
-     or p_provider not in ('paddle','stripe','paystack','flutterwave')
-     or p_provider_payment_id is null or length(p_provider_payment_id) not between 1 and 255
+     or p_provider is null or p_provider not in ('paddle','stripe','paystack','flutterwave')
+     or p_provider_payment_id is null or length(btrim(p_provider_payment_id)) not between 1 and 255
      or p_currency is null or p_currency !~ '^[A-Z]{3}$'
      or p_amount_minor is null or p_amount_minor < 1
      or jsonb_typeof(v_metadata) <> 'object' then
