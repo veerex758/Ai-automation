@@ -13,11 +13,12 @@ export async function POST(request:NextRequest,ctx:Ctx){
   const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>4096)return NextResponse.json({error:"Request too large."},{status:413,headers});
   let body:Record<string,unknown>;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers});}
   const action=body.action;if(!["approve","reject","request_changes","publish"].includes(String(action)))return NextResponse.json({error:"Choose approve, reject, request_changes, or publish."},{status:400,headers});
-  const {data:review,error}=await auth.admin.from("marketplace_verification_reviews").select("id,product_id,version_id,marketplace_product_versions!inner(id,version,artifact_path,artifact_sha256,verification_status,manifest)").eq("id",reviewId).maybeSingle();
+  const {data:review,error}=await auth.admin.from("marketplace_verification_reviews").select("id,product_id,version_id,marketplace_product_versions!inner(id,version,artifact_path,artifact_sha256,verification_status,manifest,created_by)").eq("id",reviewId).maybeSingle();
   if(error||!review)return NextResponse.json({error:"Review not found."},{status:404,headers});
   const version=Array.isArray(review.marketplace_product_versions)?review.marketplace_product_versions[0]:review.marketplace_product_versions;
   if(!version)return NextResponse.json({error:"Submitted version is unavailable."},{status:409,headers});
-  if(typeof version.artifact_path!=="string"||version.artifact_path.split("/").length!==3||version.artifact_path.split("/").some((part:string)=>!part||part==="."||part===".."||part.includes("\\")))return NextResponse.json({error:"Submitted artifact path is unavailable."},{status:409,headers});
+  const artifactPathParts=typeof version.artifact_path==="string"?version.artifact_path.split("/"):[];
+  if(artifactPathParts.length!==3||artifactPathParts[0]!==version.created_by||artifactPathParts[1]!==review.product_id||artifactPathParts.some((part:string)=>!part||part==="."||part===".."||part.includes("\\")))return NextResponse.json({error:"Submitted artifact path is unavailable."},{status:409,headers});
   const {data:artifactFile,error:artifactError}=await auth.admin.storage.from("marketplace-artifacts").download(version.artifact_path);
   if(artifactError||!artifactFile)return NextResponse.json({error:"The private submitted artifact could not be retrieved. Review is blocked until the artifact is restored."},{status:409,headers});
   if(artifactFile.size>524288)return NextResponse.json({error:"The submitted artifact exceeds the 512 KiB verification limit."},{status:413,headers});
