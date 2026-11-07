@@ -109,13 +109,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         .eq("created_by", user.id).eq("mode", "live").gte("created_at", hourAgo);
       if (error) throw error;
       if ((count ?? 0) >= 10) return NextResponse.json({ error: "Live run limit reached." }, { status: 429 });
-      const { data: executionUsage, error: executionUsageError } = await supabase.rpc("consume_workspace_usage", {
-        p_workspace_id: workflow.workspace_id, p_metric: "workflow_execution", p_quantity: 1,
-        p_metadata: { workflow_id: workflow.id, idempotency_key: idempotencyKey },
-      });
-      if (executionUsageError) return NextResponse.json({ error: "Execution billing meter unavailable. Apply the subscription migration." }, { status: 503 });
-      if (!executionUsage?.allowed) return NextResponse.json({ error: "Monthly workflow execution allowance reached. Upgrade your plan.", entitlement: executionUsage }, { status: 402 });
     }
+
+    // The blueprint defines one workflow run as one execution, regardless of node count or run mode.
+    const { data: executionUsage, error: executionUsageError } = await supabase.rpc("consume_workspace_usage", {
+      p_workspace_id: workflow.workspace_id,
+      p_metric: "workflow_execution",
+      p_quantity: 1,
+      p_metadata: dryRun
+        ? { workflow_id: workflow.id, mode: "dry_run" }
+        : { workflow_id: workflow.id, mode: "live", idempotency_key: idempotencyKey },
+    });
+    if (executionUsageError) return NextResponse.json({ error: "Execution billing meter unavailable. Apply the subscription migration." }, { status: 503 });
+    if (!executionUsage?.allowed) return NextResponse.json({ error: "Monthly workflow execution allowance reached. Upgrade your plan.", entitlement: executionUsage }, { status: 402 });
 
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
@@ -135,6 +141,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       completed_at: initialCompletedAt, duration_ms: initialDuration,
       error_message: dryRunExecution?.status === "failed" ? "One or more registered workflow steps failed." : null,
     }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
+    if (insertError?.code === "23505" && !dryRun) {
+      const { data: duplicateRun } = await supabase.from("workflow_runs")
+        .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message")
+        .eq("idempotency_key", idempotencyKey).eq("created_by", user.id).eq("workflow_id", workflow.id).maybeSingle();
+      if (duplicateRun) return NextResponse.json({ run: duplicateRun, duplicate: true }, { status: 200 });
+    }
     if (insertError) throw insertError;
 
     const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: false });
