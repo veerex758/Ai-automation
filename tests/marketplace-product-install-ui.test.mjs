@@ -6,13 +6,14 @@ const page=readFileSync(new URL("../app/marketplace/[slug]/page.tsx",import.meta
 const button=readFileSync(new URL("../app/marketplace/[slug]/install-button.tsx",import.meta.url),"utf8");
 
 test("published product detail exposes install only to authenticated users",()=>{
- assert.match(page,/user\?<MarketplaceInstallButton productId=\{product\.id\}\s*:\s*<Link href="\/login">/);
- assert.match(page,/user\?<MarketplaceInstallButton productId=\{product\.id\}\s*:\s*<Link href="\/login">/);
+ assert.ok(page.includes("sb.auth.getUser()"));
+ assert.ok(page.includes("user?<MarketplaceInstallButton productId={product.id}/>"));
+ assert.ok(page.includes('<Link href="/login">Sign in to install'));
 });
 
 test("marketplace install UI calls authenticated server endpoint and explains draft-only behavior",()=>{
- assert.match(button,/\/api\/marketplace\/products\/\$\{productId\}\/install/);
- assert.match(button,/method:"POST"/);
- assert.match(button,/No automation runs during installation/);
- assert.match(button,/Open draft workflow/);
+ assert.ok(button.includes('/api/marketplace/products/\${productId}/install'));
+ assert.ok(button.includes('method:"POST"'));
+ assert.ok(button.includes("No automation runs during installation"));
+ assert.ok(button.includes("Open draft workflow"));
 });
