@@ -57,7 +57,7 @@ export async function POST(request: NextRequest, context: Context) {
       const model = /^[a-zA-Z0-9._-]{1,120}$/.test(agent.model_name) ? agent.model_name : "gemini-2.5-flash";
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: input }] }], generationConfig: { maxOutputTokens: 1200, temperature: 0.3 } }, signal: timeout,
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: input }] }], generationConfig: { maxOutputTokens: 1200, temperature: 0.3 } }), signal: timeout,
       });
       if (!response.ok) throw new Error(response.status === 429 ? "AI_RATE_LIMITED" : response.status === 401 || response.status === 403 ? "AI_PROVIDER_AUTH_ERROR" : "AI_PROVIDER_ERROR");
       const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
