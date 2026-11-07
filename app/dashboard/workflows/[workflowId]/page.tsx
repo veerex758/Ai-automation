@@ -29,7 +29,7 @@ export default function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
   const workflowId = params.workflowId;
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
-  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalog[]>([]);\n  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalog[]>([]);
+  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalog[]>([]);
   const [definition, setDefinition] = useState<Definition>(starterDefinition);
   const [savedFingerprint, setSavedFingerprint] = useState(JSON.stringify(starterDefinition));
   const [selectedId, setSelectedId] = useState("trigger-1");
