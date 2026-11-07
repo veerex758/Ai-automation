@@ -7,16 +7,15 @@ create policy marketplace_products_public_read
   status='published'
   and current_version_id is not null
   and exists (
-   select 1 from public.marketplace_product_versions v
-   where v.id=current_version_id
-     and v.product_id=id
-     and v.verification_status='approved'
+   select 1 from public.marketplace_public_product_versions v
+   where v.id=marketplace_products.current_version_id
+     and v.product_id=marketplace_products.id
   )
   and (
-   creator_id is null
+   marketplace_products.creator_id is null
    or exists (
     select 1 from public.marketplace_creators c
-    where c.id=creator_id and c.status='verified'
+    where c.id=marketplace_products.creator_id and c.status='verified'
    )
   )
  );
