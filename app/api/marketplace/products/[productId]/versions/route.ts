@@ -11,6 +11,7 @@ export async function POST(request:NextRequest,ctx:Ctx){
  const {data:product,error:productError}=await supabase.from("marketplace_products").select("id,status,created_by").eq("id",productId).eq("created_by",user.id).maybeSingle();if(productError||!product||!["draft","changes_requested"].includes(product.status))return NextResponse.json({error:"Product not found or not editable."},{status:404,headers});
  const {data,error}=await supabase.from("marketplace_product_versions").insert({product_id:productId,version,artifact_path:`manifest:${check.artifactSha256}`,artifact_sha256:check.artifactSha256,manifest,created_by:user.id,verification_status:"pending",changelog:typeof b.changelog==="string"?b.changelog.slice(0,4000):""}).select("id,version,verification_status,artifact_sha256").single();
  if(error){if(error.code==="23505")return NextResponse.json({error:"That product version already exists."},{status:409,headers});throw error;}
+ const {error:linkError}=await supabase.from("marketplace_products").update({current_version_id:data.id}).eq("id",productId).eq("created_by",user.id);if(linkError)throw linkError;
  return NextResponse.json({version:data,preflight:check.checks,message:"Draft version saved. Submit it for Aivanta verification."},{status:201,headers});
  }catch(e){console.error("Marketplace version create failed",e);return NextResponse.json({error:"Could not save product version."},{status:500,headers});}
 }
