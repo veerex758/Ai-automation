@@ -45,7 +45,7 @@ test("finalizer records supplied event digest and timestamp", () => {
 
 test("refund and chargeback append reversal entries, cap cumulative reversals and revoke entitlement", () => {
   assert.match(migration, /create or replace function public\.marketplace_reverse_payment/i);
-  assert.match(migration, /p_kind not in \('refund','chargeback'\)/i);
+  assert.match(migration, /purchase\\.provider_payment_id is null/);\n  assert.match(migration, /p_kind not in \('refund','chargeback'\)/i);
   assert.match(migration, /prior_refund\+p_amount_minor>purchase\.amount_minor-prior_chargeback/i);
   assert.match(migration, /prior_chargeback\+p_amount_minor>purchase\.amount_minor-prior_refund/i);
   assert.match(migration, /prior_refund\+prior_chargeback\+p_amount_minor>=purchase\.amount_minor/i);
