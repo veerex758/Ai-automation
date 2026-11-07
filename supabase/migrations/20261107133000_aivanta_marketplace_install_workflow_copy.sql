@@ -62,6 +62,10 @@ begin
  end if;
  select * into i from public.marketplace_installations where id=p_installation_id for update;
  if not found or i.installed_by<>p_actor_id then raise exception 'installation_not_found_or_not_owned'; end if;
+ if not exists(select 1 from public.workspaces w where w.id=i.workspace_id and w.owner_id=p_actor_id)
+  and not exists(select 1 from public.workspace_members wm where wm.workspace_id=i.workspace_id and wm.user_id=p_actor_id) then
+  raise exception 'workspace_access_denied';
+ end if;
  select * into p from public.marketplace_products where id=i.product_id for share;
  if not found or p.status<>'published' or p.current_version_id<>i.product_version_id then
   raise exception 'product_version_no_longer_installable';
@@ -69,6 +73,13 @@ begin
  if p.creator_id is not null then
   select status into creator_status from public.marketplace_creators where id=p.creator_id for share;
   if creator_status is distinct from 'verified' then raise exception 'creator_not_verified'; end if;
+ end if;
+ if p.pricing_type='free' then
+  if not exists(select 1 from public.marketplace_entitlements e where e.user_id=p_actor_id and e.product_id=p.id and e.status='active' and e.entitlement_type in ('free','admin_grant')) then
+   raise exception 'active_entitlement_required';
+  end if;
+ elsif not exists(select 1 from public.marketplace_entitlements e where e.user_id=p_actor_id and e.product_id=p.id and e.status='active' and e.entitlement_type in ('purchase','subscription','admin_grant') and (e.ends_at is null or e.ends_at>now())) then
+  raise exception 'active_entitlement_required';
  end if;
  select * into v from public.marketplace_product_versions
  where id=i.product_version_id and product_id=i.product_id and verification_status='approved' for share;
