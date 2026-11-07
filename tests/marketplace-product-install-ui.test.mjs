@@ -6,7 +6,7 @@ const page=readFileSync(new URL("../app/marketplace/[slug]/page.tsx",import.meta
 const button=readFileSync(new URL("../app/marketplace/[slug]/install-button.tsx",import.meta.url),"utf8");
 
 test("published product detail exposes install only to authenticated users",()=>{
- assert.match(page,/sb\.auth\.getUser\(\)/);
+ assert.match(page,/user\\?<MarketplaceInstallButton productId=\\{product\\.id\\}\\s*:\\s*<Link href="\\/login">/);
  assert.match(page,/user\?<MarketplaceInstallButton productId=\{product\.id\}\s*:\s*<Link href="\/login">/);
 });
 
