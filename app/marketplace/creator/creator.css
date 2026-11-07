@@ -16,3 +16,4 @@
 .creator-subscription-list p{color:#98a8bd;font-size:12px}
 .creator-subscription-list button{margin-top:10px}
 @media(max-width:680px){.creator-finance-grid{grid-template-columns:1fr}.creator-finance-grid h2{font-size:20px}.creator-card{padding:22px}}
+.creator-dashboard-link{margin-left:auto;margin-right:20px;color:#9ebbd2;text-decoration:none;font-size:12px}.creator-dashboard-link:hover{color:#dce9f3}@media(max-width:480px){.creator-dashboard-link{font-size:10px;margin-right:8px}}
