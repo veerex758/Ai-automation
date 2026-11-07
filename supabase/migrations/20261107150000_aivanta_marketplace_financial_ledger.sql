@@ -47,12 +47,13 @@ revoke update,delete on public.marketplace_financial_ledger from service_role;
 -- currency, and idempotency before granting an entitlement.
 create or replace function public.marketplace_finalize_payment(
  p_provider text,p_event_id text,p_purchase_id uuid,p_provider_payment_id text,
- p_amount_minor integer,p_currency text
+ p_amount_minor integer,p_currency text,p_payload_sha256 text,p_occurred_at timestamptz
 ) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare purchase public.marketplace_purchases%rowtype; creator uuid; commission bigint; earning bigint;
 begin
  if p_provider is null or p_event_id is null or p_provider_payment_id is null then raise exception 'invalid_payment_event'; end if;
- if p_amount_minor<=0 or p_currency<>'USD' then raise exception 'invalid_payment_amount'; end if;\n if p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}
+ if p_amount_minor<=0 or p_currency<>'USD' then raise exception 'invalid_payment_amount'; end if;
+ if p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'invalid_event_hash'; end if;
  select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
  if not found then raise exception 'purchase_not_found'; end if;
  if purchase.provider<>p_provider or purchase.amount_minor<>p_amount_minor or purchase.currency<>p_currency then raise exception 'payment_mismatch'; end if;
@@ -65,7 +66,8 @@ begin
  select mp.creator_id into creator from public.marketplace_products mp join public.marketplace_product_versions mv on mv.id=mp.current_version_id and mv.product_id=mp.id and mv.verification_status='approved' where mp.id=purchase.product_id and mp.status='published' and mp.current_version_id=purchase.product_version_id;
  if not found then raise exception 'product_version_not_current_or_published'; end if;
  commission:=floor(p_amount_minor*0.20); earning:=p_amount_minor-commission;
- update public.marketplace_purchases set status='paid',provider_payment_id=p_provider_payment_id,paid_at=now() where id=purchase.id;\n insert into public.marketplace_payment_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,processing_status,processed_at) values(p_provider,p_event_id,'payment.succeeded',p_payload_sha256,coalesce(p_occurred_at,now()),'processed',now());
+ update public.marketplace_purchases set status='paid',provider_payment_id=p_provider_payment_id,paid_at=now() where id=purchase.id;
+ insert into public.marketplace_payment_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,processing_status,processed_at) values(p_provider,p_event_id,'payment.succeeded',p_payload_sha256,coalesce(p_occurred_at,now()),'processed',now());
  insert into public.marketplace_entitlements(user_id,product_id,purchase_id,entitlement_type,status)
  values(purchase.buyer_user_id,purchase.product_id,purchase.id,'purchase','active')
  on conflict(user_id,product_id,purchase_id) do nothing;
@@ -77,7 +79,7 @@ begin
  return jsonb_build_object('status','paid','purchase_id',purchase.id,'commission_minor',commission,'creator_earning_minor',earning);
 end; $$;
 revoke all on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text,text,timestamptz) from public,anon,authenticated;
-grant execute on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text) to service_role;
+grant execute on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text,text,timestamptz) to service_role;
 
 -- Event inbox writes are service-only; processing records are retained for audit.
 revoke update,delete on public.marketplace_payment_events from service_role;
