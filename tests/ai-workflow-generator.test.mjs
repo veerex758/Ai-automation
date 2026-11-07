@@ -48,3 +48,26 @@ test("rejects invalid model names and non-HTTPS provider endpoints in production
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_MODEL: "invalid model!" } }), /AI_CONFIGURATION_ERROR/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_BASE_URL: "http://ai.example.test", NODE_ENV: "production" } }), /AI_CONFIGURATION_ERROR/);
 });
+
+test("validates explicit directed edges and true/false condition branches", async () => {
+  const branched = {
+    version: 1,
+    nodes: [
+      { id: "start", type: "trigger", title: "Start", description: "Start", settings: { event: "manual" } },
+      { id: "check", type: "condition", title: "Check lead", description: "Check lead score", settings: { field: "score", operator: "greater_than", value: "10" } },
+      { id: "yes", type: "action", title: "Qualified", description: "Create task", settings: { provider: "internal", operation: "create_task", message: "Qualified lead" } },
+      { id: "no", type: "action", title: "Unqualified", description: "Create task", settings: { provider: "internal", operation: "create_task", message: "Review lead" } }
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "check", label: "next" },
+      { id: "e2", source: "check", target: "yes", label: "true" },
+      { id: "e3", source: "check", target: "no", label: "false" }
+    ]
+  };
+  const result = await generateWorkflow({ prompt: "Qualify leads", nodeCatalog: [], env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(branched) } }] }) });
+  assert.equal(result.definition.edges.length, 3);
+  assert.equal(result.definition.edges[1].label, "true");
+  assert.equal(result.definition.edges[2].label, "false");
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
