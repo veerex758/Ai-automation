@@ -6,6 +6,7 @@ import {
   PROVIDER_OAUTH_CONFIG,
   verifyOAuthState,
   selectInstagramBusinessAccount,
+  refreshProviderOAuthToken,
 } from "../lib/integrations/provider-oauth";
 
 test("provider OAuth state is signed, time-bound and bound to the provider", () => {
@@ -36,11 +37,9 @@ test("configured OAuth providers build provider-specific PKCE authorization requ
   process.env.AIVANTA_X_TWITTER_CLIENT_SECRET = "twitter-secret";
   try {
     const url = new URL(createProviderAuthorizeUrl({
-      provider: "x_twitter",
-      config: PROVIDER_OAUTH_CONFIG.x_twitter,
+      provider: "x_twitter", config: PROVIDER_OAUTH_CONFIG.x_twitter,
       redirectUri: "https://aivanta.example.test/api/integrations/oauth/x_twitter/callback",
-      state: "signed-state",
-      codeVerifier: "verifier",
+      state: "signed-state", codeVerifier: "verifier",
     }));
     assert.equal(url.origin, "https://twitter.com");
     assert.equal(url.searchParams.get("client_id"), "twitter-client");
@@ -61,11 +60,8 @@ test("OAuth configuration fails closed when provider client configuration is mis
   delete process.env.AIVANTA_SALESFORCE_CLIENT_ID;
   try {
     assert.throws(() => createProviderAuthorizeUrl({
-      provider: "salesforce",
-      config: PROVIDER_OAUTH_CONFIG.salesforce,
-      redirectUri: "https://aivanta.example.test/callback",
-      state: "state",
-      codeVerifier: "verifier",
+      provider: "salesforce", config: PROVIDER_OAUTH_CONFIG.salesforce,
+      redirectUri: "https://aivanta.example.test/callback", state: "state", codeVerifier: "verifier",
     }), /OAUTH_PROVIDER_NOT_CONFIGURED/);
   } finally {
     if (prior !== undefined) process.env.AIVANTA_SALESFORCE_CLIENT_ID = prior;
@@ -75,4 +71,61 @@ test("OAuth configuration fails closed when provider client configuration is mis
 test("Instagram business account selection requires a usable account identifier", () => {
   assert.deepEqual(selectInstagramBusinessAccount({ data: [{ id: "ig-1", username: "aivanta" }] }), { id: "ig-1", username: "aivanta" });
   assert.throws(() => selectInstagramBusinessAccount({ data: [] }), /INSTAGRAM_BUSINESS_ACCOUNT_NOT_FOUND/);
+});
+
+test("OAuth refresh rotates tokens when the provider returns a replacement and uses Basic auth where required", async () => {
+  const oldFetch = globalThis.fetch;
+  const priorId = process.env.AIVANTA_X_TWITTER_CLIENT_ID;
+  const priorSecret = process.env.AIVANTA_X_TWITTER_CLIENT_SECRET;
+  process.env.AIVANTA_X_TWITTER_CLIENT_ID = "client-id";
+  process.env.AIVANTA_X_TWITTER_CLIENT_SECRET = "client-secret";
+  let captured: { url: string; init?: RequestInit } | undefined;
+  globalThis.fetch = (async (input, init) => {
+    captured = { url: String(input), init };
+    return new Response(JSON.stringify({ access_token: "rotated-access", refresh_token: "rotated-refresh", expires_in: 3600, token_type: "Bearer" }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const token = await refreshProviderOAuthToken({ provider: "x_twitter", config: PROVIDER_OAUTH_CONFIG.x_twitter, refreshToken: "old-refresh" });
+    assert.equal(token.access_token, "rotated-access");
+    assert.equal(token.refresh_token, "rotated-refresh");
+    assert.equal(captured?.url, PROVIDER_OAUTH_CONFIG.x_twitter.tokenUrl);
+    const headers = new Headers(captured?.init?.headers);
+    assert.equal(headers.get("authorization"), "Basic " + Buffer.from("client-id:client-secret").toString("base64"));
+    assert.equal(new URLSearchParams(String(captured?.init?.body)).get("refresh_token"), "old-refresh");
+    assert.equal(new URLSearchParams(String(captured?.init?.body)).has("client_secret"), false);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (priorId === undefined) delete process.env.AIVANTA_X_TWITTER_CLIENT_ID; else process.env.AIVANTA_X_TWITTER_CLIENT_ID = priorId;
+    if (priorSecret === undefined) delete process.env.AIVANTA_X_TWITTER_CLIENT_SECRET; else process.env.AIVANTA_X_TWITTER_CLIENT_SECRET = priorSecret;
+  }
+});
+
+test("OAuth refresh maps revoked credentials to an explicit reauthorization error", async () => {
+  const oldFetch = globalThis.fetch;
+  const priorId = process.env.AIVANTA_SALESFORCE_CLIENT_ID;
+  const priorSecret = process.env.AIVANTA_SALESFORCE_CLIENT_SECRET;
+  process.env.AIVANTA_SALESFORCE_CLIENT_ID = "client-id";
+  process.env.AIVANTA_SALESFORCE_CLIENT_SECRET = "client-secret";
+  globalThis.fetch = (async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 })) as typeof fetch;
+  try {
+    await assert.rejects(
+      refreshProviderOAuthToken({ provider: "salesforce", config: PROVIDER_OAUTH_CONFIG.salesforce, refreshToken: "revoked" }),
+      /OAUTH_REAUTH_REQUIRED/,
+    );
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (priorId === undefined) delete process.env.AIVANTA_SALESFORCE_CLIENT_ID; else process.env.AIVANTA_SALESFORCE_CLIENT_ID = priorId;
+    if (priorSecret === undefined) delete process.env.AIVANTA_SALESFORCE_CLIENT_SECRET; else process.env.AIVANTA_SALESFORCE_CLIENT_SECRET = priorSecret;
+  }
+});
+
+test("all registered OAuth provider configs use HTTPS endpoints and declare scopes", () => {
+  for (const [provider, config] of Object.entries(PROVIDER_OAUTH_CONFIG)) {
+    assert.equal(new URL(config.authorizeUrl).protocol, "https:", provider + " authorize endpoint");
+    assert.equal(new URL(config.tokenUrl).protocol, "https:", provider + " token endpoint");
+    assert.ok(config.scopes.length > 0, provider + " scopes");
+    assert.ok(config.scopes.every((scope) => typeof scope === "string" && scope.trim().length > 0), provider + " scope values");
+    assert.equal(config.clientIdEnv, "AIVANTA_" + provider.toUpperCase() + "_CLIENT_ID");
+    assert.equal(config.clientSecretEnv, "AIVANTA_" + provider.toUpperCase() + "_CLIENT_SECRET");
+  }
 });
