@@ -3,11 +3,11 @@ import "server-only";
 export const GOOGLE_PRODUCTS = {
   gmail: {
     label: "Gmail",
-    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    scopes: ["https://www.googleapis.com/auth/gmail.send"],
   },
   sheets: {
     label: "Google Sheets",
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   },
 } as const;
 

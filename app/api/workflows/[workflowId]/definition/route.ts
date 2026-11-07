@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { findOperation } from "@/nodes/registry";
+import { findOperation, getPublicNodeCatalog } from "@/nodes/registry";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
     }
 
-    const validated = validateDefinition(body.definition);
+    const validated = validateDefinition(body.definition, getPublicNodeCatalog());
     if (!validated.definition) return NextResponse.json({ valid: false, error: validated.error }, { status: 422 });
 
     const nodes = validated.definition.nodes;
@@ -103,7 +103,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
     }
     const requestBody = body as Record<string, unknown>;
-    const validated = validateDefinition(requestBody.definition);
+    const validated = validateDefinition(requestBody.definition, getPublicNodeCatalog());
     if (!validated.definition) return NextResponse.json({ error: validated.error }, { status: 400 });
 
     // Keep the existing version-1 nodes contract for the builder and database RPC,

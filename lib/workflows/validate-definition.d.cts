@@ -9,4 +9,4 @@ export type ValidationResult = {
   definition?: { version: 1; nodes: WorkflowNode[] };
   error?: string;
 };
-export function validateDefinition(value: unknown): ValidationResult;
+export function validateDefinition(value: unknown, nodeCatalog?: unknown[]): ValidationResult;
