@@ -51,3 +51,16 @@ test("refund/chargeback history remains append-only and creator/platform shares 
  assert.match(migration,/Creator earning reversal/i);
  assert.match(migration,/revoke update,delete on public\.marketplace_financial_ledger from service_role/i);
 });
+
+test("reversal validates null hashes and cumulative refund/chargeback caps",()=>{
+ assert.match(migration,/p_payload_sha256 is null or p_payload_sha256 !~ '\^\[a-f0-9\]\{64\}\$'/);
+ assert.match(migration,/prior_refund\+p_amount_minor>purchase\.amount_minor-prior_chargeback/i);
+ assert.match(migration,/prior_chargeback\+p_amount_minor>purchase\.amount_minor-prior_refund/i);
+ assert.match(migration,/prior_refund\+prior_chargeback\+p_amount_minor>=purchase\.amount_minor/i);
+});
+test("migration ends cleanly without stale duplicate finalizer fragments",()=>{
+ assert.ok(migration.trimEnd().endsWith("revoke update,delete on public.marketplace_payment_events from service_role;"));
+ assert.equal((migration.match(/create or replace function public\.marketplace_finalize_payment/g)||[]).length,1);
+ assert.equal((migration.match(/create or replace function public\.marketplace_reverse_payment/g)||[]).length,1);
+ assert.doesNotMatch(migration,/repeat\('0',64\)/);
+});
