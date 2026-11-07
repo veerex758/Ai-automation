@@ -71,7 +71,7 @@ reset role;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select is((select count(*)::integer from public.marketplace_payout_requests where creator_id='c2222222-2222-4222-8222-222222222222' and amount_minor=1000),1,'payout request is persisted once');
-select throws_ok($$select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'paid','','mock-transfer')$$,'P0001','payout_transition_invalid','finance cannot mark a requested payout paid without processing');
+select throws_ok($$select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'paid','','mock-transfer')$$,'P0001','invalid_payout_action','finance review RPC cannot mark payout paid');
 select lives_ok($$select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'approve','reviewed','')$$,'finance approval transition is allowed');
 select lives_ok($$select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'processing','batch-started','')$$,'approved payout can enter processing');
 select is((select status from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'processing','processing payout stays unpaid until settlement reconciliation');
