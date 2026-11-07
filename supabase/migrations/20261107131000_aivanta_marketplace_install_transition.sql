@@ -10,7 +10,7 @@ begin
  u:=auth.uid();
  if u is null then raise exception 'authentication_required'; end if;
  if not private.is_workspace_member(p_workspace_id) then raise exception 'workspace_access_denied'; end if;
- select * into p from public.marketplace_products where id=p_product_id for share;
+ select * into p from public.marketplace_products where id=p_product_id for update;
  if not found or p.status<>'published' then raise exception 'product_not_available'; end if;
  select * into v from public.marketplace_product_versions where id=p.current_version_id and product_id=p.id and verification_status='approved' for share;
  if not found then raise exception 'verified_version_required'; end if;
