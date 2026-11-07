@@ -33,5 +33,8 @@ test("workflow creation, agent runs, and AI draft generation call the usage RPC"
 
 test("billing endpoint reports blueprint prices without enabling checkout", () => {
   assert.match(billingRoute, /get_workspace_entitlements/);
-  assert.match(billingRoute, /monthly:9,annual:90/);\n  assert.match(billingRoute, /monthly:29,annual:290/);\n  assert.match(billingRoute, /monthly:79,annual:790/);\n  assert.match(billingRoute, /checkout_enabled:false/);
+  assert.match(billingRoute, /monthly:9,annual:90/);
+  assert.match(billingRoute, /monthly:29,annual:290/);
+  assert.match(billingRoute, /monthly:79,annual:790/);
+  assert.match(billingRoute, /checkout_enabled:false/);
 });
