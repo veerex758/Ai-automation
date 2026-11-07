@@ -35,3 +35,19 @@ test("finalizer records real event digest and timestamp rather than a placeholde
  assert.match(migration,/p_payload_sha256,coalesce\(p_occurred_at,now\(\)\)/);
  assert.doesNotMatch(migration,/repeat\('0',64\)/);
 });
+
+test("refunds and chargebacks append reversal entries and revoke entitlements appropriately",()=>{
+ assert.match(migration,/create or replace function public\.marketplace_reverse_payment/i);
+ assert.match(migration,/p_kind not in \('refund','chargeback'\)/i);
+ assert.match(migration,/refund_exceeds_paid_amount/i);
+ assert.match(migration,/entry_type,amount_minor,currency,memo/i);
+ assert.match(migration,/status=target_status/i);
+ assert.match(migration,/status='revoked' where purchase_id=purchase\.id/i);
+ assert.match(migration,/duplicate_event/i);
+ assert.match(migration,/revoke all on function public\.marketplace_reverse_payment/i);
+});
+test("refund/chargeback history remains append-only and creator/platform shares are reversed",()=>{
+ assert.match(migration,/commission reversal/i);
+ assert.match(migration,/Creator earning reversal/i);
+ assert.match(migration,/revoke update,delete on public\.marketplace_financial_ledger from service_role/i);
+});
