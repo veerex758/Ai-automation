@@ -27,7 +27,7 @@ export type MarketplacePaymentProvider = {
 - Event inbox keyed by provider/event ID and processing state.
 - Append-only ledger with unique provider event + entry type + purchase guard.
 - Server-only RPC locks purchase; verifies exact expected amount/currency/provider; marks paid once; creates entitlement once; records gross, platform commission, creator earning.
-- Reversal RPC inserts balanced negative entries; updates refunded/disputed status and revokes/adjusts entitlement. No direct ledger UPDATE/DELETE.
+- Refund/chargeback RPC locks purchase, deduplicates provider event, bounds refunds to paid amount, appends reversal rows for gross/commission/creator share, updates purchase state, and revokes entitlement on full refund/dispute. No direct ledger UPDATE/DELETE. SQL runtime/concurrency verification remains required.
 - RLS denies anon and ordinary users ledger/inbox writes; service-role processing only. Buyer can read own purchase/receipt; creator can read own earnings aggregate only through scoped RPC.
 - Reconciliation report compares provider events/settlement against purchases and ledger, flags mismatch; never auto-adjusts without authorized finance action.
 
