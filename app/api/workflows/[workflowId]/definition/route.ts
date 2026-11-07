@@ -76,9 +76,18 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
         settings: { event: "manual" },
       }],
     };
+    const registrySteps = stored && Array.isArray((stored as { steps?: unknown }).steps)
+      ? (stored as { steps: RegisteredWorkflowStep[] }).steps : [];
+    const hydratedDefinition = valid.definition ? {
+      ...valid.definition,
+      nodes: valid.definition.nodes.map((node) => {
+        const step = registrySteps.find((candidate) => candidate.id === node.id);
+        return step ? { ...node, registryNodeId: step.nodeId, registryOperationId: step.operationId, registryInput: step.input } : node;
+      }),
+    } : starterDefinition;
     return NextResponse.json({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status },
-      definition: valid.definition ?? starterDefinition,
+      definition: hydratedDefinition,
     });
   } catch (error) {
     console.error("Failed to load Aivanta workflow definition:", error);
