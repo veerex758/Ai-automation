@@ -1,5 +1,5 @@
 begin;
-select plan(57);
+select plan(59);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -68,6 +68,7 @@ select throws_ok($select public.marketplace_settle_payout((select id from public
 select set_config('request.jwt.claim.role','service_role',true);
 select lives_ok($select public.marketplace_settle_payout((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'mock','transfer-1','settle-event-1',repeat('a',64),'2026-11-05')$,'service role settles payout with provider reference');
 select is((public.marketplace_settle_payout((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'mock','transfer-1','settle-event-1',repeat('a',64),'2026-11-05')->>'status'),'duplicate_settlement','provider settlement retry is idempotent');
+select throws_ok($select public.marketplace_settle_payout((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'mock','transfer-conflict','settle-event-2',repeat('b',64),'2026-11-05')$,'P0001','payout_settlement_conflict','paid payout cannot be reconciled to a different transfer');
 select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001') and entry_type='payout'),1,'settlement appends exactly one payout ledger debit');
 select set_config('request.jwt.claim.role','authenticated',true);
 select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001') and entry_type='payout'),1,'paid payout appends exactly one ledger debit');
