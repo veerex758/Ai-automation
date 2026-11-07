@@ -22,7 +22,7 @@ export type VerifiedMarketplaceWebhook = {
   data: unknown;
 };
 
-export type ParsedMarketplacePayment = {
+export type ParsedMarketplaceReversal = {\n  purchaseId: string;\n  kind: "refund" | "chargeback";\n  amountMinor: number;\n};\n\nexport type ParsedMarketplacePayment = {
   purchaseId: string;
   providerPaymentId: string;
   amountMinor: number;
@@ -37,7 +37,7 @@ export interface MarketplacePaymentProvider {
   }>;
   /** Must validate provider signature over rawBody; never trust parsed JSON alone. */
   verifyWebhook(rawBody: Uint8Array, headers: Headers): Promise<VerifiedMarketplaceWebhook>;
-  parsePayment(event: VerifiedMarketplaceWebhook): ParsedMarketplacePayment | null;
+  parsePayment(event: VerifiedMarketplaceWebhook): ParsedMarketplacePayment | null;\n  /** Optional provider-normalized refund/chargeback payload after signature verification. */\n  parseReversal?(event: VerifiedMarketplaceWebhook): ParsedMarketplaceReversal | null;
 }
 
 /** Common envelope guard after provider-specific signature verification. */
