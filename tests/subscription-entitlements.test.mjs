@@ -22,7 +22,7 @@ test("usage RPC rejects unauthenticated and invalid usage requests", () => {
 });
 
 test("free and paid plan quotas are encoded in server-side metering", () => {
-  for (const cap of ["then 3 else 25", "then 25 else 500", "then 100 else 2500", "then 500 else 15000"]) assert.ok(migration.includes(cap), `missing cap ${cap}`);
+  for (const cap of ["workflow_execution' then 300", "workflow_execution' then 2000", "workflow_execution' then 10000", "workflow_execution' then 50000"]) assert.ok(migration.includes(cap), `missing cap ${cap}`);
 });
 
 test("workflow creation, agent runs, and AI draft generation call the usage RPC", () => {
@@ -31,7 +31,7 @@ test("workflow creation, agent runs, and AI draft generation call the usage RPC"
   assert.match(aiRoute, /consume_workspace_usage[\s\S]*ai_generation[\s\S]*usage\?\.allowed/);
 });
 
-test("billing endpoint reports entitlements without enabling checkout", () => {
+test("billing endpoint reports blueprint prices without enabling checkout", () => {
   assert.match(billingRoute, /get_workspace_entitlements/);
-  assert.match(billingRoute, /checkout_enabled:false/);
+  assert.match(billingRoute, /monthly:9,annual:90/);\n  assert.match(billingRoute, /monthly:29,annual:290/);\n  assert.match(billingRoute, /monthly:79,annual:790/);\n  assert.match(billingRoute, /checkout_enabled:false/);
 });
