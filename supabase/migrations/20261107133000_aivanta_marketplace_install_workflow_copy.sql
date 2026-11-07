@@ -62,6 +62,7 @@ begin
  end if;
  select * into i from public.marketplace_installations where id=p_installation_id for update;
  if not found or i.installed_by<>p_actor_id then raise exception 'installation_not_found_or_not_owned'; end if;
+ if i.status='removed' then raise exception 'installation_removed'; end if;
  if not exists(select 1 from public.workspaces w where w.id=i.workspace_id and w.owner_id=p_actor_id)
   and not exists(select 1 from public.workspace_members wm where wm.workspace_id=i.workspace_id and wm.user_id=p_actor_id) then
   raise exception 'workspace_access_denied';
@@ -106,7 +107,9 @@ begin
   'draft',
   p_actor_id
  ) returning id into new_workflow_id;
- update public.marketplace_installations set workflow_id=new_workflow_id where id=i.id;
+ update public.marketplace_installations
+ set workflow_id=new_workflow_id,status='configuring',activated_at=null
+ where id=i.id;
  return jsonb_build_object('installation_id',i.id,'workflow_id',new_workflow_id,'product_version_id',i.product_version_id,'status','configuring','created',true);
 end $$;
 revoke all on function public.marketplace_materialize_installation(uuid,uuid,text) from public,anon,authenticated;
