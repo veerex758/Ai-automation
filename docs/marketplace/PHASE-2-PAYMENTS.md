@@ -30,7 +30,7 @@ export type MarketplacePaymentProvider = {
 - Refund/chargeback RPC locks purchase, deduplicates provider event, validates the event hash, caps cumulative refund + chargeback reversals against the original paid amount, appends reversal rows for gross/commission/creator share, updates purchase state, and revokes entitlement on full refund/dispute. No direct ledger UPDATE/DELETE. SQL runtime/concurrency verification remains required.
 - Provider-neutral TypeScript contract requires raw-body signature verification in each adapter, a verified event envelope, a five-minute freshness guard, and normalized USD/integer-minor-unit payment validation. No provider adapter is enabled.
 - RLS denies anon and ordinary users ledger/inbox writes; service-role processing only. Buyer can read own purchase/receipt; creator can read own earnings aggregate only through scoped RPC.
-- Reconciliation report compares provider events/settlement against purchases and ledger, flags mismatch; never auto-adjusts without authorized finance action.
+- Service-only gross reconciliation report compares paid purchase amounts with gross-sale ledger entries and returns discrepancies; it never auto-adjusts. Provider settlement-file reconciliation remains pending provider selection and credentials.
 
 ## Gates
 1. Unit tests provider adapter signature, invalid signature, stale timestamp, replay/idempotency, mismatched amount/currency, duplicate payment ID.
@@ -39,7 +39,7 @@ export type MarketplacePaymentProvider = {
 4. Staging signed test-mode webhook and authenticated buyer checkout; browser E2E after Vercel quota.
 5. Production requires provider/country/legal/compliance confirmation, secrets configured, finance/reconciliation controls and explicit launch authorization.
 
-## Deliberately blocked
+## Current progress (2026-11-07)\n- Provider contract now includes optional normalized refund/chargeback parsing; processor dispatch is typed and covered by a refund test.\n- Finalizer records duplicate successful payment event IDs for the same provider payment as processed without duplicating ledger/entitlement writes.\n- Reversal RPC refuses refunds/chargebacks until a provider payment ID is present.\n- Added a service-role-only reconciliation function to detect missing/mismatched gross-sale ledger rows.\n- Static tests assert these protections. Runtime execution remains required.\n\n## Deliberately blocked
 - Live checkout, subscriptions, refunds, transfers/payouts, tax invoices, creator payout availability, automatic finance adjustments.
 - Provider-specific implementation until provider choice and test credentials are supplied.
 
