@@ -267,7 +267,7 @@ begin
  if auth.role()<>'service_role' then raise exception 'finance_service_role_required'; end if;
  select * into payout from public.marketplace_payout_requests where id=p_request_id for update;
  if not found then raise exception 'payout_request_not_found'; end if;
- next_status:=case p_action when 'hold' then 'on_hold' when 'approve' then 'approved' when 'reject' then 'rejected' when 'processing' then 'processing' when 'failed' then 'failed' when 'paid' then 'paid' else null end;
+ next_status:=case p_action when 'review' then 'under_review' when 'hold' then 'on_hold' when 'approve' then 'approved' when 'reject' then 'rejected' when 'processing' then 'processing' when 'failed' then 'failed' when 'paid' then 'paid' else null end;
  if next_status is null then raise exception 'invalid_payout_action'; end if;
  if payout.status='paid' and next_status='paid' and coalesce(p_transfer_id,payout.provider_transfer_id)=payout.provider_transfer_id then return jsonb_build_object('id',payout.id,'status','paid','duplicate',true); end if;
  if not (
