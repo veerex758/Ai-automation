@@ -115,3 +115,26 @@ revoke all on function public.marketplace_reverse_payment(text,text,uuid,text,in
 grant execute on function public.marketplace_reverse_payment(text,text,uuid,text,integer,text,timestamptz) to service_role;
 -- Provider inbox remains immutable after event processing.
 revoke update,delete on public.marketplace_payment_events from service_role;
+
+-- Provider-neutral reconciliation report. Returns only discrepancies; operators
+-- compare this against provider settlement exports before payout eligibility.
+create or replace function public.marketplace_financial_reconciliation()
+returns table(purchase_id uuid,purchase_status text,purchase_amount_minor bigint,
+ ledger_gross_minor bigint,ledger_reversal_minor bigint,net_gross_minor bigint,
+ discrepancy_minor bigint)
+language sql stable security definer set search_path=public,pg_temp as $$
+ select p.id,p.status,p.amount_minor::bigint,
+  coalesce(sum(case when l.entry_type='gross_sale' then l.amount_minor else 0 end),0)::bigint,
+  coalesce(sum(case when l.entry_type in ('refund','chargeback') then -l.amount_minor else 0 end),0)::bigint,
+  coalesce(sum(case when l.entry_type in ('gross_sale','refund','chargeback') then l.amount_minor else 0 end),0)::bigint,
+  (case when p.status in ('paid','refunded','disputed') then p.amount_minor::bigint else 0 end)-
+  coalesce(sum(case when l.entry_type in ('gross_sale','refund','chargeback') then l.amount_minor else 0 end),0)::bigint
+ from public.marketplace_purchases p
+ left join public.marketplace_financial_ledger l on l.purchase_id=p.id
+ group by p.id,p.status,p.amount_minor
+ having (case when p.status in ('paid','refunded','disputed') then p.amount_minor::bigint else 0 end) <>
+  coalesce(sum(case when l.entry_type in ('gross_sale','refund','chargeback') then l.amount_minor else 0 end),0)
+ order by p.created_at;
+$$;
+revoke all on function public.marketplace_financial_reconciliation() from public,anon,authenticated;
+grant execute on function public.marketplace_financial_reconciliation() to service_role;
