@@ -4,7 +4,8 @@ select plan(62);
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
 select has_table('public','marketplace_payout_requests','payout requests are durable');
-select has_table('public','marketplace_creator_statements','creator period statements are durable');\nselect has_table('public','marketplace_creator_support_cases','creator support cases are durable');
+select has_table('public','marketplace_creator_statements','creator period statements are durable');
+select has_table('public','marketplace_creator_support_cases','creator support cases are durable');
 select has_function('public','marketplace_creator_earnings_summary','creator earnings summary RPC exists');
 select has_function('public','marketplace_apply_subscription_event','subscription event dispatcher exists');
 select has_function('public','marketplace_request_payout','payout request RPC exists');
@@ -17,7 +18,8 @@ select has_function('public','marketplace_request_subscription_cancellation','bu
 select has_function('public','marketplace_my_creator_statements','creator statement read RPC exists');
 select has_function('public','marketplace_update_subscription_command','service-only cancellation command processor exists');
 select has_function('public','marketplace_my_payout_profile','creator-safe payout onboarding status RPC exists');
-select has_function('public','marketplace_my_creator_analytics','ledger-backed creator analytics RPC exists');\nselect has_function('public','marketplace_create_creator_support_case','creator support case submission RPC exists');
+select has_function('public','marketplace_my_creator_analytics','ledger-backed creator analytics RPC exists');
+select has_function('public','marketplace_create_creator_support_case','creator support case submission RPC exists');
 select ok(not has_table_privilege('authenticated','public.marketplace_payout_requests','SELECT'),'payout rows are private');
 select ok(not has_table_privilege('authenticated','public.marketplace_subscription_events','SELECT'),'provider events are private');
 select ok(not has_function_privilege('anon','public.marketplace_request_payout(bigint,text)','EXECUTE'),'anon cannot request payouts');
@@ -53,7 +55,10 @@ select is((select onboarding_status from public.marketplace_my_payout_profile())
 select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'creator can reserve available payout balance');
 select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'same idempotency key and amount returns original payout');
 select throws_ok($$select public.marketplace_request_payout(900,'phase3-key-0001')$$,'P0001','payout_idempotency_conflict','idempotency key cannot change payout amount');
-select throws_ok($select public.marketplace_request_payout(2500,'phase3-key-0002')$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');\nselect lives_ok($select public.marketplace_create_creator_support_case('payout','Payout review request','Please review the payout request and confirm the transfer status.',(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'phase3-case-0001')$,'verified creator can submit a payout support appeal');\nselect is((select count(*)::integer from public.marketplace_creator_support_cases where creator_id='c2222222-2222-4222-8222-222222222222'),1,'support appeal is scoped and persisted for creator');\nselect lives_ok($select public.marketplace_create_creator_support_case('payout','Payout review request','Please review the payout request and confirm the transfer status.',(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'phase3-case-0001')$,'support case idempotency returns original case');
+select throws_ok($select public.marketplace_request_payout(2500,'phase3-key-0002')$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
+select lives_ok($select public.marketplace_create_creator_support_case('payout','Payout review request','Please review the payout request and confirm the transfer status.',(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'phase3-case-0001')$,'verified creator can submit a payout support appeal');
+select is((select count(*)::integer from public.marketplace_creator_support_cases where creator_id='c2222222-2222-4222-8222-222222222222'),1,'support appeal is scoped and persisted for creator');
+select lives_ok($select public.marketplace_create_creator_support_case('payout','Payout review request','Please review the payout request and confirm the transfer status.',(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'phase3-case-0001')$,'support case idempotency returns original case');
 
 reset role;
 set local role service_role;
