@@ -280,3 +280,7 @@ begin
 end; $$;
 revoke all on function public.marketplace_review_payout_request(uuid,text,text,text) from public,anon,authenticated;
 grant execute on function public.marketplace_review_payout_request(uuid,text,text,text) to service_role;
+
+-- Preserve financial/subscription event history and statement snapshots. Definer RPCs
+-- remain the only mutation path for finance lifecycle records.
+revoke update,delete on public.marketplace_subscription_events,public.marketplace_creator_statements,public.marketplace_payout_requests from service_role;
