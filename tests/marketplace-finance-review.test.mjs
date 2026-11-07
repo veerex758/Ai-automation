@@ -32,3 +32,16 @@ test("finance payout review transitions remain explicit and audited",()=>{
  assert.match(monetization,/payout_transition_invalid/);
  assert.match(monetization,/insert into public.marketplace_admin_audit/);
 });
+
+const supportRoute=readFileSync(new URL("../app/api/marketplace/admin/support/route.ts",import.meta.url),"utf8");
+const supportReview=readFileSync(new URL("../supabase/migrations/20261107175000_aivanta_marketplace_phase3_support_review.sql",import.meta.url),"utf8");
+const supportPage=readFileSync(new URL("../app/marketplace/admin/support/page.tsx",import.meta.url),"utf8");
+test("creator support review is reviewer-gated and status plus audit are atomic",()=>{
+ assert.match(supportRoute,/AIVANTA_MARKETPLACE_REVIEWER_IDS/);
+ assert.match(supportRoute,/marketplace_review_creator_support_case/);
+ assert.doesNotMatch(supportRoute,/from\("marketplace_creator_support_cases"\)\.update/);
+ assert.match(supportReview,/for update/);
+ assert.match(supportReview,/insert into public\.marketplace_admin_audit/);
+ assert.match(supportReview,/support_case_transition_invalid/);
+ assert.match(supportPage,/Audit note/);
+});
