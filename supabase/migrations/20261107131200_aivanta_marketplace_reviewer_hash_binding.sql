@@ -28,8 +28,8 @@ begin
   raise exception 'artifact_hash_mismatch';
  end if;
  if p_status='approved' and exists(
-  select 1 from jsonb_array_elements(p_checks) as item
-  where coalesce(item->>'passed','false')<>'true'
+  select 1 from jsonb_array_elements(p_checks) as checks(value)
+  where coalesce(value->>'passed','false')<>'true'
  ) then raise exception 'verification_checks_not_all_passed'; end if;
  update public.marketplace_product_versions
  set verification_status=p_status,
