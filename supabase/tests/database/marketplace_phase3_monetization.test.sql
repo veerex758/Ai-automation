@@ -1,5 +1,5 @@
 begin;
-select plan(38);
+select plan(40);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -16,6 +16,7 @@ select has_function('public','marketplace_my_subscriptions','buyer can read own 
 select has_function('public','marketplace_request_subscription_cancellation','buyer cancellation request RPC exists');
 select has_function('public','marketplace_my_creator_statements','creator statement read RPC exists');
 select has_function('public','marketplace_update_subscription_command','service-only cancellation command processor exists');
+select has_function('public','marketplace_my_payout_profile','creator-safe payout onboarding status RPC exists');
 select ok(not has_table_privilege('authenticated','public.marketplace_payout_requests','SELECT'),'payout rows are private');
 select ok(not has_table_privilege('authenticated','public.marketplace_subscription_events','SELECT'),'provider events are private');
 select ok(not has_function_privilege('anon','public.marketplace_request_payout(bigint,text)','EXECUTE'),'anon cannot request payouts');
@@ -47,7 +48,8 @@ values('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified'
 set local role authenticated;
 select set_config('request.jwt.claim.sub','a2222222-2222-4222-8222-222222222222',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'creator can reserve available payout balance');
+select is((select onboarding_status from public.marketplace_my_payout_profile()),'verified','creator can read own onboarding state without provider account reference');
+select lives_ok($select public.marketplace_request_payout(1000,'phase3-key-0001')$,'creator can reserve available payout balance');
 select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'same idempotency key and amount returns original payout');
 select throws_ok($$select public.marketplace_request_payout(900,'phase3-key-0001')$$,'P0001','payout_idempotency_conflict','idempotency key cannot change payout amount');
 select throws_ok($$select public.marketplace_request_payout(2500,'phase3-key-0002')$$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
