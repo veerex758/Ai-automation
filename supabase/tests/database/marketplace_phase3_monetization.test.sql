@@ -47,21 +47,21 @@ values('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified'
 set local role authenticated;
 select set_config('request.jwt.claim.sub','a2222222-2222-4222-8222-222222222222',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select lives_ok($select public.marketplace_request_payout(1000,'phase3-key-0001')$,'creator can reserve available payout balance');
-select lives_ok($select public.marketplace_request_payout(1000,'phase3-key-0001')$,'same idempotency key and amount returns original payout');
-select throws_ok($select public.marketplace_request_payout(900,'phase3-key-0001')$,'P0001','payout_idempotency_conflict','idempotency key cannot change payout amount');
-select throws_ok($select public.marketplace_request_payout(2500,'phase3-key-0002')$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
+select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'creator can reserve available payout balance');
+select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'same idempotency key and amount returns original payout');
+select throws_ok($$select public.marketplace_request_payout(900,'phase3-key-0001')$$,'P0001','payout_idempotency_conflict','idempotency key cannot change payout amount');
+select throws_ok($$select public.marketplace_request_payout(2500,'phase3-key-0002')$$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
 
 reset role;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select is((select count(*)::integer from public.marketplace_payout_requests where creator_id='c2222222-2222-4222-8222-222222222222' and amount_minor=1000),1,'payout request is persisted once');
-select lives_ok($$select public.marketplace_set_creator_payout_profile('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified','complete',true,1000,null)$$,'service role updates payout onboarding profile');
-select lives_ok($$select public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now())$$,'service role generates creator statement snapshot');
+select lives_ok($$$select public.marketplace_set_creator_payout_profile('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified','complete',true,1000,null)$$,'service role updates payout onboarding profile');
+select lives_ok($$$select public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now())$$,'service role generates creator statement snapshot');
 select is((select creator_earnings_minor from public.marketplace_creator_statements where creator_id='c2222222-2222-4222-8222-222222222222' and period_start='2026-11-01'),3000::bigint,'statement earnings reconcile to ledger');
 select is(public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now()),(select id from public.marketplace_creator_statements where creator_id='c2222222-2222-4222-8222-222222222222' and period_start='2026-11-01'),'statement generation retry returns immutable snapshot');
 
-select lives_ok($$select public.marketplace_apply_subscription_event('mock','sub-event-1',repeat('c',64),'subscription.active','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-01')$$,'active subscription event grants entitlement');
+select lives_ok($$$select public.marketplace_apply_subscription_event('mock','sub-event-1',repeat('c',64),'subscription.active','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-01')$$,'active subscription event grants entitlement');
 select is((select status from public.marketplace_entitlements where subscription_id=(select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1')),'active','subscription event creates active entitlement');
 select is((public.marketplace_apply_subscription_event('mock','sub-event-1',repeat('c',64),'subscription.active','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-01')->>'status'),'duplicate_event','provider event retry is idempotent');
 select is((public.marketplace_apply_subscription_event('mock','sub-event-2',repeat('d',64),'invoice.payment_failed','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-02')->>'status'),'past_due','failed payment enters grace period');
@@ -71,7 +71,7 @@ reset role;
 set local role service_role;
 select set_config('request.jwt.claim.sub','a1111111-1111-4111-8111-111111111111',true);
 select set_config('request.jwt.claim.role','service_role',true);
-select lives_ok($select public.marketplace_request_subscription_cancellation((select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1'),'cancel-phase3-0001')$,'buyer identity can request cancellation through durable command');
+select lives_ok($$select public.marketplace_request_subscription_cancellation((select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1'),'cancel-phase3-0001')$$,'buyer identity can request cancellation through durable command');
 select is((select cancel_at_period_end from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1'),true,'cancellation request marks subscription pending period-end cancellation');
 select is((public.marketplace_apply_subscription_event('mock','sub-event-3',repeat('e',64),'subscription.cancelled','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-03')->>'status'),'cancelled','cancellation event is applied');
 select is((select status from public.marketplace_entitlements where subscription_id=(select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1')),'expired','cancelled subscription entitlement expires');
