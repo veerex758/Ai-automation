@@ -32,7 +32,7 @@ begin
   where coalesce(value->>'passed','false')<>'true'
  ) then raise exception 'verification_checks_not_all_passed'; end if;
  update public.marketplace_product_versions
- set verification_status=p_status,
+ set verification_status=case when p_status='approved' then 'approved' else 'rejected' end,
      verified_at=case when p_status='approved' then now() else null end,
      verified_by=p_reviewer_id
  where id=p_version_id;
