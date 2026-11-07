@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { processMarketplaceWebhook } from "../lib/marketplace/payments/process-webhook";
+import { processMarketplaceWebhook, type MarketplaceWebhookProcessor } from "../lib/marketplace/payments/process-webhook";
 import type { MarketplacePaymentProvider, VerifiedMarketplaceWebhook } from "../lib/marketplace/payments/provider";
 
 const event: VerifiedMarketplaceWebhook = { eventId: "evt_1", type: "payment.succeeded", occurredAt: new Date().toISOString(), data: {} };
@@ -10,7 +10,7 @@ const provider: MarketplacePaymentProvider = {
  async verifyWebhook(raw){ assert.equal(new TextDecoder().decode(raw),"raw-event"); return event; },
  parsePayment(){ return {purchaseId:"purchase_1",providerPaymentId:"pay_1",amountMinor:1200,currency:"USD"}; },
 };
-const processor={finalizePayment:async(input:Record<string,unknown>)=>input,reversePayment:async(input:Record<string,unknown>)=>input};
+const processor: MarketplaceWebhookProcessor={finalizePayment:async(input)=>input,reversePayment:async(input)=>input};
 test("payment webhook passes verified raw digest and normalized data to finalizer",async()=>{
  const result=await processMarketplaceWebhook(provider,processor,new TextEncoder().encode("raw-event"),new Headers(),Date.now());
  assert.equal(result.eventId,"evt_1");
@@ -35,3 +35,4 @@ test("unknown verified events are acknowledged but never finalized",async()=>{
  assert.equal((result.outcome as {status:string}).status,"ignored");
  assert.equal(called,false);
 });
+\ntest("verified refund dispatches only to reversal processor",async()=>{\n const refundEvent={...event,type:"refund.succeeded"};\n const refundProvider:MarketplacePaymentProvider={...provider,verifyWebhook:async()=>refundEvent,parseReversal:()=>({purchaseId:"purchase_1",kind:"refund",amountMinor:300})};\n let reversed:unknown;\n const result=await processMarketplaceWebhook(refundProvider,{...processor,reversePayment:async(input)=>{reversed=input;return input;}},new TextEncoder().encode("raw-event"),new Headers(),Date.now());\n assert.equal(result.eventId,"evt_1");\n assert.equal((reversed as {kind:string}).kind,"refund");\n assert.equal((reversed as {amountMinor:number}).amountMinor,300);\n});\n
