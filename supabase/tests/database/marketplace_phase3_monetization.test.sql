@@ -1,5 +1,5 @@
 begin;
-select plan(18);
+select plan(27);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
