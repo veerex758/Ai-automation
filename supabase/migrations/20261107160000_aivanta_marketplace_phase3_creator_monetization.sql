@@ -356,10 +356,10 @@ begin
  if not found or creator.status<>'verified' then raise exception 'creator_not_eligible'; end if;
  select * into profile from public.marketplace_creator_payout_profiles where creator_id=creator.id;
  if not found or profile.onboarding_status<>'verified' or profile.tax_status not in ('complete','exempt') or not profile.payouts_enabled then raise exception 'payout_onboarding_incomplete'; end if;
- if profile.hold_until is not null and profile.hold_until>now() then raise exception 'payout_hold_active'; end if;
- if p_amount_minor<profile.minimum_payout_minor then raise exception 'payout_below_minimum'; end if;
  select * into prior from public.marketplace_payout_requests where creator_id=creator.id and idempotency_key=p_idempotency_key;
  if found then if prior.amount_minor<>p_amount_minor then raise exception 'payout_idempotency_conflict'; end if; return prior.id; end if;
+ if profile.hold_until is not null and profile.hold_until>now() then raise exception 'payout_hold_active'; end if;
+ if p_amount_minor<profile.minimum_payout_minor then raise exception 'payout_below_minimum'; end if;
  select coalesce(sum(case when entry_type in ('creator_earning','creator_earning_reversal','processor_fee','payment_fee','tax','payout') then amount_minor else 0 end),0)
  into available from public.marketplace_financial_ledger where creator_id=creator.id;
  select available-coalesce(sum(amount_minor),0) into available from public.marketplace_payout_requests
