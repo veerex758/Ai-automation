@@ -109,6 +109,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         .eq("created_by", user.id).eq("mode", "live").gte("created_at", hourAgo);
       if (error) throw error;
       if ((count ?? 0) >= 10) return NextResponse.json({ error: "Live run limit reached." }, { status: 429 });
+      const { data: executionUsage, error: executionUsageError } = await supabase.rpc("consume_workspace_usage", {
+        p_workspace_id: workflow.workspace_id, p_metric: "workflow_execution", p_quantity: 1,
+        p_metadata: { workflow_id: workflow.id, idempotency_key: idempotencyKey },
+      });
+      if (executionUsageError) return NextResponse.json({ error: "Execution billing meter unavailable. Apply the subscription migration." }, { status: 503 });
+      if (!executionUsage?.allowed) return NextResponse.json({ error: "Monthly workflow execution allowance reached. Upgrade your plan.", entitlement: executionUsage }, { status: 402 });
     }
 
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
