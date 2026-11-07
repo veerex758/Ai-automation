@@ -29,3 +29,9 @@ test("finalization grants once and books 20/80 gross split",()=>{
 test("provider setup, signatures, replay and external payments remain explicitly gated",()=>{
  for(const phrase of ["signed webhook","idempotency","provider","No entitlement on pending/failed","Do not report payouts as available"])assert.ok(spec.toLowerCase().includes(phrase.toLowerCase()));
 });
+
+test("finalizer records real event digest and timestamp rather than a placeholder",()=>{
+ assert.match(migration,/p_payload_sha256 !~ '\\^\\[a-f0-9\\]\\{64\\}\\$'/);
+ assert.match(migration,/p_payload_sha256,coalesce\(p_occurred_at,now\(\)\)/);
+ assert.doesNotMatch(migration,/repeat\('0',64\)/);
+});
