@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {verifyMarketplaceArtifact} from "../lib/marketplace/verification";
+import {verifyMarketplaceArtifact,verifyMarketplaceStoredArtifact} from "../lib/marketplace/verification";
 const valid={definition:{version:1,nodes:[{id:"start",type:"trigger",title:"Manual start",description:"",settings:{event:"manual"}}]}};
 test("marketplace verification accepts a valid registry-backed workflow",()=>{
  const result=verifyMarketplaceArtifact(valid);assert.equal(result.passed,true);assert.equal(result.checks.every(x=>x.passed),true);assert.match(result.artifactSha256,/^[a-f0-9]{64}$/);
@@ -23,4 +23,16 @@ test("marketplace artifact hash is canonical across JSON object key order",()=>{
  const left=verifyMarketplaceArtifact({definition:{version:1,nodes:[{id:"start",type:"trigger",title:"Manual start",description:"",settings:{event:"manual"}}]}});
  const right=verifyMarketplaceArtifact({definition:{nodes:[{settings:{event:"manual"},description:"",title:"Manual start",type:"trigger",id:"start"}],version:1}});
  assert.equal(left.artifactSha256,right.artifactSha256);
+});
+
+test("marketplace review integrity binds uploaded bytes, stored manifest, and recorded hash",()=>{
+ const content=JSON.stringify(valid);
+ const expected=verifyMarketplaceArtifact(valid).artifactSha256;
+ const matching=verifyMarketplaceStoredArtifact(content,valid,expected);
+ assert.equal(matching.integrityPassed,true);
+ assert.equal(matching.verification.passed,true);
+ const altered=verifyMarketplaceStoredArtifact(JSON.stringify({...valid,extra:"tampered"}),valid,expected);
+ assert.equal(altered.integrityPassed,false);
+ const mismatchedManifest=verifyMarketplaceStoredArtifact(content,{...valid,extra:"different"},expected);
+ assert.equal(mismatchedManifest.integrityPassed,false);
 });
