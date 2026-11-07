@@ -6,6 +6,7 @@ import {
   PROVIDER_OAUTH_CONFIG,
   verifyOAuthState,
   selectInstagramBusinessAccount,
+  refreshProviderOAuthToken,
 } from "../lib/integrations/provider-oauth";
 
 test("provider OAuth state is signed, time-bound and bound to the provider", () => {
@@ -75,4 +76,24 @@ test("OAuth configuration fails closed when provider client configuration is mis
 test("Instagram business account selection requires a usable account identifier", () => {
   assert.deepEqual(selectInstagramBusinessAccount({ data: [{ id: "ig-1", username: "aivanta" }] }), { id: "ig-1", username: "aivanta" });
   assert.throws(() => selectInstagramBusinessAccount({ data: [] }), /INSTAGRAM_BUSINESS_ACCOUNT_NOT_FOUND/);
+});
+
+test("OAuth refresh fails closed on rate limits, provider server errors and malformed token responses", async () => {
+  const oldFetch = globalThis.fetch;
+  const priorId = process.env.AIVANTA_SALESFORCE_CLIENT_ID;
+  const priorSecret = process.env.AIVANTA_SALESFORCE_CLIENT_SECRET;
+  process.env.AIVANTA_SALESFORCE_CLIENT_ID = "client-id";
+  process.env.AIVANTA_SALESFORCE_CLIENT_SECRET = "client-secret";
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 })) as typeof fetch;
+    await assert.rejects(refreshProviderOAuthToken({ provider: "salesforce", config: PROVIDER_OAUTH_CONFIG.salesforce, refreshToken: "refresh" }), /OAUTH_TOKEN_REFRESH_FAILED/);
+    globalThis.fetch = (async () => new Response(JSON.stringify({ error: "server_error" }), { status: 503 })) as typeof fetch;
+    await assert.rejects(refreshProviderOAuthToken({ provider: "salesforce", config: PROVIDER_OAUTH_CONFIG.salesforce, refreshToken: "refresh" }), /OAUTH_TOKEN_REFRESH_FAILED/);
+    globalThis.fetch = (async () => new Response(JSON.stringify({ expires_in: 3600 }), { status: 200 })) as typeof fetch;
+    await assert.rejects(refreshProviderOAuthToken({ provider: "salesforce", config: PROVIDER_OAUTH_CONFIG.salesforce, refreshToken: "refresh" }), /OAUTH_TOKEN_RESPONSE_INVALID/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (priorId === undefined) delete process.env.AIVANTA_SALESFORCE_CLIENT_ID; else process.env.AIVANTA_SALESFORCE_CLIENT_ID = priorId;
+    if (priorSecret === undefined) delete process.env.AIVANTA_SALESFORCE_CLIENT_SECRET; else process.env.AIVANTA_SALESFORCE_CLIENT_SECRET = priorSecret;
+  }
 });
