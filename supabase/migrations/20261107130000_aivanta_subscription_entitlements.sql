@@ -24,7 +24,7 @@ revoke insert,update,delete on public.workspace_subscriptions from authenticated
 create table if not exists public.workspace_usage (
  id uuid primary key default gen_random_uuid(),
  workspace_id uuid not null references public.workspaces(id) on delete cascade,
- metric text not null check (metric in ('workflow_created','agent_run','ai_generation')),
+ metric text not null check (metric in ('workflow_created','workflow_execution','ai_credit','agent_run','ai_generation')),
  quantity integer not null check (quantity > 0),
  period_start date not null default date_trunc('month',now())::date,
  actor_user_id uuid references auth.users(id) on delete set null,
@@ -53,7 +53,7 @@ begin
  if auth.uid() is null or not private.is_workspace_member(p_workspace_id) then
   raise exception 'workspace access denied' using errcode='42501';
  end if;
- if p_metric not in ('workflow_created','agent_run','ai_generation') or p_quantity<1 or p_quantity>100 then
+ if p_metric not in ('workflow_created','workflow_execution','ai_credit','agent_run','ai_generation') or p_quantity<1 or p_quantity>100 then
   raise exception 'invalid usage request' using errcode='22023';
  end if;
  select plan_key,status,current_period_start::date into v_plan,v_status,v_period
@@ -68,7 +68,7 @@ begin
   else case p_metric when 'workflow_created' then 3 else 25 end
  end;
  if p_metric='workflow_created' then
-  select count(*) into v_used from public.workflows where workspace_id=p_workspace_id;
+  select count(*) into v_used from public.workflows where workspace_id=p_workspace_id and status='active';
  else
   select coalesce(sum(quantity),0) into v_used from public.workspace_usage
    where workspace_id=p_workspace_id and period_start=date_trunc('month',now())::date and metric=p_metric;
@@ -92,7 +92,7 @@ begin
  select count(*) into v_workflows from public.workflows where workspace_id=p_workspace_id;
  select coalesce(sum(quantity),0) into v_runs from public.workspace_usage where workspace_id=p_workspace_id and period_start=date_trunc('month',now())::date and metric='agent_run';
  select coalesce(sum(quantity),0) into v_ai from public.workspace_usage where workspace_id=p_workspace_id and period_start=date_trunc('month',now())::date and metric='ai_generation';
- return jsonb_build_object('plan',v_plan,'status',v_status,'period_start',v_start,'usage',jsonb_build_object('workflow_created',v_workflows,'agent_run',v_runs,'ai_generation',v_ai),'limits',jsonb_build_object('workflow_created',case v_plan when 'starter' then 25 when 'pro' then 100 when 'business' then 500 else 3 end,'agent_run',case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 else 25 end,'ai_generation',case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 else 25 end),'billing',jsonb_build_object('provider_connected',exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and billing_provider is not null),'checkout_enabled',false));
+ return jsonb_build_object('plan',v_plan,'status',v_status,'period_start',v_start,'usage',jsonb_build_object('workflow_created',v_workflows,'agent_run',v_runs,'ai_generation',v_ai),'limits',jsonb_build_object('workflow_created',case v_plan when 'starter' then 10 when 'pro' then 50 when 'business' then 200 else 2 end,'workflow_execution',case v_plan when 'starter' then 2000 when 'pro' then 10000 when 'business' then 50000 else 300 end,'ai_credit',case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 else 25 end,'agent_run',case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 else 25 end,'ai_generation',case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 else 25 end),'billing',jsonb_build_object('provider_connected',exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and billing_provider is not null),'checkout_enabled',false));
 end $$;
 revoke all on function public.get_workspace_entitlements(uuid) from public,anon;
 grant execute on function public.get_workspace_entitlements(uuid) to authenticated;
