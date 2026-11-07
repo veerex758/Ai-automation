@@ -166,6 +166,21 @@ export default function WorkflowBuilderPage() {
     }));
   }
 
+  async function generateDraftOnCanvas() {
+    const prompt = window.prompt("Describe the workflow to draft:");
+    if (!prompt?.trim()) return;
+    setError(""); setNotice("Generating a reviewable draft…");
+    try {
+      const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
+      const payload = await response.json();
+      if (!response.ok || !payload.definition?.nodes?.length) throw new Error(payload.error || "AI could not create a draft.");
+      const generated = payload.definition as Definition;
+      const normalized = { ...generated, edges: generated.edges ?? generated.nodes.slice(1).map((node, index) => ({ id: "ai-edge-" + index, source: generated.nodes[index].id, target: node.id, label: "next" as const })) };
+      draftRevision.current += 1; setValidation(null); setDefinition(normalized); setSelectedId(normalized.nodes[0]?.id ?? "");
+      setNotice("AI draft loaded onto the canvas. Review and edit it, then Save workflow; it has not been executed.");
+    } catch (e) { setError(e instanceof Error ? e.message : "AI draft generation failed."); setNotice(""); }
+  }
+
   function addNode(type: Exclude<NodeType, "trigger">) {
     draftRevision.current += 1;
     setValidation(null);
@@ -236,7 +251,7 @@ export default function WorkflowBuilderPage() {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify({ definition, registrySteps: definition.nodes.map((node) => ({ id: node.id, nodeId: node.type === "trigger" ? "manual" : node.settings.provider === "email" ? "email" : node.settings.provider === "slack" ? "slack" : node.settings.provider === "openai" ? "openai" : "internal", operationId: node.type === "trigger" ? "start" : node.settings.provider === "email" ? "send_email" : node.settings.provider === "slack" ? "send_message" : node.settings.provider === "openai" ? "generate_text" : "create_task", kind: node.type === "trigger" ? "trigger" : "action", input: node.type === "trigger" ? {} : node.settings.provider === "email" ? { to: node.settings.recipient ?? "", subject: node.title, text: node.settings.message ?? node.title } : node.settings.provider === "slack" ? { message: node.settings.message ?? node.title } : node.settings.provider === "openai" ? { prompt: node.settings.message ?? node.title } : { message: node.settings.message ?? node.title } })).filter((step) => step.kind === "trigger" || step.nodeId !== "internal" || step.operationId === "create_task") }),
       });
       const result = await response.json();
       if (revisionAtStart !== draftRevision.current) return;
@@ -302,7 +317,7 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
+        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
       </header>
 
       <div className="builder-layout">
