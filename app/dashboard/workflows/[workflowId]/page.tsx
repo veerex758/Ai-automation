@@ -26,7 +26,7 @@ const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> 
 export default function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
   const workflowId = params.workflowId;
-  const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [workflow, setWorkflow] = useState<Workflow | null>(null);\n  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalog[]>([]);
   const [definition, setDefinition] = useState<Definition>(starterDefinition);
   const [savedFingerprint, setSavedFingerprint] = useState(JSON.stringify(starterDefinition));
   const [selectedId, setSelectedId] = useState("trigger-1");
@@ -70,7 +70,7 @@ export default function WorkflowBuilderPage() {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, { cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not load this workflow.");
-      setWorkflow(result.workflow);
+      setWorkflow(result.workflow);\n      const catalogResponse = await fetch("/api/node-catalog", { cache: "no-store" });\n      if (catalogResponse.ok) { const catalogResult = await catalogResponse.json(); setRegistryCatalog(Array.isArray(catalogResult.nodes) ? catalogResult.nodes : []); }
       const nextDefinition = result.definition as Definition;
       setDefinition({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) });
       setSavedFingerprint(JSON.stringify({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) }));
