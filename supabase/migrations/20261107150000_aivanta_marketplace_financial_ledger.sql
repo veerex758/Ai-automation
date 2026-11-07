@@ -62,14 +62,14 @@ begin
  end if;
  if purchase.status<>'pending' then raise exception 'purchase_not_pending'; end if;
  if exists(select 1 from public.marketplace_purchases where provider_payment_id=p_provider_payment_id and id<>purchase.id) then raise exception 'payment_id_reused'; end if;
- select creator_id into creator from public.marketplace_products where id=purchase.product_id and status='published' and current_version_id=purchase.product_version_id;
+ select mp.creator_id into creator from public.marketplace_products mp join public.marketplace_product_versions mv on mv.id=mp.current_version_id and mv.product_id=mp.id and mv.verification_status='approved' where mp.id=purchase.product_id and mp.status='published' and mp.current_version_id=purchase.product_version_id;
  if not found then raise exception 'product_version_not_current_or_published'; end if;
  commission:=floor(p_amount_minor*0.20); earning:=p_amount_minor-commission;
  update public.marketplace_purchases set status='paid',provider_payment_id=p_provider_payment_id,paid_at=now() where id=purchase.id;
  insert into public.marketplace_entitlements(user_id,product_id,purchase_id,entitlement_type,status)
  values(purchase.buyer_user_id,purchase.product_id,purchase.id,'purchase','active')
  on conflict(user_id,product_id,purchase_id) do nothing;
- insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
+ if exists(select 1 from public.marketplace_payment_events where provider=p_provider and provider_event_id=p_event_id and processing_status='processed') then raise exception 'payment_event_already_processed'; end if;\n insert into public.marketplace_payment_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,processing_status,processed_at) values(p_provider,p_event_id,'payment.succeeded',repeat('0',64),now(),'processed',now()) on conflict(provider,provider_event_id) do update set processing_status='processed',processed_at=now() where marketplace_payment_events.processing_status<>'processed';\n insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
  values
  (purchase.id,creator,p_provider,p_event_id,'gross_sale',p_amount_minor,p_currency,'Verified marketplace payment'),
  (purchase.id,creator,p_provider,p_event_id,'platform_commission',commission,p_currency,'Aivanta 20% commission'),
