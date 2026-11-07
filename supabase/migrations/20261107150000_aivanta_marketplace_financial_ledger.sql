@@ -12,6 +12,37 @@ alter table public.marketplace_payment_events add column if not exists error_cod
 alter table public.marketplace_payment_events drop constraint if exists marketplace_payment_events_provider_provider_event_id_key;
 create unique index if not exists marketplace_payment_events_provider_event_id_idx on public.marketplace_payment_events(provider,provider_event_id);
 create index if not exists marketplace_events_status_idx on public.marketplace_payment_events(processing_status,received_at);
+-- Upgrade the legacy Phase 1 ledger/inbox in place (never assume IF NOT EXISTS changes shape).
+alter table public.marketplace_payment_events alter column event_id drop not null;
+alter table public.marketplace_payment_events add column if not exists provider_event_id text;
+update public.marketplace_payment_events set provider_event_id=event_id where provider_event_id is null;
+alter table public.marketplace_payment_events alter column provider_event_id set not null;
+alter table public.marketplace_payment_events add column if not exists payload_sha256 char(64);
+alter table public.marketplace_payment_events add column if not exists received_at timestamptz not null default now();
+alter table public.marketplace_payment_events add column if not exists occurred_at timestamptz;
+alter table public.marketplace_payment_events add column if not exists processing_status text not null default 'received';
+alter table public.marketplace_payment_events add column if not exists error_code text;
+alter table public.marketplace_payment_events drop constraint if exists marketplace_payment_events_provider_event_id_key;
+alter table public.marketplace_payment_events drop constraint if exists marketplace_payment_events_provider_provider_event_id_key;
+create unique index if not exists marketplace_payment_events_provider_event_id_idx on public.marketplace_payment_events(provider,provider_event_id);
+create index if not exists marketplace_events_status_idx on public.marketplace_payment_events(processing_status,received_at);
+
+-- Legacy ledger has event_id NOT NULL, nonnegative amounts, and an old entry_type check.
+alter table public.marketplace_financial_ledger alter column event_id drop not null;
+alter table public.marketplace_financial_ledger add column if not exists provider text;
+alter table public.marketplace_financial_ledger add column if not exists provider_event_id text;
+alter table public.marketplace_financial_ledger add column if not exists memo text not null default '';
+alter table public.marketplace_financial_ledger add column if not exists created_by uuid references auth.users(id) on delete set null;
+alter table public.marketplace_financial_ledger drop constraint if exists marketplace_financial_ledger_entry_type_check;
+alter table public.marketplace_financial_ledger drop constraint if exists marketplace_financial_ledger_amount_minor_check;
+alter table public.marketplace_financial_ledger drop constraint if exists marketplace_financial_ledger_amount_check;
+alter table public.marketplace_financial_ledger drop constraint if exists marketplace_financial_ledger_currency_check;
+alter table public.marketplace_financial_ledger add constraint marketplace_financial_ledger_entry_type_check
+ check(entry_type in ('gross_sale','platform_commission','creator_earning','processor_fee','payment_fee','tax','refund','chargeback','payout','adjustment','platform_commission_reversal','creator_earning_reversal'));
+alter table public.marketplace_financial_ledger add constraint marketplace_financial_ledger_amount_nonzero_check check(amount_minor<>0);
+create unique index if not exists marketplace_ledger_provider_event_type_purchase_idx
+ on public.marketplace_financial_ledger(provider,provider_event_id,entry_type,purchase_id) where provider is not null and provider_event_id is not null;
+
 -- Ledger entries are append-only, integer minor units, and explicitly balanced by currency.
 create table if not exists public.marketplace_financial_ledger (
  id uuid primary key default gen_random_uuid(),
