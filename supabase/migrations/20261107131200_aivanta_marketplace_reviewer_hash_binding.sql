@@ -43,6 +43,16 @@ begin
   case when p_status='approved' then 'approved' else 'rejected' end,
   p_checks,p_reviewer_id,coalesce(p_notes,''),now()
  ) returning id into r;
+ -- Close the automated queue item so it cannot remain perpetually pending after human review.
+ update public.marketplace_verification_reviews
+ set status=case when p_status='approved' then 'passed' else 'failed' end,
+     checks=p_checks,reviewer_id=p_reviewer_id,notes=coalesce(p_notes,''),completed_at=now()
+ where id=(
+  select id from public.marketplace_verification_reviews
+  where product_id=p_product_id and version_id=p_version_id
+    and review_type='automated' and status in ('queued','running')
+  order by created_at desc limit 1 for update
+ );
  if p_status='approved' then
   update public.marketplace_products set status='verified',current_version_id=p_version_id,updated_at=now()
   where id=p_product_id and status in ('submitted','verified');
