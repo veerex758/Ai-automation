@@ -17,7 +17,7 @@ test("subscription and usage tables are workspace scoped and RLS protected", () 
 
 test("usage RPC rejects unauthenticated and invalid usage requests", () => {
   assert.match(migration, /auth\.uid\(\) is null or not private\.is_workspace_member/);
-  assert.match(migration, /p_metric not in \('workflow_created','agent_run','ai_generation'\)/);
+  assert.match(migration, /p_metric not in \('workflow_created','workflow_execution','ai_credit','agent_run','ai_generation'\)/);
   assert.match(migration, /p_quantity<1 or p_quantity>100/);
 });
 
