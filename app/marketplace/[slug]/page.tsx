@@ -1,12 +1,14 @@
 import Link from "next/link";
 import {notFound} from "next/navigation";
-import {createClient} from "@/lib/supabase/server";\nimport MarketplaceInstallButton from "./install-button";
+import {createClient} from "@/lib/supabase/server";
+import MarketplaceInstallButton from "./install-button";
 import "./product.css";
 type Ctx={params:Promise<{slug:string}>};
 type Product={id:string;current_version_id:string|null;name:string;summary:string;description:string;product_type:string;pricing_type:string;recurring_interval:string|null;price_minor:number;currency:string;required_plan:string;integrations:string[];permissions:unknown[];category?:{name:string}|null;creator?:{display_name:string}|null;version?:{version:string}|null};
 export default async function MarketplaceProductPage({params}:Ctx){
  const {slug}=await params;const sb=await createClient();
- const {data:{user}}=await sb.auth.getUser();\n const {data:p,error}=await sb.from("marketplace_products").select("id,current_version_id,slug,name,summary,description,product_type,pricing_type,recurring_interval,price_minor,currency,required_plan,integrations,permissions,expected_usage,published_at,category:marketplace_categories(name),creator:marketplace_creators(display_name,slug)").eq("slug",slug).eq("status","published").maybeSingle();
+ const {data:{user}}=await sb.auth.getUser();
+ const {data:p,error}=await sb.from("marketplace_products").select("id,current_version_id,slug,name,summary,description,product_type,pricing_type,recurring_interval,price_minor,currency,required_plan,integrations,permissions,expected_usage,published_at,category:marketplace_categories(name),creator:marketplace_creators(display_name,slug)").eq("slug",slug).eq("status","published").maybeSingle();
  if(error||!p)notFound();const product=p as unknown as Product;
  const {data:version}=product.current_version_id?await sb.from("marketplace_public_product_versions").select("version").eq("id",product.current_version_id).eq("product_id",product.id).maybeSingle():{data:null};
  product.version=version??undefined;const price=product.pricing_type==="free"?"Free":new Intl.NumberFormat("en-US",{style:"currency",currency:product.currency}).format(product.price_minor/100);
