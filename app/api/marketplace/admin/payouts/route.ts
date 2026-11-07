@@ -23,9 +23,9 @@ export async function POST(request:NextRequest){
  let body:unknown;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers})}
  if(!body||typeof body!=="object"||Array.isArray(body))return NextResponse.json({error:"Invalid request."},{status:400,headers});
  const input=body as Record<string,unknown>,id=input.payout_id,action=input.action,reason=input.reason,transfer=input.transfer_id;
- if(typeof id!=="string"||!/^[0-9a-f-]{36}$/i.test(id)||!["under_review","approve","reject","hold","processing","failed"].includes(String(action))||
+ if(typeof id!=="string"||!/^[0-9a-f-]{36}$/i.test(id)||!["review","approve","reject","hold","processing","failed"].includes(String(action))||
  (reason!==undefined&&(typeof reason!=="string"||reason.length>1000)))return NextResponse.json({error:"Invalid payout action."},{status:400,headers});
- if(action==="processing"&&typeof transfer==="string"&&transfer.length>255)return NextResponse.json({error:"Invalid transfer reference."},{status:400,headers});
+ if(transfer!==undefined)return NextResponse.json({error:"Provider transfer references are accepted only by settlement reconciliation."},{status:400,headers});
  const {data,error}=await access.db.rpc("marketplace_review_payout_request",{p_request_id:id,p_action:action,p_reason:typeof reason==="string"?reason.trim():"",p_transfer_id:typeof transfer==="string"?transfer.trim()||null:null});
  if(error){const status=/payout_request_not_found/.test(error.message)?404:/payout_transition_invalid/.test(error.message)?409:/invalid_payout_action/.test(error.message)?400:500;if(status===500)console.error("Finance payout action failed",error);return NextResponse.json({error:status===404?"Payout request not found.":status===409?"Payout status does not permit this action.":status===400?"Invalid payout action.":"Could not update payout."},{status,headers});}
  return NextResponse.json({payout:data},{headers});
