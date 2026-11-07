@@ -138,8 +138,6 @@ revoke update,delete on public.marketplace_payment_events from service_role;
  (purchase.id,creator,p_provider,p_event_id,'creator_earning',earning,p_currency,'Creator 80% gross share before fees/tax/adjustments');
  return jsonb_build_object('status','paid','purchase_id',purchase.id,'commission_minor',commission,'creator_earning_minor',earning);
 end; $$;
-revoke all on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text) from public,anon,authenticated;
-grant execute on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text) to service_role;
 
 -- Event inbox writes are service-only; processing records are retained for audit.
 revoke update,delete on public.marketplace_payment_events from service_role;
