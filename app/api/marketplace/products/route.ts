@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const url = request.nextUrl;
     let query = supabase.from("marketplace_products")
-      .select("id,slug,name,summary,product_type,pricing_type,recurring_interval,price_minor,currency,required_plan,integrations,permissions,expected_usage,published_at,category:marketplace_categories(name,slug),creator:marketplace_creators(display_name,slug)")\n      .eq("status", "published");
+      .select("id,slug,name,summary,product_type,pricing_type,recurring_interval,price_minor,currency,required_plan,integrations,permissions,expected_usage,published_at,category:marketplace_categories(name,slug),creator:marketplace_creators(display_name,slug)")
+      .eq("status", "published");
     const q = (url.searchParams.get("q") ?? "").replace(/[^\p{L}\p{N}\s_-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80);
     const category = url.searchParams.get("category");
     const type = url.searchParams.get("type");
