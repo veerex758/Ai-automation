@@ -1,5 +1,5 @@
 begin;
-select plan(8);
+select plan(11);
 
 -- Schema compatibility assertions: both old and new event/ledger columns coexist.
 select has_column('public','marketplace_payment_events','event_id','legacy event identifier retained');
