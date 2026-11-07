@@ -6,9 +6,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import "./builder.css";
 import RunTestPanel from "./run-test-panel";
+import RegistryOperationSettings from "./registry-operation-settings";
+type RegistryCatalog = { id: string; name: string; icon?: string; category?: string; triggers: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[]; actions: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[] };
 
 type NodeType = "trigger" | "action" | "condition";
-type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string>; position?: { x: number; y: number } };
+type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string>; registryNodeId?: string; registryOperationId?: string; registryInput?: Record<string, unknown>; position?: { x: number; y: number } };
 type WorkflowEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
 type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
 type Workflow = { id: string; name: string; description: string; status: string };
@@ -27,6 +29,7 @@ export default function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
   const workflowId = params.workflowId;
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalog[]>([]);
   const [definition, setDefinition] = useState<Definition>(starterDefinition);
   const [savedFingerprint, setSavedFingerprint] = useState(JSON.stringify(starterDefinition));
   const [selectedId, setSelectedId] = useState("trigger-1");
@@ -71,6 +74,8 @@ export default function WorkflowBuilderPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not load this workflow.");
       setWorkflow(result.workflow);
+      const catalogResponse = await fetch("/api/node-catalog", { cache: "no-store" });
+      if (catalogResponse.ok) { const catalogResult = await catalogResponse.json(); setRegistryCatalog(Array.isArray(catalogResult.nodes) ? catalogResult.nodes : []); }
       const nextDefinition = result.definition as Definition;
       setDefinition({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) });
       setSavedFingerprint(JSON.stringify({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) }));
@@ -164,6 +169,21 @@ export default function WorkflowBuilderPage() {
         ? { ...node, settings: { ...node.settings, [key]: value } }
         : node),
     }));
+  }
+
+  async function generateDraftOnCanvas() {
+    const prompt = window.prompt("Describe the workflow to draft:");
+    if (!prompt?.trim()) return;
+    setError(""); setNotice("Generating a reviewable draft…");
+    try {
+      const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
+      const payload = await response.json();
+      if (!response.ok || !payload.definition?.nodes?.length) throw new Error(payload.error || "AI could not create a draft.");
+      const generated = payload.definition as Definition;
+      const normalized = { ...generated, edges: generated.edges ?? generated.nodes.slice(1).map((node, index) => ({ id: "ai-edge-" + index, source: generated.nodes[index].id, target: node.id, label: "next" as const })) };
+      draftRevision.current += 1; setValidation(null); setDefinition(normalized); setSelectedId(normalized.nodes[0]?.id ?? "");
+      setNotice("AI draft loaded onto the canvas. Review and edit it, then Save workflow; it has not been executed.");
+    } catch (e) { setError(e instanceof Error ? e.message : "AI draft generation failed."); setNotice(""); }
   }
 
   function addNode(type: Exclude<NodeType, "trigger">) {
@@ -262,7 +282,7 @@ export default function WorkflowBuilderPage() {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify({ definition, registrySteps: definition.nodes.filter((node) => node.type === "trigger" || node.type === "action").map((node) => ({ id: node.id, nodeId: node.type === "trigger" ? "manual" : node.settings.provider === "email" ? "email" : node.settings.provider === "slack" ? "slack" : node.settings.provider === "openai" ? "openai" : "slack", operationId: node.type === "trigger" ? "start" : node.settings.provider === "email" ? "send_email" : node.settings.provider === "slack" ? "send_message" : node.settings.provider === "openai" ? "generate_text" : "send_message", kind: node.type === "trigger" ? "trigger" : "action", input: node.type === "trigger" ? {} : node.settings.provider === "email" ? { to: node.settings.recipient ?? "", subject: node.title, text: node.settings.message ?? node.title } : node.settings.provider === "slack" ? { message: node.settings.message ?? node.title } : node.settings.provider === "openai" ? { prompt: node.settings.message ?? node.title } : { message: node.settings.message ?? node.title } })) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save workflow steps.");
@@ -302,7 +322,7 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
+        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
       </header>
 
       <div className="builder-layout">
@@ -365,29 +385,7 @@ export default function WorkflowBuilderPage() {
               {(isLeadFollowUp || isLeadAlert || isFormToLead) && <><label htmlFor="trigger-source">Lead source</label><input id="trigger-source" maxLength={120} value={selectedNode.settings.source ?? ""} onChange={(event) => updateSetting("source", event.target.value)} placeholder="Website form, Instagram, CRM…" /><p className="config-note">Saved as draft context; the source is not connected automatically yet.</p></>}
               <p className="config-note">This selects the intended start event. Scheduling, inbound webhooks and live triggers are not active yet.</p>
             </div>}
-            {selectedNode.type === "action" && <div className="step-config-fields">
-              <div className="config-section-title">Action configuration</div>
-              <label htmlFor="action-provider">Service</label>
-              <select id="action-provider" value={selectedNode.settings.provider ?? "internal"} onChange={(event) => { const provider = event.target.value; updateSetting("provider", provider); updateSetting("operation", provider === "email" ? "send_email" : provider === "slack" ? "send_message" : provider === "webhook" ? "http_request" : "create_task"); }}>
-                <option value="internal">Aivanta task</option><option value="email">Email</option><option value="slack">Slack</option><option value="webhook">Webhook</option>
-              </select>
-              <label htmlFor="action-operation">Operation</label>
-              <select id="action-operation" value={selectedNode.settings.operation ?? "create_task"} onChange={(event) => updateSetting("operation", event.target.value)}>
-                {(selectedNode.settings.provider === "email" ? [{ value: "send_email", label: "Send an email" }] : selectedNode.settings.provider === "slack" ? [{ value: "send_message", label: "Send a message" }] : selectedNode.settings.provider === "webhook" ? [{ value: "http_request", label: "Send an HTTP request" }] : [{ value: "create_task", label: "Create a task" }]).map((operation) => <option key={operation.value} value={operation.value}>{operation.label}</option>)}
-              </select>
-              {(selectedNode.settings.operation === "send_email" || selectedNode.settings.operation === "send_message") && <>
-                <label htmlFor="action-recipient">Recipient</label><input id="action-recipient" maxLength={240} value={selectedNode.settings.recipient ?? ""} onChange={(event) => updateSetting("recipient", event.target.value)} placeholder="name@example.com or channel" />
-              </>}
-              {selectedNode.settings.operation === "http_request" && <>
-                <label htmlFor="action-url">Request URL</label><input id="action-url" maxLength={500} type="url" value={selectedNode.settings.url ?? ""} onChange={(event) => updateSetting("url", event.target.value)} placeholder="https://api.example.com/…" />
-              </>}
-              {isCommentToDm && <><label htmlFor="action-guide-url">Guide link</label><input id="action-guide-url" type="url" maxLength={500} value={selectedNode.settings.url ?? ""} onChange={(event) => updateSetting("url", event.target.value)} placeholder="https://your-site.com/guide" /></>}
-              <label htmlFor="action-message">{isCommentToDm ? "DM message" : isLeadFollowUp ? "Follow-up task notes" : isLeadAlert ? "Lead alert details" : isFormToLead ? "Lead review notes" : isSupportTriage ? "Support task details" : isContentApproval ? "Review task details" : "Payload / message"} <span>Optional</span></label>
-              <textarea id="action-message" maxLength={500} rows={3} value={selectedNode.settings.message ?? ""} onChange={(event) => updateSetting("message", event.target.value)} placeholder={isCommentToDm ? "Thanks for commenting! Here is your guide:" : isLeadFollowUp ? "Follow up with {{lead_name}} about {{interest}}." : isLeadAlert ? "Review new lead {{lead_name}} from {{source}}." : isFormToLead ? "Qualify {{name}} using the submitted details." : isSupportTriage ? "Review {{customer_name}}’s request: {{subject}}." : isContentApproval ? "Review the draft: {{content_title}}." : "Describe the content or payload…"} />
-              {isLeadFollowUp && <><label htmlFor="follow-up-delay">Follow-up delay</label><select id="follow-up-delay" value={selectedNode.settings.delay ?? "immediate"} onChange={(event) => updateSetting("delay", event.target.value)}><option value="immediate">Immediately</option><option value="15_minutes">After 15 minutes</option><option value="1_hour">After 1 hour</option><option value="1_day">After 1 day</option></select><p className="config-note">Delay is saved as a draft setting. Scheduled waiting is not active yet.</p></>}
-              <p className="config-note">Configuration is saved as a draft only. No service is contacted yet.</p>
-            </div>}
-            {selectedNode.type === "condition" && <div className="step-config-fields">
+            {selectedNode.type === "action" && <RegistryOperationSettings catalog={registryCatalog} kind="action" nodeId={selectedNode.registryNodeId ?? (selectedNode.settings.provider === "email" ? "email" : selectedNode.settings.provider === "slack" ? "slack" : selectedNode.settings.provider === "openai" ? "openai" : "internal")} operationId={selectedNode.registryOperationId ?? (selectedNode.settings.provider === "email" ? "send_email" : selectedNode.settings.provider === "slack" ? "send_message" : selectedNode.settings.provider === "openai" ? "generate_text" : "create_task")} input={selectedNode.registryInput ?? (selectedNode.settings.provider === "email" ? { to: selectedNode.settings.recipient ?? "", subject: selectedNode.title, text: selectedNode.settings.message ?? "" } : selectedNode.settings.provider === "slack" ? { message: selectedNode.settings.message ?? "" } : selectedNode.settings.provider === "openai" ? { prompt: selectedNode.settings.message ?? "" } : { message: selectedNode.settings.message ?? "" })} onChange={(nodeId, operationId, input) => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === selectedNode.id ? { ...node, registryNodeId: nodeId, registryOperationId: operationId, registryInput: input, settings: { ...node.settings, provider: nodeId, operation: operationId } } : node) })); }} />}{selectedNode.type === "condition" && <div className="step-config-fields">
               <div className="config-section-title">Condition rules</div>
               <label htmlFor="condition-field">{isCommentToDm ? "Comment text" : isLeadFollowUp ? "Lead follow-up status" : isSupportTriage ? "Ticket priority" : isContentApproval ? "Approval status" : "Field to check"}</label><input id="condition-field" maxLength={120} value={selectedNode.settings.field ?? ""} onChange={(event) => updateSetting("field", event.target.value)} placeholder={isCommentToDm ? "comment_text" : isLeadFollowUp ? "follow_up_status" : isSupportTriage ? "priority" : isContentApproval ? "approval_status" : "e.g. order.total"} />
               <label htmlFor="condition-operator">Comparison</label>
