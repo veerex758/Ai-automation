@@ -12,7 +12,7 @@ export async function POST(request:NextRequest,ctx:Ctx){
   const {reviewId}=await ctx.params;if(!/^[0-9a-f-]{36}$/i.test(reviewId))return NextResponse.json({error:"Invalid review id."},{status:400,headers});
   const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>4096)return NextResponse.json({error:"Request too large."},{status:413,headers});
   let body:Record<string,unknown>;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers});}
-  const action=body.action;if(!["approve","reject","publish"].includes(String(action)))return NextResponse.json({error:"Choose approve, reject, or publish."},{status:400,headers});
+  const action=body.action;if(!["approve","reject","request_changes","publish"].includes(String(action)))return NextResponse.json({error:"Choose approve, reject, request_changes, or publish."},{status:400,headers});
   const {data:review,error}=await auth.admin.from("marketplace_verification_reviews").select("id,product_id,version_id,marketplace_product_versions!inner(id,version,artifact_sha256,verification_status,manifest)").eq("id",reviewId).maybeSingle();
   if(error||!review)return NextResponse.json({error:"Review not found."},{status:404,headers});
   const version=Array.isArray(review.marketplace_product_versions)?review.marketplace_product_versions[0]:review.marketplace_product_versions;
@@ -31,7 +31,7 @@ export async function POST(request:NextRequest,ctx:Ctx){
   const integrityCheck={id:"artifact_integrity",label:"Stored version matches canonical SHA-256",passed:true,detail:"SHA-256 "+verification.artifactSha256};
   const checks=action==="approve"?[...verification.checks,integrityCheck]:[...verification.checks,integrityCheck,{id:"human_review",label:"Human reviewer decision",passed:false,detail:notes||"Rejected by Aivanta reviewer"}];
   const {data,error:decisionError}=await auth.admin.rpc("marketplace_record_verification",{
-   p_product_id:review.product_id,p_version_id:review.version_id,p_status:action==="approve"?"approved":"rejected",
+   p_product_id:review.product_id,p_version_id:review.version_id,p_status:action==="approve"?"approved":action==="request_changes"?"changes_requested":"rejected",
    p_checks:checks,p_notes:notes,p_reviewer_id:auth.user.id,p_artifact_sha256:verification.artifactSha256
   });
   if(decisionError)throw decisionError;

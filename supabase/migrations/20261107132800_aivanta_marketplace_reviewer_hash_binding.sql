@@ -15,7 +15,7 @@ declare
  r uuid;
 begin
  if auth.role()<>'service_role' then raise exception 'service_role_required'; end if;
- if p_status not in ('approved','rejected') then raise exception 'invalid_verification_status'; end if;
+ if p_status not in ('approved','rejected','changes_requested') then raise exception 'invalid_verification_status'; end if;
  if p_reviewer_id is null or not exists(select 1 from auth.users where id=p_reviewer_id) then
   raise exception 'valid_reviewer_required';
  end if;
@@ -40,7 +40,7 @@ begin
   product_id,version_id,review_type,status,checks,reviewer_id,notes,completed_at
  ) values(
   p_product_id,p_version_id,'human',
-  case when p_status='approved' then 'approved' else 'rejected' end,
+  case when p_status='approved' then 'approved' when p_status='changes_requested' then 'changes_requested' else 'rejected' end,
   p_checks,p_reviewer_id,coalesce(p_notes,''),now()
  ) returning id into r;
  -- Close the automated queue item so it cannot remain perpetually pending after human review.
@@ -56,6 +56,9 @@ begin
  if p_status='approved' then
   update public.marketplace_products set status='verified',current_version_id=p_version_id,updated_at=now()
   where id=p_product_id and status in ('submitted','verified');
+ elsif p_status='changes_requested' then
+  update public.marketplace_products set status='changes_requested',updated_at=now()
+  where id=p_product_id and status in ('submitted','verified');
  else
   update public.marketplace_products set status='rejected',updated_at=now()
   where id=p_product_id and status in ('submitted','verified');
@@ -64,7 +67,7 @@ begin
  insert into public.marketplace_admin_audit(actor_id,action,entity_type,entity_id,details)
  values(
   p_reviewer_id,
-  case when p_status='approved' then 'marketplace_version_approved' else 'marketplace_version_rejected' end,
+  case when p_status='approved' then 'marketplace_version_approved' when p_status='changes_requested' then 'marketplace_version_changes_requested' else 'marketplace_version_rejected' end,
   'product',p_product_id,
   jsonb_build_object(
    'version_id',p_version_id,
