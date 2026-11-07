@@ -35,4 +35,13 @@ test("unknown verified events are acknowledged but never finalized",async()=>{
  assert.equal((result.outcome as {status:string}).status,"ignored");
  assert.equal(called,false);
 });
-\ntest("verified refund dispatches only to reversal processor",async()=>{\n const refundEvent={...event,type:"refund.succeeded"};\n const refundProvider:MarketplacePaymentProvider={...provider,verifyWebhook:async()=>refundEvent,parseReversal:()=>({purchaseId:"purchase_1",kind:"refund",amountMinor:300})};\n let reversed:unknown;\n const result=await processMarketplaceWebhook(refundProvider,{...processor,reversePayment:async(input)=>{reversed=input;return input;}},new TextEncoder().encode("raw-event"),new Headers(),Date.now());\n assert.equal(result.eventId,"evt_1");\n assert.equal((reversed as {kind:string}).kind,"refund");\n assert.equal((reversed as {amountMinor:number}).amountMinor,300);\n});\n
+
+test("verified refund dispatches only to reversal processor",async()=>{
+ const refundEvent={...event,type:"refund.succeeded"};
+ const refundProvider:MarketplacePaymentProvider={...provider,verifyWebhook:async()=>refundEvent,parseReversal:()=>({purchaseId:"purchase_1",kind:"refund",amountMinor:300})};
+ let reversed:unknown;
+ const result=await processMarketplaceWebhook(refundProvider,{...processor,reversePayment:async(input)=>{reversed=input;return input;}},new TextEncoder().encode("raw-event"),new Headers(),Date.now());
+ assert.equal(result.eventId,"evt_1");
+ assert.equal((reversed as {kind:string}).kind,"refund");
+ assert.equal((reversed as {amountMinor:number}).amountMinor,300);
+});
