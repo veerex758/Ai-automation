@@ -39,3 +39,12 @@ test("workspace members can edit configuration but cannot alter install lifecycl
  assert.match(privileges,/create policy marketplace_installations_workspace_update/);
  assert.match(privileges,/private\.is_workspace_member\(workspace_id\)/);
 });
+
+const transitionSecurity=readFileSync(new URL("../supabase/migrations/20261107133200_aivanta_marketplace_installation_transition_security.sql",import.meta.url),"utf8");
+test("installation lifecycle and workflow linkage are not client-writable",()=>{
+ assert.match(transitionSecurity,/revoke insert, update on public\.marketplace_installations from authenticated/);
+ assert.match(transitionSecurity,/drop policy if exists marketplace_installations_workspace_insert/);
+ assert.match(transitionSecurity,/drop policy if exists marketplace_installations_workspace_update/);
+ assert.match(transitionSecurity,/grant execute on function public\.marketplace_install_product\(uuid,uuid\) to authenticated/);
+ assert.match(transitionSecurity,/grant execute on function public\.marketplace_materialize_installation\(uuid,uuid,text\) to service_role/);
+});
