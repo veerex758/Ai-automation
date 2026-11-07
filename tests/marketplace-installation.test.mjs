@@ -6,6 +6,7 @@ const migration=readFileSync(new URL("../supabase/migrations/20261107133000_aiva
 const route=readFileSync(new URL("../app/api/marketplace/products/[productId]/install/route.ts",import.meta.url),"utf8");
 
 test("Marketplace install materializes a verified version as an inactive workspace draft",()=>{
+ assert.match(migration,/marketplace_entitlements_one_free_per_user_product/);
  assert.match(migration,/create or replace function public\.marketplace_materialize_installation/);
  assert.match(migration,/i\.installed_by<>p_actor_id/);
  assert.match(migration,/p\.current_version_id<>i\.product_version_id/);
