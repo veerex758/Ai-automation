@@ -41,3 +41,40 @@ grant all on public.marketplace_payment_events,public.marketplace_financial_ledg
 -- Ledger immutability: append-only records. Service role is the only writer, and
 -- even it cannot UPDATE or DELETE entries through ordinary SQL privileges.
 revoke update,delete on public.marketplace_financial_ledger from service_role;
+
+-- Atomic payment finalization. Called only after a server verifies provider signature
+-- and parses a payment event; it independently checks provider, purchase, amount,
+-- currency, and idempotency before granting an entitlement.
+create or replace function public.marketplace_finalize_payment(
+ p_provider text,p_event_id text,p_purchase_id uuid,p_provider_payment_id text,
+ p_amount_minor integer,p_currency text
+) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare purchase public.marketplace_purchases%rowtype; creator uuid; commission bigint; earning bigint;
+begin
+ if p_provider is null or p_event_id is null or p_provider_payment_id is null then raise exception 'invalid_payment_event'; end if;
+ if p_amount_minor<=0 or p_currency<>'USD' then raise exception 'invalid_payment_amount'; end if;
+ select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
+ if not found then raise exception 'purchase_not_found'; end if;
+ if purchase.provider<>p_provider or purchase.amount_minor<>p_amount_minor or purchase.currency<>p_currency then raise exception 'payment_mismatch'; end if;
+ if purchase.status='paid' then
+   if purchase.provider_payment_id=p_provider_payment_id then return jsonb_build_object('status','already_paid','purchase_id',purchase.id); end if;
+   raise exception 'purchase_already_paid';
+ end if;
+ if purchase.status<>'pending' then raise exception 'purchase_not_pending'; end if;
+ if exists(select 1 from public.marketplace_purchases where provider_payment_id=p_provider_payment_id and id<>purchase.id) then raise exception 'payment_id_reused'; end if;
+ select creator_id into creator from public.marketplace_products where id=purchase.product_id and status='published' and current_version_id=purchase.product_version_id;
+ if not found then raise exception 'product_version_not_current_or_published'; end if;
+ commission:=floor(p_amount_minor*0.20); earning:=p_amount_minor-commission;
+ update public.marketplace_purchases set status='paid',provider_payment_id=p_provider_payment_id,paid_at=now() where id=purchase.id;
+ insert into public.marketplace_entitlements(user_id,product_id,purchase_id,entitlement_type,status)
+ values(purchase.buyer_user_id,purchase.product_id,purchase.id,'purchase','active')
+ on conflict(user_id,product_id,purchase_id) do nothing;
+ insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
+ values
+ (purchase.id,creator,p_provider,p_event_id,'gross_sale',p_amount_minor,p_currency,'Verified marketplace payment'),
+ (purchase.id,creator,p_provider,p_event_id,'platform_commission',commission,p_currency,'Aivanta 20% commission'),
+ (purchase.id,creator,p_provider,p_event_id,'creator_earning',earning,p_currency,'Creator 80% gross share before fees/tax/adjustments');
+ return jsonb_build_object('status','paid','purchase_id',purchase.id,'commission_minor',commission,'creator_earning_minor',earning);
+end; $$;
+revoke all on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text) from public,anon,authenticated;
+grant execute on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text) to service_role;
