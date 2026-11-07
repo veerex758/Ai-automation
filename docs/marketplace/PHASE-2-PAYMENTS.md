@@ -1,6 +1,6 @@
 # Marketplace Phase 2 — Payment provider + ledger (implementation contract)
 
-Status: design and database foundation only. Checkout remains disabled until a provider, country eligibility, credentials, and webhook secret are configured and explicitly authorized.
+Status: database foundation + provider-neutral adapter contract implemented on PR #162. Checkout remains disabled until a provider, country eligibility, credentials, and webhook secret are configured and explicitly authorized.
 
 ## Required invariants
 - Provider adapter is server-only; client never chooses amount, currency, creator, commission, entitlement, or verified version.
@@ -27,7 +27,8 @@ export type MarketplacePaymentProvider = {
 - Event inbox keyed by provider/event ID and processing state.
 - Append-only ledger with unique provider event + entry type + purchase guard.
 - Server-only RPC locks purchase; verifies exact expected amount/currency/provider; marks paid once; creates entitlement once; records gross, platform commission, creator earning.
-- Refund/chargeback RPC locks purchase, deduplicates provider event, bounds refunds to paid amount, appends reversal rows for gross/commission/creator share, updates purchase state, and revokes entitlement on full refund/dispute. No direct ledger UPDATE/DELETE. SQL runtime/concurrency verification remains required.
+- Refund/chargeback RPC locks purchase, deduplicates provider event, validates the event hash, caps cumulative refund + chargeback reversals against the original paid amount, appends reversal rows for gross/commission/creator share, updates purchase state, and revokes entitlement on full refund/dispute. No direct ledger UPDATE/DELETE. SQL runtime/concurrency verification remains required.
+- Provider-neutral TypeScript contract requires raw-body signature verification in each adapter, a verified event envelope, a five-minute freshness guard, and normalized USD/integer-minor-unit payment validation. No provider adapter is enabled.
 - RLS denies anon and ordinary users ledger/inbox writes; service-role processing only. Buyer can read own purchase/receipt; creator can read own earnings aggregate only through scoped RPC.
 - Reconciliation report compares provider events/settlement against purchases and ledger, flags mismatch; never auto-adjusts without authorized finance action.
 
