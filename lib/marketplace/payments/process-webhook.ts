@@ -4,7 +4,7 @@ import {
   assertMarketplacePayment,
   type MarketplacePaymentProvider,
   type VerifiedMarketplaceWebhook,
-  type ParsedMarketplaceReversal,
+  type ParsedMarketplaceReversal as ProviderParsedMarketplaceReversal,
 } from "./provider";
 
 export type MarketplaceWebhookProcessor = {
@@ -18,11 +18,7 @@ export type MarketplaceWebhookProcessor = {
   }): Promise<unknown>;
 };
 
-export type ParsedMarketplaceReversal = {
-  purchaseId: string;
-  kind: "refund" | "chargeback";
-  amountMinor: number;
-};
+export type ParsedMarketplaceReversal = ProviderParsedMarketplaceReversal;
 
 export async function processMarketplaceWebhook(
   provider: MarketplacePaymentProvider,
