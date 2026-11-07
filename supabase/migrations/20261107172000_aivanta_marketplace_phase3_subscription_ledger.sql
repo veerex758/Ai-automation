@@ -16,7 +16,7 @@ declare sub public.marketplace_subscriptions%rowtype; commission bigint; earning
 begin
  if auth.role()<>'service_role' then raise exception 'subscription_payment_service_role_required'; end if;
  if nullif(trim(p_provider),'') is null or nullif(trim(p_event_id),'') is null or
-  nullif(trim(p_provider_payment_id),'') is null or p_amount_minor<=0 or p_currency<>'USD' or
+  nullif(trim(p_provider_payment_id),'') is null or p_amount_minor<=0 or p_currency<>'USD' or p_occurred_at is null or
   p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then
   raise exception 'invalid_subscription_payment';
  end if;
@@ -29,6 +29,7 @@ begin
  select * into sub from public.marketplace_subscriptions where id=p_subscription_id and provider=p_provider for update;
  if not found then raise exception 'subscription_not_found'; end if;
  if event_row.subscription_id is distinct from sub.id then raise exception 'subscription_invoice_subscription_mismatch'; end if;
+ if event_row.occurred_at is distinct from p_occurred_at then raise exception 'subscription_invoice_timestamp_mismatch'; end if;
  if exists(select 1 from public.marketplace_financial_ledger where provider=p_provider and provider_payment_id=p_provider_payment_id and subscription_id<>sub.id) then raise exception 'subscription_payment_id_reused'; end if;
  if exists(select 1 from public.marketplace_financial_ledger where provider=p_provider and provider_event_id=p_event_id and subscription_id=sub.id and entry_type='gross_sale') then
   return jsonb_build_object('status','duplicate_invoice','subscription_id',sub.id);
