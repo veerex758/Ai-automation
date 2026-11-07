@@ -1,5 +1,7 @@
 import {createHash} from "node:crypto";
-import validateDefinition from "@/lib/workflows/validate-definition.cjs";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
+const {validateDefinition}=require("../workflows/validate-definition.cjs") as {validateDefinition:(value:unknown)=>{definition?:unknown;error?:string}};
 export type MarketplaceVerificationCheck={id:string;label:string;passed:boolean;detail:string};
 export type MarketplaceVerificationResult={passed:boolean;checks:MarketplaceVerificationCheck[];artifactSha256:string};
 const secretPatterns=[
