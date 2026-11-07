@@ -357,3 +357,73 @@ begin
 end; $$;
 revoke all on function public.marketplace_request_payout(bigint,text) from public,anon;
 grant execute on function public.marketplace_request_payout(bigint,text) to authenticated;
+
+
+-- Buyer subscription management surface: cancellation is an intent/outbox command,
+-- not a fake provider cancellation. Provider adapter must confirm by webhook.
+create table if not exists public.marketplace_subscription_commands (
+ id uuid primary key default gen_random_uuid(),
+ subscription_id uuid not null references public.marketplace_subscriptions(id) on delete restrict,
+ buyer_user_id uuid not null references auth.users(id) on delete restrict,
+ command text not null check(command in ('cancel_at_period_end')),
+ idempotency_key text not null,
+ status text not null default 'pending' check(status in ('pending','processing','succeeded','failed')),
+ provider_command_id text,
+ error_code text,
+ requested_at timestamptz not null default now(),
+ processed_at timestamptz,
+ unique(subscription_id,idempotency_key)
+);
+alter table public.marketplace_subscription_commands enable row level security;
+revoke all on public.marketplace_subscription_commands from anon,authenticated;
+grant select,insert,update on public.marketplace_subscription_commands to service_role;
+revoke update,delete on public.marketplace_subscription_commands from service_role;
+
+create or replace function public.marketplace_my_subscriptions()
+returns table(id uuid,product_id uuid,product_version_id uuid,status text,current_period_start timestamptz,current_period_end timestamptz,cancel_at_period_end boolean,grace_until timestamptz,created_at timestamptz)
+language sql stable security definer set search_path=public,pg_temp as $$
+ select s.id,s.product_id,s.product_version_id,s.status,s.current_period_start,s.current_period_end,s.cancel_at_period_end,s.grace_until,s.created_at
+ from public.marketplace_subscriptions s where s.buyer_user_id=auth.uid()
+ order by s.created_at desc;
+$$;
+revoke all on function public.marketplace_my_subscriptions() from public,anon;
+grant execute on function public.marketplace_my_subscriptions() to authenticated;
+
+create or replace function public.marketplace_request_subscription_cancellation(p_subscription_id uuid,p_idempotency_key text)
+returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
+declare sub public.marketplace_subscriptions%rowtype; command_id uuid;
+begin
+ if auth.uid() is null or p_idempotency_key is null or length(trim(p_idempotency_key)) not between 8 and 128 then raise exception 'invalid_subscription_cancellation'; end if;
+ select * into sub from public.marketplace_subscriptions where id=p_subscription_id and buyer_user_id=auth.uid() for update;
+ if not found then raise exception 'subscription_not_found'; end if;
+ if sub.status not in ('active','past_due') then raise exception 'subscription_not_cancellable'; end if;
+ insert into public.marketplace_subscription_commands(subscription_id,buyer_user_id,command,idempotency_key)
+ values(sub.id,auth.uid(),'cancel_at_period_end',p_idempotency_key)
+ on conflict(subscription_id,idempotency_key) do nothing returning id into command_id;
+ if command_id is null then select id into command_id from public.marketplace_subscription_commands where subscription_id=sub.id and idempotency_key=p_idempotency_key; end if;
+ update public.marketplace_subscriptions set cancel_at_period_end=true,updated_at=now() where id=sub.id;
+ return command_id;
+end; $$;
+revoke all on function public.marketplace_request_subscription_cancellation(uuid,text) from public,anon;
+grant execute on function public.marketplace_request_subscription_cancellation(uuid,text) to authenticated;
+
+-- Creator-facing payout history and statement listing remain caller-scoped.
+create or replace function public.marketplace_my_payouts()
+returns table(id uuid,amount_minor bigint,currency char(3),status text,requested_at timestamptz,reviewed_at timestamptz,processed_at timestamptz,failure_code text)
+language sql stable security definer set search_path=public,pg_temp as $$
+ select p.id,p.amount_minor,p.currency,p.status,p.requested_at,p.reviewed_at,p.processed_at,p.failure_code
+ from public.marketplace_payout_requests p join public.marketplace_creators c on c.id=p.creator_id
+ where c.user_id=auth.uid() order by p.requested_at desc;
+$$;
+revoke all on function public.marketplace_my_payouts() from public,anon;
+grant execute on function public.marketplace_my_payouts() to authenticated;
+
+create or replace function public.marketplace_my_creator_statements()
+returns table(id uuid,period_start date,period_end date,currency char(3),gross_sales_minor bigint,commission_minor bigint,creator_earnings_minor bigint,reversals_minor bigint,fees_tax_minor bigint,payouts_minor bigint,net_payable_minor bigint,ledger_cutoff timestamptz,generated_at timestamptz)
+language sql stable security definer set search_path=public,pg_temp as $$
+ select s.id,s.period_start,s.period_end,s.currency,s.gross_sales_minor,s.commission_minor,s.creator_earnings_minor,s.reversals_minor,s.fees_tax_minor,s.payouts_minor,s.net_payable_minor,s.ledger_cutoff,s.generated_at
+ from public.marketplace_creator_statements s join public.marketplace_creators c on c.id=s.creator_id
+ where c.user_id=auth.uid() and c.status='verified' order by s.period_start desc;
+$$;
+revoke all on function public.marketplace_my_creator_statements() from public,anon;
+grant execute on function public.marketplace_my_creator_statements() to authenticated;
