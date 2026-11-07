@@ -5,7 +5,7 @@ type Product={id:string;slug:string;name:string;summary:string;product_type:stri
 type Props={searchParams:Promise<{q?:string;category?:string;type?:string}>};
 const money=(n:number,c:string)=>new Intl.NumberFormat("en-US",{style:"currency",currency:c,maximumFractionDigits:n%100===0?0:2}).format(n/100);
 export default async function MarketplacePage({searchParams}:Props){
- const params=await searchParams;const q=(params.q??"").trim().slice(0,100);const category=params.category??"";const type=params.type??"";
+ const params=await searchParams;const q=(params.q??"").replace(/[^\\p{L}\\p{N}\\s_-]/gu," ").replace(/\\s+/g," ").trim().slice(0,80);const category=params.category??"";const type=params.type??"";
  let products:Product[]=[];let categories:{name:string;slug:string}[]=[];
  try{const sb=await createClient();let query=sb.from("marketplace_products").select("id,slug,name,summary,product_type,pricing_type,recurring_interval,price_minor,currency,category:marketplace_categories(name,slug),creator:marketplace_creators(display_name,slug)").eq("status","published").order("published_at",{ascending:false}).limit(60);
  if(q)query=query.or(`name.ilike.%${q}%,summary.ilike.%${q}%`);if(type&&["workflow","pack","agent"].includes(type))query=query.eq("product_type",type);
