@@ -32,7 +32,7 @@ test("finalization grants once and books the 20/80 gross split", () => {
 });
 
 test("provider setup, signature, replay and money movement remain explicitly gated", () => {
-  for (const phrase of ["signature is validated against raw request bytes", "idempotency", "provider", "No entitlement on pending/failed", "Do not report payouts as available"]) {
+  for (const phrase of ["Only verified provider webhook event can transition pending purchase to paid", "idempotency", "provider", "Do not report payouts as available"]) {
     assert.ok(spec.toLowerCase().includes(phrase.toLowerCase()));
   }
 });
