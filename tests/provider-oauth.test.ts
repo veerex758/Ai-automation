@@ -118,3 +118,14 @@ test("OAuth refresh maps revoked credentials to an explicit reauthorization erro
     if (priorSecret === undefined) delete process.env.AIVANTA_SALESFORCE_CLIENT_SECRET; else process.env.AIVANTA_SALESFORCE_CLIENT_SECRET = priorSecret;
   }
 });
+
+test("all registered OAuth provider configs use HTTPS endpoints and declare scopes", () => {
+  for (const [provider, config] of Object.entries(PROVIDER_OAUTH_CONFIG)) {
+    assert.equal(new URL(config.authorizeUrl).protocol, "https:", provider + " authorize endpoint");
+    assert.equal(new URL(config.tokenUrl).protocol, "https:", provider + " token endpoint");
+    assert.ok(config.scopes.length > 0, provider + " scopes");
+    assert.ok(config.scopes.every((scope) => typeof scope === "string" && scope.trim().length > 0), provider + " scope values");
+    assert.equal(config.clientIdEnv, "AIVANTA_" + provider.toUpperCase() + "_CLIENT_ID");
+    assert.equal(config.clientSecretEnv, "AIVANTA_" + provider.toUpperCase() + "_CLIENT_SECRET");
+  }
+});
