@@ -1,5 +1,5 @@
 begin;
-select plan(11);
+select plan(17);
 
 -- Schema compatibility assertions: both old and new event/ledger columns coexist.
 select has_column('public','marketplace_payment_events','event_id','legacy event identifier retained');
@@ -45,6 +45,21 @@ select is((select count(*)::integer from public.marketplace_entitlements where p
 select is((select sum(amount_minor)::integer from public.marketplace_financial_ledger where purchase_id='a6666666-6666-4666-8666-666666666666' and entry_type='platform_commission'),200,'platform receives exactly 20 percent');
 select is((select sum(amount_minor)::integer from public.marketplace_financial_ledger where purchase_id='a6666666-6666-4666-8666-666666666666' and entry_type='creator_earning'),800,'creator receives exactly 80 percent');
 select is((select count(*)::integer from public.marketplace_financial_ledger where purchase_id='a6666666-6666-4666-8666-666666666666'),3,'finalization writes three ledger lines');
+
+-- Duplicate payment event must be recorded without duplicating ledger or entitlement.
+select lives_ok(
+ $select public.marketplace_finalize_payment('mock','evt-sql-duplicate','a6666666-6666-4666-8666-666666666666','pay-sql-1',1000,'USD',repeat('d',64),now())$,
+ 'duplicate provider payment event is safely acknowledged'
+);
+select is((select count(*)::integer from public.marketplace_payment_events where provider='mock' and provider_event_id='evt-sql-duplicate' and error_code='duplicate_payment'),1,'duplicate payment event is persisted in inbox');
+
+select lives_ok(
+ $select public.marketplace_reverse_payment('mock','evt-sql-refund','a6666666-6666-4666-8666-666666666666','refund',1000,repeat('e',64),now())$,
+ 'full refund appends balanced reversals'
+);
+select is((select status from public.marketplace_purchases where id='a6666666-6666-4666-8666-666666666666'),'refunded','full refund updates purchase state');
+select is((select status from public.marketplace_entitlements where purchase_id='a6666666-6666-4666-8666-666666666666'),'revoked','full refund revokes entitlement');
+select is((select count(*)::integer from public.marketplace_financial_reconciliation() where purchase_id='a6666666-6666-4666-8666-666666666666'),0,'reconciliation treats refunds as reversals, not missing gross sales');
 
 select * from finish();
 rollback;
