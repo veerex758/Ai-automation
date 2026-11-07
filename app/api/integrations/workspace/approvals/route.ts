@@ -48,7 +48,11 @@ export async function POST(request: NextRequest) {
     if (origin && new URL(origin).origin !== new URL(request.url).origin) return json({ error: "Cross-origin request rejected." }, 403);
     const auth = await authenticatedWorkspace();
     if ("response" in auth) return auth.response;
-    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > 8 * 1024) return json({ error: "Approval request exceeds the 8 KB limit." }, 413);
+    const rawBody = await request.text();
+    if (Buffer.byteLength(rawBody, "utf8") > 8 * 1024) return json({ error: "Approval request exceeds the 8 KB limit." }, 413);
+    const body = (() => { try { return JSON.parse(rawBody) as Record<string, unknown>; } catch { return null; } })();
     if (!body || typeof body.nodeId !== "string" || typeof body.operationId !== "string" ||
         typeof body.kind !== "string" || !["trigger", "action"].includes(body.kind) ||
         typeof body.decision !== "string" || !["approved", "revoked"].includes(body.decision) ||
