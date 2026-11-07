@@ -1,18 +1,17 @@
 -- Marketplace Phase 2 financial ledger foundation. Reversible by a reviewed forward migration; staging replay required.
 -- Provider webhook inbox is durable and unique per provider event.
-create table if not exists public.marketplace_payment_events (
- id uuid primary key default gen_random_uuid(),
- provider text not null check (provider ~ '^[a-z0-9_-]{2,40}$'),
- provider_event_id text not null check (char_length(provider_event_id) between 1 and 255),
- event_type text not null check (char_length(event_type) between 1 and 160),
- payload_sha256 char(64) not null check (payload_sha256 ~ '^[a-f0-9]{64}$'),
- received_at timestamptz not null default now(),
- occurred_at timestamptz,
- processing_status text not null default 'received' check (processing_status in ('received','processing','processed','ignored','failed')),
- processed_at timestamptz,
- error_code text,
- unique(provider,provider_event_id)
-);
+-- Earlier Phase 1/2 migration created a narrower inbox; evolve it in place.
+alter table public.marketplace_payment_events add column if not exists provider_event_id text;
+update public.marketplace_payment_events set provider_event_id=event_id where provider_event_id is null;
+alter table public.marketplace_payment_events alter column provider_event_id set not null;
+alter table public.marketplace_payment_events add column if not exists payload_sha256 char(64);
+alter table public.marketplace_payment_events add column if not exists received_at timestamptz not null default now();
+alter table public.marketplace_payment_events add column if not exists occurred_at timestamptz;
+alter table public.marketplace_payment_events add column if not exists processing_status text not null default 'received';
+alter table public.marketplace_payment_events add column if not exists error_code text;
+alter table public.marketplace_payment_events drop constraint if exists marketplace_payment_events_provider_provider_event_id_key;
+create unique index if not exists marketplace_payment_events_provider_event_id_idx on public.marketplace_payment_events(provider,provider_event_id);
+create index if not exists marketplace_events_status_idx on public.marketplace_payment_events(processing_status,received_at);
 -- Ledger entries are append-only, integer minor units, and explicitly balanced by currency.
 create table if not exists public.marketplace_financial_ledger (
  id uuid primary key default gen_random_uuid(),
