@@ -41,3 +41,9 @@ test("approval API bounds raw request bytes before JSON parsing", () => {
   assert.match(approvalsRoute, /Buffer\.byteLength\(rawBody, "utf8"\) > 8 \* 1024/);
   assert.match(approvalsRoute, /Approval request exceeds the 8 KB limit/);
 });
+
+test("approval reads and writes reject cross-origin browser requests", () => {
+  assert.match(approvalsRoute, /export async function GET\(request: NextRequest\)/);
+  assert.equal((approvalsRoute.match(/Cross-origin request rejected/g) ?? []).length, 2);
+  assert.match(approvalsRoute, /request\.headers\.get\("origin"\)/);
+});
