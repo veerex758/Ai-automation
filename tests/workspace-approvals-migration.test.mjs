@@ -34,3 +34,10 @@ test("approval API authenticates users, requires workspace admins and appends im
   assert.match(approvalsRoute, /decision/);
   assert.match(approvalsRoute, /private, no-store/);
 });
+
+test("approval API bounds raw request bytes before JSON parsing", () => {
+  assert.match(approvalsRoute, /content-length/);
+  assert.match(approvalsRoute, /request\.text\(\)/);
+  assert.match(approvalsRoute, /Buffer\.byteLength\(rawBody, "utf8"\) > 8 \* 1024/);
+  assert.match(approvalsRoute, /Approval request exceeds the 8 KB limit/);
+});
