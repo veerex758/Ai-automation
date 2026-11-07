@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useState } from "react";
 import "./billing.css";
-type BillingData={subscription:{plan_key:string,status:string,billing_provider?:string|null,current_period_end?:string|null};entitlements:{plan:string,status:string,usage:Record<string,number>,limits:Record<string,number|null>,billing:{checkout_enabled:boolean}};plans:Array<{key:string,name:string,limits:Record<string,number>}>};
+type BillingData={subscription:{plan_key:string,status:string,billing_provider?:string|null,current_period_end?:string|null};entitlements:{plan:string,status:string,usage:Record<string,number>,limits:Record<string,number|null>,billing:{checkout_enabled:boolean}};plans:Array<{key:string,name:string,limits:Record<string,number|null>}>};
 const labels:Record<string,string>={workflow_created:"Active workflows",workflow_execution:"Workflow executions",ai_credit:"AI credits"};
 export default function BillingPage(){
  const [data,setData]=useState<BillingData|null>(null);const [error,setError]=useState("");const [loading,setLoading]=useState(true);
