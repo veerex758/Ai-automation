@@ -26,10 +26,13 @@ test("free and paid plan quotas are encoded in server-side metering", () => {
   for (const cap of ["workflow_execution' then 300", "workflow_execution' then 2000", "workflow_execution' then 10000", "workflow_execution' then 50000"]) assert.ok(migration.includes(cap), `missing cap ${cap}`);
 });
 
-test("workflow creation, agent runs, and AI draft generation call the usage RPC", () => {
-  assert.match(workflowRoute, /consume_workspace_usage[\s\S]*workflow_created[\s\S]*usage\?\.allowed/);
-  assert.match(agentRunRoute, /consume_workspace_usage[\s\S]*agent_run[\s\S]*usage\?\.allowed/);
-  assert.match(aiRoute, /consume_workspace_usage[\s\S]*ai_generation[\s\S]*usage\?\.allowed/);
+test("active workflow caps are enforced transactionally and AI usage consumes AI credits", () => {
+  assert.match(hardeningMigration, /pg_advisory_xact_lock/);
+  assert.match(hardeningMigration, /workflows_enforce_active_entitlement/);
+  assert.match(hardeningMigration, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
+  assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
+  assert.match(agentRunRoute, /p_metric: "ai_credit"[\\s\\S]*feature: "agent_run"/);
+  assert.match(aiRoute, /p_metric: "ai_credit"[\\s\\S]*workflow_draft_generation/);
 });
 
 test("enterprise plan custom limits render without numeric formatting errors", async () => {
