@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server";import {createClient} from "@/lib/supabase/server";
+export async function GET(){try{const sb=await createClient();const {data,error}=await sb.from("marketplace_categories").select("id,name,slug").eq("is_active",true).order("sort_order");if(error)throw error;return NextResponse.json({categories:data??[]},{headers:{"Cache-Control":"public,max-age=300"}})}catch{return NextResponse.json({error:"Could not load categories."},{status:500})}}
