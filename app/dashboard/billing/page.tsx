@@ -1,5 +1,16 @@
-import DashboardSectionPage from "../section-page";
-
-export default function Page() {
-  return <DashboardSectionPage section="billing" />;
+"use client";
+import { useEffect,useState } from "react";
+import "./billing.css";
+type BillingData={subscription:{plan_key:string,status:string,billing_provider?:string|null,current_period_end?:string|null};entitlements:{plan:string,status:string,usage:Record<string,number>,limits:Record<string,number|null>,billing:{checkout_enabled:boolean}};plans:Array<{key:string,name:string,limits:Record<string,number|null>}>};
+const labels:Record<string,string>={workflow_created:"Active workflows",workflow_execution:"Workflow executions",ai_credit:"AI credits"};
+export default function BillingPage(){
+ const [data,setData]=useState<BillingData|null>(null);const [error,setError]=useState("");const [loading,setLoading]=useState(true);
+ useEffect(()=>{fetch("/api/billing",{cache:"no-store"}).then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j.error||"Billing data unavailable");setData(j)}).catch(e=>setError(e instanceof Error?e.message:"Billing unavailable")).finally(()=>setLoading(false))},[]);
+ return <main className="billing-shell"><header><span className="billing-eyebrow">AIVANTA / WORKSPACE</span><h1>Plan &amp; usage</h1><p>Usage is enforced server-side. Payment checkout is not enabled yet.</p></header>
+ {loading?<section className="billing-panel">Loading workspace entitlements…</section>:error?<section className="billing-panel billing-error">{error}<p>Run the Phase 5 Supabase migration replay before enabling this screen.</p></section>:data&&<>
+ <section className="billing-current"><div><small>ACTIVE PLAN</small><h2>{data.plans.find(p=>p.key===data.subscription.plan_key)?.name??data.subscription.plan_key}</h2><p>Status: {data.subscription.status} · Billing: {data.subscription.billing_provider??"not connected"}</p></div><span className="billing-chip">{data.entitlements.status==="active"?"Entitlements active":"Access restricted"}</span></section>
+ <section className="billing-panel"><h2>Current period usage</h2><p>Usage resets on the first day of each calendar month.</p>{Object.entries(labels).map(([metric,label])=>{const used=data.entitlements.usage[metric]??0;const limit=data.entitlements.limits[metric]??0;const pct=limit?Math.min(100,Math.round(used/limit*100)):0;return <div className="usage-row" key={metric}><div className="usage-label"><strong>{label}</strong><span>{used.toLocaleString()} / {limit==null?"Custom":limit.toLocaleString()}</span></div><div className="usage-track"><span style={{width:pct+"%"}}/></div></div>})}</section>
+ <section className="billing-panel"><h2>Plans</h2><div className="billing-plans">{data.plans.map(plan=><article key={plan.key} className={plan.key===data.subscription.plan_key?"billing-plan selected":"billing-plan"}><h3>{plan.name}</h3><ul><li>{plan.limits.workflow_created==null?"Custom":plan.limits.workflow_created.toLocaleString()} active workflows</li><li>{plan.limits.workflow_execution==null?"Custom executions":plan.limits.workflow_execution.toLocaleString()+" executions / month"}</li><li>{plan.limits.ai_credit==null?"Custom AI credits":plan.limits.ai_credit.toLocaleString()+" AI credits / month"}</li></ul>{plan.key===data.subscription.plan_key?<span className="billing-current-label">Current plan</span>:<button disabled title="Payment checkout is not configured">Upgrade unavailable</button>}</article>)}</div><p className="billing-note">Plan changes require a verified payment provider webhook. No payment or subscription change can be initiated here.</p></section>
+ </>}
+ </main>
 }
