@@ -7,3 +7,10 @@
 .marketplace-pagination{display:flex;justify-content:space-between;align-items:center;margin:25px 0 5px;color:#8fa0b7;font-size:12px}
 .marketplace-pagination a{padding:10px 13px;border:1px solid #34465d;border-radius:8px;color:#c7d9e9;text-decoration:none}
 .marketplace-pagination a:hover{border-color:#6b91b0;background:#172637}
+
+.creator-store-hero{display:flex;align-items:center;gap:24px;padding:45px 0 38px;border-bottom:1px solid #ffffff12;margin-bottom:35px}
+.creator-store-avatar{flex:0 0 76px;width:76px;height:76px;border-radius:22px;display:grid;place-items:center;background:linear-gradient(145deg,#26465d,#172737);border:1px solid #45647d;color:#c7e4f5;font-size:30px;font-weight:700}
+.creator-store-hero h1{font-size:32px;letter-spacing:-1px;margin:7px 0}
+.creator-store-hero p{font-size:13px;color:#9aaac0;line-height:1.7;max-width:650px;margin:0 0 8px}
+.creator-store-hero>div:last-child>span{font-size:11px;color:#71839b}
+@media(max-width:600px){.creator-store-hero{align-items:flex-start;gap:16px}.creator-store-avatar{width:56px;height:56px;flex-basis:56px;border-radius:16px;font-size:22px}.creator-store-hero h1{font-size:25px}}
