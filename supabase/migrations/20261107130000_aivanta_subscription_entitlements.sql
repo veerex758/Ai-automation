@@ -39,8 +39,8 @@ grant select on public.workspace_usage to authenticated;
 revoke all on public.workspace_usage from anon,authenticated;
 grant select on public.workspace_usage to authenticated;
 
--- Plan caps: Free 3 workflows / 25 model runs / 25 AI generations monthly;
--- Starter 25 / 500 / 500; Pro 100 / 2500 / 2500; Business 500 / 15000 / 15000.
+-- Plan caps follow the approved Aivanta plan matrix: Free 2 active workflows / 300 executions / 25 AI credits;
+-- Starter 10 / 2,000 / 500; Pro 50 / 10,000 / 2,500; Business 200 / 50,000 / 15,000.
 create or replace function public.consume_workspace_usage(p_workspace_id uuid,p_metric text,p_quantity integer default 1,p_metadata jsonb default '{}'::jsonb)
 returns jsonb language plpgsql security definer set search_path=public,private,pg_temp as $$
 declare
