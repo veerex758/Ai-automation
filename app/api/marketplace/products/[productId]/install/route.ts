@@ -52,8 +52,16 @@ export async function POST(_request:NextRequest,context:Context){
    if(message.includes("authentication_required"))return NextResponse.json({error:"Authentication required."},{status:401,headers});
    throw installError;
   }
-  const installationId=installation&&typeof installation==="object"?(installation as Record<string,unknown>).installation_id:null;
+  const installationRecord=installation&&typeof installation==="object"?installation as Record<string,unknown>:{};
+  const installationId=installationRecord.installation_id;
   if(typeof installationId!=="string")throw new Error("Marketplace install transition returned no installation ID.");
+  if(installationRecord.product_version_id!==version.id){
+   return NextResponse.json({
+    error:"This product has a newer verified version. Your installed version was left unchanged.",
+    updateAvailable:true,
+    installation:installationRecord
+   },{status:409,headers});
+  }
   const {data:materialized,error:materializeError}=await admin.rpc("marketplace_materialize_installation",{
    p_installation_id:installationId,p_actor_id:user.id,p_artifact_sha256:version.artifact_sha256
   });
@@ -64,7 +72,7 @@ export async function POST(_request:NextRequest,context:Context){
    throw materializeError;
   }
   return NextResponse.json({
-   installation:{...(installation as Record<string,unknown>),workflow_id:materialized?.workflow_id},
+   installation:{...installationRecord,workflow_id:materialized?.workflow_id},
    workflow:{id:materialized?.workflow_id,status:"draft"},
    workspace:{id:workspace.id,name:workspace.name},
    message:"Copied into your workspace as a draft. Configure your own connections and test it before activation; installation never executes the workflow."
