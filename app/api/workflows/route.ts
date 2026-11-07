@@ -139,6 +139,10 @@ export async function POST(request: NextRequest) {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    const { data: usage, error: usageError } = await supabase.rpc("consume_workspace_usage", { p_workspace_id: workspace.id, p_metric: "workflow_created", p_quantity: 1, p_metadata: { source: "dashboard" } });
+    if (usageError) throw usageError;
+    if (!usage?.allowed) return NextResponse.json({ error: "Workspace workflow limit reached. Upgrade your plan to create more workflows.", entitlement: usage }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+
     const { data, error } = await supabase
       .from("workflows")
       .insert({
