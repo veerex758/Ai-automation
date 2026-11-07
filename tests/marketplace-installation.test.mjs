@@ -9,6 +9,8 @@ test("Marketplace install materializes a verified version as an inactive workspa
  assert.match(migration,/marketplace_entitlements_one_free_per_user_product/);
  assert.match(migration,/create or replace function public\.marketplace_materialize_installation/);
  assert.match(migration,/i\.installed_by<>p_actor_id/);
+ assert.match(migration,/workspace_access_denied/);
+ assert.match(migration,/active_entitlement_required/);
  assert.match(migration,/p\.current_version_id<>i\.product_version_id/);
  assert.match(migration,/v\.verification_status='approved'/);
  assert.match(migration,/'draft',\s*p_actor_id/);
