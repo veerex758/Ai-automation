@@ -139,10 +139,6 @@ export async function POST(request: NextRequest) {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data: usage, error: usageError } = await supabase.rpc("consume_workspace_usage", { p_workspace_id: workspace.id, p_metric: "workflow_created", p_quantity: 1, p_metadata: { source: "dashboard" } });
-    if (usageError) throw usageError;
-    if (!usage?.allowed) return NextResponse.json({ error: "Workspace workflow limit reached. Upgrade your plan to create more workflows.", entitlement: usage }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
-
     const { data, error } = await supabase
       .from("workflows")
       .insert({
@@ -156,6 +152,12 @@ export async function POST(request: NextRequest) {
       .select("id, name, description, status, updated_at")
       .single();
 
+    if (error?.code === "P0001" && error.message === "AIVANTA_WORKFLOW_LIMIT_REACHED") {
+      return NextResponse.json({ error: "Workspace active-workflow limit reached. Upgrade your plan to activate more workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (error?.code === "P0001" && error.message === "AIVANTA_SUBSCRIPTION_INACTIVE") {
+      return NextResponse.json({ error: "This workspace subscription is inactive. Update billing before activating workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+    }
     if (error) throw error;
     return NextResponse.json(
       { workflow: presentWorkflow(data) },
