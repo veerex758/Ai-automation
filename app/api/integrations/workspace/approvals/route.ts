@@ -26,8 +26,10 @@ async function authenticatedWorkspace() {
   return { user, workspace, supabase } as const;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const origin = request.headers.get("origin");
+    if (origin && new URL(origin).origin !== new URL(request.url).origin) return json({ error: "Cross-origin request rejected." }, 403);
     const auth = await authenticatedWorkspace();
     if ("response" in auth) return auth.response;
     const { data, error } = await adminClient().from("workspace_provider_operation_approvals")
