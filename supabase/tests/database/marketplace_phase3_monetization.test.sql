@@ -1,5 +1,5 @@
 begin;
-select plan(52);
+select plan(57);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -64,6 +64,12 @@ select lives_ok($select public.marketplace_review_payout_request((select id from
 select lives_ok($select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'processing','batch-started','')$,'approved payout can enter processing');
 select lives_ok($select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'paid','reconciled','mock-transfer-phase3')$,'paid reconciliation records external transfer reference');
 select is((public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'paid','','mock-transfer-phase3')->>'duplicate'),'true','paid reconciliation retry is idempotent');
+select throws_ok($select public.marketplace_settle_payout((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'mock','transfer-1','settle-event-1',repeat('a',64),'2026-11-05')$,'P0001','payout_settlement_service_role_required','authenticated creator cannot settle payouts');
+select set_config('request.jwt.claim.role','service_role',true);
+select lives_ok($select public.marketplace_settle_payout((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'mock','transfer-1','settle-event-1',repeat('a',64),'2026-11-05')$,'service role settles payout with provider reference');
+select is((public.marketplace_settle_payout((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'mock','transfer-1','settle-event-1',repeat('a',64),'2026-11-05')->>'status'),'duplicate_settlement','provider settlement retry is idempotent');
+select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001') and entry_type='payout'),1,'settlement appends exactly one payout ledger debit');
+select set_config('request.jwt.claim.role','authenticated',true);
 select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001') and entry_type='payout'),1,'paid payout appends exactly one ledger debit');
 select lives_ok($$select public.marketplace_set_creator_payout_profile('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified','complete',true,1000,null)$$,'service role updates payout onboarding profile');
 select lives_ok($$select public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now())$$,'service role generates creator statement snapshot');
