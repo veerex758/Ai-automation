@@ -62,10 +62,10 @@ begin
   return jsonb_build_object('allowed',false,'reason','subscription_inactive','plan',v_plan);
  end if;
  v_limit := case v_plan
-  when 'starter' then case p_metric when 'workflow_created' then 25 else 500 end
-  when 'pro' then case p_metric when 'workflow_created' then 100 else 2500 end
-  when 'business' then case p_metric when 'workflow_created' then 500 else 15000 end
-  else case p_metric when 'workflow_created' then 3 else 25 end
+  when 'starter' then case p_metric when 'workflow_created' then 10 when 'workflow_execution' then 2000 when 'ai_credit' then 500 else 500 end
+  when 'pro' then case p_metric when 'workflow_created' then 50 when 'workflow_execution' then 10000 when 'ai_credit' then 2500 else 2500 end
+  when 'business' then case p_metric when 'workflow_created' then 200 when 'workflow_execution' then 50000 when 'ai_credit' then 15000 else 15000 end
+  else case p_metric when 'workflow_created' then 2 when 'workflow_execution' then 300 when 'ai_credit' then 25 else 25 end
  end;
  if p_metric='workflow_created' then
   select count(*) into v_used from public.workflows where workspace_id=p_workspace_id and status='active';
