@@ -150,7 +150,7 @@ revoke all on function public.marketplace_request_payout(bigint,text) from publi
 grant execute on function public.marketplace_request_payout(bigint,text) to authenticated;
 
 -- Finance status changes are service-only and append a traceable audit entry.
-create or replace function public.marketplace_review_payout_request(p_request_id uuid,p_action text,p_reason text default '')
+create or replace function public.marketplace_review_payout_request(p_request_id uuid,p_action text,p_reason text default '',p_transfer_id text default null)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare payout public.marketplace_payout_requests%rowtype; next_status text;
 begin
@@ -160,14 +160,14 @@ begin
  next_status:=case p_action when 'hold' then 'on_hold' when 'approve' then 'approved' when 'reject' then 'rejected' when 'processing' then 'processing' when 'failed' then 'failed' when 'paid' then 'paid' else null end;
  if next_status is null then raise exception 'invalid_payout_action'; end if;
  if payout.status not in ('requested','under_review','approved','processing','on_hold') then raise exception 'payout_request_terminal'; end if;
- if next_status='paid' and (payout.provider_transfer_id is null or payout.payout_provider is null) then raise exception 'transfer_reference_required'; end if;
+ if next_status='paid' and (coalesce(p_transfer_id,payout.provider_transfer_id) is null or payout.payout_provider is null) then raise exception 'transfer_reference_required'; end if;
  update public.marketplace_payout_requests set status=next_status,reviewed_at=case when next_status in ('approved','rejected','on_hold') then now() else reviewed_at end,
- reviewed_by=auth.uid(),processed_at=case when next_status='paid' then now() else processed_at end,notes=concat_ws(E'\n',nullif(notes,''),nullif(p_reason,'')) where id=payout.id;
+ reviewed_by=auth.uid(),processed_at=case when next_status='paid' then now() else processed_at end,provider_transfer_id=coalesce(p_transfer_id,provider_transfer_id),notes=concat_ws(E'\n',nullif(notes,''),nullif(p_reason,'')) where id=payout.id;
  insert into public.marketplace_admin_audit(actor_id,action,entity_type,entity_id,details)
  values(auth.uid(),'payout.'||next_status,'payout_request',payout.id,jsonb_build_object('amount_minor',payout.amount_minor,'reason',p_reason));
  return jsonb_build_object('id',payout.id,'status',next_status);
 end; $$;
-revoke all on function public.marketplace_review_payout_request(uuid,text,text) from public,anon,authenticated;
+revoke all on function public.marketplace_review_payout_request(uuid,text,text,text) from public,anon,authenticated;
 grant execute on function public.marketplace_review_payout_request(uuid,text,text) to service_role;
  or p_provider_subscription_id is null then raise exception 'invalid_subscription_event'; end if;
  if exists(select 1 from public.marketplace_subscription_events where provider=p_provider and provider_event_id=p_event_id) then return jsonb_build_object('status','duplicate_event'); end if;
