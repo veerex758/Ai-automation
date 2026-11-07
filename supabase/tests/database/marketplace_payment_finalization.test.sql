@@ -37,7 +37,7 @@ on conflict(id) do nothing;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select lives_ok(
- $$$select public.marketplace_finalize_payment('mock','evt-sql-1','a6666666-6666-4666-8666-666666666666','pay-sql-1',1000,'USD',repeat('c',64),now())$$,
+ $select public.marketplace_finalize_payment('mock','evt-sql-1','a6666666-6666-4666-8666-666666666666','pay-sql-1',1000,'USD',repeat('c',64),now())$$,
  'verified payment finalizes transactionally'
 );
 select is((select status from public.marketplace_purchases where id='a6666666-6666-4666-8666-666666666666'),'paid','purchase transitions to paid');
