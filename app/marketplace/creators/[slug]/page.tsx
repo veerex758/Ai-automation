@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {notFound} from "next/navigation";
 import {createClient} from "@/lib/supabase/server";
-import "../../marketplace.css";
+import "../marketplace.css";
 type Props={params:Promise<{slug:string}>};
 export default async function CreatorStorefront({params}:Props){
  const {slug}=await params,sb=await createClient();
