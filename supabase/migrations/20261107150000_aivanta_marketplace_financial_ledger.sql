@@ -37,3 +37,7 @@ alter table public.marketplace_financial_ledger enable row level security;
 revoke all on public.marketplace_payment_events from anon,authenticated;
 revoke all on public.marketplace_financial_ledger from anon,authenticated;
 grant all on public.marketplace_payment_events,public.marketplace_financial_ledger to service_role;
+
+-- Ledger immutability: append-only records. Service role is the only writer, and
+-- even it cannot UPDATE or DELETE entries through ordinary SQL privileges.
+revoke update,delete on public.marketplace_financial_ledger from service_role;
