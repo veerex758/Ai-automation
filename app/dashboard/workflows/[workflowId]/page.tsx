@@ -251,7 +251,7 @@ export default function WorkflowBuilderPage() {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definition, registrySteps: definition.nodes.map((node) => ({ id: node.id, nodeId: node.type === "trigger" ? "manual" : node.settings.provider === "email" ? "email" : node.settings.provider === "slack" ? "slack" : node.settings.provider === "openai" ? "openai" : "internal", operationId: node.type === "trigger" ? "start" : node.settings.provider === "email" ? "send_email" : node.settings.provider === "slack" ? "send_message" : node.settings.provider === "openai" ? "generate_text" : "create_task", kind: node.type === "trigger" ? "trigger" : "action", input: node.type === "trigger" ? {} : node.settings.provider === "email" ? { to: node.settings.recipient ?? "", subject: node.title, text: node.settings.message ?? node.title } : node.settings.provider === "slack" ? { message: node.settings.message ?? node.title } : node.settings.provider === "openai" ? { prompt: node.settings.message ?? node.title } : { message: node.settings.message ?? node.title } })).filter((step) => step.kind === "trigger" || step.nodeId !== "internal" || step.operationId === "create_task") }),
+        body: JSON.stringify({ definition }),
       });
       const result = await response.json();
       if (revisionAtStart !== draftRevision.current) return;
@@ -277,7 +277,7 @@ export default function WorkflowBuilderPage() {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify({ definition, registrySteps: definition.nodes.filter((node) => node.type === "trigger" || node.type === "action").map((node) => ({ id: node.id, nodeId: node.type === "trigger" ? "manual" : node.settings.provider === "email" ? "email" : node.settings.provider === "slack" ? "slack" : node.settings.provider === "openai" ? "openai" : "internal", operationId: node.type === "trigger" ? "start" : node.settings.provider === "email" ? "send_email" : node.settings.provider === "slack" ? "send_message" : node.settings.provider === "openai" ? "generate_text" : "create_task", kind: node.type === "trigger" ? "trigger" : "action", input: node.type === "trigger" ? {} : node.settings.provider === "email" ? { to: node.settings.recipient ?? "", subject: node.title, text: node.settings.message ?? node.title } : node.settings.provider === "slack" ? { message: node.settings.message ?? node.title } : node.settings.provider === "openai" ? { prompt: node.settings.message ?? node.title } : { message: node.settings.message ?? node.title } })) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save workflow steps.");
