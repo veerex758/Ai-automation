@@ -267,14 +267,14 @@ begin
  if auth.role()<>'service_role' then raise exception 'finance_service_role_required'; end if;
  select * into payout from public.marketplace_payout_requests where id=p_request_id for update;
  if not found then raise exception 'payout_request_not_found'; end if;
- next_status:=case p_action when 'review' then 'under_review' when 'hold' then 'on_hold' when 'approve' then 'approved' when 'reject' then 'rejected' when 'processing' then 'processing' when 'failed' then 'failed' when 'paid' then 'paid' else null end;
+ next_status:=case p_action when 'review' then 'under_review' when 'hold' then 'on_hold' when 'approve' then 'approved' when 'reject' then 'rejected' when 'processing' then 'processing' when 'failed' then 'failed' else null end;
  if next_status is null then raise exception 'invalid_payout_action'; end if;
  if payout.status='paid' and next_status='paid' and coalesce(p_transfer_id,payout.provider_transfer_id)=payout.provider_transfer_id then return jsonb_build_object('id',payout.id,'status','paid','duplicate',true); end if;
  if not (
   (payout.status='requested' and next_status in ('under_review','approved','rejected','on_hold')) or
   (payout.status='under_review' and next_status in ('approved','rejected','on_hold')) or
   (payout.status='approved' and next_status in ('processing','failed','on_hold')) or
-  (payout.status='processing' and next_status in ('paid','failed','on_hold')) or
+  (payout.status='processing' and next_status in ('failed','on_hold')) or
   (payout.status='on_hold' and next_status in ('under_review','approved','rejected')) or
   (payout.status='failed' and next_status in ('processing','on_hold'))
  ) then raise exception 'payout_transition_invalid'; end if;
