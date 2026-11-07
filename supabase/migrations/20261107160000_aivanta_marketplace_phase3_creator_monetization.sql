@@ -111,6 +111,9 @@ begin
   or p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then
   raise exception 'invalid_subscription_event';
  end if;
+ -- Serialize duplicate webhook delivery and ordering for this provider subscription.
+ perform pg_advisory_xact_lock(hashtextextended('marketplace-sub-event:'||p_provider||':'||p_event_id,0));
+ perform pg_advisory_xact_lock(hashtextextended('marketplace-subscription:'||p_provider||':'||p_provider_subscription_id,0));
  select * into prior_event from public.marketplace_subscription_events
  where provider=p_provider and provider_event_id=p_event_id;
  if found then
@@ -136,8 +139,8 @@ begin
  end if;
  if not exists(
   select 1 from public.marketplace_products p
-  join public.marketplace_product_versions v on v.id=p.current_version_id and v.product_id=p.id and v.verification_status='approved'
-  where p.id=p_product_id and p.status='published' and p.pricing_type='recurring' and p.current_version_id=p_product_version_id
+  join public.marketplace_product_versions v on v.id=p_product_version_id and v.product_id=p.id and v.verification_status='approved'
+  where p.id=p_product_id and p.status='published' and p.pricing_type='recurring'
  ) then raise exception 'subscription_product_unavailable'; end if;
 
  select * into sub from public.marketplace_subscriptions
@@ -150,7 +153,11 @@ begin
    values(p_provider,p_event_id,sub.id,p_event_type,p_payload_sha256,event_time,now(),'ignored','stale_provider_event');
    return jsonb_build_object('status','stale_event','subscription_id',sub.id);
   end if;
-  if sub.buyer_user_id<>p_buyer_user_id or sub.product_id<>p_product_id then raise exception 'subscription_identity_mismatch'; end if;
+  if sub.buyer_user_id<>p_buyer_user_id or sub.product_id<>p_product_id or sub.product_version_id<>p_product_version_id then raise exception 'subscription_identity_mismatch'; end if;
+ else
+  if not exists(select 1 from public.marketplace_products where id=p_product_id and current_version_id=p_product_version_id) then
+   raise exception 'subscription_product_version_not_current';
+  end if;
  end if;
  insert into public.marketplace_subscriptions(buyer_user_id,product_id,product_version_id,provider,provider_subscription_id,status,current_period_start,current_period_end,grace_until,cancelled_at,last_provider_event_id,updated_at)
  values(p_buyer_user_id,p_product_id,p_product_version_id,p_provider,p_provider_subscription_id,event_status,p_period_start,p_period_end,grace_deadline,case when event_status='cancelled' then event_time else null end,p_event_id,now())
