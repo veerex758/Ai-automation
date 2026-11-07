@@ -1,14 +1,16 @@
 "use client";
 import Link from "next/link";
-import {useEffect,useState} from "react";
+import {useEffect,useState,type FormEvent} from "react";
 import "./new-product.css";
 type Cat={id:string;name:string;slug:string};
+type Check={passed:boolean;label:string};
+type SubmitResponse={error?:string;checks?:Check[];message?:string};
 const sample=JSON.stringify({definition:{version:1,nodes:[{id:"start",type:"trigger",title:"Manual start",description:"",settings:{event:"manual"}}]}},null,2);
 export default function NewMarketplaceProduct(){
  const [cats,setCats]=useState<Cat[]>([]),[name,setName]=useState(""),[slug,setSlug]=useState(""),[summary,setSummary]=useState(""),[description,setDescription]=useState(""),[category,setCategory]=useState(""),[type,setType]=useState("workflow"),[pricing,setPricing]=useState("free"),[price,setPrice]=useState("0"),[artifact,setArtifact]=useState(sample),[busy,setBusy]=useState(false),[error,setError]=useState(""),[result,setResult]=useState("");
  useEffect(()=>{fetch("/api/marketplace/categories").then(r=>r.json()).then(d=>{setCats(d.categories??[]);setCategory(d.categories?.[0]?.id??"")}).catch(()=>{})},[]);
- async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");setResult("");let parsed;try{parsed=JSON.parse(artifact)}catch{setError("Artifact JSON is invalid.");setBusy(false);return}
- try{const r=await fetch("/api/marketplace/products/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,slug,summary,description,category_id:category,product_type:type,pricing_type:pricing,price_minor:pricing==="free"?0:Math.round(Number(price)*100),artifact:parsed,integrations:[],permissions:[]})});const d=await r.json();if(!r.ok)throw Error(d.error+(d.checks?": "+d.checks.filter((x:any)=>!x.passed).map((x:any)=>x.label).join(", "):""));setResult(d.message??"Submitted")}catch(e){setError(e instanceof Error?e.message:"Submission failed")}finally{setBusy(false)}}
+ async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError("");setResult("");let parsed:unknown;try{parsed=JSON.parse(artifact)}catch{setError("Artifact JSON is invalid.");setBusy(false);return}
+ try{const r=await fetch("/api/marketplace/products/submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,slug,summary,description,category_id:category,product_type:type,pricing_type:pricing,price_minor:pricing==="free"?0:Math.round(Number(price)*100),artifact:parsed,integrations:[],permissions:[]})});const d=await r.json() as SubmitResponse;if(!r.ok)throw Error(d.error+(d.checks?": "+d.checks.filter(x=>!x.passed).map(x=>x.label).join(", "):""));setResult(d.message??"Submitted")}catch(e){setError(e instanceof Error?e.message:"Submission failed")}finally{setBusy(false)}}
  return <main className="new-market-product"><header><Link href="/marketplace/creator">← Creator portal</Link><Link href="/marketplace">Marketplace ↗</Link></header><section><small>CREATOR STUDIO / SUBMISSION</small><h1>Submit a product</h1><p>Submissions are privately stored and checked by Aivanta. They are not published until verification and review are complete.</p>{result?<div className="nmp-success"><b>✓ Submitted for review</b><p>{result}</p><Link href="/marketplace/creator">Back to creator portal</Link></div>:<form onSubmit={submit}>
  <label>Product name<input required minLength={3} maxLength={140} value={name} onChange={e=>setName(e.target.value)}/></label>
  <label>Product URL slug<input required pattern="[a-z0-9-]{3,160}" value={slug} onChange={e=>setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,"-"))}/></label>
