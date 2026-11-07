@@ -55,9 +55,16 @@ select is((select onboarding_status from public.marketplace_my_payout_profile())
 select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'creator can reserve available payout balance');
 select lives_ok($$select public.marketplace_request_payout(1000,'phase3-key-0001')$$,'same idempotency key and amount returns original payout');
 select throws_ok($$select public.marketplace_request_payout(900,'phase3-key-0001')$$,'P0001','payout_idempotency_conflict','idempotency key cannot change payout amount');
-select throws_ok($$select public.marketplace_request_payout(2500,'phase3-key-0002')$$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
-select lives_ok($$select public.marketplace_create_creator_support_case('payout','Payout review request','Please review the payout request and confirm the transfer status.',(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'phase3-case-0001')$$,'verified creator can submit a payout support appeal');
-select is((select count(*)::integer from public.marketplace_creator_support_cases where creator_id='c2222222-2222-4222-8222-222222222222'),1,'support appeal is scoped and persisted for creator');
+select throws_ok($select public.marketplace_request_payout(2500,'phase3-key-0002')$,'P0001','insufficient_available_balance','reserved funds cannot be requested twice');
+reset role;
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select set_config('test.phase3_payout_id',(select id::text from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),true);
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select lives_ok($$select public.marketplace_create_creator_support_case('payout','Payout review request','Please review the payout request and confirm the transfer status.',current_setting('test.phase3_payout_id')::uuid,'phase3-case-0001')$$,'verified creator can submit a payout support appeal');
+select is((select count(*)::integer from public.marketplace_my_creator_support_cases()),1,'support appeal is scoped and persisted for creator');
 select lives_ok($$select public.marketplace_create_creator_support_case('payout','Payout review request','Please review the payout request and confirm the transfer status.',(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'phase3-case-0001')$$,'support case idempotency returns original case');
 
 reset role;
