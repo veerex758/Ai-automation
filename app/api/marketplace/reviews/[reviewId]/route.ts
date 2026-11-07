@@ -17,7 +17,7 @@ export async function POST(request:NextRequest,ctx:Ctx){
   if(error||!review)return NextResponse.json({error:"Review not found."},{status:404,headers});
   const version=Array.isArray(review.marketplace_product_versions)?review.marketplace_product_versions[0]:review.marketplace_product_versions;
   if(!version)return NextResponse.json({error:"Submitted version is unavailable."},{status:409,headers});
-  if(typeof version.artifact_path!=="string"||!version.artifact_path.startsWith("marketplace-artifacts/")&&version.artifact_path.length===0)return NextResponse.json({error:"Submitted artifact path is unavailable."},{status:409,headers});
+  if(typeof version.artifact_path!=="string"||version.artifact_path.split("/").length!==3||version.artifact_path.split("/").some((part:string)=>!part||part==="."||part===".."||part.includes("\\")))return NextResponse.json({error:"Submitted artifact path is unavailable."},{status:409,headers});
   const {data:artifactFile,error:artifactError}=await auth.admin.storage.from("marketplace-artifacts").download(version.artifact_path);
   if(artifactError||!artifactFile)return NextResponse.json({error:"The private submitted artifact could not be retrieved. Review is blocked until the artifact is restored."},{status:409,headers});
   if(artifactFile.size>524288)return NextResponse.json({error:"The submitted artifact exceeds the 512 KiB verification limit."},{status:413,headers});
