@@ -90,19 +90,89 @@ revoke all on public.marketplace_subscriptions,public.marketplace_subscription_e
 grant all on public.marketplace_subscriptions,public.marketplace_subscription_events,public.marketplace_payout_requests,public.marketplace_creator_statements to service_role;
 
 
--- Apply a verified provider subscription event exactly once and synchronize its
--- subscription entitlement atomically. Provider signature verification is external.
+
+-- Verified provider events are deduplicated and ordered by occurred_at. The
+-- seven-day payment-failure grace is explicit and expires automatically.
 create or replace function public.marketplace_apply_subscription_event(
  p_provider text,p_event_id text,p_payload_sha256 text,p_event_type text,
  p_buyer_user_id uuid,p_product_id uuid,p_product_version_id uuid,
  p_provider_subscription_id text,p_period_start timestamptz,p_period_end timestamptz,
  p_occurred_at timestamptz
-) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $
-declare sub public.marketplace_subscriptions%rowtype; event_status text; entitlement_status text;
+) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare
+ sub public.marketplace_subscriptions%rowtype;
+ prior_event public.marketplace_subscription_events%rowtype;
+ event_status text; entitlement_status text; entitlement_end timestamptz;
+ grace_deadline timestamptz; event_time timestamptz:=coalesce(p_occurred_at,now());
 begin
  if auth.role()<>'service_role' then raise exception 'subscription_service_role_required'; end if;
- if p_provider is null or p_event_id is null or p_payload_sha256 !~ '^[a-f0-9]{64} from immutable ledger rows and only expose
--- the caller's own creator account. No client access to raw financial ledger.
+ if nullif(trim(p_provider),'') is null or nullif(trim(p_event_id),'') is null
+  or nullif(trim(p_provider_subscription_id),'') is null
+  or p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then
+  raise exception 'invalid_subscription_event';
+ end if;
+ select * into prior_event from public.marketplace_subscription_events
+ where provider=p_provider and provider_event_id=p_event_id;
+ if found then
+  if prior_event.payload_sha256<>p_payload_sha256 then raise exception 'subscription_event_payload_conflict'; end if;
+  return jsonb_build_object('status','duplicate_event');
+ end if;
+ if p_event_type in ('subscription.active','subscription.renewed','invoice.paid') then
+  event_status:='active'; entitlement_status:='active'; grace_deadline:=null;
+ elsif p_event_type in ('subscription.past_due','invoice.payment_failed') then
+  event_status:='past_due'; grace_deadline:=event_time+interval '7 days';
+  entitlement_status:=case when grace_deadline>now() then 'active' else 'expired' end;
+ elsif p_event_type in ('subscription.cancelled','subscription.canceled') then
+  event_status:='cancelled'; entitlement_status:='expired'; grace_deadline:=null;
+ elsif p_event_type in ('subscription.expired','subscription.ended') then
+  event_status:='expired'; entitlement_status:='expired'; grace_deadline:=null;
+ else
+  insert into public.marketplace_subscription_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,outcome)
+  values(p_provider,p_event_id,p_event_type,p_payload_sha256,event_time,'ignored');
+  return jsonb_build_object('status','ignored');
+ end if;
+ if p_period_start is null or p_period_end is null or p_period_end<=p_period_start then
+  raise exception 'invalid_subscription_period';
+ end if;
+ if not exists(
+  select 1 from public.marketplace_products p
+  join public.marketplace_product_versions v on v.id=p.current_version_id and v.product_id=p.id and v.verification_status='approved'
+  where p.id=p_product_id and p.status='published' and p.pricing_type='recurring' and p.current_version_id=p_product_version_id
+ ) then raise exception 'subscription_product_unavailable'; end if;
+
+ select * into sub from public.marketplace_subscriptions
+ where provider=p_provider and provider_subscription_id=p_provider_subscription_id for update;
+ if found and sub.last_provider_event_id is not null then
+  select * into prior_event from public.marketplace_subscription_events
+   where provider=p_provider and provider_event_id=sub.last_provider_event_id;
+  if found and prior_event.occurred_at is not null and event_time<prior_event.occurred_at then
+   insert into public.marketplace_subscription_events(provider,provider_event_id,subscription_id,event_type,payload_sha256,occurred_at,processed_at,outcome,error_code)
+   values(p_provider,p_event_id,sub.id,p_event_type,p_payload_sha256,event_time,now(),'ignored','stale_provider_event');
+   return jsonb_build_object('status','stale_event','subscription_id',sub.id);
+  end if;
+  if sub.buyer_user_id<>p_buyer_user_id or sub.product_id<>p_product_id then raise exception 'subscription_identity_mismatch'; end if;
+ end if;
+ insert into public.marketplace_subscriptions(buyer_user_id,product_id,product_version_id,provider,provider_subscription_id,status,current_period_start,current_period_end,grace_until,cancelled_at,last_provider_event_id,updated_at)
+ values(p_buyer_user_id,p_product_id,p_product_version_id,p_provider,p_provider_subscription_id,event_status,p_period_start,p_period_end,grace_deadline,case when event_status='cancelled' then event_time else null end,p_event_id,now())
+ on conflict(provider,provider_subscription_id) do update set
+  product_version_id=excluded.product_version_id,status=excluded.status,
+  current_period_start=excluded.current_period_start,current_period_end=excluded.current_period_end,
+  grace_until=excluded.grace_until,cancelled_at=excluded.cancelled_at,
+  last_provider_event_id=excluded.last_provider_event_id,updated_at=now()
+ returning * into sub;
+ entitlement_end:=case when event_status='past_due' then grace_deadline else sub.current_period_end end;
+ insert into public.marketplace_subscription_events(provider,provider_event_id,subscription_id,event_type,payload_sha256,occurred_at,processed_at,outcome)
+ values(p_provider,p_event_id,sub.id,p_event_type,p_payload_sha256,event_time,now(),'processed');
+ insert into public.marketplace_entitlements(user_id,product_id,subscription_id,entitlement_type,status,starts_at,ends_at)
+ values(sub.buyer_user_id,sub.product_id,sub.id,'subscription',entitlement_status,sub.current_period_start,entitlement_end)
+ on conflict(subscription_id) where subscription_id is not null
+ do update set status=excluded.status,starts_at=excluded.starts_at,ends_at=excluded.ends_at;
+ return jsonb_build_object('status',event_status,'subscription_id',sub.id,'entitlement_status',entitlement_status,'grace_until',grace_deadline);
+end; $$;
+revoke all on function public.marketplace_apply_subscription_event(text,text,text,text,uuid,uuid,uuid,text,timestamptz,timestamptz,timestamptz) from public,anon,authenticated;
+grant execute on function public.marketplace_apply_subscription_event(text,text,text,text,uuid,uuid,uuid,text,timestamptz,timestamptz,timestamptz) to service_role;
+
+-- Ledger-derived creator balance. Negative creator_earning rows represent reversals.
 create or replace function public.marketplace_creator_earnings_summary()
 returns table(currency char(3),gross_sales_minor bigint,commission_minor bigint,
  creator_earnings_minor bigint,reversals_minor bigint,fees_tax_minor bigint,
@@ -116,40 +186,73 @@ language sql stable security definer set search_path=public,pg_temp as $$
   coalesce(sum(case when l.entry_type in ('processor_fee','payment_fee','tax') then -l.amount_minor else 0 end),0)::bigint,
   coalesce(sum(case when l.entry_type='payout' then -l.amount_minor else 0 end),0)::bigint,
   coalesce(sum(case when l.entry_type in ('creator_earning','creator_earning_reversal','processor_fee','payment_fee','tax','payout') then l.amount_minor else 0 end),0)::bigint
- from public.marketplace_financial_ledger l
- join public.marketplace_creators c on c.id=l.creator_id
+ from public.marketplace_financial_ledger l join public.marketplace_creators c on c.id=l.creator_id
  where c.user_id=auth.uid() and c.status='verified';
 $$;
 revoke all on function public.marketplace_creator_earnings_summary() from public,anon;
 grant execute on function public.marketplace_creator_earnings_summary() to authenticated;
 
--- A creator can request a payout only against an available, verified creator
--- balance; the request is a hold, not a transfer. Finance must approve separately.
+-- Payout holds are serialized by locking the creator row. Idempotency reuse must
+-- match the original amount; held requests continue reserving funds.
 create or replace function public.marketplace_request_payout(p_amount_minor bigint,p_idempotency_key text)
 returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
-declare creator public.marketplace_creators%rowtype; available bigint; payout_id uuid;
+declare creator public.marketplace_creators%rowtype; available bigint; payout_id uuid; prior public.marketplace_payout_requests%rowtype;
 begin
- if p_amount_minor<=0 or p_idempotency_key is null or length(trim(p_idempotency_key)) not between 8 and 128 then
-  raise exception 'invalid_payout_request';
- end if;
+ if p_amount_minor<=0 or p_idempotency_key is null or length(trim(p_idempotency_key)) not between 8 and 128 then raise exception 'invalid_payout_request'; end if;
  select * into creator from public.marketplace_creators where user_id=auth.uid() for update;
  if not found or creator.status<>'verified' then raise exception 'creator_not_eligible'; end if;
  if creator.payout_provider is null or creator.payout_account_ref is null then raise exception 'payout_onboarding_incomplete'; end if;
+ select * into prior from public.marketplace_payout_requests where creator_id=creator.id and idempotency_key=p_idempotency_key;
+ if found then
+  if prior.amount_minor<>p_amount_minor then raise exception 'payout_idempotency_conflict'; end if;
+  return prior.id;
+ end if;
  select coalesce(sum(case when entry_type in ('creator_earning','creator_earning_reversal','processor_fee','payment_fee','tax','payout') then amount_minor else 0 end),0)
  into available from public.marketplace_financial_ledger where creator_id=creator.id;
  select available-coalesce(sum(amount_minor),0) into available from public.marketplace_payout_requests
- where creator_id=creator.id and status in ('requested','under_review','approved','processing');
+ where creator_id=creator.id and status in ('requested','under_review','approved','processing','on_hold');
  if p_amount_minor>available then raise exception 'insufficient_available_balance'; end if;
  insert into public.marketplace_payout_requests(creator_id,amount_minor,payout_provider,idempotency_key)
- values(creator.id,p_amount_minor,creator.payout_provider,p_idempotency_key)
- on conflict(creator_id,idempotency_key) do nothing returning id into payout_id;
- if payout_id is null then select id into payout_id from public.marketplace_payout_requests where creator_id=creator.id and idempotency_key=p_idempotency_key; end if;
+ values(creator.id,p_amount_minor,creator.payout_provider,p_idempotency_key) returning id into payout_id;
  return payout_id;
 end; $$;
 revoke all on function public.marketplace_request_payout(bigint,text) from public,anon;
 grant execute on function public.marketplace_request_payout(bigint,text) to authenticated;
 
--- Finance status changes are service-only and append a traceable audit entry.
+-- Each creator-period statement is a cutoff snapshot. Existing statements are
+-- immutable and returned on retries; only service role can generate snapshots.
+create or replace function public.marketplace_generate_creator_statement(
+ p_creator_id uuid,p_period_start date,p_period_end date,p_cutoff timestamptz default now()
+) returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
+declare statement_id uuid; totals record;
+begin
+ if auth.role()<>'service_role' then raise exception 'statement_service_role_required'; end if;
+ if p_creator_id is null or p_period_start is null or p_period_end<p_period_start or p_cutoff is null then raise exception 'invalid_statement_period'; end if;
+ select
+  coalesce(sum(case when entry_type='gross_sale' then amount_minor else 0 end),0)::bigint gross,
+  coalesce(sum(case when entry_type='platform_commission' then amount_minor else 0 end),0)::bigint commission,
+  coalesce(sum(case when entry_type='creator_earning' and amount_minor>0 then amount_minor else 0 end),0)::bigint earnings,
+  coalesce(sum(case when entry_type='creator_earning' and amount_minor<0 then -amount_minor when entry_type='creator_earning_reversal' then -amount_minor else 0 end),0)::bigint reversals,
+  coalesce(sum(case when entry_type in ('processor_fee','payment_fee','tax') then -amount_minor else 0 end),0)::bigint fees,
+  coalesce(sum(case when entry_type='payout' then -amount_minor else 0 end),0)::bigint payouts,
+  coalesce(sum(amount_minor) filter(where entry_type in ('creator_earning','creator_earning_reversal','processor_fee','payment_fee','tax','payout')),0)::bigint net
+ into totals from public.marketplace_financial_ledger
+ where creator_id=p_creator_id and created_at<=p_cutoff
+  and created_at>=p_period_start::timestamptz and created_at<(p_period_end+1)::timestamptz;
+ insert into public.marketplace_creator_statements(creator_id,period_start,period_end,gross_sales_minor,commission_minor,creator_earnings_minor,reversals_minor,fees_tax_minor,payouts_minor,net_payable_minor,ledger_cutoff,generated_by)
+ values(p_creator_id,p_period_start,p_period_end,totals.gross,totals.commission,totals.earnings,totals.reversals,totals.fees,totals.payouts,totals.net,p_cutoff,auth.uid())
+ on conflict(creator_id,period_start,period_end) do nothing returning id into statement_id;
+ if statement_id is null then select id into statement_id from public.marketplace_creator_statements where creator_id=p_creator_id and period_start=p_period_start and period_end=p_period_end; end if;
+ return statement_id;
+end; $$;
+revoke all on function public.marketplace_generate_creator_statement(uuid,date,date,timestamptz) from public,anon,authenticated;
+grant execute on function public.marketplace_generate_creator_statement(uuid,date,date,timestamptz) to service_role;
+
+-- Paid status is only a reconciliation assertion after an external transfer.
+-- The payout ledger entry is atomic with the status change and deduplicated by
+-- payout request id; this function never calls a provider.
+alter table public.marketplace_financial_ledger add column if not exists payout_request_id uuid references public.marketplace_payout_requests(id) on delete restrict;
+create unique index if not exists marketplace_ledger_payout_request_unique on public.marketplace_financial_ledger(payout_request_id) where payout_request_id is not null;
 create or replace function public.marketplace_review_payout_request(p_request_id uuid,p_action text,p_reason text default '',p_transfer_id text default null)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare payout public.marketplace_payout_requests%rowtype; next_status text;
@@ -159,108 +262,21 @@ begin
  if not found then raise exception 'payout_request_not_found'; end if;
  next_status:=case p_action when 'hold' then 'on_hold' when 'approve' then 'approved' when 'reject' then 'rejected' when 'processing' then 'processing' when 'failed' then 'failed' when 'paid' then 'paid' else null end;
  if next_status is null then raise exception 'invalid_payout_action'; end if;
+ if payout.status='paid' and next_status='paid' and coalesce(p_transfer_id,payout.provider_transfer_id)=payout.provider_transfer_id then return jsonb_build_object('id',payout.id,'status','paid','duplicate',true); end if;
  if payout.status not in ('requested','under_review','approved','processing','on_hold') then raise exception 'payout_request_terminal'; end if;
  if next_status='paid' and (coalesce(p_transfer_id,payout.provider_transfer_id) is null or payout.payout_provider is null) then raise exception 'transfer_reference_required'; end if;
+ if next_status='paid' and payout.provider_transfer_id is not null and p_transfer_id is not null and payout.provider_transfer_id<>p_transfer_id then raise exception 'payout_transfer_reference_conflict'; end if;
  update public.marketplace_payout_requests set status=next_status,reviewed_at=case when next_status in ('approved','rejected','on_hold') then now() else reviewed_at end,
- reviewed_by=auth.uid(),processed_at=case when next_status='paid' then now() else processed_at end,provider_transfer_id=coalesce(p_transfer_id,provider_transfer_id),notes=concat_ws(E'\n',nullif(notes,''),nullif(p_reason,'')) where id=payout.id;
+ reviewed_by=auth.uid(),processed_at=case when next_status='paid' then now() else processed_at end,
+ provider_transfer_id=coalesce(p_transfer_id,provider_transfer_id),notes=concat_ws(E'\n',nullif(notes,''),nullif(p_reason,'')) where id=payout.id;
+ if next_status='paid' then
+  insert into public.marketplace_financial_ledger(creator_id,entry_type,amount_minor,currency,memo,payout_request_id)
+  values(payout.creator_id,'payout',-payout.amount_minor,payout.currency,'Reconciled creator payout '||payout.provider_transfer_id,payout.id)
+  on conflict(payout_request_id) where payout_request_id is not null do nothing;
+ end if;
  insert into public.marketplace_admin_audit(actor_id,action,entity_type,entity_id,details)
- values(auth.uid(),'payout.'||next_status,'payout_request',payout.id,jsonb_build_object('amount_minor',payout.amount_minor,'reason',p_reason));
+ values(auth.uid(),'payout.'||next_status,'payout_request',payout.id,jsonb_build_object('amount_minor',payout.amount_minor,'transfer_id',payout.provider_transfer_id,'reason',p_reason));
  return jsonb_build_object('id',payout.id,'status',next_status);
 end; $$;
 revoke all on function public.marketplace_review_payout_request(uuid,text,text,text) from public,anon,authenticated;
-grant execute on function public.marketplace_review_payout_request(uuid,text,text) to service_role;
- or p_provider_subscription_id is null then raise exception 'invalid_subscription_event'; end if;
- if exists(select 1 from public.marketplace_subscription_events where provider=p_provider and provider_event_id=p_event_id) then return jsonb_build_object('status','duplicate_event'); end if;
- if p_event_type in ('subscription.active','subscription.renewed','invoice.paid') then event_status:='active'; entitlement_status:='active';
- elsif p_event_type in ('subscription.past_due','invoice.payment_failed') then event_status:='past_due'; entitlement_status:='active';
- elsif p_event_type in ('subscription.cancelled','subscription.canceled') then event_status:='cancelled'; entitlement_status:='expired';
- elsif p_event_type in ('subscription.expired','subscription.ended') then event_status:='expired'; entitlement_status:='expired';
- else
-  insert into public.marketplace_subscription_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,outcome)
-  values(p_provider,p_event_id,p_event_type,p_payload_sha256,p_occurred_at,'ignored');
-  return jsonb_build_object('status','ignored');
- end if;
- if p_period_start is null or p_period_end is null or p_period_end<=p_period_start then raise exception 'invalid_subscription_period'; end if;
- if not exists(select 1 from public.marketplace_products p join public.marketplace_product_versions v on v.id=p.current_version_id and v.product_id=p.id and v.verification_status='approved' where p.id=p_product_id and p.status='published' and p.pricing_type='recurring' and p.current_version_id=p_product_version_id) then raise exception 'subscription_product_unavailable'; end if;
- insert into public.marketplace_subscriptions(buyer_user_id,product_id,product_version_id,provider,provider_subscription_id,status,current_period_start,current_period_end,last_provider_event_id,updated_at)
- values(p_buyer_user_id,p_product_id,p_product_version_id,p_provider,p_provider_subscription_id,event_status,p_period_start,p_period_end,p_event_id,now())
- on conflict(provider,provider_subscription_id) do update set status=excluded.status,current_period_start=excluded.current_period_start,current_period_end=excluded.current_period_end,last_provider_event_id=excluded.last_provider_event_id,updated_at=now()
- returning * into sub;
- insert into public.marketplace_subscription_events(provider,provider_event_id,subscription_id,event_type,payload_sha256,occurred_at,processed_at,outcome)
- values(p_provider,p_event_id,sub.id,p_event_type,p_payload_sha256,p_occurred_at,now(),'processed');
- insert into public.marketplace_entitlements(user_id,product_id,subscription_id,entitlement_type,status,starts_at,ends_at)
- values(sub.buyer_user_id,sub.product_id,sub.id,'subscription',entitlement_status,sub.current_period_start,sub.current_period_end)
- on conflict(subscription_id) where subscription_id is not null do update set status=excluded.status,starts_at=excluded.starts_at,ends_at=excluded.ends_at;
- return jsonb_build_object('status',event_status,'subscription_id',sub.id,'entitlement_status',entitlement_status);
-end; $;
-revoke all on function public.marketplace_apply_subscription_event(text,text,text,text,uuid,uuid,uuid,text,timestamptz,timestamptz,timestamptz) from public,anon,authenticated;
-grant execute on function public.marketplace_apply_subscription_event(text,text,text,text,uuid,uuid,uuid,text,timestamptz,timestamptz,timestamptz) to service_role;
-
--- Creator-facing earnings are derived from immutable ledger rows and only expose
--- the caller's own creator account. No client access to raw financial ledger.
-create or replace function public.marketplace_creator_earnings_summary()
-returns table(currency char(3),gross_sales_minor bigint,commission_minor bigint,
- creator_earnings_minor bigint,reversals_minor bigint,fees_tax_minor bigint,
- payouts_minor bigint,available_minor bigint)
-language sql stable security definer set search_path=public,pg_temp as $$
- select 'USD'::char(3),
-  coalesce(sum(case when l.entry_type='gross_sale' then l.amount_minor else 0 end),0)::bigint,
-  coalesce(sum(case when l.entry_type='platform_commission' then l.amount_minor else 0 end),0)::bigint,
-  coalesce(sum(case when l.entry_type='creator_earning' then l.amount_minor else 0 end),0)::bigint,
-  coalesce(sum(case when l.entry_type='creator_earning_reversal' then -l.amount_minor when l.entry_type='creator_earning' and l.amount_minor<0 then -l.amount_minor else 0 end),0)::bigint,
-  coalesce(sum(case when l.entry_type in ('processor_fee','payment_fee','tax') then -l.amount_minor else 0 end),0)::bigint,
-  coalesce(sum(case when l.entry_type='payout' then -l.amount_minor else 0 end),0)::bigint,
-  coalesce(sum(case when l.entry_type in ('creator_earning','creator_earning_reversal','processor_fee','payment_fee','tax','payout') then l.amount_minor else 0 end),0)::bigint
- from public.marketplace_financial_ledger l
- join public.marketplace_creators c on c.id=l.creator_id
- where c.user_id=auth.uid() and c.status='verified';
-$$;
-revoke all on function public.marketplace_creator_earnings_summary() from public,anon;
-grant execute on function public.marketplace_creator_earnings_summary() to authenticated;
-
--- A creator can request a payout only against an available, verified creator
--- balance; the request is a hold, not a transfer. Finance must approve separately.
-create or replace function public.marketplace_request_payout(p_amount_minor bigint,p_idempotency_key text)
-returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
-declare creator public.marketplace_creators%rowtype; available bigint; payout_id uuid;
-begin
- if p_amount_minor<=0 or p_idempotency_key is null or length(trim(p_idempotency_key)) not between 8 and 128 then
-  raise exception 'invalid_payout_request';
- end if;
- select * into creator from public.marketplace_creators where user_id=auth.uid() for update;
- if not found or creator.status<>'verified' then raise exception 'creator_not_eligible'; end if;
- if creator.payout_provider is null or creator.payout_account_ref is null then raise exception 'payout_onboarding_incomplete'; end if;
- select coalesce(sum(case when entry_type in ('creator_earning','creator_earning_reversal','processor_fee','payment_fee','tax','payout') then amount_minor else 0 end),0)
- into available from public.marketplace_financial_ledger where creator_id=creator.id;
- select available-coalesce(sum(amount_minor),0) into available from public.marketplace_payout_requests
- where creator_id=creator.id and status in ('requested','under_review','approved','processing');
- if p_amount_minor>available then raise exception 'insufficient_available_balance'; end if;
- insert into public.marketplace_payout_requests(creator_id,amount_minor,payout_provider,idempotency_key)
- values(creator.id,p_amount_minor,creator.payout_provider,p_idempotency_key)
- on conflict(creator_id,idempotency_key) do nothing returning id into payout_id;
- if payout_id is null then select id into payout_id from public.marketplace_payout_requests where creator_id=creator.id and idempotency_key=p_idempotency_key; end if;
- return payout_id;
-end; $$;
-revoke all on function public.marketplace_request_payout(bigint,text) from public,anon;
-grant execute on function public.marketplace_request_payout(bigint,text) to authenticated;
-
--- Finance status changes are service-only and append a traceable audit entry.
-create or replace function public.marketplace_review_payout_request(p_request_id uuid,p_action text,p_reason text default '')
-returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
-declare payout public.marketplace_payout_requests%rowtype; next_status text;
-begin
- if auth.role()<>'service_role' then raise exception 'finance_service_role_required'; end if;
- select * into payout from public.marketplace_payout_requests where id=p_request_id for update;
- if not found then raise exception 'payout_request_not_found'; end if;
- next_status:=case p_action when 'hold' then 'on_hold' when 'approve' then 'approved' when 'reject' then 'rejected' when 'processing' then 'processing' when 'failed' then 'failed' when 'paid' then 'paid' else null end;
- if next_status is null then raise exception 'invalid_payout_action'; end if;
- if payout.status not in ('requested','under_review','approved','processing','on_hold') then raise exception 'payout_request_terminal'; end if;
- if next_status='paid' and (payout.provider_transfer_id is null or payout.payout_provider is null) then raise exception 'transfer_reference_required'; end if;
- update public.marketplace_payout_requests set status=next_status,reviewed_at=case when next_status in ('approved','rejected','on_hold') then now() else reviewed_at end,
- reviewed_by=auth.uid(),processed_at=case when next_status='paid' then now() else processed_at end,notes=concat_ws(E'\n',nullif(notes,''),nullif(p_reason,'')) where id=payout.id;
- insert into public.marketplace_admin_audit(actor_id,action,entity_type,entity_id,details)
- values(auth.uid(),'payout.'||next_status,'payout_request',payout.id,jsonb_build_object('amount_minor',payout.amount_minor,'reason',p_reason));
- return jsonb_build_object('id',payout.id,'status',next_status);
-end; $$;
-revoke all on function public.marketplace_review_payout_request(uuid,text,text) from public,anon,authenticated;
-grant execute on function public.marketplace_review_payout_request(uuid,text,text) to service_role;
+grant execute on function public.marketplace_review_payout_request(uuid,text,text,text) to service_role;
