@@ -1,5 +1,5 @@
 begin;
-select plan(46);
+select plan(52);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -59,6 +59,12 @@ reset role;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select is((select count(*)::integer from public.marketplace_payout_requests where creator_id='c2222222-2222-4222-8222-222222222222' and amount_minor=1000),1,'payout request is persisted once');
+select throws_ok($select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'paid','','mock-transfer')$,'P0001','payout_transition_invalid','finance cannot mark a requested payout paid without processing');
+select lives_ok($select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'approve','reviewed','')$,'finance approval transition is allowed');
+select lives_ok($select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'processing','batch-started','')$,'approved payout can enter processing');
+select lives_ok($select public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'paid','reconciled','mock-transfer-phase3')$,'paid reconciliation records external transfer reference');
+select is((public.marketplace_review_payout_request((select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001'),'paid','','mock-transfer-phase3')->>'duplicate'),'true','paid reconciliation retry is idempotent');
+select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001') and entry_type='payout'),1,'paid payout appends exactly one ledger debit');
 select lives_ok($$select public.marketplace_set_creator_payout_profile('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified','complete',true,1000,null)$$,'service role updates payout onboarding profile');
 select lives_ok($$select public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now())$$,'service role generates creator statement snapshot');
 select is((select creator_earnings_minor from public.marketplace_creator_statements where creator_id='c2222222-2222-4222-8222-222222222222' and period_start='2026-11-01'),3000::bigint,'statement earnings reconcile to ledger');
