@@ -1,5 +1,5 @@
 begin;
-select plan(44);
+select plan(46);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -17,6 +17,7 @@ select has_function('public','marketplace_request_subscription_cancellation','bu
 select has_function('public','marketplace_my_creator_statements','creator statement read RPC exists');
 select has_function('public','marketplace_update_subscription_command','service-only cancellation command processor exists');
 select has_function('public','marketplace_my_payout_profile','creator-safe payout onboarding status RPC exists');
+select has_function('public','marketplace_my_creator_analytics','ledger-backed creator analytics RPC exists');
 select ok(not has_table_privilege('authenticated','public.marketplace_payout_requests','SELECT'),'payout rows are private');
 select ok(not has_table_privilege('authenticated','public.marketplace_subscription_events','SELECT'),'provider events are private');
 select ok(not has_function_privilege('anon','public.marketplace_request_payout(bigint,text)','EXECUTE'),'anon cannot request payouts');
@@ -65,6 +66,9 @@ select is(public.marketplace_generate_creator_statement('c2222222-2222-4222-8222
 
 select lives_ok($$select public.marketplace_apply_subscription_event('mock','sub-event-1',repeat('c',64),'subscription.active','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-01')$$,'active subscription event grants entitlement');
 select is((select status from public.marketplace_entitlements where subscription_id=(select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1')),'active','subscription event creates active entitlement');
+select set_config('request.jwt.claim.sub','a2222222-2222-4222-8222-222222222222',true);
+select is((select active_subscriptions from public.marketplace_my_creator_analytics()),1::bigint,'creator analytics counts active subscriptions from durable records');
+select set_config('request.jwt.claim.sub','a1111111-1111-4111-8111-111111111111',true);
 select is((public.marketplace_apply_subscription_event('mock','sub-event-1',repeat('c',64),'subscription.active','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-01')->>'status'),'duplicate_event','provider event retry is idempotent');
 select throws_ok($select public.marketplace_apply_subscription_event('mock','sub-event-1',repeat('f',64),'subscription.active','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-01')$,'P0001','subscription_event_payload_conflict','same provider event ID cannot change payload');
 select is((public.marketplace_apply_subscription_event('mock','sub-event-2',repeat('d',64),'invoice.payment_failed','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-02')->>'status'),'past_due','failed payment enters grace period');
