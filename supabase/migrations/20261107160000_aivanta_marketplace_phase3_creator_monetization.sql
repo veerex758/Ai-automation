@@ -284,3 +284,76 @@ grant execute on function public.marketplace_review_payout_request(uuid,text,tex
 -- Preserve financial/subscription event history and statement snapshots. Definer RPCs
 -- remain the only mutation path for finance lifecycle records.
 revoke update,delete on public.marketplace_subscription_events,public.marketplace_creator_statements,public.marketplace_payout_requests from service_role;
+
+
+-- Provider-backed payout onboarding is represented explicitly. Sensitive identity
+-- documents remain with the payout provider; Aivanta stores only opaque refs
+-- and compliance state required to gate disbursement.
+create table if not exists public.marketplace_creator_payout_profiles (
+ creator_id uuid primary key references public.marketplace_creators(id) on delete restrict,
+ provider text not null,
+ provider_account_ref text not null,
+ country_code char(2) not null check(country_code ~ '^[A-Z]{2}$'),
+ onboarding_status text not null default 'pending' check(onboarding_status in ('pending','verified','restricted','disabled')),
+ tax_status text not null default 'pending' check(tax_status in ('pending','complete','exempt')),
+ payouts_enabled boolean not null default false,
+ minimum_payout_minor bigint not null default 1000 check(minimum_payout_minor>0),
+ hold_until timestamptz,
+ verified_at timestamptz,
+ updated_at timestamptz not null default now(),
+ updated_by uuid references auth.users(id) on delete set null
+);
+alter table public.marketplace_creator_payout_profiles enable row level security;
+revoke all on public.marketplace_creator_payout_profiles from anon,authenticated;
+grant select,insert,update on public.marketplace_creator_payout_profiles to service_role;
+
+create or replace function public.marketplace_set_creator_payout_profile(
+ p_creator_id uuid,p_provider text,p_account_ref text,p_country_code text,
+ p_onboarding_status text,p_tax_status text,p_payouts_enabled boolean,
+ p_minimum_payout_minor bigint,p_hold_until timestamptz
+) returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if auth.role()<>'service_role' then raise exception 'payout_profile_service_role_required'; end if;
+ if p_creator_id is null or nullif(trim(p_provider),'') is null or nullif(trim(p_account_ref),'') is null
+  or p_country_code !~ '^[A-Z]{2}$' or p_onboarding_status not in ('pending','verified','restricted','disabled')
+  or p_tax_status not in ('pending','complete','exempt') or p_minimum_payout_minor<=0 then
+  raise exception 'invalid_payout_profile';
+ end if;
+ insert into public.marketplace_creator_payout_profiles(creator_id,provider,provider_account_ref,country_code,onboarding_status,tax_status,payouts_enabled,minimum_payout_minor,hold_until,verified_at,updated_by,updated_at)
+ values(p_creator_id,p_provider,p_account_ref,p_country_code,p_onboarding_status,p_tax_status,p_payouts_enabled,p_minimum_payout_minor,p_hold_until,case when p_onboarding_status='verified' then now() else null end,auth.uid(),now())
+ on conflict(creator_id) do update set provider=excluded.provider,provider_account_ref=excluded.provider_account_ref,country_code=excluded.country_code,
+ onboarding_status=excluded.onboarding_status,tax_status=excluded.tax_status,payouts_enabled=excluded.payouts_enabled,
+ minimum_payout_minor=excluded.minimum_payout_minor,hold_until=excluded.hold_until,
+ verified_at=case when excluded.onboarding_status='verified' then coalesce(public.marketplace_creator_payout_profiles.verified_at,now()) else null end,
+ updated_by=auth.uid(),updated_at=now();
+end; $$;
+revoke all on function public.marketplace_set_creator_payout_profile(uuid,text,text,text,text,text,boolean,bigint,timestamptz) from public,anon,authenticated;
+grant execute on function public.marketplace_set_creator_payout_profile(uuid,text,text,text,text,text,boolean,bigint,timestamptz) to service_role;
+
+-- Enforce provider onboarding, tax status, hold period and minimum payout at
+-- request time (not just in UI); creator-row lock serializes competing holds.
+create or replace function public.marketplace_request_payout(p_amount_minor bigint,p_idempotency_key text)
+returns uuid language plpgsql security definer set search_path=public,pg_temp as $$
+declare creator public.marketplace_creators%rowtype; profile public.marketplace_creator_payout_profiles%rowtype;
+ available bigint; payout_id uuid; prior public.marketplace_payout_requests%rowtype;
+begin
+ if p_amount_minor<=0 or p_idempotency_key is null or length(trim(p_idempotency_key)) not between 8 and 128 then raise exception 'invalid_payout_request'; end if;
+ select * into creator from public.marketplace_creators where user_id=auth.uid() for update;
+ if not found or creator.status<>'verified' then raise exception 'creator_not_eligible'; end if;
+ select * into profile from public.marketplace_creator_payout_profiles where creator_id=creator.id;
+ if not found or profile.onboarding_status<>'verified' or profile.tax_status not in ('complete','exempt') or not profile.payouts_enabled then raise exception 'payout_onboarding_incomplete'; end if;
+ if profile.hold_until is not null and profile.hold_until>now() then raise exception 'payout_hold_active'; end if;
+ if p_amount_minor<profile.minimum_payout_minor then raise exception 'payout_below_minimum'; end if;
+ select * into prior from public.marketplace_payout_requests where creator_id=creator.id and idempotency_key=p_idempotency_key;
+ if found then if prior.amount_minor<>p_amount_minor then raise exception 'payout_idempotency_conflict'; end if; return prior.id; end if;
+ select coalesce(sum(case when entry_type in ('creator_earning','creator_earning_reversal','processor_fee','payment_fee','tax','payout') then amount_minor else 0 end),0)
+ into available from public.marketplace_financial_ledger where creator_id=creator.id;
+ select available-coalesce(sum(amount_minor),0) into available from public.marketplace_payout_requests
+ where creator_id=creator.id and status in ('requested','under_review','approved','processing','on_hold');
+ if p_amount_minor>available then raise exception 'insufficient_available_balance'; end if;
+ insert into public.marketplace_payout_requests(creator_id,amount_minor,payout_provider,idempotency_key)
+ values(creator.id,p_amount_minor,profile.provider,p_idempotency_key) returning id into payout_id;
+ return payout_id;
+end; $$;
+revoke all on function public.marketplace_request_payout(bigint,text) from public,anon;
+grant execute on function public.marketplace_request_payout(bigint,text) to authenticated;
