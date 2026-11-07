@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       .eq("status", "published").order("published_at", { ascending: false });
     const category = url.searchParams.get("category");
     const type = url.searchParams.get("type");
-    const q = url.searchParams.get("q")?.trim().slice(0, 100);
+    const q = (url.searchParams.get("q") ?? "").replace(/[^\\p{L}\\p{N}\\s_-]/gu, " ").replace(/\\s+/g, " ").trim().slice(0, 80);
     if (category) query = query.eq("marketplace_categories.slug", category);
     if (type && ["workflow", "pack", "agent"].includes(type)) query = query.eq("product_type", type);
     if (q) query = query.or(`name.ilike.%${q}%,summary.ilike.%${q}%`);
