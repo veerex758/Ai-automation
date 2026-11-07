@@ -42,3 +42,5 @@ export type MarketplacePaymentProvider = {
 ## Deliberately blocked
 - Live checkout, subscriptions, refunds, transfers/payouts, tax invoices, creator payout availability, automatic finance adjustments.
 - Provider-specific implementation until provider choice and test credentials are supplied.
+
+- Provider-neutral webhook orchestration now verifies the provider adapter against raw bytes, rejects empty/oversize bodies, applies event freshness checks, hashes raw payload bytes, dispatches payment success to atomic finalization, refunds/chargebacks to reversal, and safely ignores other verified event types. The actual provider signature adapter and HTTP route remain unconfigured until provider selection.
