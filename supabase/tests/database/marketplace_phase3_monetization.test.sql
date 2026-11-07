@@ -1,5 +1,5 @@
 begin;
-select plan(36);
+select plan(38);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -19,6 +19,8 @@ select has_function('public','marketplace_update_subscription_command','service-
 select ok(not has_table_privilege('authenticated','public.marketplace_payout_requests','SELECT'),'payout rows are private');
 select ok(not has_table_privilege('authenticated','public.marketplace_subscription_events','SELECT'),'provider events are private');
 select ok(not has_function_privilege('anon','public.marketplace_request_payout(bigint,text)','EXECUTE'),'anon cannot request payouts');
+select ok(not has_function_privilege('authenticated','public.marketplace_apply_subscription_event(text,text,text,text,uuid,uuid,uuid,text,timestamptz,timestamptz,timestamptz)','EXECUTE'),'subscription event application is service-only');
+select ok(not has_function_privilege('authenticated','public.marketplace_set_creator_payout_profile(uuid,text,text,text,text,text,boolean,bigint,timestamptz)','EXECUTE'),'payout onboarding writes are service-only');
 
 insert into auth.users(id,aud,role,email,encrypted_password,created_at,updated_at)
 values
