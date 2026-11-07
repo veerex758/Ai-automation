@@ -68,3 +68,23 @@ export function verifyMarketplaceArtifact(input:unknown):MarketplaceVerification
  checks.push({id:"execution_capabilities",label:"Execution capabilities are disclosed",passed:capabilitySummary.every(x=>!x.startsWith("unknown")),detail:capabilitySummary.length?capabilitySummary.join("; "):"No executable nodes found"});
  return {passed:checks.every(check=>check.passed),checks,artifactSha256};
 }
+
+export type MarketplaceStoredArtifactResult={integrityPassed:boolean;verification:MarketplaceVerificationResult;detail:string};
+export function verifyMarketplaceStoredArtifact(content:string,storedManifest:unknown,expectedSha256:string):MarketplaceStoredArtifactResult{
+ let parsed:unknown;
+ try{parsed=JSON.parse(content);}catch{
+  return {integrityPassed:false,verification:verifyMarketplaceArtifact(null),detail:"Stored artifact is not valid JSON"};
+ }
+ const fileVerification=verifyMarketplaceArtifact(parsed);
+ const manifestVerification=verifyMarketplaceArtifact(storedManifest);
+ const integrityPassed=/^[a-f0-9]{64}$/.test(expectedSha256)
+  &&fileVerification.artifactSha256===expectedSha256
+  &&manifestVerification.artifactSha256===expectedSha256;
+ return {
+  integrityPassed,
+  verification:fileVerification,
+  detail:integrityPassed
+   ?"Uploaded artifact bytes, stored manifest, and recorded SHA-256 agree"
+   :"Uploaded artifact bytes, stored manifest, and recorded SHA-256 do not agree"
+ };
+}
