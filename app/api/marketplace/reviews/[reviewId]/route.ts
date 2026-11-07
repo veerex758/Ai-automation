@@ -28,7 +28,7 @@ export async function POST(request:NextRequest,ctx:Ctx){
   if(verification.artifactSha256!==version.artifact_sha256)return NextResponse.json({error:"Stored artifact hash does not match the submitted version. Approval is blocked."},{status:409,headers});
   if(action==="approve"&&!verification.passed)return NextResponse.json({error:"Automated verification failed. Resolve all failed checks before approval.",checks:verification.checks},{status:422,headers});
   const notes=typeof body.notes==="string"?body.notes.slice(0,2000):"";
-  const integrityCheck={id:"artifact_integrity",label:"Stored version matches canonical SHA-256",passed:true,detail:` + "`SHA-256 ${verification.artifactSha256}`" + `};
+  const integrityCheck={id:"artifact_integrity",label:"Stored version matches canonical SHA-256",passed:true,detail:`SHA-256 ${verification.artifactSha256}`};
   const checks=action==="approve"?[...verification.checks,integrityCheck]:[...verification.checks,integrityCheck,{id:"human_review",label:"Human reviewer decision",passed:false,detail:notes||"Rejected by Aivanta reviewer"}];
   const {data,error:decisionError}=await auth.admin.rpc("marketplace_record_verification",{
    p_product_id:review.product_id,p_version_id:review.version_id,p_status:action==="approve"?"approved":"rejected",
