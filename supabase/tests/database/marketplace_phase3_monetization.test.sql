@@ -1,5 +1,5 @@
 begin;
-select plan(29);
+select plan(35);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -9,7 +9,7 @@ select has_function('public','marketplace_creator_earnings_summary','creator ear
 select has_function('public','marketplace_apply_subscription_event','subscription event dispatcher exists');
 select has_function('public','marketplace_request_payout','payout request RPC exists');
 select has_function('public','marketplace_review_payout_request','finance review RPC exists');
-select has_function('public','marketplace_generate_creator_statement','statement snapshot RPC exists');\nselect has_table('public','marketplace_creator_payout_profiles','payout onboarding and compliance profile exists');\nselect has_function('public','marketplace_set_creator_payout_profile','service-only payout onboarding RPC exists');
+select has_function('public','marketplace_generate_creator_statement','statement snapshot RPC exists');\nselect has_table('public','marketplace_creator_payout_profiles','payout onboarding and compliance profile exists');\nselect has_function('public','marketplace_set_creator_payout_profile','service-only payout onboarding RPC exists');\nselect has_function('public','marketplace_my_subscriptions','buyer can read own subscription status through RPC');\nselect has_function('public','marketplace_request_subscription_cancellation','buyer cancellation request RPC exists');\nselect has_function('public','marketplace_my_creator_statements','creator statement read RPC exists');
 select ok(not has_table_privilege('authenticated','public.marketplace_payout_requests','SELECT'),'payout rows are private');
 select ok(not has_table_privilege('authenticated','public.marketplace_subscription_events','SELECT'),'provider events are private');
 select ok(not has_function_privilege('anon','public.marketplace_request_payout(bigint,text)','EXECUTE'),'anon cannot request payouts');
@@ -43,7 +43,7 @@ select throws_ok($$select public.marketplace_request_payout(2500,'phase3-key-000
 reset role;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
-select lives_ok($$select public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now())$$,'service role generates creator statement snapshot');
+select lives_ok($select public.marketplace_set_creator_payout_profile('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified','complete',true,1000,null)$,'service role updates payout onboarding profile');\nselect lives_ok($select public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now())$$,'service role generates creator statement snapshot');
 select is((select creator_earnings_minor from public.marketplace_creator_statements where creator_id='c2222222-2222-4222-8222-222222222222' and period_start='2026-11-01'),1000::bigint,'statement earnings reconcile to ledger');
 select is(public.marketplace_generate_creator_statement('c2222222-2222-4222-8222-222222222222','2026-11-01','2026-11-30',now()),(select id from public.marketplace_creator_statements where creator_id='c2222222-2222-4222-8222-222222222222' and period_start='2026-11-01'),'statement generation retry returns immutable snapshot');
 
@@ -52,7 +52,7 @@ select is((select status from public.marketplace_entitlements where subscription
 select is((public.marketplace_apply_subscription_event('mock','sub-event-1',repeat('c',64),'subscription.active','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-01')->>'status'),'duplicate_event','provider event retry is idempotent');
 select is((public.marketplace_apply_subscription_event('mock','sub-event-2',repeat('d',64),'invoice.payment_failed','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-02')->>'status'),'past_due','failed payment enters grace period');
 select is((select status from public.marketplace_entitlements where subscription_id=(select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1')),'active','entitlement remains active during bounded grace period');
-select is((public.marketplace_apply_subscription_event('mock','sub-event-3',repeat('e',64),'subscription.cancelled','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-03')->>'status'),'cancelled','cancellation event is applied');
+reset role;\nset local role authenticated;\nselect set_config('request.jwt.claim.sub','a1111111-1111-4111-8111-111111111111',true);\nselect set_config('request.jwt.claim.role','authenticated',true);\nselect lives_ok($select public.marketplace_request_subscription_cancellation((select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1'),'cancel-phase3-0001')$,'buyer requests cancellation through durable command');\nselect is((select cancel_at_period_end from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1'),true,'cancellation request marks subscription pending period-end cancellation');\nreset role;\nset local role service_role;\nselect set_config('request.jwt.claim.role','service_role',true);\nselect is((public.marketplace_apply_subscription_event('mock','sub-event-3',repeat('e',64),'subscription.cancelled','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-03')->>'status'),'cancelled','cancellation event is applied');
 select is((select status from public.marketplace_entitlements where subscription_id=(select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1')),'expired','cancelled subscription entitlement expires');
 
 select * from finish();
