@@ -61,8 +61,8 @@ test("AI credit top-ups use a separate workspace wallet and immutable ledger", (
   assert.match(aiCreditWalletMigration, /create table if not exists public\\.workspace_ai_credit_transactions/);
   assert.match(aiCreditWalletMigration, /alter table public\\.workspace_ai_credit_wallets enable row level security/);
   assert.match(aiCreditWalletMigration, /alter table public\\.workspace_ai_credit_transactions enable row level security/);
-  assert.match(aiCreditWalletMigration, /workspace_ai_credit_transactions_immutable/);
-  assert.match(aiCreditWalletMigration, /reject_ai_credit_ledger_mutation/);
+  assert.match(aiCreditWalletMigration, /revoke all on public\\.workspace_ai_credit_transactions from anon, authenticated, service_role/);
+  assert.match(aiCreditWalletMigration, /grant select on public\\.workspace_ai_credit_transactions to authenticated/);
 });
 
 test("AI credit top-ups are provider-neutral, service-role-only, and idempotent", () => {
