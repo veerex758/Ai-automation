@@ -1,4 +1,8 @@
 -- Materialize a verified Marketplace artifact as a workspace-owned draft workflow.
+create unique index if not exists marketplace_entitlements_one_free_per_user_product
+ on public.marketplace_entitlements(user_id,product_id)
+ where entitlement_type='free' and purchase_id is null;
+
 -- Re-installing the same version is idempotent; installing a newer version creates
 -- a new draft copy and leaves the customer's previous workflow untouched.
 
