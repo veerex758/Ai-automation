@@ -11,10 +11,9 @@ export async function POST(req:NextRequest,ctx:Ctx){
  let parsed:unknown;try{parsed=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers:h})}
  if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return NextResponse.json({error:"Invalid request body."},{status:400,headers:h});
  const body=parsed as Record<string,unknown>;const action=body.action;
- const status=action==="verify"?"verified":action==="suspend"?"suspended":action==="reinstate"?"pending":null;if(!status)return NextResponse.json({error:"Action must be verify, suspend, or reinstate."},{status:400,headers:h});
- const {data:before,error:be}=await sb.from("marketplace_creators").select("id,user_id,status,display_name").eq("id",creatorId).maybeSingle();if(be||!before)return NextResponse.json({error:"Creator not found."},{status:404,headers:h});
- const {data:updated,error:ue}=await sb.from("marketplace_creators").update({status,updated_at:new Date().toISOString()}).eq("id",creatorId).select("id,status,display_name").single();if(ue)throw ue;
- const {error:ae}=await sb.from("marketplace_admin_audit").insert({actor_id:user.id,action:"creator_"+action,entity_type:"creator",entity_id:creatorId,details:{from:before.status,to:status,notes:typeof body.notes==="string"?body.notes.slice(0,1000):""}});if(ae)throw ae;
- return NextResponse.json({creator:updated},{headers:h});
+ if(!["verify","suspend","reinstate"].includes(String(action)))return NextResponse.json({error:"Action must be verify, suspend, or reinstate."},{status:400,headers:h});
+ const {data:result,error:moderationError}=await sb.rpc("marketplace_moderate_creator",{p_creator_id:creatorId,p_actor_id:user.id,p_action:action,p_notes:typeof body.notes==="string"?body.notes.slice(0,1000):""});
+ if(moderationError){if(moderationError.message.includes("creator_not_found"))return NextResponse.json({error:"Creator not found."},{status:404,headers:h});if(moderationError.message.includes("creator_not_suspended")||moderationError.message.includes("suspended_creator_cannot_be_verified"))return NextResponse.json({error:"Creator status does not allow this action."},{status:409,headers:h});throw moderationError;}
+ return NextResponse.json({creator:result},{headers:h});
  }catch(e){console.error("Creator moderation failed",e);return NextResponse.json({error:"Creator moderation failed."},{status:500,headers:h})}
 }
