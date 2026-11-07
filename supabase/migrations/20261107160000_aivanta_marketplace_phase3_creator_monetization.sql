@@ -427,3 +427,27 @@ language sql stable security definer set search_path=public,pg_temp as $$
 $$;
 revoke all on function public.marketplace_my_creator_statements() from public,anon;
 grant execute on function public.marketplace_my_creator_statements() to authenticated;
+
+
+create or replace function public.marketplace_update_subscription_command(
+ p_command_id uuid,p_status text,p_provider_command_id text,p_error_code text
+) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare command_row public.marketplace_subscription_commands%rowtype;
+begin
+ if auth.role()<>'service_role' then raise exception 'subscription_command_service_role_required'; end if;
+ if p_status not in ('processing','succeeded','failed') then raise exception 'invalid_subscription_command_status'; end if;
+ select * into command_row from public.marketplace_subscription_commands where id=p_command_id for update;
+ if not found then raise exception 'subscription_command_not_found'; end if;
+ if command_row.status='succeeded' then
+  if p_status='succeeded' and command_row.provider_command_id is not distinct from p_provider_command_id then return jsonb_build_object('id',command_row.id,'status','succeeded','duplicate',true); end if;
+  raise exception 'subscription_command_terminal';
+ end if;
+ if command_row.status='failed' and p_status='processing' then
+  update public.marketplace_subscription_commands set status='processing',error_code=null,processed_at=null where id=command_row.id;
+ elsif command_row.status in ('pending','processing') then
+  update public.marketplace_subscription_commands set status=p_status,provider_command_id=coalesce(p_provider_command_id,provider_command_id),error_code=p_error_code,processed_at=case when p_status in ('succeeded','failed') then now() else null end where id=command_row.id;
+ else raise exception 'subscription_command_transition_invalid'; end if;
+ return jsonb_build_object('id',command_row.id,'status',p_status);
+end; $$;
+revoke all on function public.marketplace_update_subscription_command(uuid,text,text,text) from public,anon,authenticated;
+grant execute on function public.marketplace_update_subscription_command(uuid,text,text,text) to service_role;
