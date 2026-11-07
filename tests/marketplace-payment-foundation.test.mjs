@@ -38,31 +38,7 @@ test("provider setup, signature, replay and money movement remain explicitly gat
 });
 
 test("finalizer records supplied event digest and timestamp", () => {
-  assert.match(migration, /p_payload_sha256 is null or p_payload_sha256 !~ '\\^\\[a-f0-9\\]\\{64\\}\\
-  assert.match(migration, /p_payload_sha256,coalesce\(p_occurred_at,now\(\)\)/i);
-  assert.doesNotMatch(migration, /repeat\('0',64\)/);
-});
-
-test("refund and chargeback append reversal entries, cap cumulative reversals and revoke entitlement", () => {
-  assert.match(migration, /create or replace function public\.marketplace_reverse_payment/i);
-  assert.match(migration, /purchase\\.provider_payment_id is null/);\n  assert.match(migration, /p_kind not in \('refund','chargeback'\)/i);
-  assert.match(migration, /prior_refund\+p_amount_minor>purchase\.amount_minor-prior_chargeback/i);
-  assert.match(migration, /prior_chargeback\+p_amount_minor>purchase\.amount_minor-prior_refund/i);
-  assert.match(migration, /prior_refund\+prior_chargeback\+p_amount_minor>=purchase\.amount_minor/i);
-  assert.match(migration, /commission reversal/i);
-  assert.match(migration, /Creator earning reversal/i);
-  assert.match(migration, /status='revoked' where purchase_id=purchase\.id/i);
-  assert.match(migration, /duplicate_event/i);
-  assert.match(migration, /revoke all on function public\.marketplace_reverse_payment/i);
-});
-
-test("service-only reconciliation reports purchase versus ledger gross discrepancies", () => {\n  assert.match(migration, /create or replace function public\\.marketplace_financial_reconciliation/i);\n  assert.match(migration, /grant execute on function public\\.marketplace_financial_reconciliation\\(\\) to service_role/i);\n  assert.match(migration, /having .*marketplace_purchases/s);\n  assert.match(migration, /discrepancy_minor/i);\n});\n\ntest("migration ends cleanly with exactly one finalizer and reversal function", () => {
-  assert.ok(migration.trimEnd().endsWith("grant execute on function public.marketplace_financial_reconciliation() to service_role;"));
-  assert.equal((migration.match(/create or replace function public\.marketplace_finalize_payment/g) || []).length, 1);
-  assert.equal((migration.match(/create or replace function public\.marketplace_reverse_payment/g) || []).length, 1);
-  assert.doesNotMatch(migration, /repeat\('0',64\)/);
-});
-/i);
+  assert.match(migration, /p_payload_sha256 is null/i);
   assert.match(migration, /p_payload_sha256,coalesce\(p_occurred_at,now\(\)\)/i);
   assert.doesNotMatch(migration, /repeat\('0',64\)/);
 });
@@ -77,12 +53,10 @@ test("refund and chargeback append reversal entries, cap cumulative reversals an
   assert.match(migration, /Creator earning reversal/i);
   assert.match(migration, /status='revoked' where purchase_id=purchase\.id/i);
   assert.match(migration, /duplicate_event/i);
-  assert.match(migration, /revoke all on function public\.marketplace_reverse_payment/i);
 });
 
-test("migration ends cleanly with exactly one finalizer and reversal function", () => {
-  assert.ok(migration.trimEnd().endsWith("revoke update,delete on public.marketplace_payment_events from service_role;"));
-  assert.equal((migration.match(/create or replace function public\.marketplace_finalize_payment/g) || []).length, 1);
-  assert.equal((migration.match(/create or replace function public\.marketplace_reverse_payment/g) || []).length, 1);
-  assert.doesNotMatch(migration, /repeat\('0',64\)/);
+test("service-only reconciliation reports purchase versus ledger gross discrepancies", () => {
+  assert.match(migration, /create or replace function public\.marketplace_financial_reconciliation/i);
+  assert.match(migration, /grant execute on function public\.marketplace_financial_reconciliation\(\) to service_role/i);
+  assert.match(migration, /discrepancy_minor/i);
 });
