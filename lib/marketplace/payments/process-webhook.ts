@@ -3,7 +3,7 @@ import {
   assertFreshVerifiedWebhook,
   assertMarketplacePayment,
   type MarketplacePaymentProvider,
-  type VerifiedMarketplaceWebhook,
+  type VerifiedMarketplaceWebhook,\n  type ParsedMarketplaceReversal,
 } from "./provider";
 
 export type MarketplaceWebhookProcessor = {
