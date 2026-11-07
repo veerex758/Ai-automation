@@ -20,7 +20,7 @@ alter table public.workspace_subscriptions
 
 create unique index if not exists workspace_usage_idempotency_uidx
   on public.workspace_usage (workspace_id, metric, (metadata ->> 'idempotency_key'))
-  where metadata ? 'idempotency_key';
+  where nullif(metadata ->> 'idempotency_key','') is not null;
 
 create or replace function public.consume_workspace_usage(
   p_workspace_id uuid,
@@ -44,6 +44,7 @@ declare
   v_custom_workflows integer;
   v_custom_executions integer;
   v_custom_ai_credits integer;
+  v_subscription_period_start date;
 begin
   if auth.uid() is null or not private.is_workspace_member(p_workspace_id) then
     raise exception 'workspace access denied' using errcode='42501';
@@ -59,11 +60,12 @@ begin
   -- cannot both observe the same remaining allowance and over-consume it.
   perform pg_advisory_xact_lock(hashtextextended(p_workspace_id::text,0));
 
-  select plan_key,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit
-    into v_plan,v_status,v_custom_workflows,v_custom_executions,v_custom_ai_credits
+  select plan_key,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit,current_period_start::date
+    into v_plan,v_status,v_custom_workflows,v_custom_executions,v_custom_ai_credits,v_subscription_period_start
     from public.workspace_subscriptions where workspace_id=p_workspace_id;
   v_plan := coalesce(v_plan,'free');
   v_status := coalesce(v_status,'active');
+  v_period := coalesce(v_subscription_period_start,date_trunc('month',now())::date);
   if v_status not in ('active','trialing') then
     return jsonb_build_object('allowed',false,'reason','subscription_inactive','plan',v_plan);
   end if;
@@ -210,16 +212,16 @@ begin
   select count(*) into v_workflows from public.workflows
     where workspace_id=p_workspace_id and status='active';
   select coalesce(sum(quantity),0) into v_runs from public.workspace_usage
-    where workspace_id=p_workspace_id and period_start=date_trunc('month',now())::date and metric='workflow_execution';
+    where workspace_id=p_workspace_id and period_start=v_start and metric='workflow_execution';
   select coalesce(sum(quantity),0) into v_ai from public.workspace_usage
-    where workspace_id=p_workspace_id and period_start=date_trunc('month',now())::date and metric='ai_credit';
+    where workspace_id=p_workspace_id and period_start=v_start and metric='ai_credit';
 
   return jsonb_build_object(
     'plan',v_plan,
     'status',v_status,
     'period_start',v_start,
     'usage',jsonb_build_object('workflow_created',v_workflows,'workflow_execution',v_runs,'ai_credit',v_ai),
-    'limits',jsonb_build_object('workflow_created',v_workflow_limit,'workflow_execution',v_execution_limit,'ai_credit',v_ai_limit),
+    'limits',jsonb_build_object('workflow_created',v_workflow_limit,'workflow_execution',v_execution_limit,'ai_credit',v_ai_limit,'agent_run',v_ai_limit,'ai_generation',v_ai_limit),
     'billing',jsonb_build_object(
       'provider_connected',exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and billing_provider is not null),
       'checkout_enabled',false
