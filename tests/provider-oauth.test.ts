@@ -76,3 +76,14 @@ test("Instagram business account selection requires a usable account identifier"
   assert.deepEqual(selectInstagramBusinessAccount({ data: [{ id: "ig-1", username: "aivanta" }] }), { id: "ig-1", username: "aivanta" });
   assert.throws(() => selectInstagramBusinessAccount({ data: [] }), /INSTAGRAM_BUSINESS_ACCOUNT_NOT_FOUND/);
 });
+
+test("OAuth registry has deliberate provider-specific auth and PKCE settings", () => {
+  assert.equal(PROVIDER_OAUTH_CONFIG.x_twitter.tokenAuth, "basic");
+  assert.equal(PROVIDER_OAUTH_CONFIG.pipedrive.tokenAuth, "basic");
+  assert.equal(PROVIDER_OAUTH_CONFIG.bitbucket.tokenAuth, "basic");
+  assert.equal(PROVIDER_OAUTH_CONFIG.salesforce.pkce, false);
+  assert.equal(PROVIDER_OAUTH_CONFIG.facebook_pages.tokenExchangeMode, "meta-long-lived");
+  assert.equal(PROVIDER_OAUTH_CONFIG.instagram.tokenExchangeMode, "meta-long-lived");
+  assert.equal(PROVIDER_OAUTH_CONFIG.tiktok.clientIdParam, "client_key");
+  assert.equal(PROVIDER_OAUTH_CONFIG.tiktok.tokenResponsePath, "data");
+});
