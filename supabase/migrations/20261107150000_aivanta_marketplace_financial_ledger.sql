@@ -81,16 +81,15 @@ end; $$;
 revoke all on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.marketplace_finalize_payment(text,text,uuid,text,integer,text,text,timestamptz) to service_role;
 
--- Refund/chargeback reversal: lock the purchase and append exact inverse ledger entries.
--- Repeated provider events or repeated same-state transitions are idempotent.
+-- Refund/chargeback reversal: purchase lock + cumulative cap across both reversal types.
 create or replace function public.marketplace_reverse_payment(
  p_provider text,p_event_id text,p_purchase_id uuid,p_kind text,
  p_amount_minor integer,p_payload_sha256 text,p_occurred_at timestamptz
 ) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare purchase public.marketplace_purchases%rowtype; creator uuid; prior_refund bigint; prior_chargeback bigint; target_status text;
 begin
- if p_kind not in ('refund','chargeback') then raise exception 'invalid_reversal_kind'; end if;
- if p_amount_minor<=0 or p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}
+ if p_provider is null or p_event_id is null or p_kind not in ('refund','chargeback') then raise exception 'invalid_reversal_kind'; end if;
+ if p_amount_minor<=0 or p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'invalid_reversal'; end if;
  select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
  if not found then raise exception 'purchase_not_found'; end if;
  if purchase.provider<>p_provider or purchase.status not in ('paid','refunded','disputed') then raise exception 'purchase_not_reversible'; end if;
@@ -101,10 +100,10 @@ begin
  if p_kind='refund' and prior_refund+p_amount_minor>purchase.amount_minor-prior_chargeback then raise exception 'refund_exceeds_paid_amount'; end if;
  if p_kind='chargeback' and prior_chargeback+p_amount_minor>purchase.amount_minor-prior_refund then raise exception 'chargeback_exceeds_paid_amount'; end if;
  target_status:=case when p_kind='chargeback' then 'disputed' when prior_refund+prior_chargeback+p_amount_minor>=purchase.amount_minor then 'refunded' else purchase.status end;
- insert into public.marketplace_payment_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,processing_status,processed_at) values(p_provider,p_event_id,p_kind,p_payload_sha256,coalesce(p_occurred_at,now()),'processed',now());
+ insert into public.marketplace_payment_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,processing_status,processed_at)
+ values(p_provider,p_event_id,p_kind,p_payload_sha256,coalesce(p_occurred_at,now()),'processed',now());
  insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
  values(purchase.id,creator,p_provider,p_event_id,p_kind,-p_amount_minor,purchase.currency,'Provider-confirmed marketplace reversal');
- -- Reverse creator and platform allocation proportionally (rounded platform share; creator absorbs remainder).
  insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
  values(purchase.id,creator,p_provider,p_event_id,'platform_commission',-floor(p_amount_minor*0.20),purchase.currency,'Commission reversal'),
  (purchase.id,creator,p_provider,p_event_id,'creator_earning',-(p_amount_minor-floor(p_amount_minor*0.20)),purchase.currency,'Creator earning reversal');
@@ -114,29 +113,5 @@ begin
 end; $$;
 revoke all on function public.marketplace_reverse_payment(text,text,uuid,text,integer,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.marketplace_reverse_payment(text,text,uuid,text,integer,text,timestamptz) to service_role;
--- Event inbox writes are service-only; processing records are retained for audit.
-revoke update,delete on public.marketplace_payment_events from service_role;
- then raise exception 'invalid_reversal'; end if;
- select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
- if not found then raise exception 'purchase_not_found'; end if;
- if purchase.provider<>p_provider or purchase.status not in ('paid','refunded','disputed') then raise exception 'purchase_not_reversible'; end if;
- if exists(select 1 from public.marketplace_payment_events where provider=p_provider and provider_event_id=p_event_id) then return jsonb_build_object('status','duplicate_event','purchase_id',purchase.id); end if;
- select creator_id into creator from public.marketplace_products where id=purchase.product_id;
- select coalesce(sum(-amount_minor),0) into prior from public.marketplace_financial_ledger where purchase_id=purchase.id and entry_type='refund';
- if p_kind='refund' and prior+p_amount_minor>purchase.amount_minor then raise exception 'refund_exceeds_paid_amount'; end if;
- target_status:=case when p_kind='chargeback' then 'disputed' when prior+p_amount_minor=purchase.amount_minor then 'refunded' else purchase.status end;
- insert into public.marketplace_payment_events(provider,provider_event_id,event_type,payload_sha256,occurred_at,processing_status,processed_at) values(p_provider,p_event_id,p_kind,p_payload_sha256,coalesce(p_occurred_at,now()),'processed',now());
- insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
- values(purchase.id,creator,p_provider,p_event_id,p_kind,-p_amount_minor,purchase.currency,'Provider-confirmed marketplace reversal');
- -- Reverse creator and platform allocation proportionally (rounded platform share; creator absorbs remainder).
- insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
- values(purchase.id,creator,p_provider,p_event_id,'platform_commission',-floor(p_amount_minor*0.20),purchase.currency,'Commission reversal'),
- (purchase.id,creator,p_provider,p_event_id,'creator_earning',-(p_amount_minor-floor(p_amount_minor*0.20)),purchase.currency,'Creator earning reversal');
- update public.marketplace_purchases set status=target_status,refunded_at=case when target_status='refunded' then now() else refunded_at end where id=purchase.id;
- if target_status in ('refunded','disputed') then update public.marketplace_entitlements set status='revoked' where purchase_id=purchase.id; end if;
- return jsonb_build_object('status',target_status,'purchase_id',purchase.id,'reversed_minor',p_amount_minor);
-end; $$;
-revoke all on function public.marketplace_reverse_payment(text,text,uuid,text,integer,text,timestamptz) from public,anon,authenticated;
-grant execute on function public.marketplace_reverse_payment(text,text,uuid,text,integer,text,timestamptz) to service_role;
--- Event inbox writes are service-only; processing records are retained for audit.
+-- Provider inbox remains immutable after event processing.
 revoke update,delete on public.marketplace_payment_events from service_role;
