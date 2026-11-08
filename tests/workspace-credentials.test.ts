@@ -206,3 +206,15 @@ test("workspace credential vault accepts database and storage provider fields", 
   assert.throws(() => encryptWorkspaceCredentials({ supabase: { projectUrl: "https://project.supabase.co" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ aws_s3: { accessKeyId: "id", region: "us-east-1" } } as never, key));
 });
+
+
+test("workspace credential vault accepts MySQL and MongoDB connection strings", () => {
+  const value = {
+    mysql: { connectionString: "mysql://worker:secret@db.example.test/app" },
+    mongodb: { connectionString: "mongodb://worker:secret@db.example.test/app" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-database:drivers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-database:drivers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ mysql: {} } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ mongodb: { connectionString: "" } } as never, key));
+});

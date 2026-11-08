@@ -13,6 +13,8 @@ export type NodeContext = {
     request(args: { url: string; method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
   };
   previousOutputs: Readonly<Record<string, unknown>>;
+  /** Worker-side authorization hook, called immediately before every live provider handler. */
+  authorizeOperation?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action" }) => Promise<void>;
   webhook?: { verified: boolean };
   /** Shared atomic rate-limit backend. Missing backend fails closed. */
   rateLimit?: { consume(args: { key: string; limit: number; windowMs: number }): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> };

@@ -17,6 +17,8 @@ type ConnectionRecord = {
 type CatalogPayload = { nodes?: RegistryNode[]; error?: string };
 type WorkspacePayload = { integrations?: ConnectionRecord[]; liveExecutionEnabled?: boolean; liveProvidersEnabled?: string[]; error?: string };
 type GooglePayload = { connections?: ConnectionRecord[]; error?: string };
+type ApprovalRecord = { node_id: string; operation_id: string; decision: "approved" | "revoked"; provider: string };
+type ApprovalPayload = { approvals?: ApprovalRecord[]; error?: string };
 
 const officialBrandAssets: Record<string, { slug: string; label: string }> = {
   "openai": {
@@ -418,6 +420,8 @@ export default function RegistryIntegrationsDirectory() {
   const [nodes, setNodes] = useState<RegistryNode[]>([]);
   const [workspace, setWorkspace] = useState<ConnectionRecord[]>([]);
   const [google, setGoogle] = useState<ConnectionRecord[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
+  const [approvalError, setApprovalError] = useState("");
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [liveExecutionEnabled, setLiveExecutionEnabled] = useState(false);
@@ -428,15 +432,17 @@ export default function RegistryIntegrationsDirectory() {
   useEffect(() => {
     let active = true;
     async function load() {
-      const [catalogResponse, workspaceResponse, googleResponse] = await Promise.all([
+      const [catalogResponse, workspaceResponse, googleResponse, approvalsResponse] = await Promise.all([
         fetch("/api/integrations/catalog", { cache: "no-store" }),
         fetch("/api/integrations/workspace", { cache: "no-store" }),
         fetch("/api/integrations/google/connections", { cache: "no-store" }),
+        fetch("/api/integrations/workspace/approvals", { cache: "no-store" }),
       ]);
-      const [catalogData, workspaceData, googleData] = await Promise.all([
+      const [catalogData, workspaceData, googleData, approvalsData] = await Promise.all([
         catalogResponse.json().catch(() => ({})) as Promise<CatalogPayload>,
         workspaceResponse.json().catch(() => ({})) as Promise<WorkspacePayload>,
         googleResponse.json().catch(() => ({})) as Promise<GooglePayload>,
+        approvalsResponse.json().catch(() => ({})) as Promise<ApprovalPayload>,
       ]);
       if (!active) return;
       if (!catalogResponse.ok || !Array.isArray(catalogData.nodes)) setCatalogState("error");
@@ -446,6 +452,7 @@ export default function RegistryIntegrationsDirectory() {
       setLiveExecutionEnabled(workspaceData.liveExecutionEnabled === true);
       setLiveProvidersEnabled(Array.isArray(workspaceData.liveProvidersEnabled) ? workspaceData.liveProvidersEnabled : []);
       setGoogle(Array.isArray(googleData.connections) ? googleData.connections : []);
+      setApprovals(Array.isArray(approvalsData.approvals) ? [...approvalsData.approvals].reverse() : []);
     }
     void load().catch(() => { if (active) { setCatalogState("error"); setStatusUnavailable(true); } });
     return () => { active = false; };
@@ -459,6 +466,22 @@ export default function RegistryIntegrationsDirectory() {
   const connectedCount = nodes.filter((node) => connectionState(node, workspace, google, statusUnavailable) === "connected").length;
   const registeredCount = nodes.filter((node) => node.executionStatus === "registered").length;
   const toggle = (id: string) => setExpanded((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+
+  async function changeApproval(node: RegistryNode, operation: Operation, kind: "trigger" | "action", decision: "approved" | "revoked") {
+    setApprovalError("");
+    const provider = providerForNode[node.id] ?? node.id;
+    const response = await fetch("/api/integrations/workspace/approvals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, nodeId: node.id, operationId: operation.id, kind, decision }),
+    });
+    const payload = await response.json().catch(() => ({})) as { approval?: ApprovalRecord; error?: string };
+    if (!response.ok || !payload.approval) {
+      setApprovalError(payload.error ?? "Unable to update the workspace approval.");
+      return;
+    }
+    setApprovals((current) => [...current, payload.approval!]);
+  }
 
   return <section className="registry-integrations" aria-label="Aivanta provider directory">
     <div className="registry-directory-toolbar">
@@ -504,6 +527,18 @@ export default function RegistryIntegrationsDirectory() {
           {isExpanded && <div className="registry-operation-list">
             {operations.length === 0 ? <p>No operations are registered yet.</p> : operations.map((operation) => <div className="registry-operation" key={operation.kind + operation.id}>
               <div><span>{operation.kind}</span><strong>{operation.name}</strong><code>{operation.id}</code></div><p>{operation.description}</p>
+              {node.auth.type !== "none" && <div className="registry-approval-control">
+                {(() => {
+                  const kind = operation.kind.toLowerCase() as "trigger" | "action";
+                  const matchingApprovals = approvals.filter((item) => item.node_id === node.id && item.operation_id === operation.id);
+                  const latest = matchingApprovals[matchingApprovals.length - 1];
+                  const approved = latest?.decision === "approved";
+                  return <><span>{approved ? "Workspace approved" : latest?.decision === "revoked" ? "Approval revoked" : "Approval required"}</span>
+                    <button type="button" onClick={() => void changeApproval(node, operation, kind, approved ? "revoked" : "approved")}>
+                      {approved ? "Revoke approval" : "Approve operation"}
+                    </button></>;
+                })()}
+              </div>}
               <details className="registry-operation-schema"><summary>Input and output schema</summary>
                 <div><strong>Input</strong><pre>{JSON.stringify(operation.inputSchema ?? {}, null, 2)}</pre></div>
                 <div><strong>Output</strong><pre>{JSON.stringify(operation.outputSchema ?? {}, null, 2)}</pre></div>
@@ -514,6 +549,7 @@ export default function RegistryIntegrationsDirectory() {
       })}
       {filtered.length === 0 && <div className="registry-state-panel">No provider or operation matches “{query}”.</div>}
     </div>}
+    {approvalError && <p className="registry-directory-note" role="alert">{approvalError}</p>}
     <p className="registry-directory-note">
       All 100 requested providers are listed. “Coming soon” means no native execution adapter is registered yet; it is not a working connection. The AI planner can select only registered operations; live execution remains subject to provider credentials, approval, and execution gates. A connected label requires a saved workspace connection and a successful provider test.
     </p>
