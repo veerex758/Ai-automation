@@ -47,7 +47,7 @@ export async function POST(_request:NextRequest,context:Context){
   if(installError){
    const message=installError.message??"";
    if(message.includes("workspace_access_denied"))return NextResponse.json({error:"You do not have access to this workspace."},{status:403,headers});
-   if(message.includes("active_entitlement_required"))return NextResponse.json({error:"Purchase this product before installing it."},{status:402,headers});
+   if(message.includes("active_entitlement_required")||message.includes("active_entitlement_or_license_required"))return NextResponse.json({error:"Purchase this product before installing it."},{status:402,headers});
    if(message.includes("product_not_available")||message.includes("verified_version_required"))return NextResponse.json({error:"This product is not currently available for installation."},{status:404,headers});
    if(message.includes("authentication_required"))return NextResponse.json({error:"Authentication required."},{status:401,headers});
    throw installError;
