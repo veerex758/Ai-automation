@@ -16,7 +16,7 @@ test("finance queue and mutations require explicit reviewer allowlist and servic
 test("reviewer UI cannot mark payout paid or enter transfer references",()=>{
  assert.match(page,/paid status is only set by verified provider settlement reconciliation/);
  assert.doesNotMatch(page,/action:"paid"/);
- assert.doesNotMatch(page,/transfer_id\s*[:=]/);
+ assert.doesNotMatch(page,/input[^>]*transfer/i);
  assert.doesNotMatch(page,/action\s*:\s*[\x27\x22]paid/);
 });
 
