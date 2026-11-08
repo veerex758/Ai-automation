@@ -108,11 +108,10 @@ test("native executable inventory has one authoritative count, separate from dir
   const registered = catalog.filter((node) => node.executionStatus === "registered");
   const comingSoon = catalog.filter((node) => node.executionStatus === "coming_soon");
 
-  // 120 is the native registry after adding 51 provider adapters across the seven catalogue batches:
-  // 20 utility-pack nodes and 20 provider-pack nodes, plus 51 new catalogue adapters.
-  assert.equal(nodes.length, 120);
-  assert.equal(executable.length, 120);
-  assert.equal(new Set(nodes.map((node) => node.id)).size, 120);
+  // 122 is the native registry after the 51 catalogue adapters and the two registered Logic/Data nodes.
+  assert.equal(nodes.length, 122);
+  assert.equal(executable.length, 122);
+  assert.equal(new Set(nodes.map((node) => node.id)).size, 122);
 
   // The 100-entry provider directory is a different inventory. MySQL and
   // MongoDB are now mapped; internal utility nodes remain outside that list.
