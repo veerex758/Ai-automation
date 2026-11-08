@@ -4,7 +4,7 @@ import {createClient} from "@/lib/supabase/server";
 import MarketplaceInstallButton from "./install-button";
 import "./product.css";
 type Ctx={params:Promise<{slug:string}>};
-type Product={id:string;current_version_id:string|null;name:string;summary:string;description:string;product_type:string;pricing_type:string;recurring_interval:string|null;price_minor:number;currency:string;required_plan:string;integrations:string[];permissions:unknown[];category?:{name:string}|null;creator?:{display_name:string}|null;version?:{version:string;changelog:string;verified_at:string|null}|null};
+type Product={id:string;current_version_id:string|null;name:string;summary:string;description:string;product_type:string;pricing_type:string;recurring_interval:string|null;price_minor:number;currency:string;required_plan:string;integrations:string[];permissions:unknown[];category?:{name:string}|null;creator?:{display_name:string;slug:string}|null;version?:{version:string;changelog:string;verified_at:string|null}|null};
 export default async function MarketplaceProductPage({params}:Ctx){
  const {slug}=await params;const sb=await createClient();
  const {data:{user}}=await sb.auth.getUser();
