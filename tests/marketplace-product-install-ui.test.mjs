@@ -7,8 +7,8 @@ const button=readFileSync(new URL("../app/marketplace/[slug]/install-button.tsx"
 
 test("published product detail exposes install only to authenticated users",()=>{
  assert.ok(page.includes("sb.auth.getUser()"));
- assert.ok(page.includes("user?<MarketplaceInstallButton productId={product.id}/>"));
- assert.ok(page.includes('<Link href="/login">Sign in to install'));
+ assert.ok(page.includes("user?(product.pricing_type==="free""));\n assert.ok(page.includes("<MarketplaceCheckoutButton"));
+ assert.ok(page.includes('<Link href="/login">Sign in to purchase/install'));
 });
 
 test("marketplace install UI calls authenticated server endpoint and explains draft-only behavior",()=>{
