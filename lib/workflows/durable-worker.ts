@@ -89,11 +89,7 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
       google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
     };
     const googleProduct = googleProductByProvider[provider];
-    if (provider === "rss_feed") {
-      // RSS is a credential-free read operation; it still requires the explicit provider live gate.
-      credentials[provider] = {};
-      continue;
-    }
+    if (provider === "rss_feed") { credentials[provider] = {}; continue; }
     if (googleProduct) {
       credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;
@@ -102,9 +98,9 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id,status").eq("workspace_id", workspaceId).eq("provider", provider).maybeSingle();
+      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider).maybeSingle();
     if (integrationError) throw new Error("WORKSPACE_INTEGRATION_LOOKUP_FAILED");
-    if (!integration || integration.status !== "connected") {
+    if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed") {
       throw new Error(provider === "resend" ? "EMAIL_CONNECTION_REQUIRED" : provider.toUpperCase() + "_CONNECTION_REQUIRED");
     }
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
