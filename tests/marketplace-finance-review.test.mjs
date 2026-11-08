@@ -45,3 +45,5 @@ test("creator support review is reviewer-gated and status plus audit are atomic"
  assert.match(supportReview,/support_case_transition_invalid/);
  assert.match(supportPage,/Audit note/);
 });
+
+test("creator payout transfer route is finance-gated, eligibility checked and reconciled",()=>{const transfer=readFileSync(new URL("../app/api/marketplace/admin/payouts/transfer/route.ts",import.meta.url),"utf8");assert.match(transfer,/AIVANTA_MARKETPLACE_PAYOUTS_ENABLED/);assert.match(transfer,/AIVANTA_MARKETPLACE_REVIEWER_IDS/);assert.match(transfer,/onboarding_status!=="verified"/);assert.match(transfer,/tax_status!=="complete"/);assert.match(transfer,/status!=="approved"/);assert.match(transfer,/marketplace_admin_audit/);assert.match(transfer,/status:"processing"/)});
