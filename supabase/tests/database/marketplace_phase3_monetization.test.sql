@@ -79,7 +79,7 @@ select throws_ok($$select public.marketplace_review_payout_request((select id fr
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
-select throws_ok($$select public.marketplace_settle_payout(current_setting('test.phase3_payout_id')::uuid,'mock','transfer-1','settle-event-1',repeat('a',64),'2026-11-05')$$,'P0001','payout_settlement_service_role_required','authenticated creator cannot settle payouts');
+select throws_ok($$select public.marketplace_settle_payout(current_setting('test.phase3_payout_id')::uuid,'mock','transfer-1','settle-event-1',repeat('a',64),'2026-11-05')$,'42501',null,'authenticated creator cannot settle payouts is denied by function grants');
 reset role;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
