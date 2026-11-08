@@ -83,7 +83,8 @@ declare purchase public.marketplace_purchases%rowtype; creator uuid; commission 
 begin
  if p_provider is null or p_event_id is null or p_provider_payment_id is null then raise exception 'invalid_payment_event'; end if;
  if p_amount_minor<=0 or p_currency<>'USD' then raise exception 'invalid_payment_amount'; end if;
- if p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}
+ if p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'invalid_payload_hash'; end if;
+ select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
  if not found then raise exception 'purchase_not_found'; end if;
  if purchase.provider<>p_provider or purchase.amount_minor<>p_amount_minor or purchase.currency<>p_currency then raise exception 'payment_mismatch'; end if;
  if purchase.status='paid' then
