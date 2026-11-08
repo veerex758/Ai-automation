@@ -90,7 +90,7 @@ select is((select count(*)::integer from public.marketplace_financial_ledger whe
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
-select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=(select id from public.marketplace_payout_requests where idempotency_key='phase3-key-0001') and entry_type='payout'),1,'paid payout appends exactly one ledger debit');
+select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=current_setting('test.phase3_payout_id')::uuid and entry_type='payout'),1,'paid payout appends exactly one ledger debit');
 reset role;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
