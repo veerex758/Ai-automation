@@ -1,5 +1,5 @@
 begin;
-select plan(62);
+select plan(63);
 
 select has_table('public','marketplace_subscriptions','subscription lifecycle table exists');
 select has_table('public','marketplace_subscription_events','subscription event inbox exists');
@@ -127,7 +127,7 @@ select set_config('request.jwt.claim.sub','a1111111-1111-4111-8111-111111111111'
 select set_config('request.jwt.claim.role','service_role',true);
 select lives_ok($$select public.marketplace_request_subscription_cancellation((select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1'),'cancel-phase3-0001')$$,'buyer identity can request cancellation through durable command');
 select is((select cancel_at_period_end from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1'),true,'cancellation request marks subscription pending period-end cancellation');
-select is((public.marketplace_apply_subscription_event('mock','sub-event-3',repeat('e',64),'subscription.cancelled','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-03')->>'status'),'cancelled','cancellation event is applied');
+select is((public.marketplace_apply_subscription_event('mock','sub-event-3',repeat('e',64),'subscription.cancelled','a1111111-1111-4111-8111-111111111111','e4444444-4444-4444-8444-444444444444','f5555555-5555-4555-8555-555555555555','sub-phase3-1','2026-11-01','2026-12-01','2026-11-05')->>'status'),'cancelled','cancellation event is applied');
 select is((select status from public.marketplace_entitlements where subscription_id=(select id from public.marketplace_subscriptions where provider_subscription_id='sub-phase3-1')),'expired','cancelled subscription entitlement expires');
 
 select * from finish();
