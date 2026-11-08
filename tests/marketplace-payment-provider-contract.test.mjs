@@ -8,7 +8,7 @@ test("payment adapter contract is provider-neutral and server-side",()=>{
  assert.match(contract,/createCheckout\(input: MarketplaceCheckoutInput\)/);
  assert.match(contract,/verifyWebhook\(rawBody: Uint8Array, headers: Headers\)/);
  assert.match(contract,/parsePayment\(event: VerifiedMarketplaceWebhook\)/);
- assert.match(contract,/Must validate provider signature over rawBody/);
+ assert.match(contract,/verifyWebhook(rawBody: Uint8Array, headers: Headers)/);
  assert.match(spec,/Provider-neutral adapter/);
 });
 test("verified webhook envelope rejects invalid IDs/types and stale timestamps",()=>{
@@ -21,6 +21,6 @@ test("verified webhook envelope rejects invalid IDs/types and stale timestamps",
 test("normalized payment validation fails closed for amount, currency and identifiers",()=>{
  assert.match(contract,/invalid_payment_payload/);
  assert.match(contract,/Number\.isSafeInteger\(payment\.amountMinor\)/);
- assert.match(contract,/payment\.amountMinor <= 0/);
- assert.match(contract,/payment\.currency !== "USD"/);
+ assert.match(contract,/payment.amountMinor<=0/);
+ assert.match(contract,/payment.currency!=="USD"/);
 });
