@@ -76,7 +76,8 @@ test("Google OAuth scope validation allows only identity plus the requested read
 
   assert.equal(isGoogleProduct("gmail"), true);
   assert.equal(isGoogleProduct("sheets"), true);
-  assert.equal(isGoogleProduct("drive"), false);
+  assert.equal(isGoogleProduct("drive"), true);
+  for (const product of ["calendar", "docs", "forms", "youtube", "contacts"]) assert.equal(isGoogleProduct(product), true);
   assert.equal(isGoogleProduct(null), false);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email profile " + gmail), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", gmail), true);
@@ -124,4 +125,15 @@ test("restore caller environment after this test file", () => {
   else process.env.GOOGLE_CLIENT_SECRET = originalGoogleConfig.clientSecret;
   if (originalGoogleConfig.redirectUri === undefined) delete process.env.GOOGLE_REDIRECT_URI;
   else process.env.GOOGLE_REDIRECT_URI = originalGoogleConfig.redirectUri;
+});
+
+
+test("each newly supported Google product accepts only its exact read-only scope", async () => {
+  const { GOOGLE_PRODUCTS, hasOnlyApprovedGoogleScopes } = await loadTypeScript("../lib/integrations/google-oauth.ts");
+  for (const product of ["drive", "calendar", "docs", "forms", "youtube", "contacts"]) {
+    const scope = GOOGLE_PRODUCTS[product].scopes[0];
+    assert.match(scope, /\.readonly$/);
+    assert.equal(hasOnlyApprovedGoogleScopes(product, "openid email profile " + scope), true);
+    assert.equal(hasOnlyApprovedGoogleScopes(product, scope + " https://www.googleapis.com/auth/drive"), false);
+  }
 });

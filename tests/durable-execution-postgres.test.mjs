@@ -11,10 +11,24 @@ const migration = await readFile(
   new URL("../supabase/migrations/20261031100000_aivanta_durable_execution_queue.sql", import.meta.url),
   "utf8",
 );
+const liveModeMigration = await readFile(
+  new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url),
+  "utf8",
+);
+const utilityMigration = await readFile(
+  new URL("../supabase/migrations/20261105045346_aivanta_utility_execution_hardening.sql", import.meta.url),
+  "utf8",
+);
+const utilityIndexesMigration = await readFile(
+  new URL("../supabase/migrations/20261105045900_aivanta_utility_execution_indexes.sql", import.meta.url),
+  "utf8",
+);
 const ids = {
   workspace: "10000000-0000-4000-8000-000000000001",
   workflow: "20000000-0000-4000-8000-000000000001",
+  workflowOther: "20000000-0000-4000-8000-000000000002",
   user: "30000000-0000-4000-8000-000000000001",
+  workspaceOther: "10000000-0000-4000-8000-000000000002",
 };
 let ready = false;
 
@@ -40,6 +54,8 @@ async function resetFixture() {
   try {
     await db.query(`
       truncate table
+        public.execution_error_events,
+        public.execution_rate_limit_hits,
         public.execution_dead_letters,
         public.execution_checkpoints,
         public.execution_jobs,
@@ -49,8 +65,8 @@ async function resetFixture() {
     // Each subtest starts from workflow version 1 so a prior version-pinning
     // assertion cannot leak mutated fixture state into later dispatch tests.
     await db.query(
-      "update public.workflows set version=1,status='active',definition=$1::jsonb where id=$2",
-      [JSON.stringify({ version: 1, nodes: [] }), ids.workflow],
+      "update public.workflows set version=1,status='active',definition=$1::jsonb,created_by=$2 where id=$3",
+      [JSON.stringify({ version: 1, nodes: [] }), ids.user, ids.workflow],
     );
   } finally {
     await db.query("reset role").catch(() => {});
@@ -66,7 +82,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
   const setup = await client();
   try {
     await setup.query(`
-      drop table if exists public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade;
+      drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade;
       drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade;
       do $$ begin
         if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
@@ -77,7 +93,8 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       create table public.workflows (
         id uuid primary key, workspace_id uuid not null references public.workspaces(id),
         version integer not null, status text not null,
-        definition jsonb not null default '{"version":1,"nodes":[]}'::jsonb
+        definition jsonb not null default '{"version":1,"nodes":[]}'::jsonb,
+        created_by uuid
       );
       create table public.workflow_runs (
         id uuid primary key default gen_random_uuid(),
@@ -89,16 +106,57 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       grant usage on schema public to anon, authenticated, service_role;
     `);
-    await setup.query("insert into public.workspaces values ($1)", [ids.workspace]);
+    await setup.query("insert into public.workspaces values ($1),($2)", [ids.workspace, ids.workspaceOther]);
     await setup.query(
-      "insert into public.workflows (id,workspace_id,version,status,definition) values ($1,$2,1,'active',$3::jsonb)",
-      [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] })],
+      "insert into public.workflows (id,workspace_id,version,status,definition,created_by) values ($1,$2,1,'active',$3::jsonb,$4),($5,$2,1,'active',$3::jsonb,$4)",
+      [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] }), ids.user, ids.workflowOther],
     );
     await setup.query(migration);
+    await setup.query(liveModeMigration);
+    await setup.query(utilityMigration);
+    await setup.query(utilityIndexesMigration);
     ready = true;
   } finally {
     setup.release();
   }
+
+
+  await t.test("live dispatch is explicit, single-attempt, and the legacy RPC stays dry-run", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const dry = await dispatch(db, crypto.randomUUID(), 4);
+      const dryJob = await db.query("select execution_mode,max_attempts from public.execution_jobs where id=$1", [dry.job_id]);
+      assert.equal(dryJob.rows[0].execution_mode, "dry_run");
+      assert.equal(dryJob.rows[0].max_attempts, 4);
+
+      const key = crypto.randomUUID();
+      const live = await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,5,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, key],
+      );
+      const liveResult = live.rows[0].result;
+      const liveJob = await db.query("select execution_mode,max_attempts from public.execution_jobs where id=$1", [liveResult.job_id]);
+      assert.equal(liveJob.rows[0].execution_mode, "live");
+      assert.equal(liveJob.rows[0].max_attempts, 1);
+    } finally { db.release(); }
+  });
+
+  await t.test("idempotency keys cannot be reused across workflow IDs or execution modes", async () => {
+    await resetFixture();
+    const db = await client();
+    const key = crypto.randomUUID();
+    try {
+      await dispatch(db, key);
+      await assert.rejects(
+        db.query(
+          "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,5,'live')",
+          [ids.workspace, ids.workflowOther, ids.user, key],
+        ),
+        (error) => error.code === "23505",
+      );
+    } finally { db.release(); }
+  });
 
   await t.test("two competing workers never receive the same job", async () => {
     await resetFixture();
@@ -206,6 +264,216 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     } finally { db.release(); }
   });
 
+
+  await t.test("shared rate limiter is atomic and isolates workspaces", async () => {
+    await resetFixture();
+    const clients = await Promise.all([client(), client(), client()]);
+    try {
+      const results = await Promise.all(clients.map((db) => db.query(
+        "select public.consume_execution_rate_limit($1,'checkout',2,60000) as result",
+        [ids.workspace],
+      )));
+      const decisions = results.map((item) => item.rows[0].result.allowed).sort();
+      assert.deepEqual(decisions, [false, true, true]);
+      const isolated = await clients[0].query(
+        "select public.consume_execution_rate_limit($1,'checkout',2,60000) as result",
+        [ids.workspaceOther],
+      );
+      assert.equal(isolated.rows[0].result.allowed, true);
+    } finally { clients.forEach((db) => db.release()); }
+  });
+
+  await t.test("workflow failures atomically enqueue active Error Trigger subscribers", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const subscriberDefinition = {
+        format: "aivanta-registry-v1",
+        steps: [{ id: "on-error", nodeId: "error_trigger", operationId: "capture", kind: "trigger",
+          input: { code: "TEST_FAILURE", message: "Test failure" } }],
+      };
+      await db.query(
+        "update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify(subscriberDefinition), ids.workflowOther],
+      );
+      await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,1,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [job] = await claim(db, "error-source-worker");
+      const result = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'step-a','TEST_FAILURE','TEST_FAILURE',1) as dispatched",
+        [job.id, job.lease_token],
+      );
+      assert.equal(result.rows[0].dispatched, 1);
+      const duplicate = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'step-a','TEST_FAILURE','TEST_FAILURE',1) as dispatched",
+        [job.id, job.lease_token],
+      );
+      assert.equal(duplicate.rows[0].dispatched, 0);
+      const queued = await db.query(
+        "select execution_mode,payload from public.execution_jobs where workflow_id=$1 and idempotency_key like 'error:%'",
+        [ids.workflowOther],
+      );
+      assert.equal(queued.rowCount, 1);
+      assert.equal(queued.rows[0].execution_mode, "live");
+      assert.equal(queued.rows[0].payload.source, "error_trigger");
+      assert.equal(queued.rows[0].payload.input.code, "TEST_FAILURE");
+      assert.match(queued.rows[0].payload.input.occurredAt, /Z$/);
+      const [subscriberJob] = await claim(db, "error-subscriber-worker");
+      assert.equal(subscriberJob.payload.source, "error_trigger");
+      const nested = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'handler-step','HANDLER_FAILED','HANDLER_FAILED',1) as dispatched",
+        [subscriberJob.id, subscriberJob.lease_token],
+      );
+      assert.equal(nested.rows[0].dispatched, 0);
+      const noRecursion = await db.query(
+        "select count(*)::integer as count from public.execution_jobs where idempotency_key like 'error:%'",
+      );
+      assert.equal(noRecursion.rows[0].count, 1);
+    } finally { db.release(); }
+  });
+
+
+  await t.test("dry-run failures are recorded without launching live Error Trigger workflows", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      await db.query(
+        "update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify({ format: "aivanta-registry-v1", steps: [{ id: "on-error", nodeId: "error_trigger", operationId: "capture", kind: "trigger", input: { code: "TEST_FAILURE", message: "Test failure" } }] }), ids.workflowOther],
+      );
+      await dispatch(db, crypto.randomUUID());
+      const [job] = await claim(db, "dry-run-error-worker");
+      const result = await db.query(
+        "select public.record_and_dispatch_execution_error_event($1,$2,'step-a','TEST_FAILURE','TEST_FAILURE',1) as dispatched",
+        [job.id, job.lease_token],
+      );
+      assert.equal(result.rows[0].dispatched, 0);
+      const queued = await db.query("select count(*)::integer as count from public.execution_jobs where idempotency_key like 'error:%'");
+      assert.equal(queued.rows[0].count, 0);
+    } finally { db.release(); }
+  });
+
+
+  await t.test("job finalization persists failed live runs to the retryable Error Trigger outbox", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const subscriberDefinition = {
+        format: "aivanta-registry-v1",
+        steps: [{ id: "on-error", nodeId: "error_trigger", operationId: "capture", kind: "trigger",
+          input: { code: "PLACEHOLDER", message: "Placeholder" } }],
+      };
+      await db.query(
+        "update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify(subscriberDefinition), ids.workflowOther],
+      );
+      await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,1,'live')",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [job] = await claim(db, "outbox-source-worker");
+      const finished = await db.query(
+        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE','step-a','TEST_FAILURE') as result",
+        [job.id, job.lease_token],
+      );
+      assert.equal(finished.rows[0].result, "dead_letter");
+      const pending = await db.query(
+        "select dispatch_status,error_code,step_id from public.execution_error_events where job_id=$1",
+        [job.id],
+      );
+      assert.equal(pending.rowCount, 1);
+      assert.equal(pending.rows[0].dispatch_status, "pending");
+      assert.equal(pending.rows[0].error_code, "TEST_FAILURE");
+      assert.equal(pending.rows[0].step_id, "step-a");
+      const dispatched = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
+      assert.equal(dispatched.rows[0].count, 1);
+      const queued = await db.query(
+        "select payload from public.execution_jobs where workflow_id=$1 and idempotency_key like 'error:%'",
+        [ids.workflowOther],
+      );
+      assert.equal(queued.rowCount, 1);
+      assert.equal(queued.rows[0].payload.source, "error_trigger");
+      const event = await db.query(
+        "select dispatch_status,dispatched_at from public.execution_error_events where job_id=$1",
+        [job.id],
+      );
+      assert.equal(event.rows[0].dispatch_status, "dispatched");
+      assert.ok(event.rows[0].dispatched_at);
+    } finally { db.release(); }
+  });
+
+
+  await t.test("pending Error Trigger deliveries retry after a transient queue insert failure", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const subscriberDefinition = {
+        format: "aivanta-registry-v1",
+        steps: [{ id: "on-error", nodeId: "error_trigger", operationId: "capture", kind: "trigger",
+          input: { code: "PLACEHOLDER", message: "Placeholder" } }],
+      };
+      await db.query(
+        "update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify(subscriberDefinition), ids.workflowOther],
+      );
+      await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,1,'live')",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [job] = await claim(db, "outbox-retry-source-worker");
+      const event = await db.query(
+        "select public.record_execution_error_event($1,$2,'step-retry','SUBSCRIBER_SETUP','SUBSCRIBER_SETUP',1) as id",
+        [job.id, job.lease_token],
+      );
+      await db.query(`
+        create or replace function public.test_fail_error_trigger_job_insert()
+        returns trigger language plpgsql as $$
+        begin
+          if new.payload->>'source' = 'error_trigger' then
+            raise exception 'simulated transient queue insert failure';
+          end if;
+          return new;
+        end;
+        $$;
+      `);
+      await db.query(`
+        create trigger test_fail_error_trigger_job_insert
+        before insert on public.execution_jobs
+        for each row execute function public.test_fail_error_trigger_job_insert()
+      `);
+      const first = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
+      assert.equal(first.rows[0].count, 1);
+      const failed = await db.query(
+        "select dispatch_status,dispatch_attempts,dispatch_error_code from public.execution_error_events where id=$1",
+        [event.rows[0].id],
+      );
+      assert.equal(failed.rows[0].dispatch_status, "pending");
+      assert.equal(failed.rows[0].dispatch_attempts, 1);
+      assert.equal(failed.rows[0].dispatch_error_code, "ERROR_TRIGGER_DISPATCH_FAILED");
+      await db.query("drop trigger test_fail_error_trigger_job_insert on public.execution_jobs");
+      await db.query("drop function public.test_fail_error_trigger_job_insert()");
+      const second = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
+      assert.equal(second.rows[0].count, 1);
+      const queued = await db.query(
+        "select count(*)::integer as count from public.execution_jobs where workflow_id=$1 and idempotency_key like 'error:%'",
+        [ids.workflowOther],
+      );
+      assert.equal(queued.rows[0].count, 1);
+      const succeeded = await db.query(
+        "select dispatch_status,dispatch_attempts from public.execution_error_events where id=$1",
+        [event.rows[0].id],
+      );
+      assert.equal(succeeded.rows[0].dispatch_status, "dispatched");
+      assert.equal(succeeded.rows[0].dispatch_attempts, 2);
+    } finally {
+      await db.query("drop trigger if exists test_fail_error_trigger_job_insert on public.execution_jobs").catch(() => {});
+      await db.query("drop function if exists public.test_fail_error_trigger_job_insert()").catch(() => {});
+      db.release();
+    }
+  });
+
   await t.test("browser roles cannot read queue tables or execute privileged RPCs", async () => {
     await resetFixture();
     const db = await client();
@@ -236,14 +504,21 @@ test.after(async () => {
     if (ready) {
       const db = await pool.connect();
       try {
-        await db.query("drop table if exists public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade");
+        await db.query("drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade");
         await db.query("drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade");
         await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer)");
+        await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer,text)");
         await db.query("drop function if exists public.enqueue_execution_job(uuid,uuid,uuid,text,jsonb,integer)");
         await db.query("drop function if exists public.claim_execution_jobs(text,integer,integer)");
         await db.query("drop function if exists public.heartbeat_execution_job(uuid,uuid,integer)");
         await db.query("drop function if exists public.checkpoint_execution_step(uuid,uuid,text,integer,text,jsonb,jsonb)");
         await db.query("drop function if exists public.finish_execution_job(uuid,uuid,boolean,text)");
+        await db.query("drop function if exists public.finish_execution_job(uuid,uuid,boolean,text,text,text)");
+        await db.query("drop function if exists public.consume_execution_rate_limit(uuid,text,integer,integer)");
+        await db.query("drop function if exists public.record_execution_error_event(uuid,uuid,text,text,text,integer)");
+        await db.query("drop function if exists public.dispatch_pending_execution_error_events(integer)");
+        await db.query("drop function if exists public.dispatch_execution_error_event(uuid)");
+        await db.query("drop function if exists public.record_and_dispatch_execution_error_event(uuid,uuid,text,text,text,integer)");
       } finally {
         await db.query("reset role").catch(() => {});
         db.release();

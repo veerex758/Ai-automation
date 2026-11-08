@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -138,6 +139,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let definitionToSave: Record<string, unknown> = definitionResult.definition;
+    let registrySteps: unknown = null;
+    if ("registrySteps" in body) {
+      const validatedRegistry = validateRegisteredSteps(body.registrySteps);
+      if (!validatedRegistry.steps) {
+        return NextResponse.json({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
+      }
+      registrySteps = validatedRegistry.steps;
+      definitionToSave = { ...definitionResult.definition, format: "aivanta-registry-v1", steps: validatedRegistry.steps };
+    }
+
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data, error } = await supabase
       .from("workflows")
@@ -146,7 +158,7 @@ export async function POST(request: NextRequest) {
         name,
         description,
         status,
-        definition: definitionResult.definition,
+        definition: definitionToSave,
         created_by: user.id,
       })
       .select("id, name, description, status, updated_at")
@@ -154,7 +166,7 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json(
-      { workflow: presentWorkflow(data) },
+      { workflow: presentWorkflow(data), registry: registrySteps ? { format: "aivanta-registry-v1", steps: registrySteps } : null },
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

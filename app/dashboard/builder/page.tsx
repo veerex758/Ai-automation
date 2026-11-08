@@ -11,8 +11,9 @@ import "./builder.css";
 type StepKind = "Trigger" | "Action" | "Condition";
 type ActionField = { name: string; label: string; type: "text" | "email" | "url"; required: boolean; maxLength: number };
 type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
-type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string> };
+type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string>; registryBacked?: boolean };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
+type RegistryDraftStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
 type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
 
 const starterSteps: BuilderStep[] = [
@@ -36,6 +37,8 @@ export default function WorkflowBuilderPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
+  const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
+  const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
@@ -90,11 +93,12 @@ export default function WorkflowBuilderPage() {
     setSteps(current => [...current, { id, kind, title, detail }]);
     setSelected(id);
     setShowAdd(false);
+    setAiRegistrySteps(null);
     setNotice("Step added. Configure its details before activating the workflow.");
   }
 
   function getActionConfigurationIssues(): string[] {
-    return steps.filter(step => step.kind === "Action").flatMap(step => {
+    return steps.filter(step => step.kind === "Action" && !step.registryBacked).flatMap(step => {
       if (!step.actionId) return [`Choose an action type for "${step.title}".`];
       const action = actionCatalog.find(item => item.id === step.actionId);
       if (!action) return [`The action configured for "${step.title}" is no longer available.`];
@@ -116,11 +120,11 @@ export default function WorkflowBuilderPage() {
       return;
     }
 
-    if (catalogLoading) {
+    if (!aiRegistrySteps && catalogLoading) {
       setNotice("The action catalog is still loading. Please wait before saving.");
       return;
     }
-    if (catalogError) {
+    if (!aiRegistrySteps && catalogError) {
       setNotice("The action catalog is unavailable. Reload it before saving this workflow.");
       return;
     }
@@ -171,6 +175,7 @@ export default function WorkflowBuilderPage() {
             description: `${steps.length} steps · Visual workflow draft`,
             status: "draft",
             definition,
+            ...(aiRegistrySteps ? { registrySteps: aiRegistrySteps } : {}),
           }),
         });
         const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
@@ -186,7 +191,7 @@ export default function WorkflowBuilderPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify({ definition, ...(aiRegistrySteps ? { registrySteps: aiRegistrySteps } : {}) }),
       });
       const saved = await saveResponse.json() as { success?: boolean; error?: string };
       if (!saveResponse.ok || !saved.success) {
@@ -256,9 +261,10 @@ export default function WorkflowBuilderPage() {
               setAiGenerating(true); setAiPreview(null); setNotice("");
               try {
                 const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: aiPrompt.trim() }) });
-                const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow };
-                if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes)) throw new Error(payload.error || "Could not generate a workflow draft.");
+                const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow; registrySteps?: RegistryDraftStep[] };
+                if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes) || !Array.isArray(payload.registrySteps)) throw new Error(payload.error || "Could not generate a registry-backed workflow draft.");
                 setAiPreview(payload.definition);
+                setAiPreviewRegistrySteps(payload.registrySteps);
                 setNotice("AI draft ready. Review the generated steps before applying them to your canvas.");
               } catch (error) { setNotice(error instanceof Error ? error.message : "AI generation failed. Please try again."); }
               finally { setAiGenerating(false); }
@@ -267,13 +273,14 @@ export default function WorkflowBuilderPage() {
               <textarea id="ai-workflow-prompt" value={aiPrompt} maxLength={2000} onChange={event => setAiPrompt(event.target.value)} placeholder="When a new lead arrives, create a task and send a follow-up email…" rows={3} />
               <div className="ai-workflow-form-footer"><small>{aiPrompt.length}/2000 · Generated steps need review</small><button className="builder-primary-button" type="submit" disabled={aiGenerating || !aiPrompt.trim()}>{aiGenerating ? "Generating draft…" : "Generate workflow ✳"}</button></div>
             </form>
-            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
+            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => { setAiPreview(null); setAiPreviewRegistrySteps(null); }}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
               const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => {
                 const action = node.type === "action"
                   ? actionCatalog.find(item => item.provider === node.settings.provider && item.operation === node.settings.operation)
                   : undefined;
                 return {
                   id: Date.now() + index,
+                  registryBacked: true,
                   kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action",
                   title: node.title,
                   detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · "),
@@ -281,7 +288,7 @@ export default function WorkflowBuilderPage() {
                   ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
                 };
               });
-              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
+              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiRegistrySteps(aiPreviewRegistrySteps); setAiPreviewRegistrySteps(null); setAiPreview(null); setNotice("Registry-backed AI draft applied. Save it when ready; no actions have run.");
             }}>Apply draft to canvas ↗</button></div>}
           </section>
           <div className="builder-workspace-grid">
@@ -307,7 +314,7 @@ export default function WorkflowBuilderPage() {
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
-              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div>{currentStep.kind === "Action" && <section className="action-config-panel" aria-label="Action configuration">
+              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div>{currentStep.kind === "Action" && !currentStep.registryBacked && <section className="action-config-panel" aria-label="Action configuration">
                 <label htmlFor="action-catalog-select">Action type</label>
                 {catalogLoading ? <p className="action-catalog-status">Loading supported actions…</p> : catalogError ? <p className="action-catalog-status" role="alert">{catalogError} Refresh the page to retry.</p> : <>
                   <select id="action-catalog-select" className="settings-input" value={currentStep.actionId ?? ""} onChange={event => {
@@ -337,10 +344,10 @@ export default function WorkflowBuilderPage() {
                   })()}
                 </>}
               </section>}
-              <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></> : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
+              <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setAiRegistrySteps(null); setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></> : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
             </aside>
           </div>
-          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> This is an interactive builder prototype. Saving stores a draft in this browser only. No external services run, and activation remains disabled until validation and execution safeguards are available.</p></div>
+          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> AI-generated workflows are saved as validated registry drafts in your Aivanta workspace. Saving never activates or executes them; live execution remains separately gated.</p></div>
         </div>
       </section>
     </main>

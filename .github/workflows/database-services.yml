@@ -1,0 +1,102 @@
+name: Database service integration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-services-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mysql-mongodb:
+    name: Real MySQL and MongoDB worker adapters
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Create a private test CA and server certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          CERT_DIR="$RUNNER_TEMP/aivanta-db-certs"
+          mkdir -p "$CERT_DIR"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -keyout "$CERT_DIR/ca.key" -out "$CERT_DIR/ca.pem" -subj "/CN=Aivanta CI Database CA" -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign"
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout "$CERT_DIR/server.key" -out "$CERT_DIR/server.csr" \
+            -subj "/CN=localhost"
+          cat > "$CERT_DIR/server.ext" <<'CERT'
+          subjectAltName=DNS:localhost,IP:127.0.0.1
+          extendedKeyUsage=serverAuth
+          keyUsage=digitalSignature,keyEncipherment
+          CERT
+          openssl x509 -req -in "$CERT_DIR/server.csr" \
+            -CA "$CERT_DIR/ca.pem" -CAkey "$CERT_DIR/ca.key" -CAcreateserial \
+            -out "$CERT_DIR/server.pem" -days 2 -sha256 -extfile "$CERT_DIR/server.ext"
+          cat "$CERT_DIR/server.pem" "$CERT_DIR/server.key" > "$CERT_DIR/mongo-server.pem"
+          chmod 644 "$CERT_DIR/ca.pem" "$CERT_DIR/server.pem" "$CERT_DIR/server.key" "$CERT_DIR/mongo-server.pem"
+          echo "AIVANTA_DB_CERT_DIR=$CERT_DIR" >> "$GITHUB_ENV"
+          echo "NODE_EXTRA_CA_CERTS=$CERT_DIR/ca.pem" >> "$GITHUB_ENV"
+      - name: Start authenticated TLS database containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name aivanta-mysql -p 3306:3306 \
+            -e MYSQL_ROOT_PASSWORD=aivanta_test_password \
+            -e MYSQL_DATABASE=aivanta_test \
+            -v "$AIVANTA_DB_CERT_DIR:/certs:ro" mysql:8.4 \
+            --require_secure_transport=ON --ssl-ca=/certs/ca.pem \
+            --ssl-cert=/certs/server.pem --ssl-key=/certs/server.key
+          docker volume create aivanta-mongodb-data
+          docker run -d --name aivanta-mongodb-init -p 27017:27017 \
+            -v "$AIVANTA_DB_CERT_DIR:/certs:ro" -v aivanta-mongodb-data:/data/db mongo:7 \
+            mongod --tlsMode requireTLS --tlsCAFile /certs/ca.pem \
+            --tlsCertificateKeyFile /certs/mongo-server.pem \
+            --tlsAllowConnectionsWithoutCertificates --bind_ip_all
+          for attempt in $(seq 1 60); do
+            if docker exec aivanta-mysql mysqladmin ping -uroot -paivanta_test_password --silent >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          for attempt in $(seq 1 60); do
+            if docker exec aivanta-mongodb-init mongosh --quiet --tls --tlsCAFile /certs/ca.pem \
+              --eval 'db.adminCommand("ping").ok' 2>/dev/null | grep -q 1; then break; fi
+            sleep 2
+          done
+          docker exec aivanta-mongodb-init mongosh --quiet --tls --tlsCAFile /certs/ca.pem \
+            --eval 'db.getSiblingDB("admin").createUser({user:"root",pwd:"aivanta_test_password",roles:[{role:"root",db:"admin"}]})'
+          docker stop aivanta-mongodb-init
+          docker rm aivanta-mongodb-init
+          docker run -d --name aivanta-mongodb -p 27017:27017 \
+            -v "$AIVANTA_DB_CERT_DIR:/certs:ro" -v aivanta-mongodb-data:/data/db mongo:7 \
+            mongod --tlsMode requireTLS --tlsCAFile /certs/ca.pem \
+            --tlsCertificateKeyFile /certs/mongo-server.pem \
+            --tlsAllowConnectionsWithoutCertificates --auth --bind_ip_all
+          for attempt in $(seq 1 60); do
+            if docker exec aivanta-mongodb mongosh --quiet --tls --tlsCAFile /certs/ca.pem \
+              -u root -p aivanta_test_password --authenticationDatabase admin \
+              --eval 'db.adminCommand("ping").ok' 2>/dev/null | grep -q 1; then break; fi
+            sleep 2
+          done
+          docker exec aivanta-mysql mysqladmin ping -uroot -paivanta_test_password --silent
+          docker exec aivanta-mongodb mongosh --quiet --tls --tlsCAFile /certs/ca.pem \
+            -u root -p aivanta_test_password --authenticationDatabase admin \
+            --eval 'db.adminCommand("ping").ok' | grep -q 1
+          echo "MYSQL_TEST_URL=mysql://root:aivanta_test_password@127.0.0.1:3306/aivanta_test" >> "$GITHUB_ENV"
+          echo "MONGODB_TEST_URL=mongodb://root:aivanta_test_password@127.0.0.1:27017/aivanta_test?authSource=admin&tls=true" >> "$GITHUB_ENV"
+      - name: Run real database driver integration tests
+        run: npx tsx --test tests/database-services.integration.test.ts
+      - name: Collect database container logs on failure
+        if: failure()
+        run: |
+          docker logs aivanta-mysql || true
+          docker logs aivanta-mongodb || true
