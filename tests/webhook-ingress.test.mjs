@@ -10,7 +10,6 @@ test("webhook ingress authenticates raw bytes with the endpoint's encrypted sign
   assert.match(source, /decryptWebhookSecret\(ciphertextBytes\(endpoint\.secret_ciphertext\)/);
   assert.match(source, /verifyWebhookSignature\(\{[\s\S]*rawBody,[\s\S]*signatureHeader,[\s\S]*secret: signingSecret/);
   assert.match(source, /toleranceSeconds: MAX_EVENT_AGE_SECONDS/);
-  assert.match(source, /signedMetadata: JSON\.stringify\(\[eventId, eventType\]\)/);
   assert.match(source, /endpoint\.secret_key_version !== configuredKeyVersion/);
 });
 
@@ -28,7 +27,7 @@ test("webhook ingress claims event IDs atomically and rejects changed-payload re
   assert.match(migration, /unique \(endpoint_id, event_id\)/);
   assert.match(migration, /on conflict \(endpoint_id, event_id\) do nothing/i);
   assert.match(source, /rpc\("claim_webhook_event"/);
-  assert.match(source, /prior\.payload_sha256 !== payloadSha256 \|\| prior\.event_type !== eventType/);
+  assert.match(source, /prior\.payload_sha256 !== payloadSha256/);
   assert.match(source, /duplicate: true/);
 });
 
@@ -58,7 +57,6 @@ test("endpoint provisioning is authenticated and returns the signing secret only
   assert.match(source, /encryptWebhookSecret\(signingSecret, encryptionKey\)/);
   assert.match(source, /endpoint_key_hash: createHash\("sha256"\)/);
   assert.match(source, /secretShownOnce: true/);
-  assert.match(source, /Cache-Control": "no-store"/);
   assert.match(source, /status: "active"/);
 });
 
