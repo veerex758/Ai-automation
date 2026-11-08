@@ -9,8 +9,8 @@ const { isValidEmail, isHttpsUrl } = actionFieldValidation;
 import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
-type ActionField = { name: string; label: string; type: "text" | "email" | "url" | "json"; required: boolean; maxLength: number };
-type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[]; nodeId?: string };
+type ActionField = { name: string; label: string; type: "text" | "email" | "url"; required: boolean; maxLength: number };
+type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
 type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string> };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
 type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
@@ -70,49 +70,9 @@ export default function WorkflowBuilderPage() {
     async function loadActionCatalog() {
       try {
         const response = await fetch("/api/workflows/actions", { headers: { Accept: "application/json" }, cache: "no-store" });
-        const payload = await response.json() as {
-          actions?: CatalogAction[];
-          nodes?: Array<{
-            id: string; name: string; category: string; auth: { type: string; scopes?: string[] };
-            actions: Array<{ id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; format?: string; title?: string; maxLength?: number }>; required?: string[] } }>;
-          }>;
-          error?: string;
-        };
+        const payload = await response.json() as { actions?: CatalogAction[]; error?: string };
         if (!response.ok || !Array.isArray(payload.actions)) throw new Error(payload.error || "Action catalog could not be loaded.");
-        const legacy = payload.actions.filter(action => !payload.nodes?.some(node => node.actions.some(operation => node.id + "." + operation.id === action.id)));
-        const registered: CatalogAction[] = (payload.nodes ?? []).flatMap(node => node.actions.map(operation => {
-          const properties = operation.inputSchema.properties ?? {};
-          const required = operation.inputSchema.required ?? [];
-          const fields: ActionField[] = Object.entries(properties).map(([name, schema]) => {
-            const type: ActionField["type"] = schema.type === "array" || schema.type === "object"
-              ? "json"
-              : schema.format === "email" ? "email" : schema.format === "uri" || schema.format === "url" ? "url" : "text";
-            return {
-              name,
-              label: schema.title || name.replace(/([A-Z])/g, " $1").replace(/[_-]/g, " ").replace(/^./, value => value.toUpperCase()),
-              type,
-              required: required.includes(name),
-              maxLength: schema.maxLength ?? (type === "json" ? 10000 : 1000),
-            };
-          });
-          const authDescription = node.auth.type === "oauth2"
-            ? " Requires a connected OAuth account" + (node.auth.scopes?.length ? " with scopes: " + node.auth.scopes.join(", ") : "") + "."
-            : node.auth.type === "apiKey" ? " Requires a saved workspace API credential."
-            : "";
-          return {
-            id: node.id + "." + operation.id,
-            provider: node.id,
-            operation: operation.id,
-            nodeId: node.id,
-            label: node.name + ": " + operation.name,
-            description: operation.description + authDescription,
-            category: node.category,
-            execution: "dry_run_only" as const,
-            fields,
-            requirements: [node.auth.type === "none" ? "No connection required" : "Workspace connection required"],
-          };
-        }));
-        if (active) setActionCatalog([...legacy, ...registered]);
+        if (active) setActionCatalog(payload.actions);
       } catch (error) {
         if (active) setCatalogError(error instanceof Error ? error.message : "Action catalog could not be loaded.");
       } finally {
@@ -144,9 +104,6 @@ export default function WorkflowBuilderPage() {
         if (value.length > field.maxLength) return [`${field.label} for "${step.title}" must be ${field.maxLength} characters or fewer.`];
         if (field.type === "email" && value && !isValidEmail(value)) return [`Enter a valid ${field.label.toLowerCase()} for "${step.title}".`];
         if (field.type === "url" && value && !isHttpsUrl(value)) return [`Enter a valid HTTPS URL for "${step.title}".`];
-        if (field.type === "json" && value) {
-          try { JSON.parse(value); } catch { return [`${field.label} for "${step.title}" must contain valid JSON.`]; }
-        }
         return [];
       });
     });
@@ -224,41 +181,17 @@ export default function WorkflowBuilderPage() {
         setSavedWorkflowId(workflowId);
       }
 
-      const canUseRegistryRunner = steps[0]?.kind === "Trigger" &&
-        (steps[0].settings?.event || "manual") === "manual" &&
-        steps.slice(1).every(step => step.kind === "Action" && Boolean(actionCatalog.find(action => action.id === step.actionId)?.nodeId));
-      const registrySteps = canUseRegistryRunner ? steps.map((step, index) => {
-        if (index === 0) return {
-          id: String(step.id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || "trigger-1",
-          nodeId: "manual", operationId: "start", kind: "trigger" as const, input: {},
-        };
-        const action = actionCatalog.find(item => item.id === step.actionId)!;
-        const input: Record<string, unknown> = {};
-        for (const field of action.fields) {
-          const value = step.settings?.[field.name] ?? "";
-          if (!value && !field.required) continue;
-          input[field.name] = field.type === "json" ? JSON.parse(value) : value;
-        }
-        return {
-          id: String(step.id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || `step-${index + 1}`,
-          nodeId: action.nodeId!,
-          operationId: action.operation,
-          kind: "action" as const,
-          input,
-        };
-      }) : undefined;
-      if (steps.some(step => actionCatalog.find(action => action.id === step.actionId)?.nodeId) && !registrySteps) {
-        throw new Error("Registered nodes currently require a manual trigger and action-only steps. Choose the manual trigger before saving this registry workflow.");
-      }
+      if (!isNewWorkflow) {
       const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ definition, ...(registrySteps ? { registrySteps } : {}) }),
+        body: JSON.stringify({ definition }),
       });
       const saved = await saveResponse.json() as { success?: boolean; error?: string };
       if (!saveResponse.ok || !saved.success) {
         throw new Error(saved.error || "The workflow record was created, but its steps could not be saved. Please retry after checking the workflow list.");
+      }
       }
 
       try {
@@ -374,20 +307,7 @@ export default function WorkflowBuilderPage() {
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
-              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div>{currentStep.kind === "Trigger" && <section className="action-config-panel" aria-label="Trigger configuration">
-                <label htmlFor="trigger-event-select">Trigger type</label>
-                <select id="trigger-event-select" className="settings-input" value={currentStep.settings?.event || "manual"} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? {
-                  ...step,
-                  settings: { ...step.settings, event: event.target.value },
-                  title: event.target.value === "manual" ? "Run manually" : "Receive webhook",
-                  detail: event.target.value === "manual" ? "Starts only when you explicitly run this workflow." : "Webhook activation requires a configured signed endpoint.",
-                } : step))}>
-                  <option value="manual">Manual run (supported)</option>
-                  <option value="webhook">Webhook (setup required)</option>
-                </select>
-                <p className="action-catalog-status">Registered-node dry runs currently support the manual trigger. Webhook trigger setup remains separate.</p>
-              </section>}
-              {currentStep.kind === "Action" && <section className="action-config-panel" aria-label="Action configuration">
+              {currentStep ? <><div className="settings-kind"><span className={"builder-node-icon node-" + currentStep.kind.toLowerCase()}>{kindIcons[currentStep.kind]}</span><div><strong>{currentStep.kind}</strong><small>Step {steps.findIndex(step => step.id === currentStep.id) + 1} of {steps.length}</small></div></div>{currentStep.kind === "Action" && <section className="action-config-panel" aria-label="Action configuration">
                 <label htmlFor="action-catalog-select">Action type</label>
                 {catalogLoading ? <p className="action-catalog-status">Loading supported actions…</p> : catalogError ? <p className="action-catalog-status" role="alert">{catalogError} Refresh the page to retry.</p> : <>
                   <select id="action-catalog-select" className="settings-input" value={currentStep.actionId ?? ""} onChange={event => {
@@ -410,7 +330,7 @@ export default function WorkflowBuilderPage() {
                     return <div className="action-fields">
                       <div className="action-capability"><span className={action.execution === "live_guarded" ? "action-capability-live" : ""}>{action.execution === "live_guarded" ? "Guarded live path" : "Dry-run only"}</span><p>{action.description}</p></div>
                       {action.fields.map(field => <label className="action-field" key={field.name} htmlFor={"action-field-" + currentStep.id + "-" + field.name}>{field.label}{field.required ? " *" : ""}
-                        {field.type === "json" || (field.type === "text" && field.maxLength > 200) ? <textarea id={"action-field-" + currentStep.id + "-" + field.name} className="settings-textarea" maxLength={field.maxLength} rows={3} placeholder={field.type === "json" ? 'Enter JSON, e.g. ["value"] or {"key":"value"}' : undefined} value={currentStep.settings?.[field.name] ?? ""} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, settings: { ...step.settings, [field.name]: event.target.value } } : step))} /> : <input id={"action-field-" + currentStep.id + "-" + field.name} className="settings-input" type={field.type} maxLength={field.maxLength} required={field.required} value={currentStep.settings?.[field.name] ?? ""} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, settings: { ...step.settings, [field.name]: event.target.value } } : step))} />}
+                        {field.type === "text" && field.maxLength > 200 ? <textarea id={"action-field-" + currentStep.id + "-" + field.name} maxLength={field.maxLength} rows={2} value={currentStep.settings?.[field.name] ?? ""} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, settings: { ...step.settings, [field.name]: event.target.value } } : step))} /> : <input id={"action-field-" + currentStep.id + "-" + field.name} className="settings-input" type={field.type} maxLength={field.maxLength} required={field.required} value={currentStep.settings?.[field.name] ?? ""} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, settings: { ...step.settings, [field.name]: event.target.value } } : step))} />}
                       </label>)}
                       {action.requirements?.length ? <p className="action-catalog-status">Requirements: {action.requirements.join(", ").replaceAll("_", " ")}.</p> : null}
                     </div>;
