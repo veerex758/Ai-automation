@@ -172,4 +172,4 @@ language sql stable security definer set search_path=public,pg_temp as $$
   coalesce(sum(case when l.entry_type='gross_sale' then l.amount_minor else 0 end),0)
  order by p.created_at;
 $$;
-revoke all on function public.marketplace_financial_reconciliation() from public,anon,authenticated;
+revoke all on function public.marketplace_financial_reconciliation() from public,anon,authenticated;\ngrant execute on function public.marketplace_financial_reconciliation() to service_role;
