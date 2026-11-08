@@ -2,7 +2,8 @@ import Link from "next/link";
 import {redirect} from "next/navigation";
 import {createClient} from "@/lib/supabase/server";
 import "../marketplace.css";
-type Purchase={id:string;amount_minor:number;currency:string;status:string;provider:string;provider_payment_id:string|null;created_at:string;paid_at:string|null;refunded_at:string|null;product:{name:string;slug:string;product_type:string}|null;version:{version:string}|null};\nexport default async function MarketplacePurchases(){
+type Purchase={id:string;amount_minor:number;currency:string;status:string;provider:string;provider_payment_id:string|null;created_at:string;paid_at:string|null;refunded_at:string|null;product:{name:string;slug:string;product_type:string}|null;version:{version:string}|null};
+export default async function MarketplacePurchases(){
  const sb=await createClient(),{data:{user}}=await sb.auth.getUser();if(!user)redirect("/login?next=/marketplace/purchases");
  const {data,error}=await sb.from("marketplace_purchases").select("id,amount_minor,currency,status,provider,provider_payment_id,created_at,paid_at,refunded_at,product:marketplace_products(name,slug,product_type),version:marketplace_product_versions(version)").eq("buyer_user_id",user.id).order("created_at",{ascending:false}).limit(100);
  const purchases=(data??[]) as unknown as Purchase[];
