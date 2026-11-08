@@ -6,7 +6,7 @@ import "./connections.css";
 
 type Connection = {
   id: string;
-  product: "gmail" | "sheets";
+  product: "gmail" | "sheets" | "drive" | "calendar" | "docs" | "forms" | "youtube" | "contacts";
   account_email: string;
   scopes: string[];
   status: "connected" | "needs_reauth" | "revoked";
@@ -27,7 +27,7 @@ const statusMessages: Record<string, string> = {
 };
 
 
-type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear";
+type WorkspaceProvider = "openai" | "gemini" | "resend" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 type WorkspaceIntegration = {
   id: string;
   provider: WorkspaceProvider;
@@ -60,6 +60,51 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   ] },
   stripe: { label: "Stripe", fields: [{ name: "secretKey", label: "Secret or restricted API key", type: "password" }] },
   linear: { label: "Linear", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  elevenlabs: { label: "ElevenLabs", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  stability_ai: { label: "Stability AI", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  hugging_face: { label: "Hugging Face", fields: [{ name: "apiKey", label: "Access token", type: "password" }] },
+  pinecone: { label: "Pinecone", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "indexHost", label: "Index host (HTTPS Pinecone host)", type: "url" }] },
+  microsoft_teams: { label: "Microsoft Teams", fields: [{ name: "accessToken", label: "Microsoft Graph access token", type: "password" }] },
+  salesforce: { label: "Salesforce", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }, { name: "instanceUrl", label: "Salesforce instance URL", type: "url" }] },
+  pipedrive: { label: "Pipedrive", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  zoho_crm: { label: "Zoho CRM", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  freshsales: { label: "Freshsales", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }, { name: "domain", label: "Freshworks domain (yourname.myfreshworks.com)", type: "text" }] },
+  close: { label: "Close", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  apollo: { label: "Apollo", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  intercom: { label: "Intercom", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  jira: { label: "Jira", fields: [{ name: "siteUrl", label: "Atlassian site URL", type: "url" }, { name: "email", label: "Account email", type: "email" }, { name: "apiToken", label: "API token", type: "password" }] },
+  asana: { label: "Asana", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  trello: { label: "Trello", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "token", label: "API token", type: "password" }] },
+  clickup: { label: "ClickUp", fields: [{ name: "token", label: "Personal API token", type: "password" }] },
+  monday: { label: "Monday.com", fields: [{ name: "apiToken", label: "API token", type: "password" }] },
+  todoist: { label: "Todoist", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  airtable: { label: "Airtable", fields: [{ name: "accessToken", label: "Personal access token", type: "password" }] },
+  bitbucket: { label: "Bitbucket", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  netlify: { label: "Netlify", fields: [{ name: "token", label: "Personal access token", type: "password" }] },
+  woocommerce: { label: "WooCommerce", fields: [{ name: "storeUrl", label: "HTTPS store URL", type: "url" }, { name: "consumerKey", label: "Consumer key", type: "password" }, { name: "consumerSecret", label: "Consumer secret", type: "password" }] },
+  paypal: { label: "PayPal", fields: [{ name: "clientId", label: "REST client ID", type: "password" }, { name: "clientSecret", label: "REST client secret", type: "password" }, { name: "environment", label: "Environment (sandbox or live)", type: "text" }] },
+  paddle: { label: "Paddle", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  lemon_squeezy: { label: "Lemon Squeezy", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "storeId", label: "Store ID", type: "text" }] },
+  square: { label: "Square", fields: [{ name: "accessToken", label: "Access token", type: "password" }, { name: "environment", label: "Environment (sandbox or production)", type: "text" }] },
+  razorpay: { label: "Razorpay", fields: [{ name: "keyId", label: "Key ID", type: "text" }, { name: "keySecret", label: "Key secret", type: "password" }] },
+  zoom: { label: "Zoom", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  cal_com: { label: "Cal.com", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
+  twilio_voice: { label: "Twilio Voice", fields: [{ name: "accountSid", label: "Account SID", type: "text" }, { name: "authToken", label: "Auth token", type: "password" }, { name: "fromPhone", label: "Twilio voice caller ID (E.164)", type: "tel" }] },
+  docusign: { label: "DocuSign", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }, { name: "accountId", label: "Account ID", type: "text" }, { name: "baseUri", label: "API base URI", type: "url" }] },
+  x_twitter: { label: "X/Twitter", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  linkedin: { label: "LinkedIn", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  facebook_pages: { label: "Facebook Pages", fields: [{ name: "pageAccessToken", label: "Page access token", type: "password" }] },
+  instagram: { label: "Instagram", fields: [{ name: "accessToken", label: "Graph API access token", type: "password" }, { name: "igUserId", label: "Instagram professional account ID", type: "text" }] },
+  tiktok: { label: "TikTok", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  mailchimp: { label: "Mailchimp", fields: [{ name: "apiKey", label: "API key (includes server region suffix)", type: "password" }] },
+  typeform: { label: "Typeform", fields: [{ name: "accessToken", label: "Personal access token", type: "password" }] },
+  supabase: { label: "Supabase", fields: [{ name: "projectUrl", label: "Project URL (https://project.supabase.co)", type: "url" }, { name: "apiKey", label: "API key (scoped key preferred)", type: "password" }] },
+  postgresql: { label: "PostgreSQL", fields: [{ name: "connectionString", label: "Connection string (TLS required)", type: "password" }] },
+  redis: { label: "Redis (Upstash REST)", fields: [{ name: "restUrl", label: "Upstash REST URL", type: "url" }, { name: "token", label: "REST token", type: "password" }] },
+  firebase: { label: "Firebase / Firestore", fields: [{ name: "projectId", label: "Firebase project ID", type: "text" }, { name: "accessToken", label: "Google access token with datastore scope", type: "password" }] },
+  dropbox: { label: "Dropbox", fields: [{ name: "accessToken", label: "OAuth access token", type: "password" }] },
+  aws_s3: { label: "AWS S3", fields: [{ name: "accessKeyId", label: "Access key ID", type: "text" }, { name: "secretAccessKey", label: "Secret access key", type: "password" }, { name: "region", label: "AWS region", type: "text" }] },
+  cloudflare_r2: { label: "Cloudflare R2", fields: [{ name: "accountId", label: "Cloudflare account ID", type: "text" }, { name: "accessKeyId", label: "R2 access key ID", type: "text" }, { name: "secretAccessKey", label: "R2 secret access key", type: "password" }] },
 };
 
 function WorkspaceIntegrationManager() {
@@ -250,6 +295,12 @@ export default function ConnectionsPage() {
           <span className="connection-scope">READ ONLY</span>
           <a className="connection-button" href="/api/integrations/google/start?product=sheets">Connect Sheets <span aria-hidden="true">↗</span></a>
         </article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Drive</h2><p>Read file metadata and search Drive. No file edits or deletes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=drive">Connect Drive <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Calendar</h2><p>Read calendar events in a selected time window. No event changes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=calendar">Connect Calendar <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Docs</h2><p>Read document metadata and content structure. No document edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=docs">Connect Docs <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Forms</h2><p>Read form titles and question metadata. No response or form edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=forms">Connect Forms <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">▶</div><div className="connection-card-copy"><h2>YouTube</h2><p>Search videos and read channel metadata. No publishing actions.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=youtube">Connect YouTube <span aria-hidden="true">↗</span></a></article>
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Contacts</h2><p>Read contact names, email addresses and phone numbers.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=contacts">Connect Contacts <span aria-hidden="true">↗</span></a></article>
       </section>
 
       <WorkspaceIntegrationManager />
@@ -259,7 +310,7 @@ export default function ConnectionsPage() {
         {loading ? <p className="connections-empty">Loading connections…</p> : connections.length === 0 ? <p className="connections-empty">No Google accounts connected yet.</p> : connections.map(connection => (
           <article className="connection-row" key={connection.id}>
             <div className={`connection-icon ${connection.product === "gmail" ? "google-icon" : "sheets-icon"}`} aria-hidden="true">{connection.product === "gmail" ? "G" : "▦"}</div>
-            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{connection.product === "gmail" ? "Gmail" : "Google Sheets"} · {connection.scopes.length} permissions</span></div>
+            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{({ gmail: "Gmail", sheets: "Google Sheets", drive: "Google Drive", calendar: "Google Calendar", docs: "Google Docs", forms: "Google Forms", youtube: "YouTube", contacts: "Google Contacts" } as Record<string, string>)[connection.product]} · {connection.scopes.length} permissions</span></div>
             <span className={`connection-status status-${connection.status}`}>{connection.status.replace("_", " ")}</span>
           </article>
         ))}

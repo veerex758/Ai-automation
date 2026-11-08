@@ -184,28 +184,32 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "ElevenLabs",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "elevenlabs"
   },
   {
     "id": "stability_ai",
     "name": "Stability AI",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "stability_ai"
   },
   {
     "id": "hugging_face",
     "name": "Hugging Face",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "hugging_face"
   },
   {
     "id": "pinecone",
     "name": "Pinecone",
     "category": "ai",
     "group": "AI",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "pinecone"
   },
   {
     "id": "gmail",
@@ -228,42 +232,48 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Drive",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_drive"
   },
   {
     "id": "google_calendar",
     "name": "Calendar",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_calendar"
   },
   {
     "id": "google_docs",
     "name": "Docs",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_docs"
   },
   {
     "id": "google_forms",
     "name": "Forms",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_forms"
   },
   {
     "id": "youtube",
     "name": "YouTube",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "youtube"
   },
   {
     "id": "google_contacts",
     "name": "Contacts",
     "category": "google",
     "group": "Google",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "google_contacts"
   },
   {
     "id": "slack",
@@ -310,7 +320,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Microsoft Teams",
     "category": "communication",
     "group": "Messaging and email",
-    "auth": "apiKey"
+    "auth": "oauth2",
+    "registryId": "microsoft_teams"
   },
   {
     "id": "resend",
@@ -357,49 +368,56 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Salesforce",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "salesforce"
   },
   {
     "id": "pipedrive",
     "name": "Pipedrive",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "pipedrive"
   },
   {
     "id": "zoho_crm",
     "name": "Zoho CRM",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "zoho_crm"
   },
   {
     "id": "freshsales",
     "name": "Freshsales",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "freshsales"
   },
   {
     "id": "close",
     "name": "Close",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "close"
   },
   {
     "id": "apollo",
     "name": "Apollo",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "apollo"
   },
   {
     "id": "intercom",
     "name": "Intercom",
     "category": "crm",
     "group": "CRM and sales",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "intercom"
   },
   {
     "id": "notion",
@@ -422,49 +440,56 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Jira",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "jira"
   },
   {
     "id": "asana",
     "name": "Asana",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "asana"
   },
   {
     "id": "trello",
     "name": "Trello",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "trello"
   },
   {
     "id": "clickup",
     "name": "ClickUp",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "clickup"
   },
   {
     "id": "monday",
     "name": "Monday.com",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "monday"
   },
   {
     "id": "todoist",
     "name": "Todoist",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "todoist"
   },
   {
     "id": "airtable",
     "name": "Airtable",
     "category": "productivity",
     "group": "Productivity and PM",
-    "auth": "oauth2"
+    "auth": "apiKey",
+    "registryId": "airtable"
   },
   {
     "id": "github",
@@ -487,7 +512,8 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Bitbucket",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "oauth2",
+    "registryId": "bitbucket"
   },
   {
     "id": "sentry",
@@ -510,21 +536,24 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Netlify",
     "category": "developer",
     "group": "Developer tools",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "netlify"
   },
   {
     "id": "supabase",
     "name": "Supabase",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "supabase"
   },
   {
     "id": "postgresql",
     "name": "PostgreSQL",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "connectionString",
+    "registryId": "postgresql"
   },
   {
     "id": "mysql",
@@ -545,35 +574,40 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Redis",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "redis"
   },
   {
     "id": "firebase",
     "name": "Firebase",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "oauth2",
+    "registryId": "firebase"
   },
   {
     "id": "dropbox",
     "name": "Dropbox",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "oauth2",
+    "registryId": "dropbox"
   },
   {
     "id": "aws_s3",
     "name": "AWS S3",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "aws_s3"
   },
   {
     "id": "cloudflare_r2",
     "name": "Cloudflare R2",
     "category": "database",
     "group": "Databases and storage",
-    "auth": "connectionString"
+    "auth": "apiKey",
+    "registryId": "cloudflare_r2"
   },
   {
     "id": "stripe",
@@ -596,91 +630,104 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "WooCommerce",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "woocommerce"
   },
   {
     "id": "paypal",
     "name": "PayPal",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "paypal"
   },
   {
     "id": "paddle",
     "name": "Paddle",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "paddle"
   },
   {
     "id": "lemon_squeezy",
     "name": "Lemon Squeezy",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "lemon_squeezy"
   },
   {
     "id": "square",
     "name": "Square",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "square"
   },
   {
     "id": "razorpay",
     "name": "Razorpay",
     "category": "payments",
     "group": "Payments and e-commerce",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "razorpay"
   },
   {
     "id": "x_twitter",
     "name": "X/Twitter",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "x_twitter"
   },
   {
     "id": "linkedin",
     "name": "LinkedIn",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "linkedin"
   },
   {
     "id": "facebook_pages",
     "name": "Facebook Pages",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "facebook_pages"
   },
   {
     "id": "instagram",
     "name": "Instagram",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "instagram"
   },
   {
     "id": "tiktok",
     "name": "TikTok",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "tiktok"
   },
   {
     "id": "mailchimp",
     "name": "Mailchimp",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "mailchimp"
   },
   {
     "id": "typeform",
     "name": "Typeform",
     "category": "marketing",
     "group": "Social and marketing",
-    "auth": "oauth2"
+    "auth": "oauth2",
+    "registryId": "typeform"
   },
   {
     "id": "calendly",
@@ -711,28 +758,32 @@ export const providerCatalog: ProviderCatalogEntry[] = [
     "name": "Zoom",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "zoom"
   },
   {
     "id": "cal_com",
     "name": "Cal.com",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "cal_com"
   },
   {
     "id": "twilio_voice",
     "name": "Twilio Voice",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "twilio_voice"
   },
   {
     "id": "docusign",
     "name": "DocuSign",
     "category": "support",
     "group": "Support and misc",
-    "auth": "apiKey"
+    "auth": "apiKey",
+    "registryId": "docusign"
   },
   {
     "id": "rss_feed",

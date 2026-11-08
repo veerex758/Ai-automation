@@ -2,11 +2,13 @@ import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { decryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
+import { GOOGLE_PRODUCTS, type GoogleProduct } from "@/lib/integrations/google-oauth";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
+import { isProviderLiveEnabled, providerPackLiveId } from "@/lib/workflows/provider-live-gates";
 
 
 type Job = {
@@ -29,16 +31,14 @@ function client() {
   });
 }
 
-async function googleAccessToken(db: DbClient, workspaceId: string, product: "gmail" | "sheets"): Promise<string> {
+async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct): Promise<string> {
   const { data: connection, error } = await db.from("google_connections")
     .select("id,encrypted_credentials,expires_at,status,scopes")
     .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
-  if (!connection) throw new Error(product === "gmail" ? "GMAIL_CONNECTION_REQUIRED" : "GOOGLE_SHEETS_CONNECTION_REQUIRED");
-  const requiredScope = product === "gmail"
-    ? "https://www.googleapis.com/auth/gmail.readonly"
-    : "https://www.googleapis.com/auth/spreadsheets.readonly";
+  if (!connection) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
+  const requiredScope = GOOGLE_PRODUCTS[product].scopes[0];
   if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
     throw new Error("GOOGLE_SCOPE_MISMATCH");
   }
@@ -80,11 +80,16 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: "gm
 async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>): Promise<WorkspaceCredentials> {
   const credentials: WorkspaceCredentials = {};
   for (const provider of providers) {
-    if (provider === "gmail" || provider === "sheets") {
-      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, provider) };
+    const googleProductByProvider: Record<string, GoogleProduct> = {
+      gmail: "gmail", sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
+      google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
+    };
+    const googleProduct = googleProductByProvider[provider];
+    if (googleProduct) {
+      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;
     }
-    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"].includes(provider)) {
+    if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
@@ -107,34 +112,44 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
 }
 
 function providerForStep(step: RegisteredWorkflowStep): string | null {
+  const providerPackProvider = providerPackLiveId(step);
+  if (providerPackProvider) return providerPackProvider;
   if (step.nodeId === "openai" && step.operationId === "generate_text") return "openai";
   if (step.nodeId === "gemini" && step.operationId === "generate_text") return "gemini";
   if (step.nodeId === "slack" && ["send_message", "post_message"].includes(step.operationId)) return "slack";
   if (step.nodeId === "email" && step.operationId === "send_email") return "resend";
   if (step.nodeId === "gmail" && step.operationId === "list_messages") return "gmail";
   if (step.nodeId === "google_sheets" && step.operationId === "get_values") return "sheets";
+  if (["google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "notion" && step.operationId === "create_page") return "notion";
   if (step.nodeId === "hubspot" && step.operationId === "create_contact") return "hubspot";
   if (step.nodeId === "twilio" && step.operationId === "send_sms") return "twilio";
   if (step.nodeId === "shopify" && step.operationId === "list_products") return "shopify";
   if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
   if (step.nodeId === "linear" && step.operationId === "create_issue") return "linear";
+  if (["elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
+  if (["claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "rss_feed"].includes(step.nodeId) && step.operationId === "execute") return step.nodeId;
   if (step.nodeId === "http_request" && step.operationId === "request") return "http";
   return null;
 }
 
-const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http"]);
+const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "google_drive", "google_calendar", "google_docs", "google_forms", "youtube", "google_contacts", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "rss_feed"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
   }
   if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled"))) return true;
   if (step.kind === "action" && new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time", "loop.iterate", "wait.delay"]).has(step.nodeId + "." + step.operationId)) return true;
+  const providerPackProvider = providerPackLiveId(step);
+  if (providerPackProvider) return isProviderLiveEnabled(providerPackProvider, process.env.AIVANTA_LIVE_INTEGRATIONS);
   const provider = step.kind === "action" ? providerForStep(step) : null;
   if (!provider) return false;
   if (SERVER_ENABLED_INTEGRATIONS.has(provider) || (step.nodeId === "slack" && step.operationId === "post_message")) {
-    const enabled = new Set((process.env.AIVANTA_LIVE_INTEGRATIONS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-    return enabled.has(provider);
+    return isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS);
   }
   return true;
 }
@@ -279,7 +294,7 @@ export async function runDurableWorker() {
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
         }
-        const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value)));
+        const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value) && value !== "rss_feed"));
         const credentials = job.execution_mode === "live"
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};

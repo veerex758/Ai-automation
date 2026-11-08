@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   const productValue = request.nextUrl.searchParams.get("product");
   if (!isGoogleProduct(productValue)) {
-    return NextResponse.json({ error: "Choose a supported Google product: gmail or sheets." }, { status: 400 });
+    return NextResponse.json({ error: "Choose a supported read-only Google product." }, { status: 400 });
   }
 
   try {

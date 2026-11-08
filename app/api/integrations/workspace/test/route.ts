@@ -1,3 +1,5 @@
+import { createHash, createHmac } from "node:crypto";
+import { Pool } from "pg";
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -6,9 +8,23 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+function signedS3Headers(url: URL, accessKeyId: string, secretAccessKey: string, region: string): Record<string, string> {
+  const amzDate = new Date().toISOString().replace(/[:-]|\\.\\d{3}/g, "");
+  const date = amzDate.slice(0, 8);
+  const payloadHash = createHash("sha256").update("").digest("hex");
+  const canonicalHeaders = "host:" + url.host + "\\n" + "x-amz-content-sha256:" + payloadHash + "\\n" + "x-amz-date:" + amzDate + "\\n";
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalRequest = ["GET", url.pathname, url.searchParams.toString(), canonicalHeaders, signedHeaders, payloadHash].join("\\n");
+  const scope = date + "/" + region + "/s3/aws4_request";
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, createHash("sha256").update(canonicalRequest).digest("hex")].join("\\n");
+  const hmac = (key: Buffer | string, value: string) => createHmac("sha256", key).update(value).digest();
+  const signingKey = hmac(hmac(hmac(hmac("AWS4" + secretAccessKey, date), region), "s3"), "aws4_request");
+  return { "x-amz-date": amzDate, "x-amz-content-sha256": payloadHash, Authorization: "AWS4-HMAC-SHA256 Credential=" + accessKeyId + "/" + scope + ", SignedHeaders=" + signedHeaders + ", Signature=" + createHmac("sha256", signingKey).update(stringToSign).digest("hex") };
+}
 
-const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"]);
-type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear";
+
+const TESTABLE = new Set(["openai", "gemini", "slack", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+type Provider = "openai" | "gemini" | "slack" | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "elevenlabs" | "stability_ai" | "hugging_face" | "pinecone" | "microsoft_teams" | "salesforce" | "pipedrive" | "zoho_crm" | "freshsales" | "close" | "apollo" | "intercom" | "jira" | "asana" | "trello" | "clickup" | "monday" | "todoist" | "airtable" | "bitbucket" | "netlify" | "woocommerce" | "paypal" | "paddle" | "lemon_squeezy" | "square" | "razorpay" | "zoom" | "cal_com" | "twilio_voice" | "docusign" | "x_twitter" | "linkedin" | "facebook_pages" | "instagram" | "tiktok" | "mailchimp" | "typeform" | "supabase" | "postgresql" | "redis" | "firebase" | "dropbox" | "aws_s3" | "cloudflare_r2";
 type Credentials = Record<string, string>;
 
 function json(body: unknown, status = 200) {
@@ -85,6 +101,255 @@ async function check(provider: Provider, c: Credentials) {
         headers.Authorization = required(c, "apiKey"); headers["Content-Type"] = "application/json";
         body = JSON.stringify({ query: "{ viewer { id name } }" });
         break;
+      case "elevenlabs":
+        url = "https://api.elevenlabs.io/v1/user";
+        headers["xi-api-key"] = required(c, "apiKey");
+        break;
+      case "stability_ai":
+        url = "https://api.stability.ai/v1/user/account";
+        headers.Authorization = "Bearer " + required(c, "apiKey");
+        break;
+      case "hugging_face":
+        url = "https://huggingface.co/api/whoami-v2";
+        headers.Authorization = "Bearer " + required(c, "apiKey");
+        break;
+      case "pinecone": {
+        const host = required(c, "indexHost");
+        let parsed: URL;
+        try { parsed = new URL(host.startsWith("https://") ? host : "https://" + host); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".pinecone.io") || parsed.username || parsed.password) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/describe_index_stats"; method = "POST";
+        headers["Api-Key"] = required(c, "apiKey"); headers["Content-Type"] = "application/json";
+        body = "{}";
+        break;
+      }
+      case "microsoft_teams":
+        url = "https://graph.microsoft.com/v1.0/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "salesforce": {
+        const instance = required(c, "instanceUrl");
+        let parsed: URL;
+        try { parsed = new URL(instance); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password || !(parsed.hostname.endsWith(".salesforce.com") || parsed.hostname.endsWith(".force.com"))) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/services/data/v60.0/limits";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
+      case "pipedrive":
+        url = "https://api.pipedrive.com/v1/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "zoho_crm":
+        url = "https://www.zohoapis.com/crm/v6/users?type=CurrentUser";
+        headers.Authorization = "Zoho-oauthtoken " + required(c, "accessToken");
+        break;
+      case "freshsales": {
+        const domain = required(c, "domain");
+        if (!/^[a-z0-9-]+\.myfreshworks\.com$/i.test(domain)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + domain + "/crm/sales/api/contacts/filters";
+        headers.Authorization = "Token token=" + required(c, "accessToken");
+        break;
+      }
+      case "close":
+        url = "https://api.close.com/api/v1/me/";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "apiKey") + ":").toString("base64");
+        break;
+      case "apollo":
+        url = "https://api.apollo.io/api/v1/auth/health";
+        headers["x-api-key"] = required(c, "apiKey");
+        break;
+      case "intercom":
+        url = "https://api.intercom.io/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        headers["Intercom-Version"] = "2.11";
+        break;
+      case "jira": {
+        const site = required(c, "siteUrl");
+        let parsed: URL; try { parsed = new URL(site); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".atlassian.net") || parsed.username || parsed.password) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/rest/api/3/myself";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "email") + ":" + required(c, "apiToken")).toString("base64");
+        break;
+      }
+      case "asana":
+        url = "https://app.asana.com/api/1.0/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "trello": {
+        const trello = new URL("https://api.trello.com/1/members/me");
+        trello.searchParams.set("key", required(c, "apiKey")); trello.searchParams.set("token", required(c, "token"));
+        url = trello.toString();
+        break;
+      }
+      case "clickup":
+        url = "https://api.clickup.com/api/v2/user";
+        headers.Authorization = required(c, "token");
+        break;
+      case "monday":
+        url = "https://api.monday.com/v2"; method = "POST";
+        headers.Authorization = required(c, "apiToken"); headers["Content-Type"] = "application/json";
+        body = JSON.stringify({ query: "{ me { id name } }" });
+        break;
+      case "todoist":
+        url = "https://api.todoist.com/rest/v2/projects";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "airtable":
+        url = "https://api.airtable.com/v0/meta/whoami";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "bitbucket":
+        url = "https://api.bitbucket.org/2.0/user";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "netlify":
+        url = "https://api.netlify.com/api/v1/user";
+        headers.Authorization = "Bearer " + required(c, "token");
+        break;
+      case "woocommerce": {
+        const store = required(c, "storeUrl");
+        let parsed: URL; try { parsed = new URL(store); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hostname === "localhost" || parsed.hostname.endsWith(".local")) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/wp-json/wc/v3/system_status";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "consumerKey") + ":" + required(c, "consumerSecret")).toString("base64");
+        break;
+      }
+      case "paypal": {
+        const env = required(c, "environment");
+        if (env !== "sandbox" && env !== "live") throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = (env === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com") + "/v1/oauth2/token";
+        method = "POST"; headers.Authorization = "Basic " + Buffer.from(required(c, "clientId") + ":" + required(c, "clientSecret")).toString("base64");
+        headers["Content-Type"] = "application/x-www-form-urlencoded"; body = "grant_type=client_credentials";
+        break;
+      }
+      case "paddle":
+        url = "https://api.paddle.com/customers?per_page=1";
+        headers.Authorization = "Bearer " + required(c, "apiKey"); headers["Paddle-Version"] = "1";
+        break;
+      case "lemon_squeezy":
+        url = "https://api.lemonsqueezy.com/v1/stores/" + encodeURIComponent(required(c, "storeId"));
+        headers.Authorization = "Bearer " + required(c, "apiKey"); headers.Accept = "application/vnd.api+json";
+        break;
+      case "square": {
+        const env = required(c, "environment");
+        if (env !== "sandbox" && env !== "production") throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = (env === "sandbox" ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com") + "/v2/locations";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
+      case "razorpay":
+        url = "https://api.razorpay.com/v1/customers?count=1";
+        headers.Authorization = "Basic " + Buffer.from(required(c, "keyId") + ":" + required(c, "keySecret")).toString("base64");
+        break;
+      case "zoom":
+        url = "https://api.zoom.us/v2/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "cal_com":
+        url = "https://api.cal.com/v2/me";
+        headers.Authorization = "Bearer " + required(c, "apiKey");
+        headers["cal-api-version"] = "2024-08-13";
+        break;
+      case "twilio_voice": {
+        const sid = required(c, "accountSid");
+        if (!/^AC[a-f0-9]{32}$/i.test(sid)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://api.twilio.com/2010-04-01/Accounts/" + encodeURIComponent(sid) + ".json";
+        headers.Authorization = "Basic " + Buffer.from(sid + ":" + required(c, "authToken")).toString("base64");
+        break;
+      }
+      case "docusign": {
+        const base = required(c, "baseUri");
+        let parsed: URL; try { parsed = new URL(base); } catch { throw new Error("CREDENTIAL_FIELD_INVALID"); }
+        if (parsed.protocol !== "https:" || (!parsed.hostname.endsWith(".docusign.net") && !parsed.hostname.endsWith(".docusign.com"))) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = parsed.origin + "/restapi/v2.1/accounts/" + encodeURIComponent(required(c, "accountId"));
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
+      case "x_twitter":
+        url = "https://api.x.com/2/users/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "linkedin":
+        url = "https://api.linkedin.com/v2/userinfo";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "facebook_pages":
+        url = "https://graph.facebook.com/v22.0/me?fields=id,name";
+        headers.Authorization = "Bearer " + required(c, "pageAccessToken");
+        break;
+      case "instagram":
+        url = "https://graph.facebook.com/v22.0/" + encodeURIComponent(required(c, "igUserId")) + "?fields=id,username";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "tiktok":
+        url = "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name";
+        method = "POST"; headers.Authorization = "Bearer " + required(c, "accessToken");
+        headers["Content-Type"] = "application/json"; body = JSON.stringify({ fields: ["open_id", "display_name"] });
+        break;
+      case "mailchimp": {
+        const key = required(c, "apiKey"), region = key.split("-").pop() ?? "";
+        if (!/^us\d{1,2}$/.test(region)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://" + region + ".api.mailchimp.com/3.0/ping";
+        headers.Authorization = "Basic " + Buffer.from("aivanta:" + key).toString("base64");
+        break;
+      }
+      case "typeform":
+        url = "https://api.typeform.com/me";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      case "supabase": {
+        const project = new URL(required(c, "projectUrl"));
+        if (project.protocol !== "https:" || !project.hostname.endsWith(".supabase.co")) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = project.origin + "/rest/v1/";
+        const key = required(c, "apiKey"); headers.apikey = key; headers.Authorization = "Bearer " + key;
+        break;
+      }
+      case "postgresql": {
+        const connectionString = required(c, "connectionString");
+        if (!/^postgres(?:ql)?:\/\//i.test(connectionString)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const pool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 5000, ssl: { rejectUnauthorized: true } });
+        try {
+          const client = await pool.connect();
+          try { await client.query("SELECT 1"); } finally { client.release(); }
+        } finally { await pool.end(); }
+        return NextResponse.json({ ok: true, message: "PostgreSQL connection verified." }, { headers: { "Cache-Control": "no-store" } });
+      }
+      case "redis": {
+        const endpoint = new URL(required(c, "restUrl"));
+        if (endpoint.protocol !== "https:" || !endpoint.hostname.endsWith(".upstash.io")) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = endpoint.origin; method = "POST"; headers.Authorization = "Bearer " + required(c, "token");
+        headers["Content-Type"] = "application/json"; body = JSON.stringify(["PING"]);
+        break;
+      }
+      case "firebase": {
+        const project = required(c, "projectId");
+        if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        url = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(project) + "/databases/(default)/documents?pageSize=1";
+        headers.Authorization = "Bearer " + required(c, "accessToken");
+        break;
+      }
+      case "dropbox":
+        url = "https://api.dropboxapi.com/2/users/get_current_account"; method = "POST";
+        headers.Authorization = "Bearer " + required(c, "accessToken"); headers["Content-Type"] = "application/json"; body = "{}";
+        break;
+      case "aws_s3": {
+        const region = required(c, "region");
+        if (!/^[a-z]{2}-[a-z]+-\\d$/.test(region)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const target = new URL("https://s3." + region + ".amazonaws.com/");
+        target.searchParams.set("max-keys", "1");
+        url = target.toString();
+        Object.assign(headers, signedS3Headers(target, required(c, "accessKeyId"), required(c, "secretAccessKey"), region));
+        break;
+      }
+      case "cloudflare_r2": {
+        const account = required(c, "accountId");
+        if (!/^[a-f0-9]{32}$/i.test(account)) throw new Error("CREDENTIAL_FIELD_INVALID");
+        const target = new URL("https://" + account + ".r2.cloudflarestorage.com/");
+        url = target.toString();
+        Object.assign(headers, signedS3Headers(target, required(c, "accessKeyId"), required(c, "secretAccessKey"), "auto"));
+        break;
+      }
     }
     const response = await fetch(url, { method, headers, body, cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) {

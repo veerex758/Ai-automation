@@ -83,3 +83,126 @@ test("workspace credential vault accepts the additional vendor providers with on
   assert.throws(() => encryptWorkspaceCredentials({ twilio: { accountSid: "AC123" } } as never, key));
   assert.throws(() => encryptWorkspaceCredentials({ slack: {} } as never, key));
 });
+
+
+test("workspace credential vault accepts the first four catalogue AI providers", () => {
+  const value = {
+    elevenlabs: { apiKey: "eleven-secret" },
+    stability_ai: { apiKey: "stability-secret" },
+    hugging_face: { apiKey: "hf-secret" },
+    pinecone: { apiKey: "pinecone-secret", indexHost: "https://index.svc.us-east1-gcp.pinecone.io" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-ai:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-ai:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ pinecone: { apiKey: "key" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ elevenlabs: { apiKey: "key", endpoint: "https://untrusted.test" } } as never, key));
+});
+
+
+test("workspace credential vault accepts CRM and Teams provider fields without accepting extras", () => {
+  const value = {
+    microsoft_teams: { accessToken: "teams-token" },
+    salesforce: { accessToken: "salesforce-token", instanceUrl: "https://acme.my.salesforce.com" },
+    pipedrive: { accessToken: "pipedrive-token" },
+    zoho_crm: { accessToken: "zoho-token" },
+    freshsales: { accessToken: "freshsales-token", domain: "acme.myfreshworks.com" },
+    close: { apiKey: "close-key" },
+    apollo: { apiKey: "apollo-key" },
+    intercom: { accessToken: "intercom-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-crm:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-crm:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ salesforce: { accessToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ close: { apiKey: "key", password: "extra" } } as never, key));
+});
+
+
+test("workspace credential vault accepts the CRM and messaging provider fields", () => {
+  const value = {
+    microsoft_teams: { accessToken: "teams-token" },
+    salesforce: { accessToken: "salesforce-token", instanceUrl: "https://acme.my.salesforce.com" },
+    pipedrive: { accessToken: "pipedrive-token" },
+    zoho_crm: { accessToken: "zoho-token" },
+    freshsales: { accessToken: "freshsales-token", domain: "acme.myfreshworks.com" },
+    close: { apiKey: "close-key" },
+    apollo: { apiKey: "apollo-key" },
+    intercom: { accessToken: "intercom-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-crm:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-crm:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ salesforce: { accessToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ close: { apiKey: "key", password: "extra" } } as never, key));
+});
+
+
+test("workspace credential vault accepts productivity and developer provider fields", () => {
+  const value = {
+    jira: { siteUrl: "https://acme.atlassian.net", email: "admin@example.test", apiToken: "jira-token" },
+    asana: { accessToken: "asana-token" },
+    trello: { apiKey: "trello-key", token: "trello-token" },
+    clickup: { token: "clickup-token" },
+    monday: { apiToken: "monday-token" },
+    todoist: { accessToken: "todoist-token" },
+    airtable: { accessToken: "airtable-token" },
+    bitbucket: { accessToken: "bitbucket-token" },
+    netlify: { token: "netlify-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-productivity:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-productivity:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ jira: { siteUrl: "https://acme.atlassian.net", apiToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ trello: { apiKey: "key" } } as never, key));
+});
+
+
+test("workspace credential vault accepts payment and support provider fields", () => {
+  const value = {
+    woocommerce: { storeUrl: "https://shop.example.test", consumerKey: "ck-test", consumerSecret: "cs-test" },
+    paypal: { clientId: "paypal-client", clientSecret: "paypal-secret", environment: "sandbox" },
+    paddle: { apiKey: "paddle-key" },
+    lemon_squeezy: { apiKey: "lemon-key", storeId: "12345" },
+    square: { accessToken: "square-token", environment: "sandbox" },
+    razorpay: { keyId: "rzp-test", keySecret: "razor-secret" },
+    zoom: { accessToken: "zoom-token" },
+    cal_com: { apiKey: "cal-key" },
+    twilio_voice: { accountSid: "AC-placeholder-test", authToken: "voice-secret", fromPhone: "+15550001111" },
+    docusign: { accessToken: "docusign-token", accountId: "account-1", baseUri: "https://na4.docusign.net" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-commerce:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-commerce:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ paypal: { clientId: "id", clientSecret: "secret" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ square: { accessToken: "token" } } as never, key));
+});
+
+
+test("workspace credential vault accepts social and marketing provider fields", () => {
+  const value = {
+    x_twitter: { accessToken: "x-token" },
+    linkedin: { accessToken: "linkedin-token" },
+    facebook_pages: { pageAccessToken: "facebook-page-token" },
+    instagram: { accessToken: "instagram-token", igUserId: "ig-user-1" },
+    tiktok: { accessToken: "tiktok-token" },
+    mailchimp: { apiKey: "mailchimp-us20" },
+    typeform: { accessToken: "typeform-token" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-marketing:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-marketing:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ instagram: { accessToken: "token" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ facebook_pages: { pageAccessToken: "token", apiKey: "extra" } } as never, key));
+});
+
+
+test("workspace credential vault accepts database and storage provider fields", () => {
+  const value = {
+    supabase: { projectUrl: "https://project.supabase.co", apiKey: "supabase-test-key" },
+    postgresql: { connectionString: "postgresql://user:password@db.example.test:5432/app?sslmode=require" },
+    redis: { restUrl: "https://example.upstash.io", token: "redis-token" },
+    firebase: { projectId: "aivanta-project1", accessToken: "firebase-token" },
+    dropbox: { accessToken: "dropbox-token" },
+    aws_s3: { accessKeyId: "aws-access-id", secretAccessKey: "aws-secret", region: "us-east-1" },
+    cloudflare_r2: { accountId: "abcdef0123456789abcdef0123456789", accessKeyId: "r2-access-id", secretAccessKey: "r2-secret" },
+  };
+  const encrypted = encryptWorkspaceCredentials(value, key, "workspace-database:providers");
+  assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-database:providers"), value);
+  assert.throws(() => encryptWorkspaceCredentials({ supabase: { projectUrl: "https://project.supabase.co" } } as never, key));
+  assert.throws(() => encryptWorkspaceCredentials({ aws_s3: { accessKeyId: "id", region: "us-east-1" } } as never, key));
+});
