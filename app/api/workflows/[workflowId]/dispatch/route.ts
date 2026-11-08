@@ -37,8 +37,16 @@ function isLiveRegistryOperationAllowed(value: unknown): boolean {
     (step.kind === "action" && (
       (step.nodeId === "openai" && step.operationId === "generate_text") ||
       (step.nodeId === "gemini" && step.operationId === "generate_text") ||
-      (step.nodeId === "slack" && step.operationId === "send_message") ||
-      (step.nodeId === "email" && step.operationId === "send_email")
+      (step.nodeId === "slack" && ["send_message", "post_message"].includes(String(step.operationId))) ||
+      (step.nodeId === "email" && step.operationId === "send_email") ||
+      (step.nodeId === "gmail" && step.operationId === "list_messages") ||
+      (step.nodeId === "google_sheets" && step.operationId === "get_values") ||
+      (step.nodeId === "notion" && step.operationId === "create_page") ||
+      (step.nodeId === "hubspot" && step.operationId === "create_contact") ||
+      (step.nodeId === "twilio" && step.operationId === "send_sms") ||
+      (step.nodeId === "shopify" && step.operationId === "list_products") ||
+      (step.nodeId === "stripe" && step.operationId === "create_customer") ||
+      (step.nodeId === "linear" && step.operationId === "create_issue")
     ))
   ));
 }
