@@ -29,6 +29,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
   id: ProviderId; name: string; description: string; input: I; output: O;
   auth?: NodeDefinition["auth"];
   run(ctx: NodeContext, input: z.infer<I>): Promise<unknown>;
+  additionalActions?: NodeDefinition["actions"];
 }): NodeDefinition {
   return {
     id: args.id, name: args.name, icon: "plug", category: args.id === "microsoft_teams" ? "communication" : "data", version: 1,
@@ -40,7 +41,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
         const input = args.input.parse(raw);
         return args.output.parse(await args.run(ctx, input));
       },
-    }],
+    }, ...(args.additionalActions ?? [])],
   };
 }
 
@@ -51,10 +52,18 @@ const contactInput = z.object({
   phone: z.string().max(40).optional(),
 }).strict();
 const contactOutput = z.object({ contactId: z.string().min(1) }).strict();
+const searchContactsOutput = z.object({ contacts: z.array(z.object({ contactId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
+const searchLeadsOutput = z.object({ leads: z.array(z.object({ leadId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
+function nameFields(value: unknown): { firstName?: string; lastName?: string } {
+  if (typeof value !== "string" || !value.trim()) return {};
+  const parts = value.trim().split(/\s+/);
+  return { firstName: parts[0], ...(parts.length > 1 ? { lastName: parts.slice(1).join(" ") } : {}) };
+}
 
 export const catalogueCrmNodes: NodeDefinition[] = [
   node({
     id: "microsoft_teams", name: "Microsoft Teams",
+    auth: { type: "oauth2", scopes: ["ChatMessage.Send"], refresh: "manual" },
     description: "Posts a text message to a specified Microsoft Teams chat using a workspace Microsoft Graph access token.",
     input: z.object({ chatId: z.string().trim().min(1).max(200), content: z.string().trim().min(1).max(4000) }).strict(),
     output: z.object({ messageId: z.string(), chatId: z.string() }).strict(),
@@ -71,6 +80,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
   }),
   node({
     id: "salesforce", name: "Salesforce",
+    auth: { type: "oauth2", scopes: ["api", "refresh_token"], refresh: "manual" },
     description: "Creates a Salesforce Lead with validated name, email and optional phone fields using a manually connected OAuth access token.",
     input: z.object({ firstName: z.string().max(40).optional(), lastName: z.string().trim().min(1).max(80), company: z.string().trim().min(1).max(255), email: z.string().email().optional(), phone: z.string().max(40).optional() }).strict(),
     output: z.object({ leadId: z.string(), success: z.boolean() }).strict(),
@@ -88,9 +98,26 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof body.id !== "string" || body.success !== true) throw new Error("SALESFORCE_INVALID_RESPONSE");
       return { leadId: body.id, success: true };
     },
+    additionalActions: [{
+      id: "search_leads", name: "Search leads by email",
+      description: "Searches Salesforce Leads for an exact email match using SOQL and the connected API-scoped OAuth token.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchLeadsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "salesforce", "accessToken"), instance = secret(ctx, "salesforce", "instanceUrl");
+        let base: URL; try { base = new URL(instance); } catch { throw new Error("SALESFORCE_CONNECTION_INVALID"); }
+        if (base.protocol !== "https:" || base.username || base.password || !(base.hostname.endsWith(".salesforce.com") || base.hostname.endsWith(".force.com"))) throw new Error("SALESFORCE_CONNECTION_INVALID");
+        const email = input.email.replace(/\\/g, "\\\\").replace(/'/g, "\\\\'");
+        const query = "SELECT Id,FirstName,LastName,Email FROM Lead WHERE Email = '" + email + "' LIMIT 20";
+        const body = await call(ctx, "salesforce", { url: base.origin + "/services/data/v60.0/query?q=" + encodeURIComponent(query), headers: { Authorization: "Bearer " + token } });
+        const leads = Array.isArray(body.records) ? body.records.flatMap((item: any) => typeof item?.Id === "string" ? [{ leadId: item.Id, ...(typeof item.Email === "string" ? { email: item.Email } : {}), ...(typeof item.FirstName === "string" ? { firstName: item.FirstName } : {}), ...(typeof item.LastName === "string" ? { lastName: item.LastName } : {}) }] : []) : [];
+        return { leads: leads.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "pipedrive", name: "Pipedrive",
+    auth: { type: "oauth2", scopes: ["contacts:full"], refresh: "manual" },
     description: "Creates a Pipedrive person using the connected OAuth access token and returns the person ID.",
     input: contactInput,
     output: contactOutput,
@@ -103,9 +130,33 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof data?.id !== "number" && typeof data?.id !== "string") throw new Error("PIPEDRIVE_INVALID_RESPONSE");
       return { contactId: String(data.id) };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search persons by email",
+      description: "Searches Pipedrive persons by email using the connected OAuth token and returns bounded contact fields.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "pipedrive", "accessToken");
+        const url = new URL("https://api.pipedrive.com/v1/persons/search");
+        url.searchParams.set("term", input.email); url.searchParams.set("fields", "email"); url.searchParams.set("exact_match", "true"); url.searchParams.set("limit", "20");
+        const body = await call(ctx, "pipedrive", { url: url.toString(), headers: { Authorization: "Bearer " + token } });
+        const data = body.data as any;
+        const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+        const contacts = items.flatMap((entry: any) => {
+          const row = entry?.item ?? entry;
+          if (typeof row?.id !== "number" && typeof row?.id !== "string") return [];
+          const emails = Array.isArray(row.email) ? row.email : [];
+          const emailValue = emails.find((value: any) => typeof value?.value === "string")?.value;
+          const names = typeof row.name === "string" ? row.name.split(/\s+/, 2) : [];
+          return [{ contactId: String(row.id), ...(typeof emailValue === "string" ? { email: emailValue } : {}), ...(names[0] ? { firstName: names[0] } : {}), ...(names[1] ? { lastName: names[1] } : {}) }];
+        });
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "zoho_crm", name: "Zoho CRM",
+    auth: { type: "oauth2", scopes: ["ZohoCRM.modules.contacts.ALL"], refresh: "manual" },
     description: "Creates a Zoho CRM Contact using the connected OAuth access token and returns the provider record ID.",
     input: contactInput,
     output: contactOutput,
@@ -119,9 +170,23 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (row?.status !== "success" || typeof details?.id !== "string") throw new Error("ZOHO_CRM_INVALID_RESPONSE");
       return { contactId: details.id };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search contacts by email",
+      description: "Searches Zoho CRM Contacts by exact email using the connected OAuth access token.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "zoho_crm", "accessToken");
+        const url = new URL("https://www.zohoapis.com/crm/v6/Contacts/search"); url.searchParams.set("email", input.email);
+        const body = await call(ctx, "zoho_crm", { url: url.toString(), headers: { Authorization: "Zoho-oauthtoken " + token } });
+        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.Email === "string" ? { email: row.Email } : {}), ...(typeof row.First_Name === "string" ? { firstName: row.First_Name } : {}), ...(typeof row.Last_Name === "string" ? { lastName: row.Last_Name } : {}) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "freshsales", name: "Freshsales",
+    auth: { type: "apiKey", credentialKey: "accessToken" },
     description: "Creates a Freshsales contact using the workspace access token and validated Freshsales account domain.",
     input: contactInput,
     output: contactOutput,
@@ -136,6 +201,21 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof contact?.id !== "number" && typeof contact?.id !== "string") throw new Error("FRESHSALES_INVALID_RESPONSE");
       return { contactId: String(contact.id) };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search contacts by email",
+      description: "Looks up Freshsales contacts by exact email through the account lookup API.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "freshsales", "accessToken"), domain = secret(ctx, "freshsales", "domain");
+        if (!/^[a-z0-9-]+\.myfreshworks\.com$/i.test(domain)) throw new Error("FRESHSALES_CONNECTION_INVALID");
+        const url = new URL("https://" + domain + "/crm/sales/api/lookup");
+        url.searchParams.set("q", input.email); url.searchParams.set("f", "email"); url.searchParams.set("entities", "contact");
+        const body = await call(ctx, "freshsales", { url: url.toString(), headers: { Authorization: "Token token=" + token } });
+        const contacts = Array.isArray(body.contacts) ? body.contacts.flatMap((row: any) => typeof row?.id === "number" || typeof row?.id === "string" ? [{ contactId: String(row.id), ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.name === "string" ? { firstName: row.name.trim().split(/\s+/, 2)[0], ...(row.name.trim().split(/\s+/, 2)[1] ? { lastName: row.name.trim().split(/\s+/, 2)[1] } : {}) } : {}) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "close", name: "Close",
@@ -151,6 +231,24 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof body.id !== "string") throw new Error("CLOSE_INVALID_RESPONSE");
       return { contactId: body.id };
     },
+    additionalActions: [{
+      id: "get_contact", name: "Get contact",
+      description: "Retrieves one Close CRM contact by ID and returns bounded identity and communication fields.",
+      inputSchema: z.object({ contactId: z.string().trim().min(10).max(100) }).strict(),
+      outputSchema: z.object({ contactId: z.string(), name: z.string().optional(), email: z.string().email().optional(), phone: z.string().optional(), leadId: z.string().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ contactId: z.string().trim().min(10).max(100) }).strict().parse(raw);
+        const key = secret(ctx, "close", "apiKey");
+        const body = await call(ctx, "close", { url: "https://api.close.com/api/v1/contact/" + encodeURIComponent(input.contactId) + "/",
+          headers: { Authorization: "Basic " + Buffer.from(key + ":").toString("base64") } });
+        if (typeof body.id !== "string") throw new Error("CLOSE_INVALID_RESPONSE");
+        const emails = Array.isArray(body.emails) ? body.emails : [];
+        const phones = Array.isArray(body.phones) ? body.phones : [];
+        const email = emails.find((item: any) => typeof item?.email === "string")?.email;
+        const phone = phones.find((item: any) => typeof item?.phone === "string")?.phone;
+        return { contactId: body.id, ...(typeof body.name === "string" ? { name: body.name } : {}), ...(typeof email === "string" ? { email } : {}), ...(typeof phone === "string" ? { phone } : {}), ...(typeof body.lead_id === "string" ? { leadId: body.lead_id } : {}) };
+      },
+    }],
   }),
   node({
     id: "apollo", name: "Apollo",
@@ -167,9 +265,25 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof contact?.id !== "string") throw new Error("APOLLO_INVALID_RESPONSE");
       return { contactId: contact.id };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search saved contacts",
+      description: "Searches contacts already saved in the connected Apollo workspace by email keyword; does not run prospect discovery or consume enrichment credits.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const key = secret(ctx, "apollo", "apiKey");
+        const body = await call(ctx, "apollo", { url: "https://api.apollo.io/api/v1/contacts/search", method: "POST",
+          headers: { "x-api-key": key, "Content-Type": "application/json", Accept: "application/json" },
+          body: { q_keywords: input.email, page: 1, per_page: 20 } });
+        const rows = Array.isArray(body.contacts) ? body.contacts : [];
+        const contacts = rows.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...(typeof row.first_name === "string" ? { firstName: row.first_name } : {}), ...(typeof row.last_name === "string" ? { lastName: row.last_name } : {}) }] : []);
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
   node({
     id: "intercom", name: "Intercom",
+    auth: { type: "oauth2", scopes: ["read_write_users"], refresh: "manual" },
     description: "Creates an Intercom contact using the connected OAuth access token and returns the contact ID.",
     input: z.object({ email: z.string().email().max(254), name: z.string().trim().min(1).max(200) }).strict(),
     output: contactOutput,
@@ -181,5 +295,19 @@ export const catalogueCrmNodes: NodeDefinition[] = [
       if (typeof body.id !== "string") throw new Error("INTERCOM_INVALID_RESPONSE");
       return { contactId: body.id };
     },
+    additionalActions: [{
+      id: "search_contacts", name: "Search contacts by email",
+      description: "Searches Intercom contacts for an exact email match using the connected OAuth token.",
+      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      async run(ctx, raw) {
+        const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
+        const token = secret(ctx, "intercom", "accessToken");
+        const body = await call(ctx, "intercom", { url: "https://api.intercom.io/contacts/search", method: "POST",
+          headers: { Authorization: "Bearer " + token, "Intercom-Version": "2.11", "Content-Type": "application/json" },
+          body: { query: { field: "email", operator: "=", value: input.email }, pagination: { per_page: 20 } } });
+        const contacts = Array.isArray(body.data) ? body.data.flatMap((row: any) => typeof row?.id === "string" ? [{ contactId: row.id, ...(typeof row.email === "string" ? { email: row.email } : {}), ...nameFields(row.name) }] : []) : [];
+        return { contacts: contacts.slice(0, 20) };
+      },
+    }],
   }),
 ];

@@ -19,6 +19,7 @@ async function get(ctx: NodeContext, provider: string, url: string): Promise<Rec
 function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
   id: string; name: string; scope: string; description: string; input: I; output: O;
   run(ctx: NodeContext, input: z.infer<I>): Promise<unknown>;
+  additionalActions?: NodeDefinition["actions"];
 }): NodeDefinition {
   return {
     id: args.id, name: args.name, icon: "app-window", category: "data", version: 1,
@@ -30,7 +31,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
         const input = args.input.parse(raw);
         return args.output.parse(await args.run(ctx, input));
       },
-    }],
+    }, ...(args.additionalActions ?? [])],
   };
 }
 
@@ -51,6 +52,20 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         ? [{ id: item.id, name: item.name, ...(typeof item.mimeType === "string" ? { mimeType: item.mimeType } : {}), ...(typeof item.webViewLink === "string" ? { webViewLink: item.webViewLink } : {}) }] : []) : [];
       return { files: files.slice(0, input.pageSize ?? 20), ...(typeof body.nextPageToken === "string" ? { nextPageToken: body.nextPageToken } : {}) };
     },
+    additionalActions: [{
+      id: "get_file", name: "Get file metadata",
+      description: "Retrieves metadata for one Google Drive file using the existing read-only Drive OAuth scope.",
+      inputSchema: z.object({ fileId: z.string().trim().min(1).max(300) }).strict(),
+      outputSchema: z.object({ id: z.string(), name: z.string(), mimeType: z.string().optional(), webViewLink: z.string().url().optional(), modifiedTime: z.string().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ fileId: z.string().trim().min(1).max(300) }).strict().parse(raw);
+        const url = new URL("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(input.fileId));
+        url.searchParams.set("fields", "id,name,mimeType,webViewLink,modifiedTime");
+        const body = await get(ctx, "google_drive", url.toString());
+        if (typeof body.id !== "string" || typeof body.name !== "string") throw new Error("GOOGLE_DRIVE_INVALID_RESPONSE");
+        return { id: body.id, name: body.name, ...(typeof body.mimeType === "string" ? { mimeType: body.mimeType } : {}), ...(typeof body.webViewLink === "string" ? { webViewLink: body.webViewLink } : {}), ...(typeof body.modifiedTime === "string" ? { modifiedTime: body.modifiedTime } : {}) };
+      },
+    }],
   }),
   node({
     id: "google_calendar", name: "Google Calendar",
@@ -68,6 +83,19 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
       return { events: events.slice(0, input.maxResults ?? 20) };
     },
+    additionalActions: [{
+      id: "get_event", name: "Get event",
+      description: "Retrieves one event from a selected Google Calendar using the existing read-only Calendar OAuth scope.",
+      inputSchema: z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), eventId: z.string().trim().min(1).max(300) }).strict(),
+      outputSchema: z.object({ id: z.string(), summary: z.string().optional(), description: z.string().max(10000).optional(), start: z.unknown().optional(), end: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), eventId: z.string().trim().min(1).max(300) }).strict().parse(raw);
+        const url = "https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId) + "/events/" + encodeURIComponent(input.eventId);
+        const body = await get(ctx, "google_calendar", url);
+        if (typeof body.id !== "string") throw new Error("GOOGLE_CALENDAR_INVALID_RESPONSE");
+        return { id: body.id, ...(typeof body.summary === "string" ? { summary: body.summary } : {}), ...(typeof body.description === "string" ? { description: body.description.slice(0, 10000) } : {}), ...(body.start !== undefined ? { start: body.start } : {}), ...(body.end !== undefined ? { end: body.end } : {}), ...(typeof body.htmlLink === "string" ? { htmlLink: body.htmlLink } : {}) };
+      },
+    }],
   }),
   node({
     id: "google_docs", name: "Google Docs",
@@ -81,6 +109,29 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       const content = (body.body as Record<string, unknown> | undefined)?.content;
       return { documentId: body.documentId, title: body.title, ...(typeof body.revisionId === "string" ? { revisionId: body.revisionId } : {}), bodyElementCount: Array.isArray(content) ? content.length : 0 };
     },
+    additionalActions: [{
+      id: "get_document_text", name: "Get document text",
+      description: "Extracts bounded textRun content from a Google Doc using the existing read-only Docs scope.",
+      inputSchema: z.object({ documentId: z.string().trim().min(10).max(200) }).strict(),
+      outputSchema: z.object({ documentId: z.string(), title: z.string(), text: z.string().max(50000) }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ documentId: z.string().trim().min(10).max(200) }).strict().parse(raw);
+        const body = await get(ctx, "google_docs", "https://docs.googleapis.com/v1/documents/" + encodeURIComponent(input.documentId));
+        if (typeof body.documentId !== "string" || typeof body.title !== "string") throw new Error("GOOGLE_DOCS_INVALID_RESPONSE");
+        const pieces: string[] = [];
+        const visit = (value: unknown, depth = 0): void => {
+          if (depth > 20 || pieces.join("").length >= 50000) return;
+          if (Array.isArray(value)) { for (const item of value) visit(item, depth + 1); return; }
+          if (!value || typeof value !== "object") return;
+          const row = value as Record<string, unknown>;
+          const textRun = row.textRun as Record<string, unknown> | undefined;
+          if (typeof textRun?.content === "string") pieces.push(textRun.content);
+          for (const [key, child] of Object.entries(row)) if (key !== "textRun") visit(child, depth + 1);
+        };
+        visit(body.body);
+        return { documentId: body.documentId, title: body.title, text: pieces.join("").slice(0, 50000) };
+      },
+    }],
   }),
   node({
     id: "google_forms", name: "Google Forms",
@@ -114,6 +165,21 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       }) : [];
       return { videos: videos.slice(0, input.maxResults ?? 10) };
     },
+    additionalActions: [{
+      id: "get_video", name: "Get video details",
+      description: "Retrieves bounded metadata for one public YouTube video using the existing read-only YouTube scope.",
+      inputSchema: z.object({ videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) }).strict(),
+      outputSchema: z.object({ videoId: z.string(), title: z.string(), channelTitle: z.string().optional(), description: z.string().max(5000).optional(), publishedAt: z.string().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) }).strict().parse(raw);
+        const url = new URL("https://www.googleapis.com/youtube/v3/videos"); url.searchParams.set("part", "snippet"); url.searchParams.set("id", input.videoId);
+        const body = await get(ctx, "youtube", url.toString());
+        const item = Array.isArray(body.items) ? body.items[0] as Record<string, unknown> | undefined : undefined;
+        const snippet = item?.snippet as Record<string, unknown> | undefined;
+        if (typeof item?.id !== "string" || typeof snippet?.title !== "string") throw new Error("YOUTUBE_VIDEO_NOT_FOUND");
+        return { videoId: item.id, title: snippet.title, ...(typeof snippet.channelTitle === "string" ? { channelTitle: snippet.channelTitle } : {}), ...(typeof snippet.description === "string" ? { description: snippet.description.slice(0, 5000) } : {}), ...(typeof snippet.publishedAt === "string" ? { publishedAt: snippet.publishedAt } : {}) };
+      },
+    }],
   }),
   node({
     id: "google_contacts", name: "Google Contacts",
@@ -134,5 +200,22 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       }) : [];
       return { people: people.slice(0, input.pageSize ?? 50) };
     },
+    additionalActions: [{
+      id: "get_person", name: "Get person",
+      description: "Retrieves one Google Contact by People API resource name using the existing read-only Contacts scope.",
+      inputSchema: z.object({ resourceName: z.string().regex(/^people\/[A-Za-z0-9_-]{1,200}$/) }).strict(),
+      outputSchema: z.object({ resourceName: z.string(), displayName: z.string().optional(), email: z.string().optional(), phone: z.string().optional() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({ resourceName: z.string().regex(/^people\/[A-Za-z0-9_-]{1,200}$/) }).strict().parse(raw);
+        const url = new URL("https://people.googleapis.com/v1/" + input.resourceName);
+        url.searchParams.set("personFields", "names,emailAddresses,phoneNumbers");
+        const body = await get(ctx, "google_contacts", url.toString());
+        const name = Array.isArray(body.names) ? (body.names[0] as Record<string, unknown> | undefined)?.displayName : undefined;
+        const email = Array.isArray(body.emailAddresses) ? (body.emailAddresses[0] as Record<string, unknown> | undefined)?.value : undefined;
+        const phone = Array.isArray(body.phoneNumbers) ? (body.phoneNumbers[0] as Record<string, unknown> | undefined)?.value : undefined;
+        if (typeof body.resourceName !== "string") throw new Error("GOOGLE_CONTACTS_INVALID_RESPONSE");
+        return { resourceName: body.resourceName, ...(typeof name === "string" ? { displayName: name } : {}), ...(typeof email === "string" ? { email } : {}), ...(typeof phone === "string" ? { phone } : {}) };
+      },
+    }],
   }),
 ];

@@ -8,12 +8,13 @@ import { isProviderLiveEnabled, providerPackLiveId, PROVIDER_PACK_LIVE_IDS } fro
 test("20 additional catalogue providers have executable schema-backed actions", () => {
   assert.equal(providerPack.length, 20);
   for (const node of providerPack) {
-    assert.equal(node.actions.length, 1, node.id);
-    const action = node.actions[0];
-    assert.ok(action.id);
-    assert.ok(action.inputSchema);
-    assert.ok(action.outputSchema);
-    assert.equal(typeof action.run, "function");
+    assert.ok(node.actions.length >= 1, node.id);
+    for (const action of node.actions) {
+      assert.ok(action.id);
+      assert.ok(action.inputSchema);
+      assert.ok(action.outputSchema);
+      assert.equal(typeof action.run, "function");
+    }
   }
 });
 
@@ -564,6 +565,10 @@ test("all 20 provider-pack adapters resolve to an exact, opt-in live gate", () =
   }
   assert.equal(providerPackLiveId({ kind: "trigger", nodeId: "claude", operationId: "execute" }), null);
   assert.equal(providerPackLiveId({ kind: "action", nodeId: "claude", operationId: "other" }), null);
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "discord", operationId: "get_channel" }), "discord");
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "telegram", operationId: "get_chat" }), "telegram");
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "whatsapp_business", operationId: "get_phone_number" }), "whatsapp_business");
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "discord", operationId: "delete_everything" }), null);
 });
 
 const providerSpecificCases: Array<{

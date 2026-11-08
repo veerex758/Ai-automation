@@ -7,7 +7,7 @@ import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
+const providers = new Set<WorkspaceCredentialProvider>(["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2"]);
 const labels: Record<WorkspaceCredentialProvider, string> = {
   openai: "OpenAI", gemini: "Gemini", resend: "Resend", slack: "Slack", http: "HTTP API",
   notion: "Notion", hubspot: "HubSpot", twilio: "Twilio", shopify: "Shopify", stripe: "Stripe", linear: "Linear",
@@ -38,7 +38,7 @@ claude: "Claude",
   woocommerce: "WooCommerce", paypal: "PayPal", paddle: "Paddle", lemon_squeezy: "Lemon Squeezy", square: "Square", razorpay: "Razorpay",
   zoom: "Zoom", cal_com: "Cal.com", twilio_voice: "Twilio Voice", docusign: "DocuSign",
   x_twitter: "X/Twitter", linkedin: "LinkedIn", facebook_pages: "Facebook Pages", instagram: "Instagram", tiktok: "TikTok", mailchimp: "Mailchimp", typeform: "Typeform",
-  supabase: "Supabase", postgresql: "PostgreSQL", redis: "Redis", firebase: "Firebase", dropbox: "Dropbox", aws_s3: "AWS S3", cloudflare_r2: "Cloudflare R2",
+  supabase: "Supabase", postgresql: "PostgreSQL", mysql: "MySQL", mongodb: "MongoDB", redis: "Redis", firebase: "Firebase", dropbox: "Dropbox", aws_s3: "AWS S3", cloudflare_r2: "Cloudflare R2",
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
           ? labels[item.provider as WorkspaceCredentialProvider] : "Integration",
       })),
       liveExecutionEnabled: process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true",
+      liveProvidersEnabled: (process.env.AIVANTA_LIVE_INTEGRATIONS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
       emailRecipientAllowed: Boolean(recipient) && allowedRecipients.has(recipient),
     });
   } catch {
@@ -125,15 +126,46 @@ export async function POST(request: NextRequest) {
     }
 
     const db = serviceClient();
-    const { data, error } = await db.rpc("save_workspace_integration_credentials", {
-      p_workspace_id: workspace.id,
-      p_provider: provider,
-      p_display_name: displayName,
-      p_encrypted_credentials: encrypted,
-      p_created_by: user.id,
-    });
-    if (error || !data) throw error ?? new Error("INTEGRATION_SAVE_FAILED");
-    return json({ integration: data }, 201);
+    // Revoke readiness before replacing a saved secret so no worker can race
+    // the credential update using the previous successful verification.
+    const { data: existing, error: existingError } = await db.from("workspace_integrations")
+      .select("id").eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      const { error: invalidateError } = await db.from("workspace_integrations").update({
+        status: "needs_attention", last_tested_at: null, last_test_status: null,
+      }).eq("id", existing.id).eq("workspace_id", workspace.id);
+      if (invalidateError) throw invalidateError;
+    }
+    const { data, error } = provider === "mysql" || provider === "mongodb"
+      ? await db.rpc("save_workspace_database_credentials", {
+          p_workspace_id: workspace.id,
+          p_provider: provider,
+          p_display_name: displayName,
+          p_encrypted_credential: encrypted,
+          p_created_by: user.id,
+        })
+      : await db.rpc("save_workspace_integration_credentials", {
+          p_workspace_id: workspace.id,
+          p_provider: provider,
+          p_display_name: displayName,
+          p_encrypted_credentials: encrypted,
+          p_created_by: user.id,
+        });
+    const integrationId = typeof data === "string" ? data : isRecord(data) && typeof data.id === "string" ? data.id : null;
+    if (error || !integrationId) throw error ?? new Error("INTEGRATION_SAVE_FAILED");
+    // Replacing a secret invalidates any previous successful test. A new
+    // credential must pass a fresh provider check before the worker will use it.
+    const { error: invalidateError } = await db.from("workspace_integrations").update({
+      status: "needs_attention",
+      last_tested_at: null,
+      last_test_status: null,
+    }).eq("id", integrationId).eq("workspace_id", workspace.id);
+    if (invalidateError) throw invalidateError;
+    return json({ integration: {
+      id: integrationId, provider, display_name: displayName,
+      status: "needs_attention", last_tested_at: null, last_test_status: null,
+    } }, 201);
   } catch {
     return json({ error: "Could not securely save this workspace integration." }, 500);
   }
