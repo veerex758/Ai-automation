@@ -34,7 +34,7 @@ test("Google credential encryption round-trips and uses fresh IVs", async () => 
     access_token: "access-secret",
     refresh_token: "refresh-secret",
     token_type: "Bearer",
-    scope: "openid email https://www.googleapis.com/auth/gmail.send",
+    scope: "openid email https://www.googleapis.com/auth/gmail.readonly",
     expiry_date: 1900000000000,
   };
 
@@ -68,11 +68,11 @@ test("Google credential encryption fails closed without a valid 32-byte key", as
   assert.throws(() => encryptGoogleCredentials({ access_token: "x" }), /32-byte key/);
 });
 
-test("Google OAuth scope validation allows only identity plus the requested minimum write scope", async () => {
+test("Google OAuth scope validation allows only identity plus the requested read-only product scope", async () => {
   const { hasOnlyApprovedGoogleScopes, isGoogleProduct } =
     await loadTypeScript("../lib/integrations/google-oauth.ts");
-  const gmail = "https://www.googleapis.com/auth/gmail.send";
-  const sheets = "https://www.googleapis.com/auth/spreadsheets";
+  const gmail = "https://www.googleapis.com/auth/gmail.readonly";
+  const sheets = "https://www.googleapis.com/auth/spreadsheets.readonly";
 
   assert.equal(isGoogleProduct("gmail"), true);
   assert.equal(isGoogleProduct("sheets"), true);
@@ -82,8 +82,7 @@ test("Google OAuth scope validation allows only identity plus the requested mini
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", gmail), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", null), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email " + sheets), false);
-  assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email " + gmail + " https://www.googleapis.com/auth/gmail.modify"), false);
-  assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email https://www.googleapis.com/auth/gmail.readonly"), false);
+  assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email " + gmail + " https://www.googleapis.com/auth/gmail.send"), false);
   assert.equal(hasOnlyApprovedGoogleScopes("sheets", "openid email profile " + sheets), true);
   assert.equal(hasOnlyApprovedGoogleScopes("sheets", "openid email " + gmail), false);
   assert.equal(hasOnlyApprovedGoogleScopes("sheets", 42), false);

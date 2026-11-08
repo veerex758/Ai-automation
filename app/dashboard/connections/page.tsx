@@ -12,16 +12,6 @@ type Connection = {
   status: "connected" | "needs_reauth" | "revoked";
   expires_at: string | null;
 };
-type WorkspaceIntegration = { id: string; provider: string; status: string; display_name: string; last_test_status: string | null };
-type CredentialProvider = "notion" | "discord" | "telegram" | "airtable" | "trello" | "hubspot";
-const credentialOptions: Record<CredentialProvider, { label: string; fields: Array<{ key: string; label: string; placeholder: string }> }> = {
-  notion: { label: "Notion", fields: [{ key: "apiKey", label: "Internal integration secret", placeholder: "ntn_…" }] },
-  discord: { label: "Discord", fields: [{ key: "botToken", label: "Bot token", placeholder: "Discord bot token" }] },
-  telegram: { label: "Telegram", fields: [{ key: "botToken", label: "Bot token", placeholder: "123456:…" }] },
-  airtable: { label: "Airtable", fields: [{ key: "accessToken", label: "Personal access token", placeholder: "pat…" }] },
-  trello: { label: "Trello", fields: [{ key: "apiKey", label: "API key", placeholder: "Trello API key" }, { key: "token", label: "API token", placeholder: "Trello API token" }] },
-  hubspot: { label: "HubSpot", fields: [{ key: "accessToken", label: "Private-app access token", placeholder: "pat-…" }] },
-};
 
 const statusMessages: Record<string, string> = {
   connected: "Google account authorized. Credentials are stored encrypted on the server.",
@@ -38,10 +28,6 @@ const statusMessages: Record<string, string> = {
 
 export default function ConnectionsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [workspaceIntegrations, setWorkspaceIntegrations] = useState<WorkspaceIntegration[]>([]);
-  const [credentialProvider, setCredentialProvider] = useState<CredentialProvider>("notion");
-  const [credentialValues, setCredentialValues] = useState<Record<string, string>>({});
-  const [credentialSaving, setCredentialSaving] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
@@ -49,18 +35,13 @@ export default function ConnectionsPage() {
   useEffect(() => {
     const status = new URLSearchParams(window.location.search).get("google");
     if (status) setNotice(statusMessages[status] ?? "Google authorization returned.");
-    Promise.all([
-      fetch("/api/integrations/google/connections", { cache: "no-store" }).then(async response => {
+    fetch("/api/integrations/google/connections", { cache: "no-store" })
+      .then(async response => {
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Could not load Google connections.");
+        if (!response.ok) throw new Error(payload.error ?? "Could not load connections.");
         setConnections(payload.connections ?? []);
-      }),
-      fetch("/api/integrations/credentials", { cache: "no-store" }).then(async response => {
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Could not load workspace integrations.");
-        setWorkspaceIntegrations(payload.integrations ?? []);
-      }),
-    ]).catch(reason => setError(reason instanceof Error ? reason.message : "Could not load connections."))
+      })
+      .catch(reason => setError(reason instanceof Error ? reason.message : "Could not load connections."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -79,65 +60,16 @@ export default function ConnectionsPage() {
       <section className="connections-grid" aria-label="Available integrations">
         <article className="connection-card">
           <div className="connection-icon google-icon" aria-hidden="true">G</div>
-          <div className="connection-card-copy"><h2>Gmail</h2><p>Authorize Aivanta to send email from your connected Google account. Every send remains subject to workflow live-execution approval.</p></div>
-          <span className="connection-scope">SEND EMAIL</span>
+          <div className="connection-card-copy"><h2>Gmail</h2><p>Authorize access to read messages. Sending email is not enabled by this permission.</p></div>
+          <span className="connection-scope">READ ONLY</span>
           <a className="connection-button" href="/api/integrations/google/start?product=gmail">Connect Gmail <span aria-hidden="true">↗</span></a>
         </article>
         <article className="connection-card">
           <div className="connection-icon sheets-icon" aria-hidden="true">▦</div>
-          <div className="connection-card-copy"><h2>Google Sheets</h2><p>Authorize Aivanta to append rows to selected spreadsheets. Writes remain gated by workflow live-execution approval.</p></div>
-          <span className="connection-scope">APPEND ROWS</span>
+          <div className="connection-card-copy"><h2>Google Sheets</h2><p>Authorize read-only access to spreadsheets. Editing cells requires a separate permission rollout.</p></div>
+          <span className="connection-scope">READ ONLY</span>
           <a className="connection-button" href="/api/integrations/google/start?product=sheets">Connect Sheets <span aria-hidden="true">↗</span></a>
         </article>
-      </section>
-
-      <section className="workspace-credentials-panel" aria-label="API integrations">
-        <div className="connections-list-heading"><div><h2>Connect with API credentials</h2><p>Paste a provider token once. Aivanta tests it using a read-only identity endpoint, then encrypts it for this workspace. Secrets are never shown again.</p></div></div>
-        <form className="workspace-credential-form" onSubmit={async event => {
-          event.preventDefault();
-          if (credentialSaving) return;
-          setCredentialSaving(true); setError(""); setNotice("");
-          try {
-            const response = await fetch("/api/integrations/credentials", {
-              method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
-              body: JSON.stringify({ provider: credentialProvider, credentials: credentialValues }),
-            });
-            const payload = await response.json();
-            if (!response.ok) throw new Error(payload.error ?? "Connection test failed.");
-            setCredentialValues({});
-            setNotice(credentialOptions[credentialProvider].label + " connected and its credentials were encrypted for this workspace.");
-            const refreshed = await fetch("/api/integrations/credentials", { cache: "no-store" });
-            const refreshedPayload = await refreshed.json();
-            if (refreshed.ok) setWorkspaceIntegrations(refreshedPayload.integrations ?? []);
-          } catch (reason) {
-            setError(reason instanceof Error ? reason.message : "Could not connect this provider.");
-          } finally { setCredentialSaving(false); }
-        }}>
-          <label htmlFor="credential-provider">Provider</label>
-          <select id="credential-provider" value={credentialProvider} onChange={event => { setCredentialProvider(event.target.value as CredentialProvider); setCredentialValues({}); }}>
-            {Object.entries(credentialOptions).map(([key, option]) => <option key={key} value={key}>{option.label}</option>)}
-          </select>
-          {credentialOptions[credentialProvider].fields.map(field => <label className="credential-field" key={field.key}>
-            <span>{field.label}</span>
-            <input type="password" autoComplete="new-password" spellCheck={false} required value={credentialValues[field.key] ?? ""} placeholder={field.placeholder} onChange={event => setCredentialValues(current => ({ ...current, [field.key]: event.target.value }))} />
-          </label>)}
-          <button className="connection-button" type="submit" disabled={credentialSaving}>{credentialSaving ? "Testing and securing…" : "Test & save connection"} <span aria-hidden="true">↗</span></button>
-          <p className="credential-security-note">Connection testing does not create records or send messages. Live workflow actions are separately disabled until explicitly allowlisted.</p>
-        </form>
-        <div className="workspace-integrations-list">
-          {workspaceIntegrations.map(integration => <article className="connection-row" key={integration.id}>
-            <div className="connection-row-copy"><strong>{integration.display_name}</strong><span>{integration.provider} · connection test {integration.last_test_status ?? "not run"}</span></div>
-            <span className={"connection-status status-" + integration.status}>{integration.status.replace("_", " ")}</span>
-            <button type="button" className="connection-disconnect" onClick={async () => {
-              const response = await fetch("/api/integrations/credentials?provider=" + encodeURIComponent(integration.provider), { method: "DELETE" });
-              const payload = await response.json();
-              if (!response.ok) { setError(payload.error ?? "Could not disconnect provider."); return; }
-              setWorkspaceIntegrations(current => current.filter(item => item.id !== integration.id));
-              setNotice(integration.provider + " disconnected from this workspace.");
-            }}>Disconnect</button>
-          </article>)}
-          {!loading && workspaceIntegrations.length === 0 && <p className="connections-empty">No API-key integrations connected yet.</p>}
-        </div>
       </section>
 
       <section className="connections-list">

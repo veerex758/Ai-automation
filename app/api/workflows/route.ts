@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { getPublicNodeCatalog } from "@/nodes/registry";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -121,7 +120,7 @@ export async function POST(request: NextRequest) {
       : "draft";
 
     const definitionResult = "definition" in body
-      ? validateDefinition(body.definition, getPublicNodeCatalog())
+      ? validateDefinition(body.definition)
       : validateDefinition({
           version: 1,
           nodes: [{

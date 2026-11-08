@@ -1,0 +1,7 @@
+import test from "node:test";import assert from "node:assert/strict";import {readFileSync} from "node:fs";
+const contract=readFileSync(new URL("../lib/marketplace/payments/provider.ts",import.meta.url),"utf8"),spec=readFileSync(new URL("../docs/marketplace/PHASE-2-PAYMENTS.md",import.meta.url),"utf8");
+test("provider-neutral contract exposes checkout and raw webhook boundaries",()=>{for(const x of ["MarketplacePaymentProvider","createCheckout","verifyWebhook","parsePayment"])assert.ok(contract.includes(x));assert.match(spec,/Provider-neutral adapter/)});
+test("webhook event validation rejects bad envelope and stale timestamps",()=>{for(const x of ["invalid_webhook_event_id","invalid_webhook_event_type","stale_webhook_event","toleranceMs","Date.parse"])assert.ok(contract.includes(x),x)});
+test("payment validation fails closed on IDs, amounts and currency",()=>{for(const x of ["invalid_payment_payload","Number.isSafeInteger","payment.amountMinor<=0",'payment.currency!=="USD"'])assert.ok(contract.includes(x),x)});
+
+test("recurring checkout requires provider-specific verified plan/interval",()=>{const stripe=readFileSync(new URL("../lib/marketplace/payments/stripe.ts",import.meta.url),"utf8"),paystack=readFileSync(new URL("../lib/marketplace/payments/paystack.ts",import.meta.url),"utf8");assert.match(stripe,/mode",i\.billingInterval\?"subscription":"payment"/);assert.match(stripe,/price_data\]\[recurring\]\[interval\]/);assert.match(paystack,/paystack_plan_amount_or_interval_mismatch/);assert.match(paystack,/PAYSTACK_MARKETPLACE_MONTHLY_PLAN/)});
