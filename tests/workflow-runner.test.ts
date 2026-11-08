@@ -139,3 +139,207 @@ test("registry dry-run simulates Slack and Email without calling their providers
   assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated"]);
   assert.equal(calls, 0);
 });
+
+test("registry workflow validates and executes explicit branch selection", async () => {
+  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
+  const raw = [
+    { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "approved", operator: "equals", compareTo: "approved" } },
+    { id: "yes", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "approved" } }, branch: { fromStepId: "condition", route: "true" } },
+    { id: "no", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "rejected" } }, branch: { fromStepId: "condition", route: "false" } },
+  ];
+  const validated = validateRegisteredSteps(raw);
+  assert.ok(validated.steps);
+  const result = await executeRegisteredWorkflow({ steps: validated.steps, context, dryRun: false });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded", "skipped"]);
+  assert.equal(validateRegisteredSteps([raw[0], { ...raw[2], branch: { fromStepId: "later", route: "true" } }]).error, "Branch source must be an earlier IF or Switch step.");
+});
+
+
+test("loop metadata executes a downstream registered operation once per source item", async () => {
+  const calls: string[] = [];
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+      { id: "items", nodeId: "loop", operationId: "iterate", kind: "action", input: { items: ["alpha", "beta", "gamma"] } },
+      { id: "each", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { value: "{{loop_item}}", index: "{{loop_index}}" } }, loop: { sourceStepId: "items", maxIterations: 10 } },
+    ],
+    context: { ...context, http: { async request() { calls.push("request"); return { status: 200, body: {} }; } } },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.each, [
+    { data: { value: "alpha", index: 0 } },
+    { data: { value: "beta", index: 1 } },
+    { data: { value: "gamma", index: 2 } },
+  ]);
+});
+
+
+test("loop metadata executes multiple downstream steps per source item", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+      { id: "items", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { items: ["alpha", "beta", "gamma"] } } },
+      { id: "each", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { value: "{{loop_item}}", index: "{{loop_index}}" } }, loop: { sourceStepId: "items", maxIterations: 10 } },
+      { id: "decorate", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { label: "item-{{each.data.value}}", index: "{{each.data.index}}" } }, loop: { sourceStepId: "items", maxIterations: 10 } },
+    ],
+    context,
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.decorate, [
+    { data: { label: "item-alpha", index: 0 } },
+    { data: { label: "item-beta", index: 1 } },
+    { data: { label: "item-gamma", index: 2 } },
+  ]);
+});
+
+
+test("Wait pauses the runner and resumes after its persisted checkpoint", async () => {
+  const steps = [
+    { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger" as const, input: {} },
+    { id: "delay", nodeId: "wait", operationId: "delay", kind: "action" as const, input: { durationMs: 1000 } },
+    { id: "after", nodeId: "set_fields", operationId: "merge_fields", kind: "action" as const, input: { data: {}, fields: { resumedAt: "{{delay.resumeAt}}" } } },
+  ];
+  const checkpointOutputs: Record<string, unknown> = {};
+  const first = await executeRegisteredWorkflow({
+    steps, context, dryRun: false,
+    async onStepComplete(step, _position, completed) {
+      if (completed.status === "succeeded") checkpointOutputs[step.id] = completed.output;
+    },
+  });
+  assert.equal(first.status, "waiting");
+  assert.ok(typeof first.resumeAt === "string");
+  assert.equal(first.steps.some((step) => step.stepId === "after"), false);
+  const resumed = await executeRegisteredWorkflow({
+    steps, context, dryRun: false,
+    initialOutputs: checkpointOutputs,
+    completedStepIds: ["manual", "delay"],
+  });
+  assert.equal(resumed.status, "succeeded");
+  assert.equal((resumed.outputs.after as { data: { resumedAt: string } }).data.resumedAt, checkpointOutputs.delay && (checkpointOutputs.delay as { resumeAt: string }).resumeAt);
+});
+
+
+test("Schedule/Cron trigger passes its persisted event context to downstream steps", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "schedule", nodeId: "schedule", operationId: "scheduled", kind: "trigger", input: {
+        scheduledAt: "2026-11-04T09:15:00.000Z", timezone: "Africa/Lagos", cronExpression: "15 10 * * *",
+      } },
+      { id: "capture", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: {
+        data: {}, fields: { startedAt: "{{schedule.scheduledAt}}", timezone: "{{schedule.timezone}}" },
+      } },
+    ],
+    context,
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.capture, { data: { startedAt: "2026-11-04T09:15:00.000Z", timezone: "Africa/Lagos" } });
+});
+
+
+test("Split in Batches drives each downstream step once per batch in order",async()=>{
+ const result=await executeRegisteredWorkflow({
+  steps:[
+   {id:"source",nodeId:"split_batches",operationId:"split",kind:"action",input:{items:[1,2,3,4,5],batchSize:2}},
+   {id:"process",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{batch}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+  ],
+  context,dryRun:false,
+ });
+ assert.equal(result.status,"succeeded");
+ assert.deepEqual(result.outputs.process,[{items:[1,2],count:2},{items:[3,4],count:2},{items:[5],count:1}]);
+});
+
+test("Split in Batches supports chained downstream batch steps with matching batch scope",async()=>{
+ const result=await executeRegisteredWorkflow({
+  steps:[
+   {id:"source",nodeId:"split_batches",operationId:"split",kind:"action",input:{items:[1,2,3,4],batchSize:2}},
+   {id:"first",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{batch}}",operation:"reverse"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+   {id:"second",nodeId:"array_ops",operationId:"operate",kind:"action",input:{items:"{{first.items}}",operation:"flatten"},loop:{sourceStepId:"source",itemAs:"batch",indexAs:"batch_index",maxIterations:10}},
+  ],
+  context,dryRun:false,
+ });
+ assert.equal(result.status,"succeeded");
+ assert.deepEqual(result.outputs.first,[{items:[2,1],count:2},{items:[4,3],count:2}]);
+ assert.deepEqual(result.outputs.second,[{items:[2,1],count:2},{items:[4,3],count:2}]);
+});
+
+test("workflow runner emits a normalized error event once when an operation fails",async()=>{
+ const events:Array<{code:string;stepId:string}>=[];
+ const result=await executeRegisteredWorkflow({
+  steps:[{id:"bad",nodeId:"math",operationId:"calculate",kind:"action",input:{a:1,b:0,operation:"div"}}],
+  context,dryRun:false,
+  async onWorkflowError(event){events.push(event)},
+ });
+ assert.equal(result.status,"failed");
+ assert.deepEqual(events,[{code:"MATH_INVALID_RESULT",message:"MATH_INVALID_RESULT",stepId:"bad"}]);
+});
+
+test("workflow error reporter cannot mask the original failed step",async()=>{
+ const result=await executeRegisteredWorkflow({
+  steps:[{id:"bad",nodeId:"math",operationId:"calculate",kind:"action",input:{a:1,b:0,operation:"div"}}],
+  context,dryRun:false,
+  async onWorkflowError(){throw new Error("REPORTING_DOWN")},
+ });
+ assert.equal(result.status,"failed");
+ assert.equal(result.steps[0].error,"MATH_INVALID_RESULT");
+});
+
+
+test("whole-value workflow references preserve arrays and objects instead of stringifying them", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { payload: [{ id: 1 }, { id: 2 }] } } },
+      { id: "copy", nodeId: "array_ops", operationId: "operate", kind: "action", input: { items: "{{source.data.payload}}", operation: "reverse" } },
+    ],
+    context, dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.copy, { items: [{ id: 2 }, { id: 1 }], count: 2 });
+});
+
+test("Split in Batches passes each actual batch to downstream work, not the full batch list", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "split_batches", operationId: "split", kind: "action", input: { items: [1, 2, 3, 4, 5], batchSize: 2 } },
+      { id: "consume", nodeId: "array_ops", operationId: "operate", kind: "action", input: { items: "{{current_batch}}", operation: "reverse" }, loop: { sourceStepId: "source", itemAs: "current_batch", indexAs: "batch_index", maxIterations: 10 } },
+    ],
+    context, dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.consume, [{items:[2,1],count:2},{items:[4,3],count:2},{items:[5],count:1}]);
+});
+
+test("workflow references reject prototype traversal", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { value: "safe" } } },
+      { id: "read", nodeId: "text_transform", operationId: "transform", kind: "action", input: { text: "{{source.__proto__}}", operation: "trim" } },
+    ],
+    context, dryRun: false,
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.steps[1].error, "WORKFLOW_REFERENCE_NOT_FOUND");
+});
+
+
+test("Split in Batches resumes completed downstream iterations without replaying them", async () => {
+  const result = await executeRegisteredWorkflow({
+    steps: [
+      { id: "source", nodeId: "split_batches", operationId: "split", kind: "action", input: { items: [1, 2, 3, 4], batchSize: 2 } },
+      { id: "consume", nodeId: "array_ops", operationId: "operate", kind: "action", input: { items: "{{current_batch}}", operation: "reverse" }, loop: { sourceStepId: "source", itemAs: "current_batch", indexAs: "batch_index", maxIterations: 10 } },
+    ],
+    context,
+    dryRun: false,
+    initialOutputs: { "consume__loop_1": { items: ["persisted-result"], count: 1 } },
+    completedStepIds: ["consume__loop_1"],
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.outputs.consume, [
+    { items: ["persisted-result"], count: 1 },
+    { items: [4, 3], count: 2 },
+  ]);
+});

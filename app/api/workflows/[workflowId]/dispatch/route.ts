@@ -2,7 +2,7 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { runDurableWorker } from "@/lib/workflows/durable-worker";
+import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { findOperation } from "@/nodes/registry";
 
 export const runtime = "nodejs";
@@ -27,20 +27,6 @@ function isRegistryDefinition(value: unknown): boolean {
   })) return false;
   return steps[0] && isRecord(steps[0]) && steps[0].kind === "trigger" &&
     steps.filter((step) => isRecord(step) && step.kind === "trigger").length === 1;
-}
-
-function isLiveRegistryOperationAllowed(value: unknown): boolean {
-  if (!isRecord(value) || !Array.isArray(value.steps) ||
-      value.steps.filter((step) => isRecord(step) && step.kind === "action").length > 4) return false;
-  return value.steps.every((step) => isRecord(step) && (
-    (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") ||
-    (step.kind === "action" && (
-      (step.nodeId === "openai" && step.operationId === "generate_text") ||
-      (step.nodeId === "gemini" && step.operationId === "generate_text") ||
-      (step.nodeId === "slack" && step.operationId === "send_message") ||
-      (step.nodeId === "email" && step.operationId === "send_email")
-    ))
-  ));
 }
 
 function serviceClient() {
@@ -92,8 +78,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       if (!isRegistryDefinition(workflow.definition)) {
         return NextResponse.json({ error: "Registry workflow definition is invalid." }, { status: 422 });
       }
-      if (executionMode === "live" && !isLiveRegistryOperationAllowed(workflow.definition)) {
-        return NextResponse.json({ error: "This workflow contains an operation that is not enabled for durable live execution." }, { status: 403 });
+      if (executionMode === "live") {
+        const registrySteps = (workflow.definition as { steps: Parameters<typeof validateDurableLiveSteps>[0] }).steps;
+        const livePolicyError = validateDurableLiveSteps(registrySteps);
+        if (livePolicyError) {
+          return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
+        }
       }
     } else {
       const validated = validateDefinition(workflow.definition);

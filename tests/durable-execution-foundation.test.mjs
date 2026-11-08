@@ -10,6 +10,8 @@ const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", impor
 const workerService = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
 const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
+const utilityMigration = readFileSync(new URL("../supabase/migrations/20261105045346_aivanta_utility_execution_hardening.sql", import.meta.url), "utf8");
+const utilityIndexesMigration = readFileSync(new URL("../supabase/migrations/20261105045900_aivanta_utility_execution_indexes.sql", import.meta.url), "utf8");
 const runPanel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
 
 test("queue enforces workspace-scoped idempotent dispatch and bounded payloads", () => {
@@ -102,7 +104,8 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
   assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
   assert.match(workerService, /p_limit: 1/);
-  assert.match(workerService, /length > 4/);
+  assert.match(workerService, /length > MAX_LIVE_ACTION_STEPS/);
+  assert.match(workerService, /MAX_LIVE_ACTION_STEPS = 30/);
 });
 
 
@@ -116,8 +119,12 @@ test("workflow run panel dispatches live runs through the durable queue and poll
 test("dispatch validates registered definitions and guards legacy live email", () => {
   assert.match(dispatch, /isRegistryDefinition/);
   assert.match(dispatch, /findOperation/);
-  assert.match(dispatch, /isLiveRegistryOperationAllowed/);
-  assert.match(dispatch, /length > 4/);
+  assert.match(dispatch, /validateDurableLiveSteps/);
+  assert.match(workerService, /export function validateDurableLiveSteps/);
+  assert.match(workerService, /LIVE_PUBLISHING_NOT_ENABLED/);
+  assert.match(workerService, /LIVE_VOICE_RECIPIENT_NOT_ALLOWED/);
+  assert.doesNotMatch(dispatch, /isLiveRegistryOperationAllowed/);
+  assert.doesNotMatch(dispatch, /length > 4/);
   assert.match(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
   assert.match(dispatch, /Durable legacy live execution currently supports one manual-trigger Resend email action/);
 });
@@ -136,4 +143,62 @@ test("live queue dispatch is explicit and limited to one attempt", () => {
   assert.match(dispatch, /requestBody\.mode/);
   assert.match(dispatch, /AIVANTA_LIVE_EXECUTION_ENABLED/);
   assert.match(dispatch, /p_execution_mode: executionMode/);
+});
+
+
+const waitMigration = readFileSync(
+  new URL("../supabase/migrations/20261104120000_aivanta_durable_wait_resume.sql", import.meta.url),
+  "utf8",
+);
+
+test("durable waits release leases, retain attempt count, and resume from due queue state", () => {
+  assert.match(waitMigration, /'waiting'/);
+  assert.match(waitMigration, /status = 'waiting' then j\.attempts else j\.attempts \+ 1 end/);
+  assert.match(waitMigration, /j\.status = 'waiting' or j\.attempts < j\.max_attempts/);
+  assert.match(waitMigration, /create or replace function public\.pause_execution_job/i);
+  assert.match(waitMigration, /lease_token = p_lease_token and lease_until > now\(\)/);
+  assert.match(workerService, /execution_checkpoints/);
+  assert.match(workerService, /completedStepIds/);
+  assert.match(workerService, /heartbeat_execution_job/);
+  assert.match(workerService, /AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true"/);
+  assert.match(workerService, /step\.nodeId === "javascript"/);
+  assert.match(workerService, /pause_execution_job/);
+});
+
+
+test("Rate Limiter uses a workspace-scoped atomic sliding-window RPC", () => {
+  assert.match(utilityMigration, /pg_advisory_xact_lock/);
+  assert.match(utilityMigration, /workspace_id,key_hash,hit_at/);
+  assert.match(utilityMigration, /consume_execution_rate_limit/);
+  assert.match(workerService, /db\.rpc\("consume_execution_rate_limit"/);
+  assert.match(workerService, /RATE_LIMIT_BACKEND_UNAVAILABLE/);
+  assert.match(workerService, /rateLimit: \{ async consume/);
+});
+
+test("Error Trigger dispatches active same-workspace subscribers through the durable queue", () => {
+  assert.match(utilityMigration, /create or replace function public\.dispatch_execution_error_event/i);
+  assert.match(utilityMigration, /w\.workspace_id = event_row\.workspace_id/);
+  assert.match(utilityMigration, /w\.status = 'active'/);
+  assert.match(utilityMigration, /w\.definition->'steps'->0->>'nodeId' = 'error_trigger'/);
+  assert.match(utilityMigration, /'error:' \|\| event_row\.id::text/);
+  assert.match(utilityMigration, /'source','error_trigger','input',event_input/);
+  assert.match(utilityMigration, /record_and_dispatch_execution_error_event/);
+  assert.match(utilityMigration, /source_mode <> 'live'/);
+  assert.match(utilityMigration, /dispatch_status text not null default 'pending'/);
+  assert.match(utilityMigration, /create or replace function public\.dispatch_pending_execution_error_events/);
+  assert.match(utilityMigration, /create or replace function public\.finish_execution_job/);
+  assert.match(utilityMigration, /p_error_step_id text default null/);
+  assert.match(utilityIndexesMigration, /add column if not exists id bigint generated by default as identity/);
+  assert.match(utilityIndexesMigration, /primary key \(id\)/);
+  assert.match(utilityIndexesMigration, /execution_error_events_workflow_idx/);
+  assert.match(utilityIndexesMigration, /execution_error_events_run_idx/);
+  assert.match(workerService, /db\.rpc\("dispatch_pending_execution_error_events"/);
+  assert.match(workerService, /p_error_step_id: workflowErrorEvent\.current\?\.stepId/);
+  assert.match(utilityMigration, /dispatch_workflow_execution/);
+  assert.match(utilityMigration, /'live'/);
+  assert.match(workerService, /db\.rpc\("record_and_dispatch_execution_error_event"/);
+  assert.match(workerService, /source !== "error_trigger"/);
+  assert.match(workerService, /job\.execution_mode === "live" && source !== "error_trigger"/);
+  assert.match(workerService, /source === "error_trigger"/);
+  assert.match(workerService, /step\.nodeId === "error_trigger"/);
 });

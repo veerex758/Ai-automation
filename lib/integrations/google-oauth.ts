@@ -9,6 +9,12 @@ export const GOOGLE_PRODUCTS = {
     label: "Google Sheets",
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   },
+  drive: { label: "Google Drive", scopes: ["https://www.googleapis.com/auth/drive.readonly"] },
+  calendar: { label: "Google Calendar", scopes: ["https://www.googleapis.com/auth/calendar.readonly"] },
+  docs: { label: "Google Docs", scopes: ["https://www.googleapis.com/auth/documents.readonly"] },
+  forms: { label: "Google Forms", scopes: ["https://www.googleapis.com/auth/forms.body.readonly"] },
+  youtube: { label: "YouTube", scopes: ["https://www.googleapis.com/auth/youtube.readonly"] },
+  contacts: { label: "Google Contacts", scopes: ["https://www.googleapis.com/auth/contacts.readonly"] },
 } as const;
 
 export type GoogleProduct = keyof typeof GOOGLE_PRODUCTS;
