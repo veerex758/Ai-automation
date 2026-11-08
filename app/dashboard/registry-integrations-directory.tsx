@@ -363,6 +363,7 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
     "label": "OpenWeather"
   }
 };
+const providerDisplayName = (node: RegistryNode) => officialBrandAssets[node.id]?.label ?? node.name;
 const googleProductForNode: Record<string, string> = {
   gmail: "gmail", google_sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
   google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
