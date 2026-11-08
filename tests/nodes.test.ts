@@ -5,7 +5,7 @@ import { executeRegisteredOperation } from "../nodes/runner";
 import type { NodeContext } from "../nodes/types";
 
 test("registry includes versioned provider and data utility operations", () => {
-  assert.equal(nodes.length, 120);
+  assert.equal(nodes.length, 122);
   assert.ok(findOperation("mysql", "query", "action"));
   assert.ok(findOperation("mongodb", "find", "action"));
   assert.ok(findOperation("manual", "start", "trigger"));
@@ -36,7 +36,7 @@ test("registry includes versioned provider and data utility operations", () => {
   assert.ok(findOperation("if", "evaluate", "action"));
   assert.ok(findOperation("switch", "select_route", "action"));
   assert.ok(findOperation("merge", "merge_inputs", "action"));
-  assert.equal(nodes.length, 120);
+  assert.equal(nodes.length, 122);
   for (const id of ["deduplicate","sort","split_batches","crypto_hash","template","csv_parse","csv_stringify","markdown_html","text_transform","regex","array_ops","object_ops","math","uuid","base64","date_add","date_format","error_trigger","rate_limiter","json_encode"]) assert.ok(findOperation(id, id==="deduplicate"?"unique":id==="sort"?"sort_items":id==="split_batches"?"split":id==="crypto_hash"?"hash":id==="template"?"render":id==="csv_parse"?"parse":id==="csv_stringify"?"stringify":id==="markdown_html"?"convert":id==="text_transform"?"transform":id==="regex"?"match":id==="array_ops"||id==="object_ops"?"operate":id==="math"?"calculate":id==="uuid"?"generate":id==="base64"?"convert":id==="date_add"?"add":id==="date_format"?"format":id==="error_trigger"?"capture":id==="json_encode"?"encode":"check",id==="error_trigger"?"trigger":"action"));
 });
 
@@ -327,4 +327,44 @@ test("JavaScript sandbox caps streamed stdout and still stops the VM", async () 
     async stop() { stopped = true; },
   } as never)), /JAVASCRIPT_OUTPUT_TOO_LARGE/);
   assert.equal(stopped, true);
+});
+
+
+test("Logic condition compares values without external side effects", async () => {
+  const operation = findOperation("logic", "condition", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  }, { left: 12, operator: "greater_than", right: 8 });
+  assert.deepEqual(result, { result: true });
+});
+
+test("Logic filter supports nested fields and preserves matching records", async () => {
+  const operation = findOperation("logic", "filter_items", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  }, { items: [{ customer: { active: true } }, { customer: { active: false } }], field: "customer.active", operator: "equals", value: true });
+  assert.deepEqual(result, { items: [{ customer: { active: true } }], count: 1 });
+});
+
+test("Data mapping and text formatting support nested values", async () => {
+  const context = {
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  };
+  const mapper = findOperation("data", "map_fields", "action");
+  assert.ok(mapper);
+  assert.deepEqual(await mapper.run(context, {
+    data: { customer: { name: "Ada" }, id: 7 },
+    fields: { fullName: "customer.name", customerId: "id", missing: "customer.email" },
+  }), { data: { fullName: "Ada", customerId: 7, missing: null } });
+  const formatter = findOperation("data", "format_text", "action");
+  assert.ok(formatter);
+  assert.deepEqual(await formatter.run(context, {
+    template: "Hello {{customer.name}} (#{{id}})",
+    data: { customer: { name: "Ada" }, id: 7 },
+  }), { text: "Hello Ada (#7)" });
 });
