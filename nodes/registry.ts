@@ -7,6 +7,8 @@ import { emailNode } from "./email";
 import { manualNode } from "./manual";
 import { gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode } from "./integrations";
 import { providerCatalog } from "./provider-catalog";
+import { logicNode } from "./logic";
+import { dataNode } from "./data";
 import { dataNodes } from "./data";
 import { ifNode, switchNode, mergeNode } from "./core-logic";
 import { httpRequestNode } from "./http-request";
@@ -29,7 +31,7 @@ import { sqlDocumentDatabaseNodes } from "./sql-document-databases";
 export const nodes: NodeDefinition[] = [
   manualNode, webhooksNode, openaiNode, geminiNode, slackNode, emailNode,
   gmailNode, sheetsNode, notionNode, hubspotNode, twilioNode, shopifyNode, stripeNode, linearNode,
-  ...dataNodes, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack, ...providerPack, ...catalogueAiNodes, ...catalogueCrmNodes, ...catalogueGoogleNodes, ...catalogueProductivityNodes, ...catalogueCommerceSupportNodes, ...catalogueMarketingNodes, ...catalogueDatabaseNodes, ...sqlDocumentDatabaseNodes,
+  ...dataNodes, logicNode, dataNode, ifNode, switchNode, mergeNode, httpRequestNode, waitNode, scheduleNode, loopNode, javascriptNode, ...utilityPack, ...providerPack, ...catalogueAiNodes, ...catalogueCrmNodes, ...catalogueGoogleNodes, ...catalogueProductivityNodes, ...catalogueCommerceSupportNodes, ...catalogueMarketingNodes, ...catalogueDatabaseNodes, ...sqlDocumentDatabaseNodes,
 ];
 
 export function findNode(nodeId: string): NodeDefinition | undefined {
