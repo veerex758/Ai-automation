@@ -24,7 +24,7 @@ test("durably queues scheduled work for the dry-run worker", () => {
   assert.ok(route.includes("const leaseSeconds = 300"));
   assert.ok(route.includes('"dispatch_workflow_execution"'));
   assert.ok(route.includes('"schedule:" + claim.schedule_id'));
-  assert.ok(route.includes('p_payload: { input: {}, source: "schedule"'));
+  assert.ok(route.includes('p_payload: { input: scheduledInput, source: "schedule"'));
   assert.ok(!route.includes("runDryRun"));
   assert.ok(!route.includes("sendResendEmail"));
   assert.ok(!route.includes("fetch("));
