@@ -19,7 +19,7 @@ declare i public.marketplace_installations%rowtype;prior public.marketplace_inst
 begin
  if auth.role()<>'service_role' then raise exception 'installation_transition_service_role_required';end if;
  select * into i from public.marketplace_installations where id=p_installation_id for update;if not found then raise exception 'installation_not_found';end if;
- if i.installed_by<>p_actor_id and not private.is_workspace_member(i.workspace_id) then raise exception 'installation_workspace_access_denied';end if;
+ if i.installed_by<>p_actor_id and not exists(select 1 from public.workspace_members wm where wm.workspace_id=i.workspace_id and wm.user_id=p_actor_id) and not exists(select 1 from public.workspaces w where w.id=i.workspace_id and w.owner_id=p_actor_id) then raise exception 'installation_workspace_access_denied';end if;
  old:=i.status;
  if p_action='dry_run_passed' then
   if i.workflow_id is null or p_dry_run_id is null or not exists(select 1 from public.workflow_runs r where r.id=p_dry_run_id and r.workflow_id=i.workflow_id and r.workspace_id=i.workspace_id and r.mode='dry_run' and r.status='succeeded' and r.created_by=p_actor_id) then raise exception 'successful_dry_run_required';end if;
