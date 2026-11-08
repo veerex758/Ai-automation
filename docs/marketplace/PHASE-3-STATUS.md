@@ -18,9 +18,9 @@ Branch: `feat/marketplace-phase-3-creator-monetization`, PR #163.
 
 ## Verification checklist
 
-- [ ] Clean migration replay succeeds through all Phase 3 migrations (current replay failure investigated/fixed; rerun pending).
+- [ ] Clean migration replay succeeds through all Phase 3 migrations (replay and pgTAP role/RLS fixtures repaired; exact-head rerun pending).
 - [ ] pgTAP financial, subscription, payout and creator-support transactions pass.
-- [ ] Workflow validation tests, lint, type-check and build pass at the exact PR head (earlier run failed; fixes are in branch, new exact-head run pending).
+- [ ] Workflow validation tests, lint, type-check and build pass at the exact PR head (earlier failures fixed; exact-head rerun pending).
 - [ ] Authenticated staging and browser checks (blocked until deployment capacity is available).
 - [ ] Provider sandbox recurring billing, payout onboarding and transfer reconciliation (external credentials/provider approval required).
 - [ ] Final Phase B verified/blocked/unimplemented report reviewed before merge.
