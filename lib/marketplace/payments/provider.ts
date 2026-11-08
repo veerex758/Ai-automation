@@ -1,28 +1,105 @@
 /**
  * Server-only, provider-neutral marketplace payment contract.
- * Provider adapters verify raw webhook bytes before returning trusted events.
+ * Provider adapters must verify signatures against raw request bytes before
+ * returning an event from verifyWebhook. No adapter is enabled by this module.
  */
 export type MarketplaceCheckoutInput = {
- purchaseId:string;idempotencyKey:string;amountMinor:number;currency:"USD";
- product:{id:string;slug:string;name:string};versionId:string;buyerId:string;buyerEmail:string;
- successUrl:string;cancelUrl:string;billingInterval?:"month"|"year";
+  purchaseId: string;
+  idempotencyKey: string;
+  amountMinor: number;
+  currency: "USD";
+  product: { id: string; slug: string; name: string };
+  versionId: string;
+  buyerId: string;
+  successUrl: string;
+  cancelUrl: string;
 };
-export type VerifiedMarketplaceWebhook={eventId:string;type:string;occurredAt:string;data:unknown};
-export type ParsedMarketplaceReversal={purchaseId:string;kind:"refund"|"chargeback";amountMinor:number};
-export type ParsedMarketplacePayment={purchaseId:string;providerPaymentId:string;amountMinor:number;currency:string};
+
+export type VerifiedMarketplaceWebhook = {
+  eventId: string;
+  type: string;
+  occurredAt: string;
+  data: unknown;
+};
+
+export type ParsedMarketplaceReversal = {
+  purchaseId: string;
+  kind: "refund" | "chargeback";
+  amountMinor: number;
+};
+
+export type ParsedMarketplacePayment = {
+  purchaseId: string;
+  providerPaymentId: string;
+  amountMinor: number;
+  currency: string;
+};
+
 export interface MarketplacePaymentProvider {
- readonly id:string;
- createCheckout(input:MarketplaceCheckoutInput):Promise<{checkoutUrl:string;providerCheckoutId:string}>;
- verifyWebhook(rawBody:Uint8Array,headers:Headers):Promise<VerifiedMarketplaceWebhook>;
- parsePayment(event:VerifiedMarketplaceWebhook):ParsedMarketplacePayment|null;
- parseReversal?(event:VerifiedMarketplaceWebhook):ParsedMarketplaceReversal|null;
+  readonly id: string;
+  createCheckout(input: MarketplaceCheckoutInput): Promise<{
+    checkoutUrl: string;
+    providerCheckoutId: string;
+  }>;
+  /** Must validate provider signature over rawBody; never trust parsed JSON alone. */
+  verifyWebhook(rawBody: Uint8Array, headers: Headers): Promise<VerifiedMarketplaceWebhook>;
+  parsePayment(event: VerifiedMarketplaceWebhook): ParsedMarketplacePayment | null;
+  /** Optional provider-normalized refund/chargeback payload after signature verification. */
+  parseReversal?(event: VerifiedMarketplaceWebhook): ParsedMarketplaceReversal | null;
 }
-export function assertFreshVerifiedWebhook(event:VerifiedMarketplaceWebhook,nowMs=Date.now(),toleranceMs=5*60*1000):void{
- if(!event||typeof event.eventId!=="string"||event.eventId.length<1||event.eventId.length>255)throw new Error("invalid_webhook_event_id");
- if(typeof event.type!=="string"||event.type.length<1||event.type.length>160)throw new Error("invalid_webhook_event_type");
- const ms=Date.parse(event.occurredAt);if(!Number.isFinite(ms)||Math.abs(nowMs-ms)>toleranceMs)throw new Error("stale_webhook_event");
+
+/** Common envelope guard after provider-specific signature verification. */
+export function assertFreshVerifiedWebhook(
+  event: VerifiedMarketplaceWebhook,
+  nowMs = Date.now(),
+  toleranceMs = 5 * 60 * 1000,
+): void {
+  if (!event || typeof event.eventId !== "string" || event.eventId.length < 1 || event.eventId.length > 255) {
+    throw new Error("invalid_webhook_event_id");
+  }
+  if (typeof event.type !== "string" || event.type.length < 1 || event.type.length > 160) {
+    throw new Error("invalid_webhook_event_type");
+  }
+  const occurredAtMs = Date.parse(event.occurredAt);
+  if (!Number.isFinite(occurredAtMs) || Math.abs(nowMs - occurredAtMs) > toleranceMs) {
+    throw new Error("stale_webhook_event");
+  }
 }
-export function assertMarketplacePayment(payment:ParsedMarketplacePayment|null):asserts payment is ParsedMarketplacePayment{
- if(!payment||!payment.purchaseId||!payment.providerPaymentId)throw new Error("invalid_payment_payload");
- if(!Number.isSafeInteger(payment.amountMinor)||payment.amountMinor<=0||payment.currency!=="USD")throw new Error("invalid_payment_amount");
+
+/** Validate normalized payment data before passing it to the atomic DB RPC. */
+export function assertMarketplacePayment(
+  payment: ParsedMarketplacePayment | null,
+): asserts payment is ParsedMarketplacePayment {
+  if (!payment || !payment.purchaseId || !payment.providerPaymentId) {
+    throw new Error("invalid_payment_payload");
+  }
+  if (!Number.isSafeInteger(payment.amountMinor) || payment.amountMinor <= 0 || payment.currency !== "USD") {
+    throw new Error("invalid_payment_amount");
+  }
+}
+
+export type ParsedMarketplaceSubscription = {
+  eventType: "subscription.active" | "subscription.renewed" | "subscription.past_due" |
+    "subscription.cancelled" | "subscription.expired" | "invoice.paid" | "invoice.payment_failed";
+  buyerUserId: string;
+  productId: string;
+  productVersionId: string;
+  providerSubscriptionId: string;
+  periodStart: string;
+  periodEnd: string;
+};
+
+/** Provider-specific mapping into the durable subscription lifecycle RPC. */
+export function assertMarketplaceSubscription(
+  subscription: ParsedMarketplaceSubscription | null,
+): asserts subscription is ParsedMarketplaceSubscription {
+  if (!subscription || !subscription.buyerUserId || !subscription.productId ||
+      !subscription.productVersionId || !subscription.providerSubscriptionId) {
+    throw new Error("invalid_subscription_payload");
+  }
+  if (!Number.isFinite(Date.parse(subscription.periodStart)) ||
+      !Number.isFinite(Date.parse(subscription.periodEnd)) ||
+      Date.parse(subscription.periodEnd) <= Date.parse(subscription.periodStart)) {
+    throw new Error("invalid_subscription_period");
+  }
 }
