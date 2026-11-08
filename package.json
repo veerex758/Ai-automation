@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/workspace-credentials.test.ts && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/workspace-credentials.test.ts tests/provider-catalog.test.ts tests/provider-pack.test.ts tests/utility-pack.test.ts tests/cron.test.ts && node --test --test-concurrency=1 tests/*.test.mjs",
     "dev": "next dev",
     "build": "npm run validate:nodes && next build",
     "start": "next start",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.57.0",
+    "@vercel/sandbox": "^3.9.1",
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

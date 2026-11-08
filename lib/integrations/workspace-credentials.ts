@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 export type WorkspaceCredentialProvider =
   | "openai" | "gemini" | "resend" | "slack" | "http"
-  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear";
+  | "notion" | "hubspot" | "twilio" | "shopify" | "stripe" | "linear" | "claude" | "mistral" | "groq" | "perplexity" | "discord" | "telegram" | "whatsapp_business" | "sendgrid" | "mailgun" | "postmark" | "github" | "gitlab" | "sentry" | "vercel" | "calendly" | "zendesk" | "freshdesk" | "serpapi" | "openweather";
 export type WorkspaceCredentials = Record<string, Record<string, string>>;
 
 const KEY_BYTES = 32;
@@ -19,6 +19,25 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   shopify: ["shopDomain", "accessToken"],
   stripe: ["secretKey"],
   linear: ["apiKey"],
+  claude: ["apiKey"],
+  mistral: ["apiKey"],
+  groq: ["apiKey"],
+  perplexity: ["apiKey"],
+  discord: ["botToken"],
+  telegram: ["botToken"],
+  whatsapp_business: ["accessToken", "phoneNumberId"],
+  sendgrid: ["apiKey", "fromEmail"],
+  mailgun: ["apiKey", "domain", "fromEmail"],
+  postmark: ["serverToken", "fromEmail"],
+  github: ["token"],
+  gitlab: ["token"],
+  sentry: ["authToken"],
+  vercel: ["token"],
+  calendly: ["accessToken"],
+  zendesk: ["subdomain", "email", "apiToken"],
+  freshdesk: ["domain", "apiKey"],
+  serpapi: ["apiKey"],
+  openweather: ["apiKey"],
 };
 
 function validateCredentials(value: unknown): WorkspaceCredentials {
@@ -39,6 +58,25 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
     if (Object.keys(credentials).length === 0) throw new Error("WORKSPACE_CREDENTIALS_INVALID");
     const requiredFields: Partial<Record<WorkspaceCredentialProvider, readonly string[]>> = {
       openai: ["apiKey"], gemini: ["apiKey"], resend: ["apiKey", "fromEmail"],
+      claude: ["apiKey"],
+      mistral: ["apiKey"],
+      groq: ["apiKey"],
+      perplexity: ["apiKey"],
+      discord: ["botToken"],
+      telegram: ["botToken"],
+      whatsapp_business: ["accessToken", "phoneNumberId"],
+      sendgrid: ["apiKey", "fromEmail"],
+      mailgun: ["apiKey", "domain", "fromEmail"],
+      postmark: ["serverToken", "fromEmail"],
+      github: ["token"],
+      gitlab: ["token"],
+      sentry: ["authToken"],
+      vercel: ["token"],
+      calendly: ["accessToken"],
+      zendesk: ["subdomain", "email", "apiToken"],
+      freshdesk: ["domain", "apiKey"],
+      serpapi: ["apiKey"],
+      openweather: ["apiKey"],
       notion: ["apiKey"], hubspot: ["accessToken"],
       twilio: ["accountSid", "authToken", "fromPhone"],
       shopify: ["shopDomain", "accessToken"], stripe: ["secretKey"], linear: ["apiKey"],

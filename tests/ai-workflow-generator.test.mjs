@@ -93,3 +93,43 @@ test("does not silently fall back to OpenAI credentials when Gemini is selected"
     nodeCatalog: catalog,
   }), /AI_NOT_CONFIGURED/);
 });
+
+test("validates IF/Switch branch metadata and preserves it in generated drafts", async () => {
+  const branchSteps = [
+    ...validSteps,
+    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: true, operator: "equals", compareTo: true } },
+    { id: "yes", nodeId: "slack", operationId: "send_message", kind: "action", input: { message: "yes" }, branch: { fromStepId: "condition", route: "true" } },
+  ];
+  const extendedCatalog = [...catalog, { id: "if", name: "IF", version: 1, auth: { type: "none" }, triggers: [], actions: [{ id: "evaluate", name: "Evaluate", description: "Evaluate condition", inputSchema: { type: "object", properties: { value: {}, operator: { type: "string", enum: ["equals"] }, compareTo: {} }, required: ["value", "operator"], additionalProperties: false } }] }];
+  const validated = validateRegistrySteps(branchSteps, extendedCatalog);
+  assert.deepEqual(validated.at(-1).branch, { fromStepId: "condition", route: "true" });
+  assert.equal(validateRegistrySteps([...validSteps, { ...branchSteps[3], branch: { fromStepId: "later", route: "true" } }], extendedCatalog), null);
+  const result = await generateWorkflow({ prompt: "If true send a Slack message", env, nodeCatalog: extendedCatalog, fetchImpl: fakeFetch(providerPayload(branchSteps)) });
+  assert.deepEqual(result.registrySteps.at(-1).branch, { fromStepId: "condition", route: "true" });
+});
+
+
+test("validates and preserves bounded Loop metadata in generated drafts", async () => {
+  const loop = { sourceStepId: "items", itemAs: "lead", indexAs: "leadIndex", maxIterations: 25 };
+  const loopNode = { id: "loop", name: "Loop", version: 1, auth: { type: "none" }, triggers: [], actions: [{
+    id: "iterate", name: "Iterate", description: "Prepare items",
+    inputSchema: { type: "object", properties: { items: { type: "array", items: {} } }, required: ["items"], additionalProperties: false },
+  }] };
+  const loopCatalog = [...catalog, loopNode];
+  const loopSteps = [
+    validSteps[0],
+    { id: "items", nodeId: "loop", operationId: "iterate", kind: "action", input: { items: ["lead-a", "lead-b"] } },
+    { ...validSteps[1], input: { prompt: "Qualify {{lead}}" }, loop },
+  ];
+  const validated = validateRegistrySteps(loopSteps, loopCatalog);
+  assert.deepEqual(validated.at(-1).loop, loop);
+  assert.equal(validateRegistrySteps([validSteps[0], { ...validSteps[1], loop: { sourceStepId: "missing", maxIterations: 10 } }], catalog), null);
+  assert.equal(validateRegistrySteps([validSteps[0], { ...validSteps[1], loop: { sourceStepId: "start", maxIterations: 101 } }], catalog), null);
+  const result = await generateWorkflow({
+    prompt: "For each lead, qualify it with Gemini",
+    env,
+    nodeCatalog: loopCatalog,
+    fetchImpl: fakeFetch(providerPayload(loopSteps)),
+  });
+  assert.deepEqual(result.registrySteps.at(-1).loop, loop);
+});

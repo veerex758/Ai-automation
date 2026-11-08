@@ -61,6 +61,21 @@ test("workspace credential vault accepts the additional vendor providers with on
     stripe: { secretKey: "stripe-secret" },
     linear: { apiKey: "linear-secret" },
     slack: { botToken: "slack-bot-secret" },
+    claude: { apiKey: "claude-secret" },
+    discord: { botToken: "discord-secret" },
+    whatsapp_business: { accessToken: "wa-secret", phoneNumberId: "123456" },
+    sendgrid: { apiKey: "sg-secret", fromEmail: "hello@example.test" },
+    mailgun: { apiKey: "mg-secret", domain: "mg.example.test", fromEmail: "hello@example.test" },
+    postmark: { serverToken: "pm-secret", fromEmail: "hello@example.test" },
+    github: { token: "gh-secret" },
+    gitlab: { token: "gl-secret" },
+    sentry: { authToken: "sentry-secret" },
+    vercel: { token: "vercel-secret" },
+    calendly: { accessToken: "calendly-secret" },
+    zendesk: { subdomain: "acme", email: "admin@example.test", apiToken: "zd-secret" },
+    freshdesk: { domain: "acme", apiKey: "fd-secret" },
+    serpapi: { apiKey: "serp-secret" },
+    openweather: { apiKey: "weather-secret" },
   };
   const encrypted = encryptWorkspaceCredentials(value, key, "workspace-1:integration-set");
   assert.deepEqual(decryptWorkspaceCredentials(encrypted, key, "workspace-1:integration-set"), value);
