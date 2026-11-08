@@ -113,3 +113,15 @@ test("Email action sends through Resend and returns provider message ID", async 
   assert.equal(requestedUrl, "https://api.resend.com/emails");
   assert.equal((result as { messageId: string }).messageId, "email_test_123");
 });
+
+test("shared registry draft validator accepts only registered operations and schema-valid inputs", async () => {
+  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
+  const valid = [
+    { id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+    { id: "ai", nodeId: "gemini", operationId: "generate_text", kind: "action", input: { prompt: "Qualify this lead" } },
+  ];
+  assert.equal(validateRegisteredSteps(valid).steps?.length, 2);
+  assert.match(validateRegisteredSteps([{ ...valid[0] }, { ...valid[1], nodeId: "unregistered" }]).error ?? "", /Unknown registry operation/);
+  assert.match(validateRegisteredSteps([{ ...valid[0] }, { ...valid[1], input: { prompt: "ok", secret: "not-allowed" } }]).error ?? "", /Invalid input/);
+  assert.match(validateRegisteredSteps([valid[1]]).error ?? "", /exactly one trigger/);
+});
