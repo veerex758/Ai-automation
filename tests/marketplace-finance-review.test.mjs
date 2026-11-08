@@ -21,7 +21,7 @@ test("reviewer UI cannot mark payout paid or enter transfer references",()=>{
 });
 
 test("settlement RPC is service-only, idempotent, and appends a single ledger debit",()=>{
- assert.match(settlement,/auth.role()<>'service_role'/);
+ assert.match(settlement,/auth\.role\(\)<>'service_role'/);
  assert.match(settlement,/provider_transfer_id/);
  assert.match(settlement,/duplicate_settlement/);
  assert.match(settlement,/on conflict(payout_request_id)/);
