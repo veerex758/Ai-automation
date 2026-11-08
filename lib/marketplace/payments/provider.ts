@@ -5,7 +5,7 @@
 export type MarketplaceCheckoutInput = {
  purchaseId:string;idempotencyKey:string;amountMinor:number;currency:"USD";
  product:{id:string;slug:string;name:string};versionId:string;buyerId:string;buyerEmail:string;
- successUrl:string;cancelUrl:string;
+ successUrl:string;cancelUrl:string;billingInterval?:"month"|"year";
 };
 export type VerifiedMarketplaceWebhook={eventId:string;type:string;occurredAt:string;data:unknown};
 export type ParsedMarketplaceReversal={purchaseId:string;kind:"refund"|"chargeback";amountMinor:number};
