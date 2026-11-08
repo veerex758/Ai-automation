@@ -24,7 +24,7 @@ test("settlement RPC is service-only, idempotent, and appends a single ledger de
  assert.match(settlement,/auth\.role\(\)<>'service_role'/);
  assert.match(settlement,/provider_transfer_id/);
  assert.match(settlement,/duplicate_settlement/);
- assert.match(settlement,/on conflict(payout_request_id)/);
+ assert.match(settlement,/pg_advisory_xact_lock/);\n assert.match(settlement,/marketplace_payout_provider_transfer_unique/);
  assert.match(settlement,/'payout',-payout\.amount_minor/);
  assert.match(settlement,/insert into public\.marketplace_financial_ledger/);
 });
