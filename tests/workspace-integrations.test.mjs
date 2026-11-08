@@ -11,6 +11,9 @@ test("workspace integration API authenticates and restricts credential managemen
   assert.match(route, /workspace_members/);
   assert.match(route, /\["owner", "admin"\]/);
   assert.match(route, /encryptWorkspaceCredentials/);
+  for (const provider of ["notion", "hubspot", "twilio", "shopify", "stripe", "linear"]) {
+    assert.match(route, new RegExp('"' + provider + '"'));
+  }
   assert.match(route, /save_workspace_integration_credentials/);
 });
 
