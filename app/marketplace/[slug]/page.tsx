@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "next/link";\nimport MarketplaceCheckoutButton from "./checkout-button";
 import {notFound} from "next/navigation";
 import {createClient} from "@/lib/supabase/server";
 import MarketplaceInstallButton from "./install-button";
