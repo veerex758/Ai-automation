@@ -19,21 +19,31 @@ export type RegisteredStepResult = {
 };
 
 function resolveReferences(value: unknown, outputs: Readonly<Record<string, unknown>>, dryRun = false): unknown {
-  if (typeof value === "string") {
-    return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (_match, path: string) => {
-      const [stepId, ...parts] = path.split(".");
-      let current: unknown = outputs[stepId];
-      for (const part of parts) {
-        if (!current || typeof current !== "object" || Array.isArray(current) || !Object.prototype.hasOwnProperty.call(current, part)) {
-          if (dryRun) return "[dry-run reference: " + path + "]";
-          throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
-        }
-        current = (current as Record<string, unknown>)[part];
-      }
-      if (current === null || current === undefined) {
+  const resolvePath = (path: string): unknown => {
+    const [stepId, ...parts] = path.split(".");
+    if (["__proto__", "prototype", "constructor"].includes(stepId) || parts.some((part) => ["__proto__", "prototype", "constructor"].includes(part))) {
+      if (dryRun) return "[dry-run reference: " + path + "]";
+      throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
+    }
+    let current: unknown = outputs[stepId];
+    for (const part of parts) {
+      if (!current || typeof current !== "object" || Array.isArray(current) || !Object.prototype.hasOwnProperty.call(current, part)) {
         if (dryRun) return "[dry-run reference: " + path + "]";
         throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
       }
+      current = (current as Record<string, unknown>)[part];
+    }
+    if (current === null || current === undefined) {
+      if (dryRun) return "[dry-run reference: " + path + "]";
+      throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
+    }
+    return current;
+  };
+  if (typeof value === "string") {
+    const exact = value.match(/^\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}$/);
+    if (exact) return resolvePath(exact[1]);
+    return value.replace(/\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})*)\}\}/g, (_match, path: string) => {
+      const current = resolvePath(path);
       return typeof current === "string" ? current : JSON.stringify(current);
     });
   }
@@ -56,6 +66,7 @@ export async function executeRegisteredWorkflow(args: {
   completedStepIds?: string[];
   onStepStart?: (step: RegisteredWorkflowStep, position: number, input: unknown) => Promise<void>;
   onStepComplete?: (step: RegisteredWorkflowStep, position: number, result: RegisteredStepResult) => Promise<void>;
+  onWorkflowError?: (event: { code: string; message: string; stepId: string; workflowRunId?: string }) => Promise<void>;
 }): Promise<{ status: "succeeded" | "failed" | "waiting"; steps: RegisteredStepResult[]; outputs: Record<string, unknown>; resumeAt?: string }> {
   const outputs: Record<string, unknown> = { ...(args.initialOutputs ?? {}) };
   const completedStepIds = new Set(args.completedStepIds ?? []);
@@ -117,7 +128,7 @@ export async function executeRegisteredWorkflow(args: {
       };
       if (step.loop) {
         const source = outputs[step.loop.sourceStepId];
-        const items = Array.isArray(source) ? source : source && typeof source === "object" && Array.isArray((source as Record<string, unknown>).items) ? (source as { items: unknown[] }).items : source && typeof source === "object" && (source as Record<string, unknown>).data && typeof (source as Record<string, unknown>).data === "object" && Array.isArray(((source as { data: Record<string, unknown> }).data).items) ? ((source as { data: { items: unknown[] } }).data.items) : null;
+        const items = Array.isArray(source) ? source : source && typeof source === "object" && Array.isArray((source as Record<string, unknown>).batches) ? (source as { batches: unknown[] }).batches : source && typeof source === "object" && Array.isArray((source as Record<string, unknown>).items) ? (source as { items: unknown[] }).items : source && typeof source === "object" && (source as Record<string, unknown>).data && typeof (source as Record<string, unknown>).data === "object" && Array.isArray(((source as { data: Record<string, unknown> }).data).items) ? ((source as { data: { items: unknown[] } }).data.items) : null;
         if (!items) throw new Error("WORKFLOW_LOOP_SOURCE_NOT_ARRAY");
         const max = Math.min(100, Math.max(1, step.loop.maxIterations ?? 100));
         if (items.length > max) throw new Error("WORKFLOW_LOOP_LIMIT_EXCEEDED");
@@ -128,8 +139,16 @@ export async function executeRegisteredWorkflow(args: {
           loopExecutionCount++;
           if (loopExecutionCount > 500) throw new Error("WORKFLOW_LOOP_EXECUTION_BUDGET_EXCEEDED");
           const scope = { ...iterationContext, [step.loop.itemAs ?? "loop_item"]: items[index], [step.loop.indexAs ?? "loop_index"]: index };
+          const iterationCheckpointId = step.id + "__loop_" + (index + 1);
+          if (!args.dryRun && completedStepIds.has(iterationCheckpointId)) {
+            aggregate.push(outputs[iterationCheckpointId]);
+            continue;
+          }
           const iteration = await executeOnce(scope, index);
-          if (!iteration.simulated) aggregate.push(iteration.output);
+          if (!iteration.simulated) {
+            outputs[iterationCheckpointId] = iteration.output;
+            aggregate.push(iteration.output);
+          }
         }
         outputs[step.id] = args.dryRun ? { iterations: items.length, simulated: true } : aggregate;
         if (!args.dryRun) loopOutputs.set(step.id, aggregate);
@@ -147,6 +166,7 @@ export async function executeRegisteredWorkflow(args: {
       }
     } catch (error) {
       const code = error instanceof Error ? error.message : "NODE_EXECUTION_FAILED";
+      try { await args.onWorkflowError?.({ code: /^[A-Z0-9_]{1,64}$/.test(code) ? code : "NODE_EXECUTION_FAILED", message: code.slice(0, 2000), stepId: step.id }); } catch { /* error reporting must not mask the original workflow failure */ }
       results.push({ stepId: step.id, status: "failed", error: code });
       for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
       return { status: "failed", steps: results, outputs };

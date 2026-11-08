@@ -142,7 +142,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
   }
-  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled"))) return true;
+  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture"))) return true;
   if (step.kind === "action" && new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time", "loop.iterate", "wait.delay"]).has(step.nodeId + "." + step.operationId)) return true;
   const providerPackProvider = providerPackLiveId(step);
   if (providerPackProvider) return isProviderLiveEnabled(providerPackProvider, process.env.AIVANTA_LIVE_INTEGRATIONS);
@@ -168,7 +168,7 @@ function boundedOutput(value: unknown): Record<string, unknown> {
   return { outputOmitted: true };
 }
 
-function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean): Omit<NodeContext, "previousOutputs"> {
+function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
     logger: {
@@ -195,6 +195,19 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
         } finally { clearTimeout(timer); }
       },
     },
+    rateLimit: { async consume(args) {
+      const { data, error } = await db.rpc("consume_execution_rate_limit", {
+        p_workspace_id: workspaceId, p_key: args.key, p_limit: args.limit, p_window_ms: args.windowMs,
+      });
+      if (error || !isRecord(data)) throw new Error("RATE_LIMIT_BACKEND_UNAVAILABLE");
+      if (typeof data.allowed !== "boolean" || typeof data.remaining !== "number" ||
+          !Number.isInteger(data.remaining) || data.remaining < 0 || data.remaining > args.limit ||
+          typeof data.retryAfterMs !== "number" || !Number.isInteger(data.retryAfterMs) ||
+          data.retryAfterMs < 0 || data.retryAfterMs > args.windowMs) {
+        throw new Error("RATE_LIMIT_BACKEND_INVALID_RESPONSE");
+      }
+      return { allowed: data.allowed, remaining: data.remaining, retryAfterMs: data.retryAfterMs };
+    } },
     webhook: { verified: webhookVerified },
   };
 }
@@ -218,6 +231,10 @@ export async function runDurableWorker() {
   }
 
   const workerId = process.env.AIVANTA_WORKER_ID?.slice(0, 100) || "vercel-worker";
+  const { error: pendingDispatchError } = await db.rpc("dispatch_pending_execution_error_events", { p_limit: 25 });
+  if (pendingDispatchError) {
+    console.warn("Aivanta worker could not dispatch pending workflow error events.");
+  }
   const { data, error } = await db.rpc("claim_execution_jobs", {
     p_worker_id: workerId, p_limit: 1, p_lease_seconds: 120,
   });
@@ -229,6 +246,7 @@ export async function runDurableWorker() {
   let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
+    const workflowErrorEvent: { current: { code: string; message: string; stepId: string } | null } = { current: null };
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
     try {
@@ -288,8 +306,11 @@ export async function runDurableWorker() {
         if (source === "schedule" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "schedule" || steps[0]?.operationId !== "scheduled")) {
           throw new Error("INVALID_SCHEDULE_TRIGGER_DEFINITION");
         }
+        if (source === "error_trigger" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "error_trigger" || steps[0]?.operationId !== "capture")) {
+          throw new Error("INVALID_ERROR_TRIGGER_DEFINITION");
+        }
         if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (isRecord(job.payload?.input) && (source === "schedule" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
+        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
@@ -298,15 +319,22 @@ export async function runDurableWorker() {
         const credentials = job.execution_mode === "live"
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
-        const context = executionContext(credentials, job.payload?.webhookVerified === true);
+        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
         const workflowStepIds = new Set(steps.map((step) => step.id));
+        const resumableIterationIds = new Set<string>();
+        for (const step of steps) {
+          if (!step.loop) continue;
+          for (let index = 1; index <= Math.min(100, step.loop.maxIterations ?? 100); index++) {
+            resumableIterationIds.add(step.id + "__loop_" + index);
+          }
+        }
         const initialOutputs: Record<string, unknown> = {};
         const completedStepIds: string[] = [];
         for (const checkpoint of savedCheckpoints as Array<{ step_id: string; output: unknown }>) {
-          if (workflowStepIds.has(checkpoint.step_id)) {
+          if (workflowStepIds.has(checkpoint.step_id) || resumableIterationIds.has(checkpoint.step_id)) {
             initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
               ? checkpoint.output.__aivantaArray : checkpoint.output;
             completedStepIds.push(checkpoint.step_id);
@@ -314,6 +342,25 @@ export async function runDurableWorker() {
         }
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
+          onWorkflowError: async (event) => {
+            workflowErrorEvent.current = event;
+            // Persist and enqueue subscribers in one database transaction. A
+            // failure rolls back both, allowing the durable job retry to retry
+            // delivery without losing an event between two RPC calls.
+            if (job.execution_mode === "live" && source !== "error_trigger") {
+              const { error: eventError } = await db.rpc("record_and_dispatch_execution_error_event", {
+                p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
+                p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
+              });
+              if (eventError) throw new Error("ERROR_TRIGGER_DISPATCH_FAILED");
+            } else {
+              const { error: eventError } = await db.rpc("record_execution_error_event", {
+                p_job_id: job.id, p_lease_token: job.lease_token, p_step_id: event.stepId,
+                p_error_code: event.code, p_safe_message: event.code, p_attempt: job.attempts,
+              });
+              if (eventError) throw new Error("ERROR_EVENT_PERSISTENCE_FAILED");
+            }
+          },
           ...(job.execution_mode === "live" ? {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
@@ -393,7 +440,7 @@ export async function runDurableWorker() {
             ];
             const liveResult = await executeRegisteredWorkflow({
               steps: registrySteps,
-              context: executionContext(credentials, false),
+              context: executionContext(credentials, false, db, job.workspace_id),
               dryRun: false,
               onStepStart: async (step, position) => {
                 await persistCheckpoint(db, job, step, position, "started");
@@ -483,7 +530,10 @@ export async function runDurableWorker() {
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
       const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
-        p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false, p_error_code: outcome,
+        p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false,
+        p_error_code: workflowErrorEvent.current?.code ?? outcome,
+        p_error_step_id: workflowErrorEvent.current?.stepId ?? null,
+        p_error_message: workflowErrorEvent.current?.message ?? outcome,
       });
       if (finishError || finished === "lease_lost") leaseLost++;
       else if (finished === "dead_letter") deadLettered++;
