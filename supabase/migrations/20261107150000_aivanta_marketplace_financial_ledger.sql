@@ -173,4 +173,3 @@ language sql stable security definer set search_path=public,pg_temp as $$
  order by p.created_at;
 $$;
 revoke all on function public.marketplace_financial_reconciliation() from public,anon,authenticated;
-grant execute on function public.marketplace_financial_reconciliation() to service_role;
