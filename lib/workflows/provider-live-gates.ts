@@ -7,11 +7,16 @@ export const PROVIDER_PACK_LIVE_IDS = [
 ] as const;
 
 const providerPackIds = new Set<string>(PROVIDER_PACK_LIVE_IDS);
+const providerPackOperations: Readonly<Record<string, ReadonlySet<string>>> = {
+  discord: new Set(["execute", "get_channel"]),
+  telegram: new Set(["execute", "get_chat"]),
+  whatsapp_business: new Set(["execute", "get_phone_number"]),
+};
 
 export function providerPackLiveId(step: ProviderPackStep): string | null {
-  return step.kind === "action" && step.operationId === "execute" && providerPackIds.has(step.nodeId)
-    ? step.nodeId
-    : null;
+  if (step.kind !== "action" || !providerPackIds.has(step.nodeId)) return null;
+  const allowed = providerPackOperations[step.nodeId] ?? new Set(["execute"]);
+  return allowed.has(step.operationId) ? step.nodeId : null;
 }
 
 /** A provider is live only when its exact ID is explicitly opted in. */
