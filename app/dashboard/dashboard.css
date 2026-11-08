@@ -311,3 +311,7 @@
 .integration-brand-mark.registry-native-mark{font-size:19px}
 .native-manual{background:#edf4e8;color:#537b38}
 .native-webhooks{background:#edf3f8;color:#477b9d}
+
+.registry-connection-state.state-coming-soon{background:#f5f1e9;color:#88724c}
+.registry-connection-state.state-no-connection{background:#edf4e8;color:#537b38}
+.registry-connection-state.state-setup-required{background:#fff3e2;color:#9a682c}

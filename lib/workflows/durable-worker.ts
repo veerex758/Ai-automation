@@ -5,6 +5,7 @@ import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integr
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
 
 
@@ -118,12 +119,17 @@ function providerForStep(step: RegisteredWorkflowStep): string | null {
   if (step.nodeId === "shopify" && step.operationId === "list_products") return "shopify";
   if (step.nodeId === "stripe" && step.operationId === "create_customer") return "stripe";
   if (step.nodeId === "linear" && step.operationId === "create_issue") return "linear";
+  if (step.nodeId === "http_request" && step.operationId === "request") return "http";
   return null;
 }
 
-const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear"]);
+const SERVER_ENABLED_INTEGRATIONS = new Set(["gmail", "sheets", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "http"]);
 function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
-  if (step.kind === "trigger" && step.nodeId === "manual" && step.operationId === "start") return true;
+  if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
+    return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
+  }
+  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled"))) return true;
+  if (step.kind === "action" && new Set(["if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields", "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time", "loop.iterate", "wait.delay"]).has(step.nodeId + "." + step.operationId)) return true;
   const provider = step.kind === "action" ? providerForStep(step) : null;
   if (!provider) return false;
   if (SERVER_ENABLED_INTEGRATIONS.has(provider) || (step.nodeId === "slack" && step.operationId === "post_message")) {
@@ -134,6 +140,11 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
 }
 
 function boundedOutput(value: unknown): Record<string, unknown> {
+  if (Array.isArray(value)) {
+    try {
+      if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return { __aivantaArray: value };
+    } catch { /* omit unserializable loop output */ }
+  }
   if (isRecord(value)) {
     try {
       if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return value;
@@ -203,7 +214,28 @@ export async function runDurableWorker() {
   let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let heartbeatInFlight = false;
     try {
+      heartbeatTimer = setInterval(() => {
+        if (heartbeatInFlight) return;
+        heartbeatInFlight = true;
+        void (async () => {
+          try {
+            const { data: renewed, error: heartbeatError } = await db.rpc("heartbeat_execution_job", {
+              p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
+            });
+            if (heartbeatError || renewed !== true) {
+              console.warn("Aivanta worker heartbeat was not renewed.", { jobId: job.id });
+            }
+          } catch {
+            console.warn("Aivanta worker heartbeat failed.", { jobId: job.id });
+          } finally {
+            heartbeatInFlight = false;
+          }
+        })();
+      }, 30_000);
+      heartbeatTimer.unref?.();
       const definition = job.workflow_definition as Record<string, unknown>;
       if (job.execution_mode === "live" && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         throw new Error("LIVE_EXECUTION_DISABLED");
@@ -212,14 +244,9 @@ export async function runDurableWorker() {
       let result: { status: string; steps: Array<{ stepId: string; position: number; type: string; title: string; status: string; message: string; output?: unknown }> };
       const preCheckpointed = new Set<string>();
       if (definition.format === "aivanta-registry-v1") {
-        if (!Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
-          throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
-        }
-        let steps = definition.steps as RegisteredWorkflowStep[];
-        if (steps.some((step) => !step || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
-          typeof step.operationId !== "string" || (step.kind !== "trigger" && step.kind !== "action") || !("input" in step))) {
-          throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
-        }
+        const validated = validateRegisteredSteps(definition.steps);
+        if (!validated.steps) throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
+        let steps: RegisteredWorkflowStep[] = validated.steps;
         if (job.execution_mode === "live") {
           if (steps.some((step) => !liveStepAllowed(step)) || steps.filter((step) => step.kind === "action").length > 4) {
             throw new Error("LIVE_OPERATION_NOT_ENABLED");
@@ -243,8 +270,11 @@ export async function runDurableWorker() {
         if (source === "webhook" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "webhooks" || steps[0]?.operationId !== "receive_event")) {
           throw new Error("INVALID_WEBHOOK_TRIGGER_DEFINITION");
         }
+        if (source === "schedule" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "schedule" || steps[0]?.operationId !== "scheduled")) {
+          throw new Error("INVALID_SCHEDULE_TRIGGER_DEFINITION");
+        }
         if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (job.execution_mode === "live" && steps[0]?.nodeId === "manual" && isRecord(job.payload?.input)) {
+        if (isRecord(job.payload?.input) && (source === "schedule" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
@@ -254,8 +284,21 @@ export async function runDurableWorker() {
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
         const context = executionContext(credentials, job.payload?.webhookVerified === true);
+        const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
+          .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
+        if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
+        const workflowStepIds = new Set(steps.map((step) => step.id));
+        const initialOutputs: Record<string, unknown> = {};
+        const completedStepIds: string[] = [];
+        for (const checkpoint of savedCheckpoints as Array<{ step_id: string; output: unknown }>) {
+          if (workflowStepIds.has(checkpoint.step_id)) {
+            initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
+              ? checkpoint.output.__aivantaArray : checkpoint.output;
+            completedStepIds.push(checkpoint.step_id);
+          }
+        }
         const registryResult = await executeRegisteredWorkflow({
-          steps, context, dryRun: job.execution_mode !== "live",
+          steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
           ...(job.execution_mode === "live" ? {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
@@ -264,6 +307,16 @@ export async function runDurableWorker() {
             ),
           } : {}),
         });
+        if (registryResult.status === "waiting") {
+          const remainingMs = Math.max(1000, Date.parse(registryResult.resumeAt ?? "") - Date.now());
+          const { data: paused, error: pauseError } = await db.rpc("pause_execution_job", {
+            p_job_id: job.id, p_lease_token: job.lease_token,
+            p_delay_seconds: Math.min(2592000, Math.ceil(remainingMs / 1000)),
+          });
+          if (pauseError || paused !== true) throw new Error("EXECUTION_PAUSE_FAILED");
+          retried++;
+          continue;
+        }
         result = {
           status: registryResult.status,
           steps: registryResult.steps.map((step, index) => ({
@@ -421,6 +474,8 @@ export async function runDurableWorker() {
       else if (finished === "dead_letter") deadLettered++;
       else if (finished === "retry_wait") retried++;
       console.error("Aivanta execution job failed.", { jobId: job.id, errorCode: outcome });
+    } finally {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
   }
   return { claimed: data.length, succeeded, retried, deadLettered, leaseLost };
