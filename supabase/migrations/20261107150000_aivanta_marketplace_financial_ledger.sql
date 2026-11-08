@@ -139,8 +139,9 @@ begin
  insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
  values(purchase.id,creator,p_provider,p_event_id,p_kind,-p_amount_minor,purchase.currency,'Provider-confirmed marketplace reversal');
  insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
- values(purchase.id,creator,p_provider,p_event_id,'platform_commission',-floor(p_amount_minor*0.20),purchase.currency,'Commission reversal'),
- (purchase.id,creator,p_provider,p_event_id,'creator_earning',-(p_amount_minor-floor(p_amount_minor*0.20)),purchase.currency,'Creator earning reversal');
+ values(purchase.id,creator,p_provider,p_event_id,'platform_commission',-floor(p_amount_minor*0.20),purchase.currency,'Commission reversal');
+ insert into public.marketplace_financial_ledger(purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo)
+ values(purchase.id,creator,p_provider,p_event_id,'creator_earning',-(p_amount_minor-floor(p_amount_minor*0.20)),purchase.currency,'Creator earning reversal');
  update public.marketplace_purchases set status=target_status,refunded_at=case when target_status='refunded' then now() else refunded_at end where id=purchase.id;
  if target_status in ('refunded','disputed') then update public.marketplace_entitlements set status='revoked' where purchase_id=purchase.id; end if;
  return jsonb_build_object('status',target_status,'purchase_id',purchase.id,'reversed_minor',p_amount_minor);
