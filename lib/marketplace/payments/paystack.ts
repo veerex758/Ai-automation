@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {createHmac,timingSafeEqual} from "node:crypto";
 import type {MarketplacePaymentProvider,MarketplaceCheckoutInput,VerifiedMarketplaceWebhook,ParsedMarketplacePayment,ParsedMarketplaceReversal} from "./provider";
 const api="https://api.paystack.co";const obj=(v:unknown):Record<string,any>=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,any>:{};
