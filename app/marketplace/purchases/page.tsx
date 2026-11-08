@@ -1,4 +1,5 @@
-import Link from "next/link";\nimport {RefundRequestButton} from "./refund-request-button";
+import Link from "next/link";
+import {RefundRequestButton} from "./refund-request-button";
 import {redirect} from "next/navigation";
 import {createClient} from "@/lib/supabase/server";
 import "../marketplace.css";
