@@ -85,7 +85,6 @@ begin
  if p_amount_minor<=0 or p_currency<>'USD' then raise exception 'invalid_payment_amount'; end if;
  if p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'invalid_payload_hash'; end if;
  select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
- select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
  if not found then raise exception 'purchase_not_found'; end if;
  if purchase.provider<>p_provider or purchase.amount_minor<>p_amount_minor or purchase.currency<>p_currency then raise exception 'payment_mismatch'; end if;
  if purchase.status='paid' then
@@ -124,7 +123,7 @@ create or replace function public.marketplace_reverse_payment(
 declare purchase public.marketplace_purchases%rowtype; creator uuid; prior_refund bigint; prior_chargeback bigint; target_status text;
 begin
  if p_provider is null or p_event_id is null or p_kind not in ('refund','chargeback') then raise exception 'invalid_reversal_kind'; end if;
- if p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'invalid_event_hash'; end if;
+ if p_amount_minor<=0 or p_payload_sha256 is null or p_payload_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'invalid_reversal'; end if;
  select * into purchase from public.marketplace_purchases where id=p_purchase_id for update;
  if not found then raise exception 'purchase_not_found'; end if;
  if purchase.provider<>p_provider or purchase.provider_payment_id is null or purchase.status not in ('paid','refunded','disputed') then raise exception 'purchase_not_reversible'; end if;
@@ -173,4 +172,5 @@ language sql stable security definer set search_path=public,pg_temp as $$
  order by p.created_at;
 $$;
 revoke all on function public.marketplace_financial_reconciliation() from public,anon,authenticated;
+grant execute on function public.marketplace_financial_reconciliation() to service_role;
 grant execute on function public.marketplace_financial_reconciliation() to service_role;

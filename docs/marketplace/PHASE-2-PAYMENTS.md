@@ -1,6 +1,6 @@
 # Marketplace Phase 2 — Payment provider + ledger (implementation contract)
 
-Status: Phase 2 provider-neutral payment foundation implemented on PR #162; clean migration replay, pgTAP transaction tests, workflow validation, lint, type-check, and build are green at commit `c7dc1f8`. Checkout remains disabled until provider/country eligibility, credentials, provider signature adapter, and webhook secret are configured and explicitly authorized.
+Status: database foundation + provider-neutral adapter contract implemented on PR #162. Checkout remains disabled until a provider, country eligibility, credentials, and webhook secret are configured and explicitly authorized.
 
 ## Required invariants
 - Provider adapter is server-only; client never chooses amount, currency, creator, commission, entitlement, or verified version.
@@ -32,12 +32,12 @@ export type MarketplacePaymentProvider = {
 - RLS denies anon and ordinary users ledger/inbox writes; service-role processing only. Buyer can read own purchase/receipt; creator can read own earnings aggregate only through scoped RPC.
 - Service-only gross reconciliation report compares paid purchase amounts with gross-sale ledger entries and returns discrepancies; it never auto-adjusts. Provider settlement-file reconciliation remains pending provider selection and credentials.
 
-## Gates / verification status
-1. Provider-neutral unit/static coverage for freshness, replay/idempotency, mismatched amount/currency, duplicate payment IDs and webhook dispatch: implemented.
-2. pgTAP transaction coverage for payment finalization, duplicate event/payment, pending/failed no entitlement, reversal and ledger split: implemented and passing in clean local migration replay. Provider-specific signature and true concurrent race testing still require adapter/provider setup.
-3. Clean migration replay + pgTAP, workflow validation, lint, type-check, and build: green on `c7dc1f8` (CI run 2114; migration replay run 756). No hosted DB apply.
-4. Staging signed provider test webhook/authenticated buyer checkout and browser E2E: blocked pending provider selection/credentials and Vercel quota.
-5. Production: not authorized; provider/country/legal/compliance, secrets, settlement reconciliation and explicit launch approval required.
+## Gates
+1. Unit tests provider adapter signature, invalid signature, stale timestamp, replay/idempotency, mismatched amount/currency, duplicate payment ID.
+2. DB tests duplicate event, duplicate payment, concurrent processing, pending/failed no entitlement, refund reversal, creator/platform split balance.
+3. CI clean migration replay, lint, typecheck, tests; no hosted DB apply without approval.
+4. Staging signed test-mode webhook and authenticated buyer checkout; browser E2E after Vercel quota.
+5. Production requires provider/country/legal/compliance confirmation, secrets configured, finance/reconciliation controls and explicit launch authorization.
 
 ## Current progress (2026-11-07)\n- Provider contract now includes optional normalized refund/chargeback parsing; processor dispatch is typed and covered by a refund test.\n- Finalizer records duplicate successful payment event IDs for the same provider payment as processed without duplicating ledger/entitlement writes.\n- Reversal RPC refuses refunds/chargebacks until a provider payment ID is present.\n- Added a service-role-only reconciliation function to detect missing/mismatched gross-sale ledger rows.\n- Static tests assert these protections. Runtime execution remains required.\n\n## Deliberately blocked
 - Live checkout, subscriptions, refunds, transfers/payouts, tax invoices, creator payout availability, automatic finance adjustments.
