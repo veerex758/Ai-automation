@@ -16,7 +16,8 @@ test("finance queue and mutations require explicit reviewer allowlist and servic
 test("reviewer UI cannot mark payout paid or enter transfer references",()=>{
  assert.match(page,/paid status is only set by verified provider settlement reconciliation/);
  assert.doesNotMatch(page,/action:"paid"/);
- assert.doesNotMatch(page,/transfer_id\s*[:=]/);\n assert.doesNotMatch(page,/action\s*:\s*[\x27\x22]paid/);
+ assert.doesNotMatch(page,/transfer_id\s*[:=]/);
+ assert.doesNotMatch(page,/action\s*:\s*[\x27\x22]paid/);
 });
 
 test("settlement RPC is service-only, idempotent, and appends a single ledger debit",()=>{
@@ -24,7 +25,8 @@ test("settlement RPC is service-only, idempotent, and appends a single ledger de
  assert.match(settlement,/provider_transfer_id/);
  assert.match(settlement,/duplicate_settlement/);
  assert.match(settlement,/on conflict(payout_request_id)/);
- assert.match(settlement,/'payout',-payout\.amount_minor/);\n assert.match(settlement,/insert into public\.marketplace_financial_ledger/);
+ assert.match(settlement,/'payout',-payout\.amount_minor/);
+ assert.match(settlement,/insert into public\.marketplace_financial_ledger/);
 });
 
 test("finance payout review transitions remain explicit and audited",()=>{
