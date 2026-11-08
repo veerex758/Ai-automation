@@ -89,6 +89,7 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
       google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
     };
     const googleProduct = googleProductByProvider[provider];
+    if (provider === "rss_feed") { credentials[provider] = {}; continue; }
     if (googleProduct) {
       credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
       continue;

@@ -52,6 +52,8 @@ async function check(provider: Provider, c: Credentials) {
     const headers: Record<string, string> = {};
     let method: "GET" | "POST" = "GET", body: string | undefined;
     switch (provider) {
+      case "resend":
+        url = "https://api.resend.com/domains"; headers.Authorization = "Bearer " + required(c, "apiKey"); break;
       case "openai":
         url = "https://api.openai.com/v1/models";
         headers.Authorization = "Bearer " + required(c, "apiKey");
