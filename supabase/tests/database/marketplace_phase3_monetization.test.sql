@@ -90,8 +90,11 @@ select is((select count(*)::integer from public.marketplace_financial_ledger whe
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
-select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=current_setting('test.phase3_payout_id')::uuid and entry_type='payout'),1,'paid payout appends exactly one ledger debit');
+select ok(not has_table_privilege('authenticated','public.marketplace_financial_ledger','SELECT'),'financial ledger remains private to creators');
 reset role;
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select is((select count(*)::integer from public.marketplace_financial_ledger where payout_request_id=current_setting('test.phase3_payout_id')::uuid and entry_type='payout'),1,'paid payout appends exactly one ledger debit');
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select lives_ok($$select public.marketplace_set_creator_payout_profile('c2222222-2222-4222-8222-222222222222','mock','acct-test','NG','verified','complete',true,1000,null)$$,'service role updates payout onboarding profile');
