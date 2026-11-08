@@ -8,7 +8,7 @@ declare p public.marketplace_products%rowtype; v public.marketplace_product_vers
 begin
  if p_provider not in ('paystack','stripe') or p_idempotency_key is null or length(p_idempotency_key) not between 8 and 128 then raise exception 'invalid_checkout_request';end if;
  select * into existing from public.marketplace_purchases where buyer_user_id=p_buyer_id and checkout_idempotency_key=p_idempotency_key for update;
- if found then if existing.product_id<>p_product_id or existing.provider<>p_provider then raise exception 'idempotency_conflict';end if;
+ if found then if existing.product_id<>p_product_id or existing.product_version_id<>p_version_id or existing.provider<>p_provider then raise exception 'idempotency_conflict';end if;
  select slug,name into product_slug,product_name from public.marketplace_products where id=existing.product_id;purchase_id:=existing.id;amount_minor:=existing.amount_minor;currency:=existing.currency;return next;return;end if;
  select * into p from public.marketplace_products where id=p_product_id and status='published' for share;
  select * into v from public.marketplace_product_versions where id=p_version_id and product_id=p_product_id and verification_status='approved' for share;
