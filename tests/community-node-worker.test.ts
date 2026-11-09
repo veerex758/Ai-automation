@@ -27,7 +27,7 @@ test("community worker signature rejects stale timestamps and malformed digests"
 
 test("community worker invocation rejects malformed identifiers before network access", async () => {
   await assert.rejects(invokeCommunityNode({
-    packageVersionId: "not-a-uuid", integrity: "sha512-" + "A".repeat(88),
+    packageVersionId: "not-a-uuid", integrity: "sha512-80LkcFOS4VioWkYyJDZ50KVS0MIJk0FWIkHHWkoIB0pkx6fxH+JLUX0fsYQX0pEKeAl/EFtWwm/UMNqyibmdNQ=,
     entrypoint: "dist/index.js", operation: "run", input: {},
     permissions: [], workspaceId: "not-a-uuid", installationId: "not-a-uuid",
   }), /COMMUNITY_NODE_INVOCATION_INVALID/);
@@ -36,7 +36,7 @@ test("community worker invocation rejects malformed identifiers before network a
 test("community worker invocation rejects path traversal and malformed integrity", async () => {
   const valid = {
     packageVersionId: "00000000-0000-4000-8000-000000000001",
-    integrity: "sha512-" + "A".repeat(88), entrypoint: "dist/index.js", operation: "run",
+    integrity: "sha512-80LkcFOS4VioWkYyJDZ50KVS0MIJk0FWIkHHWkoIB0pkx6fxH+JLUX0fsYQX0pEKeAl/EFtWwm/UMNqyibmdNQ=, entrypoint: "dist/index.js", operation: "run",
     input: {}, permissions: [], workspaceId: "00000000-0000-4000-8000-000000000002",
     installationId: "00000000-0000-4000-8000-000000000003",
   };
