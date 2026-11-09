@@ -42,3 +42,9 @@ create policy marketplace_reports_own_read on public.marketplace_product_reports
 create policy marketplace_notices_own_read on public.marketplace_customer_notices for select to authenticated using (user_id=auth.uid());
 create policy marketplace_notices_own_update on public.marketplace_customer_notices for update to authenticated using (user_id=auth.uid()) with check (user_id=auth.uid());
 -- Moderation and notice delivery writes are service-role only.
+
+-- Apply customer column restrictions only after the trust tables are created.
+revoke update on public.marketplace_product_reviews from authenticated;
+grant update(rating,title,body,updated_at) on public.marketplace_product_reviews to authenticated;
+revoke update on public.marketplace_customer_notices from authenticated;
+grant update(read_at) on public.marketplace_customer_notices to authenticated;
