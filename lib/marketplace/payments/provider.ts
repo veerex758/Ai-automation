@@ -8,6 +8,8 @@ export type MarketplaceCheckoutInput = {
   idempotencyKey: string;
   amountMinor: number;
   currency: "USD";
+  /** Optional recurring subscription interval for provider checkout adapters. */
+  billingInterval?: "month" | "year";
   product: { id: string; slug: string; name: string };
   versionId: string;
   buyerId: string;
