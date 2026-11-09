@@ -6,7 +6,7 @@ function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPA
 export async function GET(){const s=await createClient();const {data:{user},error}=await s.auth.getUser();if(error||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers:h});
  const a=admin();const {data:creator}=await a.from("marketplace_creators").select("id,status").eq("user_id",user.id).maybeSingle();if(!creator)return NextResponse.json({error:"Creator profile required."},{status:403,headers:h});
  const {data:owned,error:oe}=await a.from("marketplace_creator_teams").select("id,name,slug,status,created_at").eq("owner_creator_id",creator.id);
- const {data:member,error:me}=await a.from("marketplace_creator_team_members").select("team_id,role,invitation_status,joined_at").eq("user_id",user.id);
+ const {data:member,error:me}=await a.from("marketplace_creator_team_members").select("team_id,role,invitation_status,joined_at,team:marketplace_creator_teams(id,name,slug,status)").eq("user_id",user.id);
  if(oe||me)return NextResponse.json({error:"Could not load creator teams."},{status:500,headers:h});return NextResponse.json({owned:owned??[],memberships:member??[]},{headers:h})}
 export async function POST(req:NextRequest){const s=await createClient();const {data:{user},error}=await s.auth.getUser();if(error||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers:h});
  const raw=await req.text();if(new TextEncoder().encode(raw).byteLength>3000)return NextResponse.json({error:"Request too large."},{status:413,headers:h});let b:Record<string,unknown>;try{b=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers:h})}
