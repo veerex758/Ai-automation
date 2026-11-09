@@ -16,7 +16,7 @@ test("workflow creation validates and persists an included definition in the sam
 
 test("quick-create and template creation receive a valid manual-trigger starter definition", () => {
   assert.match(route, /: validateDefinition\(\{\s*version: 1,\s*nodes: \[\{\s*id: "trigger-1",\s*type: "trigger",[\s\S]*?settings: \{ event: "manual" \}/);
-  assert.ok(route.includes("definition: definitionResult.definition"));
+  assert.ok(route.includes("definition: definitionToSave"));
 });
 
 test("builder sends a new workflow definition with creation and only patches existing drafts", () => {
