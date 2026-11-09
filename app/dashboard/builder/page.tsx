@@ -40,7 +40,8 @@ export default function WorkflowBuilderPage() {
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
   const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
-  const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);\n  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);
+  const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
+  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
 
@@ -48,9 +49,9 @@ export default function WorkflowBuilderPage() {
     try {
       const saved = window.localStorage.getItem("aivanta-builder-draft");
       if (saved) {
-        const parsed = JSON.parse(saved) as { name?: string; steps?: BuilderStep[] };
+        const parsed = JSON.parse(saved) as { name?: string; steps?: BuilderStep[]; registrySteps?: RegistryDraftStep[] };
         if (typeof parsed.name === "string") setName(parsed.name);
-        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+        if (Array.isArray(parsed.registrySteps)) setAiRegistrySteps(parsed.registrySteps);\n        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
           setSteps(parsed.steps);
           setSelected(parsed.steps[0].id);
         }
