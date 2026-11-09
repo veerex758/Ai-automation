@@ -5,7 +5,8 @@ const report=readFileSync(new URL("../app/api/marketplace/admin/settlement/route
 const migration=readFileSync(new URL("../supabase/migrations/20261107160000_aivanta_marketplace_settlement_payout_eligibility.sql",import.meta.url),"utf8");
 test("checkout route is authenticated, gated, USD-only, version-approved and idempotent",()=>{
  for(const x of ["AIVANTA_MARKETPLACE_CHECKOUT_ENABLED","session.auth.getUser()","buyerEmail:user.email","status!==\"published\"","verification_status!==\"approved\"","provider.createCheckout","provider_checkout_id","idempotencyKey:\"aivanta-\""])assert.ok(checkout.includes(x),x);
- assert.ok(checkout.includes("buyerEmail:user.email"));assert.doesNotMatch(checkout,/value\.buyerEmail/);\n assert.ok(checkout.includes("status:\"pending\""));assert.ok(!checkout.includes("status:\"paid\""));
+ assert.ok(checkout.includes("buyerEmail:user.email"));assert.doesNotMatch(checkout,/value\.buyerEmail/);
+ assert.ok(checkout.includes("status:\"pending\""));assert.ok(!checkout.includes("status:\"paid\""));
 });
 test("webhook route dispatches provider adapters into service-only atomic RPCs",()=>{
  for(const x of ["req.arrayBuffer()","processMarketplaceWebhook","marketplace_finalize_payment","marketplace_reverse_payment","SUPABASE_SERVICE_ROLE_KEY","providerId!==\"paystack\"&&providerId!==\"stripe\""])assert.ok(webhook.includes(x),x);
