@@ -2,7 +2,7 @@ import {NextResponse,type NextRequest} from "next/server";
 import {createClient as createAdmin} from "@supabase/supabase-js";
 import {createClient} from "@/lib/supabase/server";
 const h={"Cache-Control":"private, no-store"};
-function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw Error("Creator team service unavailable");return createAdmin(u,k,{auth:{autoRefreshToken:false,persistSession:false}})}
+function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL??process.env.NEXT_PUBLIC_CODED_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY??process.env.CODED_SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw Error("Creator team service unavailable");return createAdmin(u,k,{auth:{autoRefreshToken:false,persistSession:false}})}
 export async function GET(){const s=await createClient();const {data:{user},error}=await s.auth.getUser();if(error||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers:h});
  const a=admin();const {data:creator}=await a.from("marketplace_creators").select("id,status").eq("user_id",user.id).maybeSingle();if(!creator)return NextResponse.json({error:"Creator profile required."},{status:403,headers:h});
  const {data:owned,error:oe}=await a.from("marketplace_creator_teams").select("id,name,slug,status,created_at").eq("owner_creator_id",creator.id);
