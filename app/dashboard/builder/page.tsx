@@ -133,6 +133,18 @@ export default function WorkflowBuilderPage() {
     });
   }
 
+  function getRegistryConfigurationIssues(): string[] {
+    return (aiRegistrySteps ?? []).flatMap(step => {
+      const node = registryCatalog.find(item => item.id === step.nodeId);
+      const operation = [...(node?.triggers ?? []), ...(node?.actions ?? [])].find(item => item.id === step.operationId);
+      const schema = operation?.inputSchema as { required?: string[] } | undefined;
+      return (schema?.required ?? []).filter(field => {
+        const value = step.input[field];
+        return value === undefined || value === null || value === "";
+      }).map(field => `Fill in ${field} for "${operation?.name ?? step.operationId}".`);
+    });
+  }
+
   async function saveDraft() {
     if (savingDraft) return;
     if (!name.trim() || name.trim().length > 80) {
@@ -148,7 +160,7 @@ export default function WorkflowBuilderPage() {
       setNotice("The action catalog is unavailable. Reload it before saving this workflow.");
       return;
     }
-    const actionIssues = getActionConfigurationIssues();
+    const actionIssues = [...getActionConfigurationIssues(), ...getRegistryConfigurationIssues()];
     if (actionIssues.length) {
       setNotice("Action configuration needs attention: " + actionIssues.join(" "));
       return;
@@ -240,7 +252,7 @@ export default function WorkflowBuilderPage() {
   const validationResult = validateWorkflowDefinition({ name, steps });
 
   function reviewWorkflow() {
-    const actionIssues = getActionConfigurationIssues();
+    const actionIssues = [...getActionConfigurationIssues(), ...getRegistryConfigurationIssues()];
     if (actionIssues.length) {
       setNotice("Action configuration needs attention: " + actionIssues.join(" "));
       return;
