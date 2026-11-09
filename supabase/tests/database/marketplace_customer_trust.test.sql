@@ -1,5 +1,5 @@
 begin;
-select plan(20);
+select plan(21);
 select has_table('public','marketplace_product_reviews','customer ratings persist');
 select has_table('public','marketplace_product_reports','abuse reports persist');
 select has_table('public','marketplace_customer_notices','customer notices persist');
@@ -15,7 +15,8 @@ select ok((select relrowsecurity from pg_class where oid='public.marketplace_pro
 select ok(has_table_privilege('anon','public.marketplace_product_reviews','SELECT'),'anonymous can read published review rows subject to RLS');
 select ok(not has_table_privilege('anon','public.marketplace_product_reports','INSERT'),'anonymous cannot submit reports');
 select ok(not has_table_privilege('authenticated','public.marketplace_product_reports','UPDATE'),'reporter cannot alter moderation state');
-select ok(not has_table_privilege('authenticated','public.marketplace_product_reviews','UPDATE'),'review moderation fields not broadly writable');
+select ok(not has_column_privilege('authenticated','public.marketplace_product_reviews','status','UPDATE'),'reviewer cannot change review moderation state');
+select ok(not has_column_privilege('authenticated','public.marketplace_product_reviews','moderated_by','UPDATE'),'reviewer cannot impersonate a moderator');
 select ok(has_column_privilege('authenticated','public.marketplace_product_reviews','rating','UPDATE'),'reviewer may update rating content');
 select ok(has_column_privilege('authenticated','public.marketplace_customer_notices','read_at','UPDATE'),'notice recipient may acknowledge read');
 select ok(not has_column_privilege('authenticated','public.marketplace_customer_notices','body','UPDATE'),'notice recipient cannot rewrite notice');
