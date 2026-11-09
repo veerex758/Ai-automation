@@ -39,15 +39,11 @@ test("all deterministic utility actions remain explicitly allowed through durabl
   }
 });
 
-test("synchronous registry route permits pure utilities but keeps external effects guarded", () => {
-  const start = registryRoute.indexOf("const safeInternalActions = new Set(");
-  const end = registryRoute.indexOf(");", start);
-  assert.ok(start >= 0 && end > start);
-  const allowlist = registryRoute.slice(start, end);
-  for (const action of utilityActions.filter((item) => item !== "rate_limiter.check")) {
-    assert.ok(allowlist.includes("\"" + action + "\""), action + " must be safe in registry-run");
-  }
+test("synchronous registry route keeps live execution restricted to allowlisted email actions", () => {
+  assert.ok(registryRoute.includes("const unsupportedLiveStep = steps.find("));
+  assert.ok(registryRoute.includes('step.nodeId === "manual" && step.operationId === "start"'));
+  assert.ok(registryRoute.includes('step.nodeId === "email" && step.operationId === "send_email"'));
   assert.match(registryRoute, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.match(registryRoute, /unsupportedLiveStep/);
-  assert.doesNotMatch(allowlist, /openai|gemini|slack|supabase|postgresql|mysql|mongodb|redis|firebase/);
+  assert.match(registryRoute, /allowed\\.has\\(to\\)/);
+  assert.match(registryRoute, /AIVANTA_LIVE_EXECUTION_ENABLED/);
 });
