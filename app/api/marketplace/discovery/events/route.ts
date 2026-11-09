@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {createHash,createHmac} from "node:crypto";
 import {NextRequest,NextResponse} from "next/server";
 import {createClient as adminClient} from "@supabase/supabase-js";
