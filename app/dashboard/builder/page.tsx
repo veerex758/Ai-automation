@@ -71,10 +71,9 @@ export default function WorkflowBuilderPage() {
           if (payload.workflow?.name) setName(payload.workflow.name);
           if (payload.definition.format === "aivanta-registry-v1" && Array.isArray(payload.definition.steps)) {
             const registrySteps = payload.definition.steps;
-            setAiRegistrySteps(registrySteps);
+            setAiRegistrySteps(registrySteps.map((item, index) => ({ ...item, id: String(index + 1) })));
             setSteps(registrySteps.map((item, index) => {
-              const operation = undefined;
-              return { id: Number(index + 1), kind: item.kind === "trigger" ? "Trigger" : "Action", title: operation?.name ?? item.operationId, detail: operation?.description ?? `${item.nodeId} · ${item.operationId}`, registryBacked: true, actionId: `registry:${item.nodeId}:${item.operationId}`, settings: {} };
+              return { id: Number(index + 1), kind: item.kind === "trigger" ? "Trigger" : "Action", title: item.operationId, detail: `${item.nodeId} · ${item.operationId}`, registryBacked: true, actionId: `registry:${item.nodeId}:${item.operationId}`, settings: {} };
             }));
           }
         }).catch(() => { if (active) setNotice("Could not load the saved workflow. Your local draft is still available."); });
