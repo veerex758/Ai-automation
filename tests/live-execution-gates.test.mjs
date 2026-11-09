@@ -44,6 +44,6 @@ test("synchronous registry route keeps live execution restricted to allowlisted 
   assert.ok(registryRoute.includes('step.nodeId === "manual" && step.operationId === "start"'));
   assert.ok(registryRoute.includes('step.nodeId === "email" && step.operationId === "send_email"'));
   assert.match(registryRoute, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.match(registryRoute, /allowed\\.has\\(to\\)/);
+  assert.ok(registryRoute.includes("allowed.has(to)"));
   assert.match(registryRoute, /AIVANTA_LIVE_EXECUTION_ENABLED/);
 });
