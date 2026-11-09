@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {NextRequest,NextResponse} from "next/server";
 import {createClient as adminClient} from "@supabase/supabase-js";
 import {createClient} from "@/lib/supabase/server";
