@@ -171,9 +171,10 @@ export default function WorkflowBuilderPage() {
       setNotice("The action catalog is unavailable. Reload it before saving this workflow.");
       return;
     }
-    const actionIssues = [...getActionConfigurationIssues(), ...getRegistryConfigurationIssues()];
-    if (actionIssues.length) {
-      setNotice("Action configuration needs attention: " + actionIssues.join(" "));
+    const actionIssues = getActionConfigurationIssues();
+    const registryIssues = getRegistryConfigurationIssues();
+    if (actionIssues.length || registryIssues.length) {
+      setNotice("Action configuration needs attention: " + [...actionIssues, ...registryIssues].join(" "));
       return;
     }
     if (!validationResult.valid) {
