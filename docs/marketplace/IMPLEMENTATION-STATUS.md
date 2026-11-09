@@ -11,7 +11,7 @@ Source of truth: `docs/marketplace/MASTER-SPEC.md`. This ledger separates merged
 | Immutable product versions/private artifact storage/checksum | Implemented on main | Version submission, private bucket and integrity/hash verification. |
 | Automated checks + reviewer exact version/hash approval + publication gate | Implemented on main | `lib/marketplace/verification.ts`, reviewer queue/decision/publish RPC, verification tests. Reviewer must remain independent of creator. |
 | Customer install into own workspace, inactive draft copy | Implemented on main | Install RPC + private artifact materialization. No execution on install. |
-| Configure connections, dry-run, activate, pause, update/rollback/version pin, uninstall | Partial | Configure/dry-run/activation/pause/rollback/uninstall customer journey and backend transition gates need completion and authenticated E2E. |
+| Configure connections, dry-run, activate, pause, update/rollback/version pin, uninstall | In PR #175 | Lifecycle RPC/API now configures (without storing credentials), requires successful side-effect-free registry dry-run before activation, and supports pause/uninstall. Version update/rollback and authenticated lifecycle E2E still pending. |
 | Product ratings eligible only after purchase/install | In PR #175 | Rating API/table, RLS, one review per product/user, published-only display. CI/replay pending. |
 | Abuse/IP/security/privacy reports + moderation | In PR #175 | Report submission, moderator queue, audited triage/closure, reporter notice. CI/replay pending. |
 | Customer notices (permissions/integrations/usage/revocation/updates) | Foundation in PR #175 | Inbox/read state; actual notice fan-out on product/version/revocation events still needs wiring. |
