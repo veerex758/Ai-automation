@@ -88,3 +88,24 @@ test("rejects unknown AI draft envelope and node fields", async () => {
   const unsafeNode = { ...validDefinition, nodes: [{ ...validDefinition.nodes[0], executable: "true" }] };
   await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsafeNode) } }] }) }), /AI_UNSAFE_WORKFLOW/);
 });
+
+test("explicit Gemini provider selects Gemini key even when OpenAI key is also present", async () => {
+  let url = "";
+  let auth = "";
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-key", OPENAI_API_KEY: "openai-key", NODE_ENV: "test" }, fetchImpl: async (requested, options) => {
+    url = requested; auth = options.headers.Authorization;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  }});
+  assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(auth, "Bearer gemini-key");
+});
+test("explicit OpenAI provider uses OpenAI key and endpoint", async () => {
+  let url = "";
+  let auth = "";
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async (requested, options) => {
+    url = requested; auth = options.headers.Authorization;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  }});
+  assert.equal(url, "https://api.openai.com/v1/chat/completions");
+  assert.equal(auth, "Bearer openai-key");
+});
