@@ -117,13 +117,20 @@ export async function invokeCommunityNode(args: CommunityNodeInvocation): Promis
     });
     const declared = Number(response.headers.get("content-length") ?? "0");
     if (declared > MAX_RESPONSE_BYTES) throw new Error("COMMUNITY_NODE_OUTPUT_TOO_LARGE");
-    const bytes = await response.arrayBuffer();
-    if (bytes.byteLength > MAX_RESPONSE_BYTES) throw new Error("COMMUNITY_NODE_OUTPUT_TOO_LARGE");
+    const bytes = await readBoundedResponse(response, MAX_RESPONSE_BYTES);
     if (!response.ok) throw new Error("COMMUNITY_NODE_WORKER_FAILED");
     let parsed: unknown;
     try { parsed = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE"); }
     if (!parsed || typeof parsed !== "object" || !("output" in parsed)) throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE");
-    const result = parsed as CommunityNodeWorkerResult;\n    if (result.logs !== undefined) {\n      if (!Array.isArray(result.logs)) throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE");\n      result.logs = result.logs.slice(0, MAX_LOGS).flatMap((entry) => {\n        if (!entry || (entry.level !== "info" && entry.level !== "error") || typeof entry.message !== "string") return [];\n        return [{ level: entry.level, message: entry.message.slice(0, MAX_LOG_MESSAGE_CHARS) }];\n      });\n    }\n    return result;
+    const result = parsed as CommunityNodeWorkerResult;
+    if (result.logs !== undefined) {
+      if (!Array.isArray(result.logs)) throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE");
+      result.logs = result.logs.slice(0, MAX_LOGS).flatMap((entry) => {
+        if (!entry || (entry.level !== "info" && entry.level !== "error") || typeof entry.message !== "string") return [];
+        return [{ level: entry.level, message: entry.message.slice(0, MAX_LOG_MESSAGE_CHARS) }];
+      });
+    }
+    return result;
   } catch (error) {
     if (controller.signal.aborted) throw new Error("COMMUNITY_NODE_WORKER_TIMEOUT");
     throw error;
