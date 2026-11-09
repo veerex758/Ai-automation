@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateWorkflow, extractJson } from "../lib/workflows/ai-workflow-generator.cjs";
-const validDefinition = { version: 1, nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
+const validDefinition = { version: 1, edges: [], nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
 const env = { AIVANTA_AI_API_KEY: "test-secret", AIVANTA_AI_BASE_URL: "https://ai.example.test/v1", AIVANTA_AI_MODEL: "test-model", NODE_ENV: "test" };
 const fakeFetch = (payload, status = 200) => async (_url, options) => {
   assert.equal(options.headers.Authorization, "Bearer test-secret");
@@ -81,4 +81,10 @@ test("validates explicit directed edges and true/false condition branches", asyn
   assert.equal(result.definition.edges[2].label, "false");
   assert.equal(result.saved, false);
   assert.equal(result.executed, false);
+});
+test("rejects unknown AI draft envelope and node fields", async () => {
+  const unsafe = { ...validDefinition, execute: true };
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsafe) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const unsafeNode = { ...validDefinition, nodes: [{ ...validDefinition.nodes[0], executable: "true" }] };
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsafeNode) } }] }) }), /AI_UNSAFE_WORKFLOW/);
 });
