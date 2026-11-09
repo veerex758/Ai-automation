@@ -5,7 +5,7 @@ import IntegrationDirectory from "./integrations/integration-directory";
 
 type Section = "integrations" | "templates" | "analytics" | "activity" | "billing" | "settings";
 const navigation = [
-  ["Dashboard","/dashboard","▦"],["Workflows","/dashboard#workflows","↗"],["Integrations","/dashboard/integrations","⌘"],["AI Agents","/dashboard/ai-assistant","✺"],["Templates","/dashboard/templates","▧"],["Analytics","/dashboard/analytics","▥"],["Activity logs","/dashboard/activity","◷"],["Billing","/dashboard/billing","◇"],["Settings","/dashboard/settings","⚙"],
+  ["Dashboard","/dashboard","▦"],["Workflows","/dashboard#workflows","↗"],["Integrations","/dashboard/integrations","⌘"],["Node library","/dashboard/nodes","◇"],["AI Agents","/dashboard/ai-assistant","✺"],["Templates","/dashboard/templates","▧"],["Analytics","/dashboard/analytics","▥"],["Activity logs","/dashboard/activity","◷"],["Billing","/dashboard/billing","◇"],["Settings","/dashboard/settings","⚙"],
 ] as const;
 const templates = [
   {name:"Lead Capture & Welcome Email",category:"Lead capture",description:"Start from a website form, record lead details, and prepare a welcome message."},

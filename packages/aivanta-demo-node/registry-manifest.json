@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packageName": "@aivanta/demo-hello",
+  "packageVersion": "1.0.0",
+  "displayName": "Aivanta Hello Demo",
+  "description": "A minimal capability-free demonstration node maintained by Aivanta.",
+  "publisher": {
+    "name": "Aivanta",
+    "url": "https://github.com/veerex758/Ai-automation"
+  },
+  "runtimeApiVersion": 1,
+  "entrypoint": "dist/index.js",
+  "integrity": "sha512-uhDIZ8e5B6wDsqyiy9+Nv7TymXLQz3fa+E2zQOpS7s/wHy+6W67a5LMNYv1Cn4/EuxL++UT0tqDcqGcqgkT3jw==",
+  "permissions": [],
+  "installPolicy": "no-scripts",
+  "nativeDependencies": false
+}

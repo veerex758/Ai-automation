@@ -33,6 +33,11 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Verify node installation migration and RLS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          bash tests/sql/verify-node-installation-migration.sh
       - name: Workflow validation tests
         run: npm test
       - name: Lint
