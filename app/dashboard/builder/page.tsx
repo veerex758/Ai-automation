@@ -41,7 +41,7 @@ export default function WorkflowBuilderPage() {
   const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
-  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);
+  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);\n  const registryCatalogRef = { current: registryCatalog };\n  registryCatalogRef.current = registryCatalog;
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
 
@@ -59,8 +59,26 @@ export default function WorkflowBuilderPage() {
     } catch {
       // Keep the starter workflow when saved browser data is invalid.
     }
-    setHydrated(true);
     let active = true;
+    const requestedWorkflowId = new URLSearchParams(window.location.search).get("workflow");
+    if (requestedWorkflowId && /^[0-9a-f-]{36}$/i.test(requestedWorkflowId)) {
+      void fetch(`/api/workflows/${requestedWorkflowId}/definition`, { cache: "no-store" })
+        .then(async response => {
+          const payload = await response.json() as { workflow?: { id: string; name: string }; definition?: { format?: string; steps?: RegistryDraftStep[]; nodes?: GeneratedNode[] } };
+          if (!active || !response.ok || !payload.definition) return;
+          setSavedWorkflowId(payload.workflow?.id ?? requestedWorkflowId);
+          if (payload.workflow?.name) setName(payload.workflow.name);
+          if (payload.definition.format === "aivanta-registry-v1" && Array.isArray(payload.definition.steps)) {
+            const registrySteps = payload.definition.steps;
+            setAiRegistrySteps(registrySteps);
+            setSteps(registrySteps.map((item, index) => {
+              const operation = [...(registryCatalogRef.current ?? []).flatMap(node => [...node.triggers, ...node.actions])].find(op => op.id === item.operationId);
+              return { id: Number(index + 1), kind: item.kind === "trigger" ? "Trigger" : "Action", title: operation?.name ?? item.operationId, detail: operation?.description ?? `${item.nodeId} · ${item.operationId}`, registryBacked: true, actionId: `registry:${item.nodeId}:${item.operationId}`, settings: {} };
+            }));
+          }
+        }).catch(() => { if (active) setNotice("Could not load the saved workflow. Your local draft is still available."); });
+    }
+    setHydrated(true);
     void fetch("/api/workflows", { cache: "no-store" })
       .then(async response => {
         const payload = await response.json() as { workspace?: { name?: string } };
