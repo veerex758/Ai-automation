@@ -10,6 +10,7 @@ import "./builder.css";
 
 type StepKind = "Trigger" | "Action" | "Condition";
 type ActionField = { name: string; label: string; type: "text" | "email" | "url"; required: boolean; maxLength: number };
+type RegistryCatalogNode = { id: string; name: string; icon: string; category: string; group: string; executionStatus: "registered" | "coming_soon"; triggers: { id: string; name: string; description: string; inputSchema: Record<string, unknown> }[]; actions: { id: string; name: string; description: string; inputSchema: Record<string, unknown> }[] };
 type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
 type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string>; registryBacked?: boolean };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
@@ -39,7 +40,7 @@ export default function WorkflowBuilderPage() {
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
   const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
-  const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
+  const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);\n  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
 
@@ -73,9 +74,9 @@ export default function WorkflowBuilderPage() {
     async function loadActionCatalog() {
       try {
         const response = await fetch("/api/workflows/actions", { headers: { Accept: "application/json" }, cache: "no-store" });
-        const payload = await response.json() as { actions?: CatalogAction[]; error?: string };
+        const payload = await response.json() as { actions?: CatalogAction[]; registryNodes?: RegistryCatalogNode[]; error?: string };
         if (!response.ok || !Array.isArray(payload.actions)) throw new Error(payload.error || "Action catalog could not be loaded.");
-        if (active) setActionCatalog(payload.actions);
+        if (active) { setActionCatalog(payload.actions); setRegistryCatalog((payload.registryNodes ?? []).filter(node => node.executionStatus === "registered")); }
       } catch (error) {
         if (active) setCatalogError(error instanceof Error ? error.message : "Action catalog could not be loaded.");
       } finally {
@@ -294,7 +295,7 @@ export default function WorkflowBuilderPage() {
           <div className="builder-workspace-grid">
             <section className="canvas-panel" aria-label="Workflow canvas">
               <div className="canvas-toolbar"><div><strong>Workflow canvas</strong><small>TRIGGER → ACTIONS → OUTCOME</small></div><button onClick={() => setShowAdd(value => !value)}>＋ Add step</button></div>
-              {showAdd && <div className="add-step-menu">{(["Trigger", "Action", "Condition"] as StepKind[]).map(kind => <button key={kind} onClick={() => addStep(kind)}><span>{kindIcons[kind]}</span><span><strong>{kind}</strong><small>{kind === "Trigger" ? "Start the workflow" : kind === "Action" ? "Do a task" : "Branch on a rule"}</small></span></button>)}</div>}
+              {showAdd && <div className="add-step-menu"><div className="registry-picker-heading"><strong>Registered nodes</strong><small>{registryCatalog.length} available · choose an operation</small></div>{registryCatalog.map(node => <details className="registry-picker-node" key={node.id}><summary><span>{node.icon}</span><strong>{node.name}</strong><small>{node.category}</small></summary><div className="registry-picker-operations">{[...node.triggers.map(op => ({...op,kind:"Trigger" as StepKind})),...node.actions.map(op => ({...op,kind:"Action" as StepKind}))].map(op => <button key={`${node.id}:${op.kind}:${op.id}`} onClick={() => { const id=Date.now(); const registryStep: RegistryDraftStep={id:String(id),nodeId:node.id,operationId:op.id,kind:op.kind.toLowerCase() as "trigger"|"action",input:{}}; setSteps(current=>[...current,{id,kind:op.kind,title:op.name,detail:op.description,registryBacked:true,settings:{},actionId:`registry:${node.id}:${op.id}`}]);setSelected(id);setShowAdd(false);setAiRegistrySteps(current=>[...(current??[]),registryStep]);setNotice("Registry operation added. Configure its inputs before saving.");}}>{op.kind==="Trigger"?"◎":"↗"} {op.name}<small>{op.description}</small></button>)}</div></details>)}{(["Condition"] as StepKind[]).map(kind=><button key={kind} onClick={()=>addStep(kind)}><span>{kindIcons[kind]}</span><span><strong>{kind}</strong><small>Branch on a rule</small></span></button>)}</div>}
               <div className="flow-canvas">
                 <div className="canvas-grid" />
                 <div className="flow-nodes">
