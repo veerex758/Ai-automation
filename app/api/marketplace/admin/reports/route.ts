@@ -2,7 +2,7 @@ import {NextResponse,type NextRequest} from "next/server";
 import {createClient as createAdmin} from "@supabase/supabase-js";
 import {createClient} from "@/lib/supabase/server";
 const headers={"Cache-Control":"private, no-store"};
-function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw new Error("Marketplace moderation service unavailable");return createAdmin(u,k,{auth:{autoRefreshToken:false,persistSession:false}})}
+function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL??process.env.NEXT_PUBLIC_CODED_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY??process.env.CODED_SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw new Error("Marketplace moderation service unavailable");return createAdmin(u,k,{auth:{autoRefreshToken:false,persistSession:false}})}
 async function moderator(){const s=await createClient();const {data:{user},error}=await s.auth.getUser();if(error||!user)return null;const ids=[...(process.env.AIVANTA_MARKETPLACE_REVIEWER_IDS??"").split(","),...(process.env.AIVANTA_MARKETPLACE_ADMIN_IDS??"").split(",")].map(x=>x.trim()).filter(Boolean);return ids.includes(user.id)?user:null}
 export async function GET(request:NextRequest){const user=await moderator();if(!user)return NextResponse.json({error:"Marketplace moderator access required."},{status:403,headers});
  const status=request.nextUrl.searchParams.get("status")??"open";if(!["open","triaged","investigating","resolved","dismissed","all"].includes(status))return NextResponse.json({error:"Invalid report status."},{status:400,headers});
