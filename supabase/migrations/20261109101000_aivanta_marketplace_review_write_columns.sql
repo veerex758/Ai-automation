@@ -1,0 +1,2 @@
+-- Column-level customer write grants are applied after the trust tables are created
+-- in 20261109150000_aivanta_marketplace_customer_trust.sql.

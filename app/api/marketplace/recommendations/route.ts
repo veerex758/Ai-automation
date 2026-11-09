@@ -1,0 +1,8 @@
+import {NextResponse} from "next/server";import {createClient} from "@/lib/supabase/server";
+const h={"Cache-Control":"private, no-store"};
+export async function GET(){try{const sb=await createClient();const {data:{user}}=await sb.auth.getUser();let owned:string[]=[];if(user){const [i,p]=await Promise.all([sb.from("marketplace_installations").select("product_id").eq("installed_by",user.id).neq("status","removed").limit(200),sb.from("marketplace_purchases").select("product_id").eq("buyer_user_id",user.id).in("status",["paid","refunded"]).limit(200)]);owned=[...(i.data??[]).map(x=>x.product_id),...(p.data??[]).map(x=>x.product_id)]}
+ const {data:products,error}=await sb.from("marketplace_products").select("id,slug,name,summary,product_type,pricing_type,price_minor,currency,category_id,integrations,creator:marketplace_creators(display_name,slug),category:marketplace_categories(name)").eq("status","published").limit(250);if(error)throw error;
+ const seen=new Set(owned),candidate=(products??[]).filter(p=>!seen.has(p.id));const categoryCounts=new Map<string,number>();for(const p of products??[])if(seen.has(p.id)&&p.category_id)categoryCounts.set(p.category_id,(categoryCounts.get(p.category_id)??0)+1);
+ const ranked=candidate.map(p=>({p,score:(categoryCounts.get(p.category_id)??0)*5+(p.pricing_type==="free"?1:0)})).sort((a,b)=>b.score-a.score).slice(0,12).map(x=>x.p);
+ return NextResponse.json({recommendations:ranked,personalized:Boolean(user),basis:user?"Your installed and purchased product categories":"Popular/free catalog defaults"},{headers:h});
+ }catch(e){console.error("Marketplace recommendations failed",e);return NextResponse.json({error:"Could not load recommendations."},{status:500,headers:h})}}
