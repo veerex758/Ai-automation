@@ -26,7 +26,7 @@ export async function POST(request:NextRequest){
  if(typeof id!=="string"||!/^[0-9a-f-]{36}$/i.test(id)||!["review","approve","reject","hold","processing","failed"].includes(String(action))||
  (reason!==undefined&&(typeof reason!=="string"||reason.length>1000)))return NextResponse.json({error:"Invalid payout action."},{status:400,headers});
  if(transfer!==undefined)return NextResponse.json({error:"Provider transfer references are accepted only by settlement reconciliation."},{status:400,headers});
- const {data,error}=await access.db.rpc("marketplace_review_payout_request",{p_request_id:id,p_action:action,p_reason:typeof reason==="string"?reason.trim():"",p_transfer_id:typeof transfer==="string"?transfer.trim()||null:null});
+ const {data,error}=await access.db.rpc("marketplace_review_payout_request",{p_request_id:id,p_action:action,p_reason:typeof reason==="string"?reason.trim():"",p_transfer_id:null});
  if(error){const status=/payout_request_not_found/.test(error.message)?404:/payout_transition_invalid/.test(error.message)?409:/invalid_payout_action/.test(error.message)?400:500;if(status===500)console.error("Finance payout action failed",error);return NextResponse.json({error:status===404?"Payout request not found.":status===409?"Payout status does not permit this action.":status===400?"Invalid payout action.":"Could not update payout."},{status,headers});}
  return NextResponse.json({payout:data},{headers});
  }catch(error){console.error("Finance payout action failed",error);return NextResponse.json({error:"Could not update payout."},{status:500,headers});}
