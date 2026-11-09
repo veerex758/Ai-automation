@@ -22,6 +22,40 @@ export type CommunityNodeWorkerResult = { output: unknown; logs?: Array<{ level:
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 10_000;
+const MAX_LOGS = 100;
+const MAX_LOG_MESSAGE_CHARS = 2_000;
+
+async function readBoundedResponse(response: Response, maxBytes: number): Promise<Uint8Array> {
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel("response size limit exceeded");
+        throw new Error("COMMUNITY_NODE_OUTPUT_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength; }
+  return result;
+}
+
+function validateInvocation(args: CommunityNodeInvocation): void {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuid.test(args.packageVersionId) || !uuid.test(args.installationId) || !uuid.test(args.workspaceId)) throw new Error("COMMUNITY_NODE_INVOCATION_INVALID");
+  if (!/^sha512-[A-Za-z0-9+/]{86}==$/.test(args.integrity)) throw new Error("COMMUNITY_NODE_INTEGRITY_INVALID");
+  if (!/^dist\/[a-zA-Z0-9._/-]+\.js$/.test(args.entrypoint) || args.entrypoint.includes("..")) throw new Error("COMMUNITY_NODE_ENTRYPOINT_INVALID");
+  if (!/^[a-zA-Z0-9._:-]{1,128}$/.test(args.operation)) throw new Error("COMMUNITY_NODE_OPERATION_INVALID");
+  if (!Array.isArray(args.permissions) || args.permissions.length > 7 || args.permissions.some(p => typeof p !== "string" || !/^[a-z][a-z0-9_.:-]{1,127}$/.test(p))) throw new Error("COMMUNITY_NODE_PERMISSIONS_INVALID");
+}
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -39,6 +73,7 @@ function safeEqualHex(a: string, b: string): boolean {
 }
 
 export async function invokeCommunityNode(args: CommunityNodeInvocation): Promise<CommunityNodeWorkerResult> {
+  validateInvocation(args);
   const endpoint = new URL(requiredEnv("AIVANTA_COMMUNITY_NODE_WORKER_URL"));
   if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
     throw new Error("COMMUNITY_NODE_WORKER_URL_INVALID");
@@ -88,7 +123,7 @@ export async function invokeCommunityNode(args: CommunityNodeInvocation): Promis
     let parsed: unknown;
     try { parsed = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE"); }
     if (!parsed || typeof parsed !== "object" || !("output" in parsed)) throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE");
-    return parsed as CommunityNodeWorkerResult;
+    const result = parsed as CommunityNodeWorkerResult;\n    if (result.logs !== undefined) {\n      if (!Array.isArray(result.logs)) throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE");\n      result.logs = result.logs.slice(0, MAX_LOGS).flatMap((entry) => {\n        if (!entry || (entry.level !== "info" && entry.level !== "error") || typeof entry.message !== "string") return [];\n        return [{ level: entry.level, message: entry.message.slice(0, MAX_LOG_MESSAGE_CHARS) }];\n      });\n    }\n    return result;
   } catch (error) {
     if (controller.signal.aborted) throw new Error("COMMUNITY_NODE_WORKER_TIMEOUT");
     throw error;
