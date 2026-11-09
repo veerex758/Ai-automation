@@ -1,0 +1,3 @@
+import assert from "node:assert/strict";import {readFile} from "node:fs/promises";
+const route=await readFile("app/api/marketplace/admin/reports/route.ts","utf8");
+assert.match(route,/AIVANTA_MARKETPLACE_ADMIN_IDS/);assert.match(route,/marketplace_product_reports/);assert.match(route,/marketplace_admin_audit/);assert.match(route,/resolution.length<5/);assert.match(route,/marketplace_customer_notices/);console.log("Marketplace moderation contracts passed.");
