@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { verifyCommunityWorkerSignature } from "../lib/nodes/community-worker";
+import { invokeCommunityNode, verifyCommunityWorkerSignature } from "../lib/nodes/community-worker";
 
 test("community worker signatures bind timestamp, nonce, and exact request body", () => {
   const secret = "test-secret-that-is-at-least-32-characters-long";
@@ -23,4 +23,23 @@ test("community worker signature rejects stale timestamps and malformed digests"
   assert.equal(verifyCommunityWorkerSignature({ secret, timestamp, nonce, body, signature }), false);
   assert.equal(verifyCommunityWorkerSignature({ secret, timestamp: "NaN", nonce, body, signature }), false);
   assert.equal(verifyCommunityWorkerSignature({ secret, timestamp: String(Date.now()), nonce, body, signature: "bad" }), false);
+});
+
+test("community worker invocation rejects malformed identifiers before network access", async () => {
+  await assert.rejects(invokeCommunityNode({
+    packageVersionId: "not-a-uuid", integrity: "sha512-" + "A".repeat(88),
+    entrypoint: "dist/index.js", operation: "run", input: {},
+    permissions: [], workspaceId: "not-a-uuid", installationId: "not-a-uuid",
+  }), /COMMUNITY_NODE_INVOCATION_INVALID/);
+});
+
+test("community worker invocation rejects path traversal and malformed integrity", async () => {
+  const valid = {
+    packageVersionId: "00000000-0000-4000-8000-000000000001",
+    integrity: "sha512-" + "A".repeat(88), entrypoint: "dist/index.js", operation: "run",
+    input: {}, permissions: [], workspaceId: "00000000-0000-4000-8000-000000000002",
+    installationId: "00000000-0000-4000-8000-000000000003",
+  };
+  await assert.rejects(invokeCommunityNode({...valid, entrypoint: "dist/../index.js"}), /COMMUNITY_NODE_ENTRYPOINT_INVALID/);
+  await assert.rejects(invokeCommunityNode({...valid, integrity: "sha256-invalid"}), /COMMUNITY_NODE_INTEGRITY_INVALID/);
 });
