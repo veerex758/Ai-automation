@@ -1,49 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
-import { performSafeHttpRequest } from "@/nodes/safe-http";
-import { executeRegisteredWorkflow } from "@/nodes/workflow-runner";
-import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
-async function serverContext(workspaceId: string, loadWorkspaceCredentials: boolean): Promise<Omit<NodeContext, "previousOutputs">> {
+function serverContext(): Omit<NodeContext, "previousOutputs"> {
   const credentials: Record<string, Record<string, string>> = {};
   if (process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
   if (process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
   if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
     credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
   }
-
-  if (loadWorkspaceCredentials) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
-    const admin = createSupabaseAdminClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-    const { data: integrations, error: integrationError } = await admin.from("workspace_integrations")
-      .select("id,provider").eq("workspace_id", workspaceId).eq("status", "connected");
-    if (integrationError) throw integrationError;
-    const rows = integrations ?? [];
-    if (rows.length) {
-      const byId = new Map(rows.map((row) => [row.id, row.provider]));
-      const { data: secrets, error: secretError } = await admin.from("workspace_integration_secrets")
-        .select("integration_id,encrypted_credentials").in("integration_id", rows.map((row) => row.id));
-      if (secretError) throw secretError;
-      for (const row of secrets ?? []) {
-        const provider = byId.get(row.integration_id);
-        if (!provider || typeof row.encrypted_credentials !== "string") continue;
-        const decoded = decryptWorkspaceCredentials(row.encrypted_credentials, undefined, workspaceId + ":" + provider);
-        credentials[provider] = { ...credentials[provider], ...(decoded[provider] ?? {}) };
-      }
-    }
-  }
-
   return {
     credentials,
     logger: {
@@ -52,11 +22,21 @@ async function serverContext(workspaceId: string, loadWorkspaceCredentials: bool
     },
     http: {
       async request(args) {
-        const response = await performSafeHttpRequest({
-          url: args.url, method: args.method, headers: args.headers ?? {},
-          body: args.body, timeoutMs: args.timeoutMs ?? 15000,
-        });
-        return { status: response.status, body: response.body };
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), args.timeoutMs ?? 15000);
+        try {
+          const response = await fetch(args.url, {
+            method: args.method,
+            headers: args.headers,
+            body: args.body === undefined ? undefined : JSON.stringify(args.body),
+            signal: controller.signal,
+            redirect: "error",
+          });
+          let body: unknown = null;
+          const raw = await response.text();
+          try { body = raw ? JSON.parse(raw) : raw; } catch { body = raw; }
+          return { status: response.status, body };
+        } finally { clearTimeout(timer); }
       },
     },
   };
@@ -97,27 +77,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
       return NextResponse.json({ error: "This endpoint requires a saved aivanta-registry-v1 workflow definition." }, { status: 422 });
     }
-    const validated = validateRegisteredSteps(definition.steps);
-    if (!validated.steps) {
-      return NextResponse.json({ error: validated.error ?? "Registry workflow steps are malformed." }, { status: 422 });
+    const steps = definition.steps as RegisteredWorkflowStep[];
+    if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
+      typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
+      return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
     }
-    const steps = validated.steps;
     if (!dryRun) {
       // Until each provider has its own workspace-scoped connection and explicit live-action gate,
       // keep production execution restricted to the existing guarded Resend email action.
-      const safeInternalActions = new Set([
-        "if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields",
-        "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time",
-        "loop.iterate",
-        "deduplicate.unique", "sort.sort_items", "split_batches.split", "crypto_hash.hash",
-        "template.render", "csv_parse.parse", "csv_stringify.stringify", "markdown_html.convert",
-        "text_transform.transform", "regex.match", "array_ops.operate", "object_ops.operate",
-        "math.calculate", "uuid.generate", "base64.convert", "date_add.add", "date_format.format",
-        "json_encode.encode",
-      ]);
       const unsupportedLiveStep = steps.find((step) =>
         (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
-        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email") && !safeInternalActions.has(step.nodeId + "." + step.operationId))
+        (step.kind === "action" && !(step.nodeId === "email" && step.operationId === "send_email"))
       );
       if (unsupportedLiveStep) {
         return NextResponse.json({ error: "This registry operation is available in dry-run only until its live integration is explicitly enabled." }, { status: 403 });
@@ -141,12 +111,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       if ((count ?? 0) >= 10) return NextResponse.json({ error: "Live run limit reached." }, { status: 429 });
     }
 
+    // The blueprint defines one workflow run as one execution, regardless of node count or run mode.
+    const { data: executionUsage, error: executionUsageError } = await supabase.rpc("consume_workspace_usage", {
+      p_workspace_id: workflow.workspace_id,
+      p_metric: "workflow_execution",
+      p_quantity: 1,
+      p_metadata: dryRun
+        ? { workflow_id: workflow.id, mode: "dry_run" }
+        : { workflow_id: workflow.id, mode: "live", idempotency_key: idempotencyKey },
+    });
+    if (executionUsageError) return NextResponse.json({ error: "Execution billing meter unavailable. Apply the subscription migration." }, { status: 503 });
+    if (!executionUsage?.allowed) return NextResponse.json({ error: "Monthly workflow execution allowance reached. Upgrade your plan.", entitlement: executionUsage }, { status: 402 });
+
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
     // -> finalized lifecycle so step inserts remain auditable before completion.
-    const executionContext = await serverContext(workflow.workspace_id, !dryRun);
     const dryRunExecution = dryRun
-      ? await executeRegisteredWorkflow({ steps, context: executionContext, dryRun: true })
+      ? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: true })
       : null;
     const initialStatus = dryRunExecution
       ? (dryRunExecution.status === "succeeded" ? "succeeded" : "failed")
@@ -160,9 +141,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       completed_at: initialCompletedAt, duration_ms: initialDuration,
       error_message: dryRunExecution?.status === "failed" ? "One or more registered workflow steps failed." : null,
     }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
+    if (insertError?.code === "23505" && !dryRun) {
+      const { data: duplicateRun } = await supabase.from("workflow_runs")
+        .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message")
+        .eq("idempotency_key", idempotencyKey).eq("created_by", user.id).eq("workflow_id", workflow.id).maybeSingle();
+      if (duplicateRun) return NextResponse.json({ run: duplicateRun, duplicate: true }, { status: 200 });
+    }
     if (insertError) throw insertError;
 
-    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: executionContext, dryRun: false });
+    const execution = dryRunExecution ?? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: false });
     const rows = execution.steps.map((step, index) => ({
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
