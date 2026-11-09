@@ -74,8 +74,8 @@ export default function WorkflowBuilderPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not load this workflow.");
       setWorkflow(result.workflow);
-      const catalogResponse = await fetch("/api/node-catalog", { cache: "no-store" });
-      if (catalogResponse.ok) { const catalogResult = await catalogResponse.json(); setRegistryCatalog(Array.isArray(catalogResult.nodes) ? catalogResult.nodes : []); }
+      const catalogResponse = await fetch("/api/workflows/actions", { cache: "no-store" });
+      if (catalogResponse.ok) { const catalogResult = await catalogResponse.json(); setRegistryCatalog(Array.isArray(catalogResult.registryNodes) ? catalogResult.registryNodes : []); }
       const nextDefinition = result.definition as Definition;
       setDefinition({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) });
       setSavedFingerprint(JSON.stringify({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) }));
