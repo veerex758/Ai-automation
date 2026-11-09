@@ -109,3 +109,15 @@ test("explicit OpenAI provider uses OpenAI key and endpoint", async () => {
   assert.equal(url, "https://api.openai.com/v1/chat/completions");
   assert.equal(auth, "Bearer openai-key");
 });
+
+test("registry mode returns only a bounded node plan and never executes it", async () => {
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };
+  const result = await generateWorkflow({ prompt: "Start manually", nodeCatalog: [{ id: "manual" }], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) });
+  assert.deepEqual(result.registrySteps, plan.registrySteps);
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
+test("registry mode rejects unexpected top-level fields", async () => {
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], execute: true };
+  await assert.rejects(generateWorkflow({ prompt: "Start manually", mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+});
