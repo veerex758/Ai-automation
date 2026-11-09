@@ -112,7 +112,7 @@ test("explicit OpenAI provider uses OpenAI key and endpoint", async () => {
 
 test("registry mode returns only a bounded node plan and never executes it", async () => {
   const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };
-  const result = await generateWorkflow({ prompt: "Start manually", nodeCatalog: [{ id: "manual" }], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) });
+  const result = await generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) });
   assert.deepEqual(result.registrySteps, plan.registrySteps);
   assert.equal(result.saved, false);
   assert.equal(result.executed, false);
