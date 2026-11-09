@@ -314,7 +314,7 @@ export default function ConnectionsPage() {
       <section className="connections-hero">
         <div className="connections-eyebrow">YOUR WORKSPACE, CONNECTED</div>
         <h1>Connect your tools.</h1>
-        {workflowId && <Link className="connections-return" href={`/dashboard/workflows/${workflowId}`}>Return to your workflow <span aria-hidden="true">→</span></Link>
+        {workflowId && <Link className="connections-return" href={`/dashboard/workflows/${workflowId}`}>Return to your workflow <span aria-hidden="true">→</span></Link>}
         <p>Authorize services using their official sign-in screens. Aivanta never asks for your provider password.</p>
       </section>
 
