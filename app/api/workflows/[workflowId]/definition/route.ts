@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { findOperation } from "@/nodes/registry";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -64,7 +64,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
 
-    const stored = data.definition as { version?: unknown; nodes?: unknown } | null;
+    const stored = data.definition as Record<string, unknown> | null;
     const valid = validateDefinition(stored && typeof stored === "object" ? stored : { version: 1, nodes: [] });
     const starterDefinition = {
       version: 1 as const,
@@ -76,18 +76,40 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
         settings: { event: "manual" },
       }],
     };
-    const registrySteps = stored && Array.isArray((stored as { steps?: unknown }).steps)
-      ? (stored as { steps: RegisteredWorkflowStep[] }).steps : [];
-    const hydratedDefinition = valid.definition ? {
-      ...valid.definition,
-      nodes: valid.definition.nodes.map((node) => {
-        const step = registrySteps.find((candidate) => candidate.id === node.id);
-        return step ? { ...node, registryNodeId: step.nodeId, registryOperationId: step.operationId, registryInput: step.input } : node;
-      }),
-    } : starterDefinition;
+    // The shared v1 validator intentionally returns only its normalized legacy
+    // nodes. Preserve the registry execution plan separately so a saved graph
+    // can round-trip through GET without silently degrading to legacy nodes.
+    let registryPlan: Record<string, unknown> = {};
+    if (stored?.format === "aivanta-registry-v1") {
+      const checkedRegistry = validateRegisteredSteps(stored.steps);
+      if (!checkedRegistry.steps) {
+        return NextResponse.json({ error: "This saved registry workflow needs repair before it can be edited.", detail: checkedRegistry.error }, { status: 409 });
+      }
+      registryPlan = { format: "aivanta-registry-v1", steps: checkedRegistry.steps };
+    }
     return NextResponse.json({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status },
-      definition: hydratedDefinition,
+      definition: {
+        ...(valid.definition ?? starterDefinition),
+        nodes: (valid.definition ?? starterDefinition).nodes.map((node, index) => {
+          const savedNode = Array.isArray(stored?.nodes) ? stored.nodes[index] as Record<string, unknown> | undefined : undefined;
+          const step = Array.isArray(stored?.steps)
+            ? (stored.steps as Record<string, unknown>[]).find((item) => item.id === node.id)
+            : undefined;
+          return {
+            ...node,
+            ...(savedNode?.position ? { position: savedNode.position } : {}),
+            ...(step ? {
+              registryNodeId: step.nodeId,
+              registryOperationId: step.operationId,
+              registryInput: step.input,
+              settings: { ...node.settings, provider: step.nodeId, operation: step.operationId },
+            } : {}),
+          };
+        }),
+        ...(stored && Array.isArray(stored.edges) ? { edges: stored.edges } : {}),
+        ...registryPlan,
+      },
     });
   } catch (error) {
     console.error("Failed to load Aivanta workflow definition:", error);
@@ -118,7 +140,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     // Keep the existing version-1 nodes contract for the builder and database RPC,
     // while optionally storing a registry execution plan alongside it. The RPC
     // validates the legacy nodes and persists the full JSON document atomically.
-    let definitionToSave: Record<string, unknown> = validated.definition;
+    let definitionToSave: Record<string, unknown> = {
+      ...validated.definition,
+      ...(requestBody.definition && typeof requestBody.definition === "object"
+        ? {
+            edges: (requestBody.definition as Record<string, unknown>).edges,
+            nodes: validated.definition.nodes.map((node, index) => ({
+              ...node,
+              position: ((requestBody.definition as Record<string, unknown>).nodes as Record<string, unknown>[] | undefined)?.[index]?.position,
+            })),
+          }
+        : {}),
+    };
     const legacyNodes = validated.definition.nodes;
     const canBridgeLegacyDefinition = legacyNodes[0]?.type === "trigger" &&
       legacyNodes[0].settings.event === "manual" &&
@@ -147,37 +180,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     const registryStepsInput = hasExplicitRegistrySteps ? requestBody.registrySteps : autoRegistrySteps;
     const shouldSaveRegistry = hasExplicitRegistrySteps || autoRegistrySteps !== null;
     if (shouldSaveRegistry) {
-      if (!Array.isArray(registryStepsInput) || registryStepsInput.length < 1 || registryStepsInput.length > 30) {
-        return NextResponse.json({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
-      }
-      const registrySteps = registryStepsInput as unknown[];
-      const seen = new Set<string>();
-      for (const candidate of registrySteps) {
-        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-          return NextResponse.json({ error: "Each registry step must be an object." }, { status: 400 });
-        }
-        const step = candidate as Record<string, unknown>;
-        if (typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) ||
-            typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
-            (step.kind !== "trigger" && step.kind !== "action") || !("input" in step)) {
-          return NextResponse.json({ error: "Registry steps must have unique IDs, a registered operation, a kind, and input." }, { status: 400 });
-        }
-        seen.add(step.id);
-        const operation = findOperation(step.nodeId, step.operationId, step.kind);
-        if (!operation) return NextResponse.json({ error: `Unknown registry operation: ${step.nodeId}.${step.operationId}.` }, { status: 422 });
-        const parsedInput = operation.inputSchema.safeParse(step.input);
-        if (!parsedInput.success) return NextResponse.json({ error: `Invalid input for registry step ${step.id}.` }, { status: 422 });
-      }
-      if (registrySteps[0] && (registrySteps[0] as Record<string, unknown>).kind !== "trigger") {
-        return NextResponse.json({ error: "The first registry step must be a trigger." }, { status: 400 });
-      }
-      if (registrySteps.filter((step) => (step as Record<string, unknown>).kind === "trigger").length !== 1) {
-        return NextResponse.json({ error: "A registry workflow must contain exactly one trigger." }, { status: 400 });
+      const validatedRegistry = validateRegisteredSteps(registryStepsInput);
+      if (!validatedRegistry.steps) {
+        return NextResponse.json({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
       }
       definitionToSave = {
         ...validated.definition,
         format: "aivanta-registry-v1",
-        steps: registrySteps as RegisteredWorkflowStep[],
+        steps: validatedRegistry.steps,
       };
     }
 

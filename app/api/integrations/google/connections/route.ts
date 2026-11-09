@@ -15,7 +15,8 @@ export async function GET() {
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Support the deployment's existing CODED_* secret naming as well as the canonical alias.
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return NextResponse.json({ error: "Connection storage is not configured." }, { status: 503, headers });
 
     const admin = createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });

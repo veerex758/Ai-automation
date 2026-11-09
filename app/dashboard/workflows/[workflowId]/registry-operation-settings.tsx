@@ -1,54 +1,54 @@
 "use client";
 
-import type { ChangeEvent } from "react";
+import { useMemo } from "react";
 
-type SchemaField = { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown; format?: string };
-type RegistryOperation = { id: string; name: string; description: string; inputSchema: { properties?: Record<string, SchemaField>; required?: string[] } };
-type RegistryNode = { id: string; name: string; icon?: string; category?: string; triggers: RegistryOperation[]; actions: RegistryOperation[] };
-type Props = {
-  catalog: RegistryNode[];
-  kind: "trigger" | "action";
-  nodeId: string;
-  operationId: string;
-  input: Record<string, unknown>;
-  onChange: (nodeId: string, operationId: string, input: Record<string, unknown>) => void;
-};
+type Field = { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown };
+type Operation = { id: string; name: string; description: string; inputSchema: { properties?: Record<string, Field>; required?: string[] } };
+type CatalogNode = { id: string; name: string; triggers: Operation[]; actions: Operation[] };
+type Props = { catalog: CatalogNode[]; kind: "trigger" | "action"; nodeId: string; operationId: string; input: Record<string, unknown>; onChange: (nodeId: string, operationId: string, input: Record<string, unknown>) => void };
 
-/** Schema-driven settings editor: no provider/operation allowlists in the canvas. */
 export default function RegistryOperationSettings({ catalog, kind, nodeId, operationId, input, onChange }: Props) {
-  const node = catalog.find((item) => item.id === nodeId);
-  const operations = kind === "trigger" ? node?.triggers ?? [] : node?.actions ?? [];
+  const available = useMemo(() => catalog.filter((node) => (kind === "trigger" ? node.triggers : node.actions).length), [catalog, kind]);
+  const selectedNode = catalog.find((node) => node.id === nodeId) ?? available[0];
+  const operations = selectedNode ? (kind === "trigger" ? selectedNode.triggers : selectedNode.actions) : [];
   const operation = operations.find((item) => item.id === operationId) ?? operations[0];
-  const fields = operation?.inputSchema.properties ?? {};
-  const required = new Set(operation?.inputSchema.required ?? []);
-  function update(key: string, value: unknown) {
-    onChange(nodeId, operation?.id ?? operationId, { ...input, [key]: value });
+  const properties = operation?.inputSchema.properties ?? {};
+  const required = operation?.inputSchema.required ?? [];
+  function chooseNode(nextNodeId: string) {
+    const nextNode = catalog.find((node) => node.id === nextNodeId);
+    const nextOperation = (kind === "trigger" ? nextNode?.triggers : nextNode?.actions)?.[0];
+    if (!nextNode || !nextOperation) return;
+    onChange(nextNode.id, nextOperation.id, Object.fromEntries(Object.entries(nextOperation.inputSchema.properties ?? {}).map(([key, field]) => [key, field.default ?? ""])));
   }
-  return <section className="step-config-fields" aria-label="Registered operation configuration">
-    <div className="config-section-title">Registered {kind}</div>
-    <label htmlFor="registry-node">Catalogue node</label>
-    <select id="registry-node" value={nodeId} onChange={(event) => {
-      const next = catalog.find((item) => item.id === event.target.value);
-      const nextOperation = (kind === "trigger" ? next?.triggers : next?.actions)?.[0];
-      onChange(event.target.value, nextOperation?.id ?? "", {});
-    }}>
-      {catalog.filter((item) => (kind === "trigger" ? item.triggers : item.actions).length > 0).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+  function chooseOperation(nextOperationId: string) {
+    const next = operations.find((item) => item.id === nextOperationId);
+    if (!next || !selectedNode) return;
+    onChange(selectedNode.id, next.id, Object.fromEntries(Object.entries(next.inputSchema.properties ?? {}).map(([key, field]) => [key, field.default ?? ""])));
+  }
+  function changeField(key: string, value: unknown) { if (selectedNode && operation) onChange(selectedNode.id, operation.id, { ...input, [key]: value }); }
+  return <section className="step-config-fields">
+    <div className="config-section-title">Registered {kind} operation</div>
+    <label htmlFor={kind + "-registry-node"}>App / node</label>
+    <select id={kind + "-registry-node"} value={selectedNode?.id ?? ""} onChange={(event) => chooseNode(event.target.value)}>
+      {available.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
     </select>
-    <label htmlFor="registry-operation">Operation</label>
-    <select id="registry-operation" value={operation?.id ?? ""} onChange={(event) => onChange(nodeId, event.target.value, {})}>
+    <label htmlFor={kind + "-registry-operation"}>Operation</label>
+    <select id={kind + "-registry-operation"} value={operation?.id ?? ""} onChange={(event) => chooseOperation(event.target.value)}>
       {operations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
     </select>
-    {operation?.description && <p className="config-note">{operation.description}</p>}
-    {Object.entries(fields).map(([key, schema]) => {
-      const value = input[key] ?? schema.default ?? "";
-      const label = schema.title ?? key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
-      const id = "registry-input-" + key;
-      if (schema.enum?.length) return <div key={key}><label htmlFor={id}>{label}{required.has(key) ? " *" : ""}</label><select id={id} required={required.has(key)} value={String(value)} onChange={(event) => update(key, event.target.value)}><option value="">Choose…</option>{schema.enum.map((item) => <option key={String(item)} value={String(item)}>{String(item)}</option>)}</select></div>;
-      const inputType = schema.type === "integer" || schema.type === "number" ? "number" : schema.type === "boolean" ? "checkbox" : schema.format === "email" || schema.type === "email" ? "email" : schema.format === "uri" || schema.type === "uri" ? "url" : "text";
-      if (schema.type === "object" || schema.type === "array") return <div key={key}><label htmlFor={id}>{label}{required.has(key) ? " *" : ""} (JSON)</label><textarea id={id} required={required.has(key)} value={typeof value === "string" ? value : JSON.stringify(value, null, 2)} onChange={(event) => { try { update(key, JSON.parse(event.target.value)); } catch { update(key, event.target.value); } }} placeholder={schema.description ?? (schema.type === "array" ? "[]" : "{}")}/><small className="config-note">Enter valid JSON {schema.type === "array" ? "array" : "object"}.</small></div>;
-      if (inputType === "checkbox") return <label key={key} htmlFor={id}><input id={id} type="checkbox" checked={Boolean(value)} onChange={(event) => update(key, event.target.checked)} /> {label}</label>;
-      return <div key={key}><label htmlFor={id}>{label}{required.has(key) ? " *" : ""}</label><input id={id} type={inputType} required={required.has(key)} value={String(value)} onChange={(event: ChangeEvent<HTMLInputElement>) => update(key, inputType === "number" ? Number(event.target.value) : event.target.value)} placeholder={schema.description ?? ""}/></div>;
-    })}
-    {!Object.keys(fields).length && <p className="config-note">This operation requires no input fields.</p>}
+    {operation && <><p className="config-note">{operation.description}</p><div className="config-section-title">Operation inputs</div>
+      {Object.entries(properties).map(([key, field]) => {
+        const value = input[key] ?? field.default ?? "";
+        const id = kind + "-input-" + key;
+        return <div key={key}><label htmlFor={id}>{field.title ?? key}{required.includes(key) && <span> Required</span>}</label>
+          {field.enum?.length ? <select id={id} value={String(value)} onChange={(event) => changeField(key, event.target.value)}><option value="">Choose…</option>{field.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select>
+          : field.type === "boolean" ? <select id={id} value={String(value)} onChange={(event) => changeField(key, event.target.value === "true")}><option value="true">True</option><option value="false">False</option></select>
+          : field.type === "number" || field.type === "integer" ? <input id={id} type="number" value={value === "" ? "" : Number(value)} onChange={(event) => changeField(key, event.target.value === "" ? "" : Number(event.target.value))}/>
+          : field.type === "object" || field.type === "array" ? <textarea id={id} rows={3} value={typeof value === "string" ? value : JSON.stringify(value, null, 2)} onChange={(event) => { try { changeField(key, JSON.parse(event.target.value)); } catch { changeField(key, event.target.value); } }}/>
+          : <input id={id} value={String(value)} onChange={(event) => changeField(key, event.target.value)} placeholder={field.description ?? ""}/>}
+          {field.description && <p className="config-note">{field.description}</p>}</div>;
+      })}
+      {!Object.keys(properties).length && <p className="config-note">This operation has no configurable inputs.</p>}
+    </>}
   </section>;
 }
