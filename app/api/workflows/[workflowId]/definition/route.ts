@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
