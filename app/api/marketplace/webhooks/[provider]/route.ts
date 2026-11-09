@@ -13,7 +13,8 @@ export async function POST(req:NextRequest,ctx:{params:Promise<{provider:string}
   const db=adminClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}});
   const processor:MarketplaceWebhookProcessor={
    finalizePayment:async x=>await db.rpc("marketplace_finalize_payment",{p_provider:x.provider,p_event_id:x.eventId,p_purchase_id:x.purchaseId,p_provider_payment_id:x.providerPaymentId,p_amount_minor:x.amountMinor,p_currency:x.currency,p_payload_sha256:x.payloadSha256,p_occurred_at:x.occurredAt}),
-   reversePayment:async x=>await db.rpc("marketplace_reverse_payment",{p_provider:x.provider,p_event_id:x.eventId,p_purchase_id:x.purchaseId,p_kind:x.kind,p_amount_minor:x.amountMinor,p_payload_sha256:x.payloadSha256,p_occurred_at:x.occurredAt})
+   reversePayment:async x=>await db.rpc("marketplace_reverse_payment",{p_provider:x.provider,p_event_id:x.eventId,p_purchase_id:x.purchaseId,p_kind:x.kind,p_amount_minor:x.amountMinor,p_payload_sha256:x.payloadSha256,p_occurred_at:x.occurredAt}),
+   applySubscriptionEvent:async()=>{throw new Error("Marketplace subscription webhook processor is not wired to a verified subscription RPC.")}
   };
   const result=await processMarketplaceWebhook(adapter,processor,raw,req.headers);return NextResponse.json({received:true,eventId:result.eventId},{headers});
  }catch(e){console.error("Marketplace webhook rejected/failed",e);return NextResponse.json({error:"Webhook verification or processing failed."},{status:400,headers});}
