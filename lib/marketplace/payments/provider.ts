@@ -8,7 +8,6 @@ export type MarketplaceCheckoutInput = {
   idempotencyKey: string;
   amountMinor: number;
   currency: "USD";
-  billingInterval?: "month" | "year";
   product: { id: string; slug: string; name: string };
   versionId: string;
   buyerId: string;
