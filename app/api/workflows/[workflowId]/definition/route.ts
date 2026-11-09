@@ -78,9 +78,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     // The shared v1 validator intentionally returns only its normalized legacy
     // nodes. Preserve the registry execution plan separately so a saved graph
     // can round-trip through GET without silently degrading to legacy nodes.
-    const registryPlan = stored?.format === "aivanta-registry-v1" && Array.isArray(stored.steps)
-      ? { format: "aivanta-registry-v1", steps: stored.steps }
-      : {};
+    let registryPlan: Record<string, unknown> = {};
+    if (stored?.format === "aivanta-registry-v1") {
+      const checkedRegistry = validateRegisteredSteps(stored.steps);
+      if (!checkedRegistry.steps) {
+        return NextResponse.json({ error: "This saved registry workflow needs repair before it can be edited.", detail: checkedRegistry.error }, { status: 409 });
+      }
+      registryPlan = { format: "aivanta-registry-v1", steps: checkedRegistry.steps };
+    }
     return NextResponse.json({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status },
       definition: { ...(valid.definition ?? starterDefinition), ...registryPlan },
