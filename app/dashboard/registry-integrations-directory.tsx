@@ -364,6 +364,7 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
   }
 };
 
+
 // Native workflow primitives and utility nodes use purposeful marks rather than
 // arbitrary first-letter placeholders. Provider integrations above use brand logos.
 const nativeNodeMarks: Record<string, string> = {
