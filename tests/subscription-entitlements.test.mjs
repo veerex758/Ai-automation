@@ -51,8 +51,8 @@ test("billing endpoint reports blueprint prices and gates checkout on explicit s
   assert.match(billingRoute, /monthly:9,annual:90/);
   assert.match(billingRoute, /monthly:29,annual:290/);
   assert.match(billingRoute, /monthly:79,annual:790/);
-  assert.match(billingRoute,/configuredPlans\\.some\\(p=>p\\.checkout\\.length\\)/);
-  assert.match(billingRoute,/p\\.checkout\\.map\\(slug=>\\{const plan=getPaidPlan\\(slug\\)/);
+  assert.ok(billingRoute.includes("configuredPlans.some(p=>p.checkout.length)"));
+  assert.ok(billingRoute.includes("p.checkout.map(slug=>{const plan=getPaidPlan(slug)"));
 });
 
 const aiCreditWalletMigration = await readFile(new URL("../supabase/migrations/20261107140000_aivanta_ai_credit_wallet.sql", import.meta.url), "utf8");
