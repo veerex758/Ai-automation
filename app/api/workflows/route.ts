@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { findOperation } from "@/nodes/registry";
+import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -40,6 +42,4 @@ function presentWorkflow(row: {
 export async function GET() {
   try {
     const supabase = await createClient();
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      retur¶»§q«^
+¶»§q«^

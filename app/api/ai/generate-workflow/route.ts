@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
-import { getPublicNodeCatalog } from "@/nodes/registry";
+import { findOperation, getPublicNodeCatalog } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,4 +28,4 @@ export async function POST(request: NextRequest) {
     }
     if (!body.prompt.trim()) return NextResponse.json({ error: "Describe the workflow you want to create." }, { status: 400 });
     if (body.prompt.trim().length > MAX_PROMPT_LENGTH) {
-      return NextResponse.json({ erro¶»§q«^
+      return NextRespo¶»§q«^

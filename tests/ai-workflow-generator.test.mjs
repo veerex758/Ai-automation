@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateWorkflow, extractJson } from "../lib/workflows/ai-workflow-generator.cjs";
-const validDefinition = { version: 1, nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
+const validDefinition = { version: 1, edges: [], nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
 const env = { AIVANTA_AI_API_KEY: "test-secret", AIVANTA_AI_BASE_URL: "https://ai.example.test/v1", AIVANTA_AI_MODEL: "test-model", NODE_ENV: "test" };
 const fakeFetch = (payload, status = 200) => async (_url, options) => {
   assert.equal(options.headers.Authorization, "Bearer test-secret");
@@ -18,4 +18,4 @@ test("rejects empty and oversized prompts before calling provider", async () => 
   await assert.rejects(generateWorkflow({ prompt: "x".repeat(2001), env }), /AI_PROMPT_TOO_LONG/);
 });
 test("requires server-side AI credentials", async () => {
-  await assert.rejects(generateWorkflow({ prompt: "Create a task", env¶»§q«^
+  await assert.rejects(generateWorkflow({ prompt: "Create a¶»§q«^
