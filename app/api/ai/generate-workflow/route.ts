@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
-import { getExecutableNodeCatalog } from "@/nodes/registry";
+import { getPublicNodeCatalog } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,13 +31,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
     }
 
-    const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog: getExecutableNodeCatalog() });
+    const { getOrCreateDefaultWorkspace } = await import("@/lib/supabase/workspace");
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
+    const { data: usage, error: usageError } = await supabase.rpc("consume_workspace_usage", { p_workspace_id: workspace.id, p_metric: "ai_credit", p_quantity: 1, p_metadata: { feature: "workflow_draft_generation" } });
+    if (usageError) return NextResponse.json({ error: "Usage metering unavailable. Apply Phase 5 billing migration." }, { status: 503 });
+    if (!usage?.allowed) return NextResponse.json({ error: "Monthly AI generation limit reached. Upgrade your plan.", entitlement: usage }, { status: 402 });
+
+    const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog: getPublicNodeCatalog() });
     return NextResponse.json(result);
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
-      AI_NOT_CONFIGURED: { status: 503, message: "AI workflow generation is not configured yet. Add the selected provider's server-side API key." },
-      AI_NODE_CATALOG_UNAVAILABLE: { status: 503, message: "The registered node catalog is unavailable. Reload and try again." },
+      AI_NOT_CONFIGURED: { status: 503, message: "AI workflow generation is not configured yet. Add the server-side AIVANTA_AI_API_KEY." },
       AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid." },
       AI_PROMPT_REQUIRED: { status: 400, message: "Describe the workflow you want to create." },
       AI_PROMPT_TOO_LONG: { status: 400, message: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` },
