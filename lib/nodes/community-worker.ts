@@ -25,6 +25,15 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_LOGS = 100;
 const MAX_LOG_MESSAGE_CHARS = 2_000;
 
+// Worker output is untrusted: redact credential-shaped strings before it reaches
+// run history or logs. This is defense-in-depth, not a substitute for worker policy.
+function redactWorkerLog(message: string): string {
+  return message
+    .replace(/\\b(Bearer\\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[REDACTED]")
+    .replace(/\\b(sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\\b/g, "[REDACTED]")
+    .replace(/((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|authorization)\\s*[:=]\\s*)[^\\s,;]+/gi, "$1[REDACTED]");
+}
+
 async function readBoundedResponse(response: Response, maxBytes: number): Promise<Uint8Array> {
   if (!response.body) return new Uint8Array();
   const reader = response.body.getReader();
@@ -127,7 +136,7 @@ export async function invokeCommunityNode(args: CommunityNodeInvocation): Promis
       if (!Array.isArray(result.logs)) throw new Error("COMMUNITY_NODE_WORKER_INVALID_RESPONSE");
       result.logs = result.logs.slice(0, MAX_LOGS).flatMap((entry) => {
         if (!entry || (entry.level !== "info" && entry.level !== "error") || typeof entry.message !== "string") return [];
-        return [{ level: entry.level, message: entry.message.slice(0, MAX_LOG_MESSAGE_CHARS) }];
+        return [{ level: entry.level, message: redactWorkerLog(entry.message).slice(0, MAX_LOG_MESSAGE_CHARS) }];
       });
     }
     return result;
