@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { findOperation } from "@/nodes/registry";
-import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
@@ -144,37 +143,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     const registryStepsInput = hasExplicitRegistrySteps ? requestBody.registrySteps : autoRegistrySteps;
     const shouldSaveRegistry = hasExplicitRegistrySteps || autoRegistrySteps !== null;
     if (shouldSaveRegistry) {
-      if (!Array.isArray(registryStepsInput) || registryStepsInput.length < 1 || registryStepsInput.length > 30) {
-        return NextResponse.json({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
-      }
-      const registrySteps = registryStepsInput as unknown[];
-      const seen = new Set<string>();
-      for (const candidate of registrySteps) {
-        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-          return NextResponse.json({ error: "Each registry step must be an object." }, { status: 400 });
-        }
-        const step = candidate as Record<string, unknown>;
-        if (typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) ||
-            typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
-            (step.kind !== "trigger" && step.kind !== "action") || !("input" in step)) {
-          return NextResponse.json({ error: "Registry steps must have unique IDs, a registered operation, a kind, and input." }, { status: 400 });
-        }
-        seen.add(step.id);
-        const operation = findOperation(step.nodeId, step.operationId, step.kind);
-        if (!operation) return NextResponse.json({ error: `Unknown registry operation: ${step.nodeId}.${step.operationId}.` }, { status: 422 });
-        const parsedInput = operation.inputSchema.safeParse(step.input);
-        if (!parsedInput.success) return NextResponse.json({ error: `Invalid input for registry step ${step.id}.` }, { status: 422 });
-      }
-      if (registrySteps[0] && (registrySteps[0] as Record<string, unknown>).kind !== "trigger") {
-        return NextResponse.json({ error: "The first registry step must be a trigger." }, { status: 400 });
-      }
-      if (registrySteps.filter((step) => (step as Record<string, unknown>).kind === "trigger").length !== 1) {
-        return NextResponse.json({ error: "A registry workflow must contain exactly one trigger." }, { status: 400 });
+      const validatedRegistry = validateRegisteredSteps(registryStepsInput);
+      if (!validatedRegistry.steps) {
+        return NextResponse.json({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
       }
       definitionToSave = {
         ...validated.definition,
         format: "aivanta-registry-v1",
-        steps: registrySteps as RegisteredWorkflowStep[],
+        steps: validatedRegistry.steps,
       };
     }
 
