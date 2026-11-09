@@ -22,12 +22,3 @@ test("refund and chargeback events use reversal RPC and enforce matching kind",(
 test("unknown verified events are acknowledged as ignored without granting entitlement",()=>{
  assert.match(source,/status: "ignored"/);
 });
-
-test("subscription webhook events normalize provider payloads and dispatch to lifecycle RPC",()=>{
- assert.match(source,/event\.type\.startsWith\("subscription\."\)/);
- assert.match(source,/parseSubscription\?\./);
- assert.match(source,/assertMarketplaceSubscription\(subscription\)/);
- assert.match(source,/processor\.applySubscriptionEvent/);
- assert.match(source,/providerSubscriptionId: subscription\.providerSubscriptionId/);
- assert.match(source,/periodStart: subscription\.periodStart/);
-});

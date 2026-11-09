@@ -5,8 +5,6 @@ import {
   type MarketplacePaymentProvider,
   type VerifiedMarketplaceWebhook,
   type ParsedMarketplaceReversal as ProviderParsedMarketplaceReversal,
-  type ParsedMarketplaceSubscription,
-  assertMarketplaceSubscription,
 } from "./provider";
 
 export type MarketplaceWebhookProcessor = {
@@ -17,11 +15,6 @@ export type MarketplaceWebhookProcessor = {
   reversePayment(input: {
     provider: string; eventId: string; purchaseId: string; kind: "refund" | "chargeback";
     amountMinor: number; payloadSha256: string; occurredAt: string;
-  }): Promise<unknown>;
-  applySubscriptionEvent(input: {
-    provider: string; eventId: string; payloadSha256: string; eventType: ParsedMarketplaceSubscription["eventType"];
-    buyerUserId: string; productId: string; productVersionId: string; providerSubscriptionId: string;
-    periodStart: string; periodEnd: string; occurredAt: string;
   }): Promise<unknown>;
 };
 
@@ -48,23 +41,6 @@ export async function processMarketplaceWebhook(
       provider: provider.id, eventId: event.eventId, purchaseId: payment.purchaseId,
       providerPaymentId: payment.providerPaymentId, amountMinor: payment.amountMinor,
       currency: payment.currency, payloadSha256: digest, occurredAt: event.occurredAt,
-    });
-    return { eventId: event.eventId, outcome };
-  }
-  if (event.type.startsWith("subscription.") || event.type.startsWith("invoice.")) {
-    const parseSubscription = (provider as MarketplacePaymentProvider & {
-      parseSubscription?: (event: VerifiedMarketplaceWebhook) => ParsedMarketplaceSubscription | null;
-    }).parseSubscription;
-    const subscription = parseSubscription?.(event);
-    if (!subscription) return { eventId: event.eventId, outcome: { status: "ignored", eventType: event.type } };
-    assertMarketplaceSubscription(subscription);
-    const outcome = await processor.applySubscriptionEvent({
-      provider: provider.id, eventId: event.eventId, payloadSha256: digest,
-      eventType: subscription.eventType, buyerUserId: subscription.buyerUserId,
-      productId: subscription.productId, productVersionId: subscription.productVersionId,
-      providerSubscriptionId: subscription.providerSubscriptionId,
-      periodStart: subscription.periodStart, periodEnd: subscription.periodEnd,
-      occurredAt: event.occurredAt,
     });
     return { eventId: event.eventId, outcome };
   }
