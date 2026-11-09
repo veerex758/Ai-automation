@@ -71,8 +71,15 @@ export default function WorkflowBuilderPage() {
           if (payload.workflow?.name) setName(payload.workflow.name);
           if (payload.definition.format === "aivanta-registry-v1" && Array.isArray(payload.definition.steps)) {
             const registrySteps = payload.definition.steps;
-            setAiRegistrySteps(registrySteps.map((item, index) => ({ ...item, id: String(index + 1) })));
-            setSteps(registrySteps.map((item, index) => {
+            const restoredIds = new Map(registrySteps.map((item, index) => [item.id, String(index + 1)]));
+            const restoredRegistrySteps = registrySteps.map(item => ({
+              ...item,
+              id: restoredIds.get(item.id) ?? item.id,
+              ...(item.branch ? { branch: { ...item.branch, fromStepId: restoredIds.get(item.branch.fromStepId) ?? item.branch.fromStepId } } : {}),
+              ...(item.loop ? { loop: { ...item.loop, sourceStepId: restoredIds.get(item.loop.sourceStepId) ?? item.loop.sourceStepId } } : {}),
+            }));
+            setAiRegistrySteps(restoredRegistrySteps);
+            setSteps(restoredRegistrySteps.map((item, index) => {
               return { id: Number(index + 1), kind: item.kind === "trigger" ? "Trigger" : "Action", title: item.operationId, detail: `${item.nodeId} · ${item.operationId}`, registryBacked: true, actionId: `registry:${item.nodeId}:${item.operationId}`, settings: {} };
             }));
           }
