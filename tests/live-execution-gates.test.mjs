@@ -39,11 +39,12 @@ test("all deterministic utility actions remain explicitly allowed through durabl
   }
 });
 
-test("synchronous registry route keeps live execution restricted to allowlisted email actions", () => {
-  assert.ok(registryRoute.includes("const unsupportedLiveStep = steps.find("));
-  assert.ok(registryRoute.includes('step.nodeId === "manual" && step.operationId === "start"'));
-  assert.ok(registryRoute.includes('step.nodeId === "email" && step.operationId === "send_email"'));
+test("synchronous registry route runs registry steps in dry-run and guards external live effects", () => {
+  assert.match(registryRoute, /executeRegisteredWorkflow\(\{ steps, context: serverContext\(\), dryRun: true \}\)/);
+  assert.match(registryRoute, /if \(!dryRun\)/);
+  assert.match(registryRoute, /const unsupportedLiveStep = steps\.find\(/);
   assert.match(registryRoute, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.ok(registryRoute.includes("allowed.has(to)"));
+  assert.match(registryRoute, /allowed\.has\(to\)/);
   assert.match(registryRoute, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+  assert.match(registryRoute, /registry operation is available in dry-run only/);
 });
