@@ -2,7 +2,7 @@ import test from "node:test";import assert from "node:assert/strict";import{read
 const checkout=readFileSync(new URL("../app/api/marketplace/checkout/route.ts",import.meta.url),"utf8");
 const webhook=readFileSync(new URL("../app/api/marketplace/webhooks/[provider]/route.ts",import.meta.url),"utf8");
 const report=readFileSync(new URL("../app/api/marketplace/admin/settlement/route.ts",import.meta.url),"utf8");
-const migration=readFileSync(new URL("../supabase/migrations/20261107160000_aivanta_marketplace_settlement_payout_eligibility.sql",import.meta.url),"utf8");
+const migration=readFileSync(new URL("../supabase/migrations/20261107161000_aivanta_marketplace_settlement_payout_eligibility.sql",import.meta.url),"utf8");
 test("checkout route is authenticated, gated, USD-only, version-approved and idempotent",()=>{
  for(const x of ["AIVANTA_MARKETPLACE_CHECKOUT_ENABLED","session.auth.getUser()","buyerEmail:user.email","status!==\"published\"","verification_status!==\"approved\"","provider.createCheckout","provider_checkout_id","idempotencyKey:\"aivanta-\""])assert.ok(checkout.includes(x),x);
  assert.ok(checkout.includes("buyerEmail:user.email"));assert.doesNotMatch(checkout,/value\.buyerEmail/);
