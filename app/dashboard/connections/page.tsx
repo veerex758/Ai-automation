@@ -139,8 +139,6 @@ function WorkspaceIntegrationManager() {
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [sendingResendTest, setSendingResendTest] = useState(false);
   const [notice, setNotice] = useState("");
-  const [workflowId, setWorkflowId] = useState("");
-  const [workflowId, setWorkflowId] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -286,6 +284,7 @@ function WorkspaceIntegrationManager() {
 
 export default function ConnectionsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [workflowId, setWorkflowId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
