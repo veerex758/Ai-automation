@@ -10,7 +10,7 @@ const provider: MarketplacePaymentProvider = {
  async verifyWebhook(raw){ assert.equal(new TextDecoder().decode(raw),"raw-event"); return event; },
  parsePayment(){ return {purchaseId:"purchase_1",providerPaymentId:"pay_1",amountMinor:1200,currency:"USD"}; },
 };
-const processor: MarketplaceWebhookProcessor={finalizePayment:async(input)=>input,reversePayment:async(input)=>input};
+const processor: MarketplaceWebhookProcessor={finalizePayment:async(input)=>input,reversePayment:async(input)=>input,applySubscriptionEvent:async(input)=>input};
 test("payment webhook passes verified raw digest and normalized data to finalizer",async()=>{
  const result=await processMarketplaceWebhook(provider,processor,new TextEncoder().encode("raw-event"),new Headers(),Date.now());
  assert.equal(result.eventId,"evt_1");
