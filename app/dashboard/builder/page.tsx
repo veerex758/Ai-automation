@@ -14,7 +14,7 @@ type RegistryCatalogNode = { id: string; name: string; icon: string; category: s
 type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
 type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string>; registryBacked?: boolean };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
-type RegistryDraftStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
+type RegistryDraftStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown>; branch?: { fromStepId: string; route: string }; loop?: { sourceStepId: string; itemAs?: string; indexAs?: string; maxIterations?: number } };
 type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
 
 const starterSteps: BuilderStep[] = [
