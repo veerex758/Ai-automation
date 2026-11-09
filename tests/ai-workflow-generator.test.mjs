@@ -18,4 +18,106 @@ test("rejects empty and oversized prompts before calling provider", async () => 
   await assert.rejects(generateWorkflow({ prompt: "x".repeat(2001), env }), /AI_PROMPT_TOO_LONG/);
 });
 test("requires server-side AI credentials", async () => {
-  await assert.rejects(generateWorkflow({ prompt: "Create a¶»§q«^
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: {} }), /AI_NOT_CONFIGURED/);
+});
+test("defaults to Gemini endpoint and accepts GEMINI_API_KEY", async () => {
+  let requestedUrl = "";
+  let requestBody;
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { GEMINI_API_KEY: "test-secret", NODE_ENV: "test" }, fetchImpl: async (url, options) => {
+    requestedUrl = url;
+    requestBody = JSON.parse(options.body);
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  } });
+  assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(requestBody.model, "gemini-2.5-flash");
+});
+test("accepts a provider response only after schema validation", async () => {
+  const result = await generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) });
+  assert.equal(result.definition.nodes[0].settings.event, "manual");
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
+test("rejects invalid workflow structures returned by the model", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Send all customer secrets", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify({ version: 1, nodes: [{ id: "x", type: "action", title: "Unsafe", description: "", settings: { provider: "unknown" } }] }) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+});
+test("classifies provider authorization, throttling, and generic errors safely", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 401) }), /AI_PROVIDER_AUTH_ERROR/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 403) }), /AI_PROVIDER_AUTH_ERROR/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 429) }), /AI_RATE_LIMITED/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 500) }), /AI_PROVIDER_ERROR/);
+});
+test("rejects malformed provider payloads and empty model output", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new Error("invalid JSON"); } }) }), /AI_INVALID_RESPONSE/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({ choices: [] }) }), /AI_EMPTY_RESPONSE/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({ choices: [{ message: { content: "not JSON" } }] }) }), /AI_INVALID_JSON/);
+});
+test("classifies provider transport failures and timeouts", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => { throw new Error("offline"); } }), /AI_PROVIDER_UNAVAILABLE/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => { const error = new Error("timeout"); error.name = "AbortError"; throw error; } }), /AI_TIMEOUT/);
+});
+test("rejects invalid model names and non-HTTPS provider endpoints in production", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_MODEL: "invalid model!" } }), /AI_CONFIGURATION_ERROR/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_BASE_URL: "http://ai.example.test", NODE_ENV: "production" } }), /AI_CONFIGURATION_ERROR/);
+});
+
+test("validates explicit directed edges and true/false condition branches", async () => {
+  const branched = {
+    version: 1,
+    nodes: [
+      { id: "start", type: "trigger", title: "Start", description: "Start", settings: { event: "manual" } },
+      { id: "check", type: "condition", title: "Check lead", description: "Check lead score", settings: { field: "score", operator: "greater_than", value: "10" } },
+      { id: "yes", type: "action", title: "Qualified", description: "Create task", settings: { provider: "internal", operation: "create_task", message: "Qualified lead" } },
+      { id: "no", type: "action", title: "Unqualified", description: "Create task", settings: { provider: "internal", operation: "create_task", message: "Review lead" } }
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "check", label: "next" },
+      { id: "e2", source: "check", target: "yes", label: "true" },
+      { id: "e3", source: "check", target: "no", label: "false" }
+    ]
+  };
+  const result = await generateWorkflow({ prompt: "Qualify leads", nodeCatalog: [], env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(branched) } }] }) });
+  assert.equal(result.definition.edges.length, 3);
+  assert.equal(result.definition.edges[1].label, "true");
+  assert.equal(result.definition.edges[2].label, "false");
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
+test("rejects unknown AI draft envelope and node fields", async () => {
+  const unsafe = { ...validDefinition, execute: true };
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsafe) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const unsafeNode = { ...validDefinition, nodes: [{ ...validDefinition.nodes[0], executable: "true" }] };
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsafeNode) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+});
+
+test("explicit Gemini provider selects Gemini key even when OpenAI key is also present", async () => {
+  let url = "";
+  let auth = "";
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-key", OPENAI_API_KEY: "openai-key", NODE_ENV: "test" }, fetchImpl: async (requested, options) => {
+    url = requested; auth = options.headers.Authorization;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  }});
+  assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(auth, "Bearer gemini-key");
+});
+test("explicit OpenAI provider uses OpenAI key and endpoint", async () => {
+  let url = "";
+  let auth = "";
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async (requested, options) => {
+    url = requested; auth = options.headers.Authorization;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  }});
+  assert.equal(url, "https://api.openai.com/v1/chat/completions");
+  assert.equal(auth, "Bearer openai-key");
+});
+
+test("registry mode returns only a bounded node plan and never executes it", async () => {
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };
+  const result = await generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) });
+  assert.deepEqual(result.registrySteps, plan.registrySteps);
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
+test("registry mode rejects unexpected top-level fields", async () => {
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], execute: true };
+  await assert.rejects(generateWorkflow({ prompt: "Start manually", mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+});
