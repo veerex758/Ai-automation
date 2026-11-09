@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { validateWorkflowDefinition } from "@/lib/workflows/validation";
 import actionFieldValidation from "@/lib/workflows/action-field-validation.cjs";
@@ -13,7 +14,9 @@ type ActionField = { name: string; label: string; type: "text" | "email" | "url"
 type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
 type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string> };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
-type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
+type RegistryStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: unknown };
+type MissingConnection = { provider: string; label: string; reason: string };
+type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[]; registrySteps?: RegistryStep[]; missingConnections?: MissingConnection[]; connectionStatusAvailable?: boolean };
 
 const starterSteps: BuilderStep[] = [
   { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted" },
@@ -24,6 +27,7 @@ const starterSteps: BuilderStep[] = [
 const kindIcons: Record<StepKind, string> = { Trigger: "◎", Action: "↗", Condition: "◇" };
 
 export default function WorkflowBuilderPage() {
+  const router = useRouter();
   const [name, setName] = useState("Lead capture & follow-up");
   const [steps, setSteps] = useState<BuilderStep[]>(starterSteps);
   const [selected, setSelected] = useState(1);
@@ -32,6 +36,7 @@ export default function WorkflowBuilderPage() {
   const [hydrated, setHydrated] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
   const [aiPreview, setAiPreview] = useState<GeneratedWorkflow | null>(null);
   const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -127,6 +132,25 @@ export default function WorkflowBuilderPage() {
     setNotice("Basic checks passed. Activation is still disabled because live integrations, server-side validation, and execution safeguards are not connected.");
   }
 
+  async function saveAiDraft() {
+    if (!aiPreview?.registrySteps?.length || aiSaving) return;
+    setAiSaving(true); setNotice(""); let createdWorkflowId = "";
+    try {
+      const workflowName = aiPrompt.trim().replace(/\s+/g, " ").slice(0, 80) || "AI workflow draft";
+      const createdResponse = await fetch("/api/workflows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: workflowName, description: "AI-generated registered-node draft. Review node inputs and workspace connections before running.", status: "draft" }) });
+      const createdPayload = await createdResponse.json() as { workflow?: { id?: string }; error?: string };
+      if (!createdResponse.ok || !createdPayload.workflow?.id) throw new Error(createdPayload.error || "Could not create a server-side draft.");
+      createdWorkflowId = createdPayload.workflow.id;
+      const saveResponse = await fetch("/api/workflows/" + createdWorkflowId + "/definition", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ definition: { version: 1, nodes: aiPreview.nodes }, registrySteps: aiPreview.registrySteps }) });
+      const savePayload = await saveResponse.json() as { error?: string; success?: boolean };
+      if (!saveResponse.ok || !savePayload.success) throw new Error(savePayload.error || "Could not save registered workflow steps.");
+      router.push("/dashboard/workflows/" + createdWorkflowId + "/advanced");
+    } catch (error) {
+      if (createdWorkflowId) { try { await fetch("/api/workflows/" + createdWorkflowId, { method: "DELETE" }); } catch { /* best-effort cleanup */ } }
+      setNotice(error instanceof Error ? error.message : "Could not save the AI draft.");
+    } finally { setAiSaving(false); }
+  }
+
   return (
     <main className="builder-shell">
       <aside className="builder-sidebar">
@@ -156,10 +180,10 @@ export default function WorkflowBuilderPage() {
               setAiGenerating(true); setAiPreview(null); setNotice("");
               try {
                 const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: aiPrompt.trim() }) });
-                const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow };
-                if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes)) throw new Error(payload.error || "Could not generate a workflow draft.");
-                setAiPreview(payload.definition);
-                setNotice("AI draft ready. Review the generated steps before applying them to your canvas.");
+                const payload = await response.json() as { error?: string; definition?: GeneratedWorkflow; registrySteps?: RegistryStep[]; missingConnections?: MissingConnection[]; connectionStatusAvailable?: boolean };
+                if (!response.ok || !payload.definition || !Array.isArray(payload.definition.nodes) || !Array.isArray(payload.registrySteps)) throw new Error(payload.error || "Could not generate a registered workflow draft.");
+                setAiPreview({ ...payload.definition, registrySteps: payload.registrySteps, missingConnections: payload.missingConnections ?? [], connectionStatusAvailable: payload.connectionStatusAvailable ?? false });
+                setNotice("AI registered-node draft ready. Review inputs, mappings, and connection status before saving; nothing has executed.");
               } catch (error) { setNotice(error instanceof Error ? error.message : "AI generation failed. Please try again."); }
               finally { setAiGenerating(false); }
             }}>
@@ -167,22 +191,13 @@ export default function WorkflowBuilderPage() {
               <textarea id="ai-workflow-prompt" value={aiPrompt} maxLength={2000} onChange={event => setAiPrompt(event.target.value)} placeholder="When a new lead arrives, create a task and send a follow-up email…" rows={3} />
               <div className="ai-workflow-form-footer"><small>{aiPrompt.length}/2000 · Generated steps need review</small><button className="builder-primary-button" type="submit" disabled={aiGenerating || !aiPrompt.trim()}>{aiGenerating ? "Generating draft…" : "Generate workflow ✳"}</button></div>
             </form>
-            {aiPreview && <div className="ai-workflow-preview"><div className="ai-preview-heading"><div><strong>Generated draft</strong><span>{aiPreview.nodes.length} validated steps · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div><ol>{aiPreview.nodes.map(node => <li key={node.id}><span className={"builder-node-icon node-" + (node.type === "trigger" ? "trigger" : node.type === "condition" ? "condition" : "action")}>{kindIcons[node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action"]}</span><div><strong>{node.title}</strong><p>{node.description || "No additional description."}</p><small>{node.type} · {Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · ")}</small></div></li>)}</ol><button type="button" className="builder-primary-button ai-apply-button" onClick={() => {
-              const mapped: BuilderStep[] = aiPreview.nodes.map((node, index) => {
-                const action = node.type === "action"
-                  ? actionCatalog.find(item => item.provider === node.settings.provider && item.operation === node.settings.operation)
-                  : undefined;
-                return {
-                  id: Date.now() + index,
-                  kind: node.type === "trigger" ? "Trigger" : node.type === "condition" ? "Condition" : "Action",
-                  title: node.title,
-                  detail: node.description || Object.entries(node.settings).map(([key, value]) => key + ": " + value).join(" · "),
-                  ...(action ? { actionId: action.id } : {}),
-                  ...(node.type === "action" ? { settings: { ...node.settings } } : {}),
-                };
-              });
-              setSteps(mapped); setSelected(mapped[0]?.id ?? 0); setName(aiPrompt.trim().slice(0, 80) || "AI workflow draft"); setAiPreview(null); setNotice("AI draft applied to the canvas. Save it when ready; no actions have run.");
-            }}>Apply draft to canvas ↗</button></div>}
+            {aiPreview && <div className="ai-workflow-preview">
+              <div className="ai-preview-heading"><div><strong>Generated registered-node draft</strong><span>{aiPreview.registrySteps?.length ?? aiPreview.nodes.length} steps · schema checked · not saved or executed</span></div><button type="button" className="builder-secondary-button" onClick={() => setAiPreview(null)}>Discard</button></div>
+              <ol>{(aiPreview.registrySteps ?? []).map(step => <li key={step.id}><span className={"builder-node-icon node-" + (step.kind === "trigger" ? "trigger" : "action")}>{kindIcons[step.kind === "trigger" ? "Trigger" : "Action"]}</span><div><strong>{step.nodeId}.{step.operationId}</strong><p>Registered {step.kind} · step ID: {step.id}</p><small>{JSON.stringify(step.input)}</small></div></li>)}</ol>
+              {aiPreview.missingConnections?.length ? <div role="status"><strong>Connections needing attention</strong><ul>{aiPreview.missingConnections.map(item => <li key={item.provider}>{item.label}: {item.reason}</li>)}</ul></div> : null}
+              {aiPreview.connectionStatusAvailable === false ? <p role="status">Workspace connection status could not be verified. Saving remains available, but connection readiness is unconfirmed.</p> : null}
+              <button type="button" className="builder-primary-button ai-apply-button" disabled={aiSaving} onClick={() => void saveAiDraft()}>{aiSaving ? "Saving server draft…" : "Save reviewable server draft ↗"}</button>
+            </div>}
           </section>
           <div className="builder-workspace-grid">
             <section className="canvas-panel" aria-label="Workflow canvas">
@@ -203,7 +218,7 @@ export default function WorkflowBuilderPage() {
                 </div>
                 <div className="canvas-zoom"><button aria-label="Zoom out" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>−</button><span>100%</span><button aria-label="Zoom in" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>＋</button></div>
               </div>
-              <div className="canvas-foot"><span><i /> Draft saved locally on Save draft</span><span>Drag-and-drop connections coming soon</span></div>
+              <div className="canvas-foot"><span><i /> Manual prototype drafts save locally; AI registered drafts save to the server</span><span>Drag-and-drop connections coming soon</span></div>
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
@@ -240,7 +255,7 @@ export default function WorkflowBuilderPage() {
               <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></> : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
             </aside>
           </div>
-          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> This is an interactive builder prototype. Saving stores a draft in this browser only. No external services run, and activation remains disabled until validation and execution safeguards are available.</p></div>
+          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> The manual canvas prototype saves locally. AI-generated registered-node drafts save to the server for schema validation and later dry-run review. Saving never executes actions; live execution remains separately gated.</p></div>
         </div>
       </section>
     </main>

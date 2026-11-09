@@ -231,7 +231,7 @@ test("HTTP request requires exact server-side host allowlist and restricts heade
     headers: { accept: "application/json" },
   });
   assert.equal(requestedUrl, "https://api.example.com/v1/items?q=hello+world");
-  assert.deepEqual(result, { status: 200, body: { ok: true } });
+  assert.deepEqual(result, { status: 200, ok: true, data: { ok: true }, body: { ok: true } });
   await assert.rejects(() => operation.run(context, { url: "https://example.org/", method: "GET" }), /HTTP_HOST_NOT_ALLOWLISTED/);
   await assert.rejects(() => operation.run(context, { url: "http://api.example.com/", method: "GET" }), /HTTP_URL_NOT_ALLOWED/);
   await assert.rejects(() => operation.run(context, { url: "https://127.0.0.1/", method: "GET" }), /HTTP_HOST_NOT_ALLOWED/);
