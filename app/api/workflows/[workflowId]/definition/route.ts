@@ -140,7 +140,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     // Keep the existing version-1 nodes contract for the builder and database RPC,
     // while optionally storing a registry execution plan alongside it. The RPC
     // validates the legacy nodes and persists the full JSON document atomically.
-    let definitionToSave: Record<string, unknown> = { ...validated.definition, ...(requestBody.definition && typeof requestBody.definition === "object" ? { edges: (requestBody.definition as Record<string, unknown>).edges, nodes: validated.definition.nodes.map((node, index) => ({ ...node, position: ((requestBody.definition as Record<string, unknown>).nodes as Record<string, unknown>[] | undefined)?.[index]?.position })) : {} };
+    let definitionToSave: Record<string, unknown> = {
+      ...validated.definition,
+      ...(requestBody.definition && typeof requestBody.definition === "object"
+        ? {
+            edges: (requestBody.definition as Record<string, unknown>).edges,
+            nodes: validated.definition.nodes.map((node, index) => ({
+              ...node,
+              position: ((requestBody.definition as Record<string, unknown>).nodes as Record<string, unknown>[] | undefined)?.[index]?.position,
+            })),
+          }
+        : {}),
+    };
     const legacyNodes = validated.definition.nodes;
     const canBridgeLegacyDefinition = legacyNodes[0]?.type === "trigger" &&
       legacyNodes[0].settings.event === "manual" &&
