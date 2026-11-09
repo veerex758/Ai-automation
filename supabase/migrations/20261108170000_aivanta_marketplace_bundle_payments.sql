@@ -41,7 +41,7 @@ declare p public.marketplace_bundle_purchases%rowtype;fee bigint;earning bigint;
 begin
  if auth.role()<>'service_role' then raise exception 'bundle_payment_service_role_required';end if;
  if p_hash !~ '^[a-f0-9]{64}$' or p_amount<=0 or p_currency<>'USD' then raise exception 'invalid_bundle_payment';end if;
- select * into p from public.marketplace_bundle_purchases where id=p_purchase_id for update;if not found or p.provider<>p_provider or p.amount_minor<>p_amount or p.currency<>p_currency then raise exception 'bundle_payment_mismatch';end if;end if;
+ select * into p from public.marketplace_bundle_purchases where id=p_purchase_id for update;if not found or p.provider<>p_provider or p.amount_minor<>p_amount or p.currency<>p_currency then raise exception 'bundle_payment_mismatch';end if;
  if p.status='paid' then if p.provider_payment_id=p_provider_payment_id then return jsonb_build_object('status','duplicate_bundle_payment');end if;raise exception 'bundle_already_paid';end if;if p.status<>'pending' then raise exception 'bundle_purchase_not_pending';end if;
  insert into public.marketplace_bundle_payment_events(provider,event_id,event_type,purchase_id,payload_sha256) values(p_provider,p_event_id,'payment.succeeded',p.id,p_hash) on conflict(provider,event_id) do nothing returning id into ev;if ev is null then return jsonb_build_object('status','duplicate_event');end if;
  fee:=floor(p_amount*0.20);earning:=p_amount-fee;update public.marketplace_bundle_purchases set status='paid',provider_payment_id=p_provider_payment_id,paid_at=coalesce(p_at,now()) where id=p.id;
@@ -55,9 +55,9 @@ declare p public.marketplace_bundle_purchases%rowtype;prior bigint;ev uuid;fee b
 begin
  if auth.role()<>'service_role' then raise exception 'bundle_reversal_service_role_required';end if;
  if p_kind not in ('refund','chargeback') or p_hash !~ '^[a-f0-9]{64}$' or p_amount<=0 then raise exception 'invalid_bundle_reversal';end if;
- select * into p from public.marketplace_bundle_purchases where id=p_purchase_id for update;if not found or p.provider<>p_provider or p.status not in ('paid','refunded','disputed') then raise exception 'bundle_purchase_not_reversible';end if;end if;
+ select * into p from public.marketplace_bundle_purchases where id=p_purchase_id for update;if not found or p.provider<>p_provider or p.status not in ('paid','refunded','disputed') then raise exception 'bundle_purchase_not_reversible';end if;
  if exists(select 1 from public.marketplace_bundle_payment_events where provider=p_provider and event_id=p_event_id) then return jsonb_build_object('status','duplicate_event');end if;
- select coalesce(sum(-amount_minor),0) into prior from public.marketplace_financial_ledger where bundle_purchase_id=p.id and entry_type in ('refund','chargeback');if prior+p_amount>p.amount_minor then raise exception 'bundle_reversal_exceeds_payment';end if;end if;
+ select coalesce(sum(-amount_minor),0) into prior from public.marketplace_financial_ledger where bundle_purchase_id=p.id and entry_type in ('refund','chargeback');if prior+p_amount>p.amount_minor then raise exception 'bundle_reversal_exceeds_payment';end if;
  insert into public.marketplace_bundle_payment_events(provider,event_id,event_type,purchase_id,payload_sha256) values(p_provider,p_event_id,p_kind,p.id,p_hash);
  fee:=floor(p_amount*0.20);earning:=p_amount-fee;insert into public.marketplace_financial_ledger(bundle_purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo) values(p.id,p.creator_id,p_provider,p_event_id,p_kind,-p_amount,p.currency,'Bundle provider reversal');
  insert into public.marketplace_financial_ledger(bundle_purchase_id,creator_id,provider,provider_event_id,entry_type,amount_minor,currency,memo) values(p.id,p.creator_id,p_provider,p_event_id,'platform_commission_reversal',-fee,p.currency,'Bundle commission reversal');
