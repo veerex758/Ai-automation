@@ -30,8 +30,18 @@ begin
  if v_payment.status<>'pending' then raise exception 'payment is not pending' using errcode='22023';end if;
  update public.billing_payments set status='success',provider_transaction_id=p_transaction_id,paid_at=coalesce(p_paid_at,now()),updated_at=now() where id=v_payment.id;
  select * into v_subscription from public.workspace_subscriptions where workspace_id=v_payment.workspace_id for update;
- if found and v_subscription.current_period_end>coalesce(p_paid_at,now()) then v_start:=v_subscription.current_period_start;v_end:=v_subscription.current_period_end+interval '30 days';
- else v_start:=coalesce(p_paid_at,now());v_end:=coalesce(p_paid_at,now())+interval '30 days';end if;
+ if found then
+  if v_subscription.last_payment_id is not null then
+   select paid_at into v_last_paid_at from public.billing_payments where id=v_subscription.last_payment_id;
+   if v_last_paid_at is not null and v_last_paid_at>=coalesce(p_paid_at,now()) then
+    return jsonb_build_object('success',false,'stale_payment',true);
+   end if;
+  end if;
+  if v_subscription.current_period_end>coalesce(p_paid_at,now()) then v_start:=v_subscription.current_period_start;v_end:=v_subscription.current_period_end+interval '30 days';
+  else v_start:=coalesce(p_paid_at,now());v_end:=coalesce(p_paid_at,now())+interval '30 days';end if;
+ else
+  v_start:=coalesce(p_paid_at,now());v_end:=coalesce(p_paid_at,now())+interval '30 days';
+ end if;
  insert into public.workspace_subscriptions(workspace_id,plan_key,status,billing_provider,current_period_start,current_period_end,cancel_at_period_end,last_payment_id,updated_at)
  values(v_payment.workspace_id,'pro','active','paystack',v_start,v_end,false,v_payment.id,now())
  on conflict(workspace_id) do update set plan_key='pro',status='active',billing_provider='paystack',current_period_start=excluded.current_period_start,current_period_end=excluded.current_period_end,cancel_at_period_end=false,last_payment_id=excluded.last_payment_id,updated_at=now();
