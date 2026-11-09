@@ -11,6 +11,8 @@ export type MarketplaceCheckoutInput = {
   product: { id: string; slug: string; name: string };
   versionId: string;
   buyerId: string;
+  buyerEmail: string;
+  billingInterval?: "month" | "year";
   successUrl: string;
   cancelUrl: string;
 };
