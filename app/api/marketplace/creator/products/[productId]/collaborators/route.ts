@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {NextResponse,type NextRequest} from "next/server";import {createClient as createAdmin} from "@supabase/supabase-js";import {createClient} from "@/lib/supabase/server";
 const h={"Cache-Control":"private, no-store"};type C={params:Promise<{productId:string}>};const uuid=/^[0-9a-f-]{36}$/i;
 function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw Error("Collaboration service unavailable");return createAdmin(u,k,{auth:{autoRefreshToken:false,persistSession:false}})}
