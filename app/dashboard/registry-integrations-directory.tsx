@@ -363,6 +363,17 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
     "label": "OpenWeather"
   }
 };
+
+
+// Native workflow primitives and utility nodes use purposeful marks rather than
+// arbitrary first-letter placeholders. Provider integrations above use brand logos.
+const nativeNodeMarks: Record<string, string> = {
+  webhook_trigger: "↗", schedule_cron: "◷", manual_trigger: "▶", http_request: "⇄",
+  if: "◇", switch: "⑂", loop: "↻", merge: "⋈", wait_delay: "Ⅱ", code_js: "</>",
+  set_fields: "☷", json_parse: "{}", filter: "▽", aggregate: "Σ", date_time: "◷",
+  logic: "◇", data: "▤", webhooks: "↗", manual: "▶", schedule: "◷", javascript: "</>",
+};
+
 const googleProductForNode: Record<string, string> = {
   gmail: "gmail", google_sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
   google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",

@@ -13,8 +13,7 @@ const saveRouteSource = readFileSync("app/api/integrations/workspace/route.ts", 
 
 test("all 100 directory entries have official brand artwork or an explicit native icon path", () => {
   const ids = [...catalogSource.matchAll(/"id": "([^"]+)"/g)].map((match) => match[1]);
-  const assetsBlock = directorySource.match(/const officialBrandAssets:[\s\S]*?= (\{[\s\S]*?\});\nconst googleProductForNode/);
-  assert.ok(assetsBlock, "official brand asset map must remain machine-readable");
+  const assetsBlock = directorySource.match(/const officialBrandAssets:[\s\S]*?= (\{[\s\S]*?\n\});/);
   const assets = JSON.parse(assetsBlock[1]);
   const native = new Set([
     "webhook_trigger", "schedule_cron", "manual_trigger", "http_request", "if", "switch", "loop",
