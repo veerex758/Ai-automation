@@ -140,6 +140,7 @@ function WorkspaceIntegrationManager() {
   const [sendingResendTest, setSendingResendTest] = useState(false);
   const [notice, setNotice] = useState("");
   const [workflowId, setWorkflowId] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
