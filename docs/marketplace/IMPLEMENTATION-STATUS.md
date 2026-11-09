@@ -40,7 +40,7 @@ Source of truth: `docs/marketplace/MASTER-SPEC.md`. This ledger separates merged
 | Creator/agency teams/collaborators/shared ownership | In PR #175 | Creator team and member management foundation, owner/admin roles, audit, RLS. Product-level collaborator permissions/shared publishing still outstanding. |
 | Private org marketplaces, allowlists/private distribution | Implemented foundation on main | Private spaces/members/listings APIs. Invitation, removal and real organization E2E acceptance pending. |
 | Enterprise licensing, seats, procurement/policy/usage/compliance exports | Partial | License/seat/issuance/install gates exist; policy enforcement, usage analytics, procurement and compliance export incomplete. |
-| Discovery/recommendations/personalized collections | Partial | Search/discovery events and promoted listing foundations; ranking, collections and personalization not complete. |
+| Discovery/recommendations/personalized collections | In PR #175 | Discovery event + sponsored foundations on main; personalized recommendation endpoint and curated collection tables/read API added in PR #175. Ranking quality, editorial collection management UI, tests with real behavior, and recommendation acceptance remain. |
 | Sponsored placements/disclosure/budget/review/refund | Implemented foundation on main | Sponsored label/ranking separation and budget/review/refund gates. Creator purchase/finance/browser acceptance pending. |
 | Developer API/SDK, keys/scopes/rate limits/audit | Implemented foundation on main | API key lifecycle, v1 route, SDK and rate-limit/audit migrations; publish/draft endpoint coverage and external developer acceptance pending. |
 
