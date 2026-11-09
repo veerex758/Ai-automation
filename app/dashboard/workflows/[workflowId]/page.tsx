@@ -1,18 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import "./builder.css";
 import RunTestPanel from "./run-test-panel";
+import RegistryOperationSettings from "./registry-operation-settings";
+type RegistryCatalog = { id: string; name: string; icon?: string; category?: string; triggers: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[]; actions: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[] };
 
 type NodeType = "trigger" | "action" | "condition";
-type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string> };
-type Definition = { version: 1; nodes: WorkflowNode[] };
+type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string>; registryNodeId?: string; registryOperationId?: string; registryInput?: Record<string, unknown>; position?: { x: number; y: number } };
+type WorkflowEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
+type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
 type Workflow = { id: string; name: string; description: string; status: string };
 type WorkflowVersion = { version: number; created_at: string };
 
-const starterDefinition: Definition = { version: 1, nodes: [
+const starterDefinition: Definition = { version: 1, edges: [], nodes: [
   { id: "trigger-1", type: "trigger", title: "When this happens", description: "Choose an event that starts your workflow.", settings: { event: "manual" } },
 ] };
 const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> = {
@@ -25,6 +29,7 @@ export default function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
   const workflowId = params.workflowId;
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalog[]>([]);
   const [definition, setDefinition] = useState<Definition>(starterDefinition);
   const [savedFingerprint, setSavedFingerprint] = useState(JSON.stringify(starterDefinition));
   const [selectedId, setSelectedId] = useState("trigger-1");
@@ -37,6 +42,10 @@ export default function WorkflowBuilderPage() {
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<{ valid: boolean; message: string; checkedAt: string; counts?: { triggers: number; actions: number; conditions: number } } | null>(null);
   const draftRevision = useRef(0);
+  const graphCanvasRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ id: string; pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
+  const [connectionLabel, setConnectionLabel] = useState<"true" | "false" | "next">("next");
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
   const isDirty = JSON.stringify(definition) !== savedFingerprint;
@@ -65,9 +74,11 @@ export default function WorkflowBuilderPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not load this workflow.");
       setWorkflow(result.workflow);
+      const catalogResponse = await fetch("/api/node-catalog", { cache: "no-store" });
+      if (catalogResponse.ok) { const catalogResult = await catalogResponse.json(); setRegistryCatalog(Array.isArray(catalogResult.nodes) ? catalogResult.nodes : []); }
       const nextDefinition = result.definition as Definition;
-      setDefinition(nextDefinition);
-      setSavedFingerprint(JSON.stringify(nextDefinition));
+      setDefinition({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) });
+      setSavedFingerprint(JSON.stringify({ ...nextDefinition, edges: nextDefinition.edges ?? nextDefinition.nodes.slice(1).map((node, index) => ({ id: `edge-${index + 1}`, source: nextDefinition.nodes[index].id, target: node.id, label: "next" as const })) }));
       setSelectedId(nextDefinition.nodes[0]?.id ?? "");
       const versionsResponse = await fetch(`/api/workflows/${workflowId}/versions`, { cache: "no-store" });
       if (versionsResponse.ok) {
@@ -82,6 +93,64 @@ export default function WorkflowBuilderPage() {
   }, [workflowId]);
 
   useEffect(() => { void loadWorkflow(); }, [loadWorkflow]);
+
+  function nodePosition(node: WorkflowNode, index: number) {
+    if (node.position) return node.position;
+    const incomingBranch = (definition.edges ?? []).find((edge) => edge.target === node.id && edge.label !== "next");
+    const col = incomingBranch?.label === "false" ? 2 : incomingBranch?.label === "true" ? 0 : index % 3;
+    return { x: 170 + col * 300, y: 90 + Math.floor(index / 3) * 210 };
+  }
+
+  function updateNodePosition(id: string, x: number, y: number) {
+    draftRevision.current += 1;
+    setValidation(null);
+    setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, position: { x: Math.max(120, Math.min(1900, x)), y: Math.max(70, Math.min(1800, y)) } } : node) }));
+  }
+
+  function beginNodeDrag(event: ReactPointerEvent<HTMLDivElement>, node: WorkflowNode, index: number) {
+    if ((event.target as HTMLElement).closest("button")) return;
+    const point = nodePosition(node, index);
+    dragState.current = { id: node.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: point.x, originY: point.y, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveNodeDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    drag.moved = true;
+    updateNodePosition(drag.id, drag.originX + dx, drag.originY + dy);
+  }
+
+  function endNodeDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.moved) setSelectedId(drag.id);
+    else setNotice("Node position updated. Save your changes to keep this layout.");
+    dragState.current = null;
+  }
+
+  function connectNodes(source: string, target: string, label: "true" | "false" | "next") {
+    if (source === target) return;
+    const duplicate = (definition.edges ?? []).some((edge) => edge.source === source && edge.target === target);
+    if (duplicate) { setNotice("Those nodes are already connected."); setConnectingFrom(null); return; }
+    const sourceNode = definition.nodes.find((node) => node.id === source);
+    if (!sourceNode || (label !== "next" && sourceNode.type !== "condition")) return;
+    draftRevision.current += 1;
+    setValidation(null);
+    setDefinition((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) => node.id !== target || label === "next" ? node : {
+        ...node,
+        position: { x: label === "true" ? 170 : 770, y: Math.min(1800, node.position?.y ?? 90 + Math.floor(current.nodes.findIndex((item) => item.id === node.id) / 3) * 210) },
+      }),
+      edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source, target, label }],
+    }));
+    setConnectingFrom(null);
+    setNotice("Connection added. Save your changes when ready.");
+  }
 
   function updateSelected(updates: Partial<Pick<WorkflowNode, "title" | "description">>) {
     if (!selectedNode) return;
@@ -102,6 +171,21 @@ export default function WorkflowBuilderPage() {
     }));
   }
 
+  async function generateDraftOnCanvas() {
+    const prompt = window.prompt("Describe the workflow to draft:");
+    if (!prompt?.trim()) return;
+    setError(""); setNotice("Generating a reviewable draft…");
+    try {
+      const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
+      const payload = await response.json();
+      if (!response.ok || !payload.definition?.nodes?.length) throw new Error(payload.error || "AI could not create a draft.");
+      const generated = payload.definition as Definition;
+      const normalized = { ...generated, edges: generated.edges ?? generated.nodes.slice(1).map((node, index) => ({ id: "ai-edge-" + index, source: generated.nodes[index].id, target: node.id, label: "next" as const })) };
+      draftRevision.current += 1; setValidation(null); setDefinition(normalized); setSelectedId(normalized.nodes[0]?.id ?? "");
+      setNotice("AI draft loaded onto the canvas. Review and edit it, then Save workflow; it has not been executed.");
+    } catch (e) { setError(e instanceof Error ? e.message : "AI draft generation failed."); setNotice(""); }
+  }
+
   function addNode(type: Exclude<NodeType, "trigger">) {
     draftRevision.current += 1;
     setValidation(null);
@@ -112,7 +196,7 @@ export default function WorkflowBuilderPage() {
         ? { provider: "internal", operation: "create_task", recipient: "", message: "", url: "" }
         : { field: "", operator: "equals", value: "" },
     };
-    setDefinition((current) => ({ ...current, nodes: [...current.nodes, node] }));
+    setDefinition((current) => { const previous = current.nodes[current.nodes.length - 1]; return { ...current, nodes: [...current.nodes, node], edges: [...(current.edges ?? []), ...(previous ? [{ id: `edge-${previous.id}-${id}`, source: previous.id, target: id, label: "next" as const }] : [])] }; });
     setSelectedId(id);
     setNotice("Step added. Save your changes when you're ready.");
   }
@@ -121,7 +205,7 @@ export default function WorkflowBuilderPage() {
     if (!selectedNode || selectedNode.type === "trigger") return;
     draftRevision.current += 1;
     setValidation(null);
-    setDefinition((current) => ({ ...current, nodes: current.nodes.filter((node) => node.id !== selectedNode.id) }));
+    setDefinition((current) => { const nodes = current.nodes.filter((node) => node.id !== selectedNode.id); const edges = (current.edges ?? []).filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id); return { ...current, nodes, edges }; });
     setSelectedId(definition.nodes.find((node) => node.type === "trigger")?.id ?? "");
     setNotice("Step removed. Save your changes to keep this update.");
   }
@@ -198,7 +282,7 @@ export default function WorkflowBuilderPage() {
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definition }),
+        body: JSON.stringify({ definition, registrySteps: definition.nodes.filter((node) => node.type === "trigger" || node.type === "action").map((node) => ({ id: node.id, nodeId: node.registryNodeId ?? (node.type === "trigger" ? "manual" : node.settings.provider === "email" ? "email" : node.settings.provider === "slack" ? "slack" : node.settings.provider === "openai" ? "openai" : "slack"), operationId: node.registryOperationId ?? (node.type === "trigger" ? "start" : node.settings.provider === "email" ? "send_email" : node.settings.provider === "slack" ? "send_message" : node.settings.provider === "openai" ? "generate_text" : "send_message"), kind: node.type === "trigger" ? "trigger" : "action", input: node.registryInput ?? (node.type === "trigger" ? {} : node.settings.provider === "email" ? { to: node.settings.recipient ?? "", subject: node.title, text: node.settings.message ?? node.title } : node.settings.provider === "slack" ? { message: node.settings.message ?? node.title } : node.settings.provider === "openai" ? { prompt: node.settings.message ?? node.title } : { message: node.settings.message ?? node.title }) })) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save workflow steps.");
@@ -238,7 +322,7 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
+        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
       </header>
 
       <div className="builder-layout">
@@ -255,16 +339,32 @@ export default function WorkflowBuilderPage() {
           />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
-            <div className="canvas-label"><span>CANVAS</span><span>{definition.nodes.length} / 30 steps</span></div>
-            <div className="node-stack">
-              {definition.nodes.map((node, index) => <div className="node-slot" key={node.id}>
-                {index > 0 && <div className="node-connector"><span>↓</span></div>}
-                <button className={`builder-node node-${node.type} ${selectedId === node.id ? "node-selected" : ""}`} onClick={() => setSelectedId(node.id)} aria-pressed={selectedId === node.id}>
-                  <span className="node-icon">{nodeMeta[node.type].icon}</span><span className="node-copy"><small>{nodeMeta[node.type].label.toUpperCase()} · STEP {index + 1}</small><strong>{node.title}</strong><span>{node.description || nodeMeta[node.type].help}</span></span><span className="node-chevron">›</span>
-                </button>
-                {index === definition.nodes.length - 1 && <div className="node-endpoint"><span>＋</span> Add the next step from the panel</div>}
-              </div>)}
-              {definition.nodes.length === 0 && <div className="builder-empty"><span>✳</span><strong>Start with a trigger</strong><p>A trigger defines what starts your workflow.</p><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}`, settings: { event: "manual" } }; draftRevision.current += 1; setValidation(null); setDefinition({ version: 1, nodes: [trigger] }); setSelectedId(trigger.id); setNotice("Trigger added. Save your changes when you’re ready."); }}>Add trigger</button></div>}
+            <div className="canvas-label"><span>CANVAS · DRAG NODES TO REPOSITION</span><span>{definition.nodes.length} / 30 steps</span></div>
+            <div className="graph-canvas" role="region" aria-label="Workflow graph canvas">
+              <div className="graph-grid" aria-hidden="true" />
+              <div className="graph-layout" ref={graphCanvasRef} style={{ width: Math.max(1000, ...definition.nodes.map((node, index) => nodePosition(node, index).x + 190)), height: Math.max(680, ...definition.nodes.map((node, index) => nodePosition(node, index).y + 180)) }}>
+                <svg className="graph-edges" aria-hidden="true"><defs><marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#9ab78a" /></marker></defs>
+                  {(definition.edges ?? []).map((edge) => {
+                    const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
+                    const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target);
+                    if (sourceIndex < 0 || targetIndex < 0) return null;
+                    const source = nodePosition(definition.nodes[sourceIndex], sourceIndex);
+                    const target = nodePosition(definition.nodes[targetIndex], targetIndex);
+                    const sx = source.x + 105, sy = source.y + 62, tx = target.x + 105, ty = target.y + 62;
+                    const curve = Math.max(45, Math.abs(tx - sx) * .45);
+                    return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}><path d={`M ${sx} ${sy} C ${sx + curve} ${sy}, ${tx - curve} ${ty}, ${tx} ${ty}`} /><text x={(sx + tx) / 2} y={(sy + ty) / 2 - 12}>{edge.label === "next" ? "" : edge.label.toUpperCase()}</text></g>;
+                  })}
+                </svg>
+                {definition.nodes.map((node, index) => {
+                  const point = nodePosition(node, index);
+                  return <div key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`} style={{ left: point.x, top: point.y }} onPointerDown={(event) => beginNodeDrag(event, node, index)} onPointerMove={moveNodeDrag} onPointerUp={endNodeDrag} onPointerCancel={() => { dragState.current = null; }} role="group" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }} aria-label={`Select and drag ${node.title}`}>
+                    <button type="button" className="graph-node-port graph-port-in" aria-label={`Connect into ${node.title}`} title={connectingFrom ? "Complete connection" : "Choose a source node"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!connectingFrom) { setNotice("Choose an output handle first."); return; } connectNodes(connectingFrom, node.id, connectionLabel); }} />
+                    <span className="graph-node-icon">{nodeMeta[node.type].icon}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {index + 1}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small>
+                    <button type="button" className="graph-node-port graph-port-out" aria-label={`Connect from ${node.title}`} title="Start a connection" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSelectedId(node.id); setConnectingFrom(node.id); setNotice(node.type === "condition" ? "Choose True or False in the connection editor, then select a destination input handle." : "Select a destination input handle."); }} />
+                  </div>;
+                })}
+                {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
+              </div>
             </div>
             <div className="canvas-footnote">Use the safe test panel to evaluate conditions and inspect simulated step results. External actions remain disabled.</div>
           </div>
@@ -285,29 +385,7 @@ export default function WorkflowBuilderPage() {
               {(isLeadFollowUp || isLeadAlert || isFormToLead) && <><label htmlFor="trigger-source">Lead source</label><input id="trigger-source" maxLength={120} value={selectedNode.settings.source ?? ""} onChange={(event) => updateSetting("source", event.target.value)} placeholder="Website form, Instagram, CRM…" /><p className="config-note">Saved as draft context; the source is not connected automatically yet.</p></>}
               <p className="config-note">This selects the intended start event. Scheduling, inbound webhooks and live triggers are not active yet.</p>
             </div>}
-            {selectedNode.type === "action" && <div className="step-config-fields">
-              <div className="config-section-title">Action configuration</div>
-              <label htmlFor="action-provider">Service</label>
-              <select id="action-provider" value={selectedNode.settings.provider ?? "internal"} onChange={(event) => { const provider = event.target.value; updateSetting("provider", provider); updateSetting("operation", provider === "email" ? "send_email" : provider === "slack" ? "send_message" : provider === "webhook" ? "http_request" : "create_task"); }}>
-                <option value="internal">Aivanta task</option><option value="email">Email</option><option value="slack">Slack</option><option value="webhook">Webhook</option>
-              </select>
-              <label htmlFor="action-operation">Operation</label>
-              <select id="action-operation" value={selectedNode.settings.operation ?? "create_task"} onChange={(event) => updateSetting("operation", event.target.value)}>
-                {(selectedNode.settings.provider === "email" ? [{ value: "send_email", label: "Send an email" }] : selectedNode.settings.provider === "slack" ? [{ value: "send_message", label: "Send a message" }] : selectedNode.settings.provider === "webhook" ? [{ value: "http_request", label: "Send an HTTP request" }] : [{ value: "create_task", label: "Create a task" }]).map((operation) => <option key={operation.value} value={operation.value}>{operation.label}</option>)}
-              </select>
-              {(selectedNode.settings.operation === "send_email" || selectedNode.settings.operation === "send_message") && <>
-                <label htmlFor="action-recipient">Recipient</label><input id="action-recipient" maxLength={240} value={selectedNode.settings.recipient ?? ""} onChange={(event) => updateSetting("recipient", event.target.value)} placeholder="name@example.com or channel" />
-              </>}
-              {selectedNode.settings.operation === "http_request" && <>
-                <label htmlFor="action-url">Request URL</label><input id="action-url" maxLength={500} type="url" value={selectedNode.settings.url ?? ""} onChange={(event) => updateSetting("url", event.target.value)} placeholder="https://api.example.com/…" />
-              </>}
-              {isCommentToDm && <><label htmlFor="action-guide-url">Guide link</label><input id="action-guide-url" type="url" maxLength={500} value={selectedNode.settings.url ?? ""} onChange={(event) => updateSetting("url", event.target.value)} placeholder="https://your-site.com/guide" /></>}
-              <label htmlFor="action-message">{isCommentToDm ? "DM message" : isLeadFollowUp ? "Follow-up task notes" : isLeadAlert ? "Lead alert details" : isFormToLead ? "Lead review notes" : isSupportTriage ? "Support task details" : isContentApproval ? "Review task details" : "Payload / message"} <span>Optional</span></label>
-              <textarea id="action-message" maxLength={500} rows={3} value={selectedNode.settings.message ?? ""} onChange={(event) => updateSetting("message", event.target.value)} placeholder={isCommentToDm ? "Thanks for commenting! Here is your guide:" : isLeadFollowUp ? "Follow up with {{lead_name}} about {{interest}}." : isLeadAlert ? "Review new lead {{lead_name}} from {{source}}." : isFormToLead ? "Qualify {{name}} using the submitted details." : isSupportTriage ? "Review {{customer_name}}’s request: {{subject}}." : isContentApproval ? "Review the draft: {{content_title}}." : "Describe the content or payload…"} />
-              {isLeadFollowUp && <><label htmlFor="follow-up-delay">Follow-up delay</label><select id="follow-up-delay" value={selectedNode.settings.delay ?? "immediate"} onChange={(event) => updateSetting("delay", event.target.value)}><option value="immediate">Immediately</option><option value="15_minutes">After 15 minutes</option><option value="1_hour">After 1 hour</option><option value="1_day">After 1 day</option></select><p className="config-note">Delay is saved as a draft setting. Scheduled waiting is not active yet.</p></>}
-              <p className="config-note">Configuration is saved as a draft only. No service is contacted yet.</p>
-            </div>}
-            {selectedNode.type === "condition" && <div className="step-config-fields">
+            {selectedNode.type === "action" && <RegistryOperationSettings catalog={registryCatalog} kind="action" nodeId={selectedNode.registryNodeId ?? (selectedNode.settings.provider === "email" ? "email" : selectedNode.settings.provider === "slack" ? "slack" : selectedNode.settings.provider === "openai" ? "openai" : "internal")} operationId={selectedNode.registryOperationId ?? (selectedNode.settings.provider === "email" ? "send_email" : selectedNode.settings.provider === "slack" ? "send_message" : selectedNode.settings.provider === "openai" ? "generate_text" : "create_task")} input={selectedNode.registryInput ?? (selectedNode.settings.provider === "email" ? { to: selectedNode.settings.recipient ?? "", subject: selectedNode.title, text: selectedNode.settings.message ?? "" } : selectedNode.settings.provider === "slack" ? { message: selectedNode.settings.message ?? "" } : selectedNode.settings.provider === "openai" ? { prompt: selectedNode.settings.message ?? "" } : { message: selectedNode.settings.message ?? "" })} onChange={(nodeId, operationId, input) => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === selectedNode.id ? { ...node, registryNodeId: nodeId, registryOperationId: operationId, registryInput: input, settings: { ...node.settings, provider: nodeId, operation: operationId } } : node) })); }} />}{selectedNode.type === "condition" && <div className="step-config-fields">
               <div className="config-section-title">Condition rules</div>
               <label htmlFor="condition-field">{isCommentToDm ? "Comment text" : isLeadFollowUp ? "Lead follow-up status" : isSupportTriage ? "Ticket priority" : isContentApproval ? "Approval status" : "Field to check"}</label><input id="condition-field" maxLength={120} value={selectedNode.settings.field ?? ""} onChange={(event) => updateSetting("field", event.target.value)} placeholder={isCommentToDm ? "comment_text" : isLeadFollowUp ? "follow_up_status" : isSupportTriage ? "priority" : isContentApproval ? "approval_status" : "e.g. order.total"} />
               <label htmlFor="condition-operator">Comparison</label>
@@ -319,6 +397,18 @@ export default function WorkflowBuilderPage() {
               </>}
               <p className="config-note">Rules are stored in your draft. They will not be evaluated until execution is implemented.</p>
             </div>}
+            <div className="panel-divider" />
+            <section className="graph-connection-editor" aria-label="Node connections">
+              <div className="config-section-title">Connections</div>
+              <p className="config-note">Connect this node to another node. Conditions can create true and false paths.</p>
+              {(definition.edges ?? []).filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).map((edge) => <div className="graph-edge-row" key={edge.id}><span><b>{edge.label === "next" ? "Next" : edge.label.toUpperCase()}</b> · {definition.nodes.find((node) => node.id === edge.source)?.title} → {definition.nodes.find((node) => node.id === edge.target)?.title}</span><button type="button" aria-label="Remove connection" onClick={() => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: (current.edges ?? []).filter((item) => item.id !== edge.id) })); }}>×</button></div>)}
+              {selectedNode.type === "condition" && <><label htmlFor="connection-branch">Branch label</label><select id="connection-branch" value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value as "true" | "false" | "next")}><option value="true">True path</option><option value="false">False path</option></select></>}
+              <button type="button" className="builder-validate" onClick={() => { setConnectingFrom(selectedNode.id); setConnectionLabel(selectedNode.type === "condition" ? connectionLabel : "next"); setNotice("Select an input handle on the destination node."); }}>Start connection from this node</button>
+              <label htmlFor="connect-target">Connect to node</label>
+              <select id="connect-target" defaultValue="" onChange={(event) => { const target = event.target.value; if (target) connectNodes(selectedNode.id, target, selectedNode.type === "condition" ? connectionLabel : "next"); event.currentTarget.value = ""; }}>
+                <option value="">Choose destination…</option>{definition.nodes.filter((node) => node.id !== selectedNode.id).map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}
+              </select>
+            </section>
             <div className="panel-divider" />
             <div className="step-order"><span>Step order</span><div><button aria-label="Move step up" disabled={definition.nodes.findIndex((node) => node.id === selectedNode.id) <= 1} onClick={() => moveNode(definition.nodes.findIndex((node) => node.id === selectedNode.id), -1)}>↑</button><button aria-label="Move step down" disabled={definition.nodes.findIndex((node) => node.id === selectedNode.id) >= definition.nodes.length - 1} onClick={() => moveNode(definition.nodes.findIndex((node) => node.id === selectedNode.id), 1)}>↓</button></div></div>
             {selectedNode.type !== "trigger" && <button className="remove-step" onClick={removeSelected}>Remove this step</button>}
