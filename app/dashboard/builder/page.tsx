@@ -41,7 +41,7 @@ export default function WorkflowBuilderPage() {
   const [aiRegistrySteps, setAiRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [aiPreviewRegistrySteps, setAiPreviewRegistrySteps] = useState<RegistryDraftStep[] | null>(null);
   const [actionCatalog, setActionCatalog] = useState<CatalogAction[]>([]);
-  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);\n  const registryCatalogRef = { current: registryCatalog };\n  registryCatalogRef.current = registryCatalog;
+  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
 
@@ -51,7 +51,8 @@ export default function WorkflowBuilderPage() {
       if (saved) {
         const parsed = JSON.parse(saved) as { name?: string; steps?: BuilderStep[]; registrySteps?: RegistryDraftStep[] };
         if (typeof parsed.name === "string") setName(parsed.name);
-        if (Array.isArray(parsed.registrySteps)) setAiRegistrySteps(parsed.registrySteps);\n        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+        if (Array.isArray(parsed.registrySteps)) setAiRegistrySteps(parsed.registrySteps);
+        if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
           setSteps(parsed.steps);
           setSelected(parsed.steps[0].id);
         }
@@ -72,7 +73,7 @@ export default function WorkflowBuilderPage() {
             const registrySteps = payload.definition.steps;
             setAiRegistrySteps(registrySteps);
             setSteps(registrySteps.map((item, index) => {
-              const operation = [...(registryCatalogRef.current ?? []).flatMap(node => [...node.triggers, ...node.actions])].find(op => op.id === item.operationId);
+              const operation = undefined;
               return { id: Number(index + 1), kind: item.kind === "trigger" ? "Trigger" : "Action", title: operation?.name ?? item.operationId, detail: operation?.description ?? `${item.nodeId} · ${item.operationId}`, registryBacked: true, actionId: `registry:${item.nodeId}:${item.operationId}`, settings: {} };
             }));
           }
