@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
-import { getPublicNodeCatalog } from "@/nodes/registry";
+import { findOperation, getPublicNodeCatalog } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,8 +37,21 @@ export async function POST(request: NextRequest) {
     if (usageError) return NextResponse.json({ error: "Usage metering unavailable. Apply Phase 5 billing migration." }, { status: 503 });
     if (!usage?.allowed) return NextResponse.json({ error: "Monthly AI generation limit reached. Upgrade your plan.", entitlement: usage }, { status: 402 });
 
-    const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog: getPublicNodeCatalog() });
-    return NextResponse.json(result);
+    const nodeCatalog = getPublicNodeCatalog();
+    const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog, mode: "registry" });
+    const registrySteps = result.registrySteps;
+    if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return NextResponse.json({ error: "The generated plan did not pass registry validation." }, { status: 422 });
+    const seen = new Set<string>();
+    for (let index = 0; index < registrySteps.length; index++) {
+      const step = registrySteps[index] as { id?: unknown; nodeId?: unknown; operationId?: unknown; kind?: unknown; input?: unknown };
+      if (!step || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) || typeof step.nodeId !== "string" || typeof step.operationId !== "string" || !["trigger", "action"].includes(String(step.kind)) || !step.input || typeof step.input !== "object" || Array.isArray(step.input)) return NextResponse.json({ error: "The generated plan contains an invalid step envelope." }, { status: 422 });
+      seen.add(step.id);
+      if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) return NextResponse.json({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
+      const operation = findOperation(step.nodeId, step.operationId, step.kind as "trigger" | "action");
+      if (!operation || !operation.inputSchema.safeParse(step.input).success) return NextResponse.json({ error: "The generated plan contains invalid node input. Try a simpler request." }, { status: 422 });
+    }
+    const definition = { version: 1, nodes: [{ id: "trigger-1", type: "trigger", title: "Manual start", description: "Registered workflow trigger.", settings: { event: "manual" } }] };
+    return NextResponse.json({ ...result, definition, registrySteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {

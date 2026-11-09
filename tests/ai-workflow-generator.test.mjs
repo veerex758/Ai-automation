@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateWorkflow, extractJson } from "../lib/workflows/ai-workflow-generator.cjs";
-const validDefinition = { version: 1, nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
+const validDefinition = { version: 1, edges: [], nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
 const env = { AIVANTA_AI_API_KEY: "test-secret", AIVANTA_AI_BASE_URL: "https://ai.example.test/v1", AIVANTA_AI_MODEL: "test-model", NODE_ENV: "test" };
 const fakeFetch = (payload, status = 200) => async (_url, options) => {
   assert.equal(options.headers.Authorization, "Bearer test-secret");
@@ -81,4 +81,43 @@ test("validates explicit directed edges and true/false condition branches", asyn
   assert.equal(result.definition.edges[2].label, "false");
   assert.equal(result.saved, false);
   assert.equal(result.executed, false);
+});
+test("rejects unknown AI draft envelope and node fields", async () => {
+  const unsafe = { ...validDefinition, execute: true };
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsafe) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+  const unsafeNode = { ...validDefinition, nodes: [{ ...validDefinition.nodes[0], executable: "true" }] };
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(unsafeNode) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+});
+
+test("explicit Gemini provider selects Gemini key even when OpenAI key is also present", async () => {
+  let url = "";
+  let auth = "";
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "gemini", GEMINI_API_KEY: "gemini-key", OPENAI_API_KEY: "openai-key", NODE_ENV: "test" }, fetchImpl: async (requested, options) => {
+    url = requested; auth = options.headers.Authorization;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  }});
+  assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(auth, "Bearer gemini-key");
+});
+test("explicit OpenAI provider uses OpenAI key and endpoint", async () => {
+  let url = "";
+  let auth = "";
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async (requested, options) => {
+    url = requested; auth = options.headers.Authorization;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+  }});
+  assert.equal(url, "https://api.openai.com/v1/chat/completions");
+  assert.equal(auth, "Bearer openai-key");
+});
+
+test("registry mode returns only a bounded node plan and never executes it", async () => {
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };
+  const result = await generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) });
+  assert.deepEqual(result.registrySteps, plan.registrySteps);
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
+test("registry mode rejects unexpected top-level fields", async () => {
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], execute: true };
+  await assert.rejects(generateWorkflow({ prompt: "Start manually", mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);
 });
