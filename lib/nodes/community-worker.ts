@@ -51,7 +51,7 @@ async function readBoundedResponse(response: Response, maxBytes: number): Promis
 function validateInvocation(args: CommunityNodeInvocation): void {
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!uuid.test(args.packageVersionId) || !uuid.test(args.installationId) || !uuid.test(args.workspaceId)) throw new Error("COMMUNITY_NODE_INVOCATION_INVALID");
-  if (!/^sha512-[A-Za-z0-9+/]{86}==$/.test(args.integrity)) throw new Error("COMMUNITY_NODE_INTEGRITY_INVALID");
+  if (!/^sha512-[A-Za-z0-9+/]{86}=$/.test(args.integrity)) throw new Error("COMMUNITY_NODE_INTEGRITY_INVALID");
   if (!/^dist\/[a-zA-Z0-9._/-]+\.js$/.test(args.entrypoint) || args.entrypoint.includes("..")) throw new Error("COMMUNITY_NODE_ENTRYPOINT_INVALID");
   if (!/^[a-zA-Z0-9._:-]{1,128}$/.test(args.operation)) throw new Error("COMMUNITY_NODE_OPERATION_INVALID");
   if (!Array.isArray(args.permissions) || args.permissions.length > 7 || args.permissions.some(p => typeof p !== "string" || !/^[a-z][a-z0-9_.:-]{1,127}$/.test(p))) throw new Error("COMMUNITY_NODE_PERMISSIONS_INVALID");
