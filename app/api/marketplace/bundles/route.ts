@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {NextResponse,type NextRequest} from "next/server";
 import {createClient} from "@/lib/supabase/server";
 
