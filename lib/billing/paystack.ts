@@ -24,5 +24,5 @@ export function getPaidPlan(slug: unknown): PaidPlan | null {
   if (typeof slug !== "string" || !(slug in planConfig)) return null;
   const key = slug as PaidPlanSlug, config = planConfig[key], raw = process.env[config.env], amountMinor = raw ? Number(raw) : NaN, currency = process.env.AIVANTA_BILLING_CURRENCY;
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0 || (currency !== "NGN" && currency !== "USD")) return null;
-  return { slug: key, ...config, amountMinor, currency };
+  return { slug: key, planKey: config.planKey, interval: config.interval, amountMinor, currency };
 }
