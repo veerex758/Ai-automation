@@ -89,7 +89,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     }
     return NextResponse.json({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status },
-      definition: { ...(valid.definition ?? starterDefinition), ...registryPlan },
+      definition: { ...(valid.definition ?? starterDefinition), ...(stored && Array.isArray(stored.edges) ? { edges: stored.edges } : {}), ...(stored && Array.isArray(stored.nodes) ? { nodes: (valid.definition ?? starterDefinition).nodes.map((node, index) => ({ ...node, ...(typeof stored.nodes[index] === "object" && stored.nodes[index] ? { position: (stored.nodes[index] as Record<string, unknown>).position } : {}) })) : {}, ...registryPlan },
     });
   } catch (error) {
     console.error("Failed to load Aivanta workflow definition:", error);
@@ -120,7 +120,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     // Keep the existing version-1 nodes contract for the builder and database RPC,
     // while optionally storing a registry execution plan alongside it. The RPC
     // validates the legacy nodes and persists the full JSON document atomically.
-    let definitionToSave: Record<string, unknown> = validated.definition;
+    let definitionToSave: Record<string, unknown> = { ...validated.definition, ...(requestBody.definition && typeof requestBody.definition === "object" ? { edges: (requestBody.definition as Record<string, unknown>).edges, nodes: validated.definition.nodes.map((node, index) => ({ ...node, position: ((requestBody.definition as Record<string, unknown>).nodes as Record<string, unknown>[] | undefined)?.[index]?.position })) : {} };
     const legacyNodes = validated.definition.nodes;
     const canBridgeLegacyDefinition = legacyNodes[0]?.type === "trigger" &&
       legacyNodes[0].settings.event === "manual" &&
