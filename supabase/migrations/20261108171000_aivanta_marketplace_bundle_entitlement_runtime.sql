@@ -1,5 +1,7 @@
 begin;
-alter table public.marketplace_financial_ledger drop constraint if exists marketplace_financial_ledger_entry_type_check;\nalter table public.marketplace_financial_ledger add constraint marketplace_financial_ledger_entry_type_check check(entry_type in ('gross_sale','platform_commission','creator_earning','processor_fee','tax','refund','chargeback','payout','adjustment','platform_commission_reversal','creator_earning_reversal'));\nalter table public.marketplace_entitlements add column if not exists bundle_purchase_id uuid references public.marketplace_bundle_purchases(id) on delete restrict;
+alter table public.marketplace_financial_ledger drop constraint if exists marketplace_financial_ledger_entry_type_check;
+alter table public.marketplace_financial_ledger add constraint marketplace_financial_ledger_entry_type_check check(entry_type in ('gross_sale','platform_commission','creator_earning','processor_fee','tax','refund','chargeback','payout','adjustment','platform_commission_reversal','creator_earning_reversal'));
+alter table public.marketplace_entitlements add column if not exists bundle_purchase_id uuid references public.marketplace_bundle_purchases(id) on delete restrict;
 alter table public.marketplace_entitlements drop constraint if exists marketplace_entitlements_entitlement_type_check;
 alter table public.marketplace_entitlements add constraint marketplace_entitlements_entitlement_type_check check(entitlement_type in ('free','purchase','subscription','admin_grant','bundle'));
 create unique index if not exists marketplace_bundle_entitlement_product_unique on public.marketplace_entitlements(bundle_purchase_id,product_id) where bundle_purchase_id is not null;
