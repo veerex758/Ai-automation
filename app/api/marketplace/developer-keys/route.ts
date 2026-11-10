@@ -1,0 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {createHash,randomBytes} from "node:crypto";
+import {NextRequest,NextResponse} from "next/server";
+import {createClient as adminClient} from "@supabase/supabase-js";
+import {createClient} from "@/lib/supabase/server";
+const headers={"Cache-Control":"private, no-store"};
+const scopes=["marketplace:read","marketplace:publish"] as const;
+function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw new Error("service_unavailable");return adminClient(u,k,{auth:{autoRefreshToken:false,persistSession:false}})}
+async function user(){const sb=await createClient(),{data:{user},error}=await sb.auth.getUser();return error?null:user}
+export async function GET(){try{const u=await user();if(!u)return NextResponse.json({error:"Authentication required."},{status:401,headers});const {data,error}=await admin().from("marketplace_api_keys").select("id,label,key_prefix,scopes,created_at,expires_at,revoked_at,last_used_at").eq("owner_user_id",u.id).order("created_at",{ascending:false}).limit(100);if(error)throw error;return NextResponse.json({keys:data??[]},{headers})}catch(e){console.error("Marketplace API key list failed",e);return NextResponse.json({error:"Could not list API keys."},{status:500,headers})}}
+export async function POST(req:NextRequest){try{const u=await user();if(!u)return NextResponse.json({error:"Authentication required."},{status:401,headers});const raw=await req.text();if(new TextEncoder().encode(raw).byteLength>2048)return NextResponse.json({error:"Request too large."},{status:413,headers});let b:any;try{b=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers})}if(!b||typeof b!=="object"||Array.isArray(b))return NextResponse.json({error:"Invalid request."},{status:400,headers});
+const label=String(b.label??"").trim().slice(0,80);const requested=Array.isArray(b.scopes)?b.scopes:[];if(label.length<1||!requested.length||requested.some((s:unknown)=>!scopes.includes(s as any)))return NextResponse.json({error:"A label and supported scopes are required."},{status:400,headers});
+let expiresAt:string|null=null;if(b.expiresInDays!==undefined){const days=Number(b.expiresInDays);if(!Number.isInteger(days)||days<1||days>365)return NextResponse.json({error:"expiresInDays must be 1–365."},{status:400,headers});expiresAt=new Date(Date.now()+days*86400000).toISOString()}
+const secret="avt_"+randomBytes(32).toString("hex"),prefix=secret.slice(0,12),hash=createHash("sha256").update(secret).digest("hex");
+const {data,error}=await admin().from("marketplace_api_keys").insert({owner_user_id:u.id,label,key_prefix:prefix,key_hash:hash,scopes:[...new Set(requested)],expires_at:expiresAt}).select("id,label,key_prefix,scopes,created_at,expires_at").single();if(error)throw error;await admin().rpc("marketplace_audit_api_key_event",{p_key_id:data.id,p_owner_user_id:u.id,p_action:"created",p_endpoint:"POST /api/marketplace/developer-keys",p_outcome:"success"});return NextResponse.json({key:data,secret,warning:"Copy this secret now. It cannot be retrieved again."},{status:201,headers})
+}catch(e){console.error("Marketplace API key create failed",e);return NextResponse.json({error:"Could not create API key."},{status:500,headers})}}

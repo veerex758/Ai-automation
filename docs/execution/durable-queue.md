@@ -11,9 +11,9 @@ This migration introduces a server-owned PostgreSQL queue for Aivanta workflow e
 - **Monitoring data:** job status, attempt count, availability, lease, worker ID, and safe error code are queryable by trusted server-side operators.
 
 ## Worker endpoint
-Deploy the Next.js application with a server-only `CRON_SECRET` (or `AIVANTA_WORKER_SECRET`) and Supabase service key. Invoke `POST /api/internal/worker` with `Authorization: Bearer <secret>`. The worker processes at most five jobs per tick.
+Deploy the Next.js application with a server-only `CRON_SECRET` (or `AIVANTA_WORKER_SECRET`) and Supabase service key. Invoke `POST /api/internal/worker` with `Authorization: Bearer <secret>`. The worker claims and processes one job per tick so a slow live workflow cannot strand other jobs with already-consumed attempts.
 
-The worker currently executes **side-effect-free workflow dry-runs only**. The synchronous Resend live-run route is intentionally not redirected into this queue in this foundation change: live external effects need a provider-aware idempotency/reconciliation design before retrying after an uncertain worker crash. Do not enable live email retries through this worker.
+The worker executes legacy workflows and registry workflows in dry-run mode. Registry-format jobs may execute live registered actions only when the dispatch request explicitly sets mode=live and AIVANTA_LIVE_EXECUTION_ENABLED=true. Live jobs are limited to one attempt: if the worker loses its lease or a provider outcome becomes uncertain, the job is not automatically replayed. The legacy synchronous Resend route remains separate.
 
 ## Verification gates before production
 1. Apply the migration to an isolated development database only after the migration-history reconciliation PR is merged and clean replay succeeds.
@@ -28,12 +28,34 @@ The worker currently executes **side-effect-free workflow dry-runs only**. The s
 10. Confirm no real provider side effects are enabled by this worker.
 
 ## Operational limits
-- The worker is invoked by an external scheduler; this PR does not provision a continuously running process.
+- Authenticated manual dispatch schedules an immediate server-side worker wake-up after the dispatch response. The /api/internal/worker endpoint remains available to an external scheduler for queued scheduled jobs, recovery, and maintenance; this repository does not provision a continuously running process.
 - Queue tables and RPCs are service-role only.
 - Dispatch creation and successful run finalization are transactional and lease-checked. A job can be safely retried only if its actions are side-effect-free or individually idempotent. Provider actions remain out of scope for this worker until reconciliation semantics are implemented.
 - Dead-letter replay UI and operator controls are a follow-up.
 
 
+
+## Registered live execution extension
+
+- Live queue dispatch accepts validated legacy workflow definitions and saved aivanta-registry-v1 definitions. Legacy live support is restricted to one manual-trigger Resend email action; other legacy actions remain unsupported.
+- The current visual builder still authors the legacy definition format. Its Run panel is wired to the durable Resend path; a full registry-format authoring UI is a separate follow-up. Registry operations are available to saved registry-format definitions, not automatically selectable in the legacy builder.
+- Supported live operations are one legacy manual-trigger Resend email action, or registry-format manual trigger plus registered OpenAI text generation, Gemini text generation, Slack message, and Resend email actions, with no more than four actions in one live workflow. Other operations fail closed.
+- Credentials are saved per workspace through /api/integrations/workspace. Only workspace owners/admins can add or replace them. The browser receives connection metadata only; encrypted values are stored in workspace_integration_secrets.
+- AIVANTA_CREDENTIALS_ENCRYPTION_KEY must be a base64-encoded 32-byte key. The encrypted credential envelope uses AES-256-GCM and version v1.
+- Live dispatch requires an authenticated user, an active workflow, an idempotency key, and AIVANTA_LIVE_EXECUTION_ENABLED=true. Email recipients must also be literal addresses on AIVANTA_LIVE_EMAIL_RECIPIENTS.
+- Live jobs are forced to max_attempts=1, and registry-format live workflows are limited to four actions to keep execution within the 120-second lease. The worker writes a started checkpoint before each action and a completion checkpoint after the action. An expired lease is never replayed automatically because the provider may already have accepted the request.
+- The authenticated dispatch route wakes the worker with Next.js after() after the queue transaction commits. The queue remains the source of truth if that wake-up fails; the job stays queued.
+- Webhook-triggered live queue execution remains disabled. Scheduled and durable webhook dispatchers continue to use the seven-argument compatibility RPC and are dry-run only.
+- The new migrations are additive and must be applied only after the base queue/integration migrations are merged and clean replay passes. Do not enable live execution before authenticated staging verification of credential save, dispatch, worker, and run history.
+
 ## PostgreSQL failure-injection coverage
 
 The CI workflow provisions an isolated PostgreSQL 16 service named `aivanta_test` and runs `tests/durable-execution-postgres.test.mjs` through `npm test`. The suite applies the queue migration to a minimal fixture schema and exercises concurrent `SKIP LOCKED` claims on separate connections, simultaneous duplicate dispatch, abandoned worker lease recovery, retry exhaustion/dead-letter/run failure, and denial of queue-table/RPC access to `anon` and `authenticated`. The integration harness refuses to run destructive setup unless `AIVANTA_TEST_DB=1` and the database name is exactly `aivanta_test`. It does not connect to staging or production.
+
+
+## Trigger queue bridge (guarded)
+
+- The internal scheduler dispatches due scheduled workflows into the durable queue using a schedule-occurrence idempotency key, then releases its schedule lease. The queue worker processes the immutable snapshot as a dry-run and owns retries/dead letters.
+- Verified webhook ingress can opt into durable queueing with the server-only `AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED=true` flag. This path persists a dry-run job and returns a queued receipt; it does **not** perform provider side effects. Duplicate delivery retries the same idempotent queue RPC so a receipt cannot permanently strand an event after a transient dispatch failure.
+- Keep the webhook queue flag disabled until the additive queue migration is applied and authenticated staging acceptance passes. The existing synchronous live webhook path remains separate; it is not claimed to be durably recoverable after uncertain provider acceptance.
+- Scheduled and webhook queue registry definitions are validated and simulated without provider calls. Manual registry dispatch may execute the explicitly allowed live operations described above.

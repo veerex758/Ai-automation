@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { findOperation } from "@/nodes/registry";
+import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -138,6 +140,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let definitionToSave: Record<string, unknown> = definitionResult.definition;
+    if ("registrySteps" in body) {
+      if (!Array.isArray(body.registrySteps) || body.registrySteps.length < 1 || body.registrySteps.length > 30) return NextResponse.json({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
+      const steps = body.registrySteps as unknown[];
+      const ids = new Set<string>();
+      for (const item of steps) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return NextResponse.json({ error: "Each registry step must be an object." }, { status: 400 });
+        const step = item as Record<string, unknown>;
+        if (typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || ids.has(step.id) || typeof step.nodeId !== "string" || typeof step.operationId !== "string" || (step.kind !== "trigger" && step.kind !== "action") || !("input" in step)) return NextResponse.json({ error: "Registry steps must have unique IDs, registered operations, kind, and input." }, { status: 400 });
+        ids.add(step.id);
+        const operation = findOperation(step.nodeId, step.operationId, step.kind);
+        if (!operation || !operation.inputSchema.safeParse(step.input).success) return NextResponse.json({ error: "A registry step contains an unknown operation or invalid input." }, { status: 422 });
+      }
+      if ((steps[0] as Record<string, unknown>).kind !== "trigger" || steps.filter(item => (item as Record<string, unknown>).kind === "trigger").length !== 1) return NextResponse.json({ error: "A registry workflow must contain exactly one trigger first." }, { status: 400 });
+      definitionToSave = { ...definitionResult.definition, format: "aivanta-registry-v1", steps: steps as RegisteredWorkflowStep[] };
+    }
+
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data, error } = await supabase
       .from("workflows")
@@ -146,12 +165,21 @@ export async function POST(request: NextRequest) {
         name,
         description,
         status,
-        definition: definitionResult.definition,
+        definition: definitionToSave,
         created_by: user.id,
       })
       .select("id, name, description, status, updated_at")
       .single();
 
+    if (error?.code === "P0001" && error.message === "AIVANTA_WORKFLOW_LIMIT_REACHED") {
+      return NextResponse.json({ error: "Workspace active-workflow limit reached. Upgrade your plan to activate more workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (error?.code === "P0001" && error.message === "AIVANTA_ENTERPRISE_LIMITS_NOT_CONFIGURED") {
+      return NextResponse.json({ error: "Enterprise workflow limits must be configured before activating workflows." }, { status: 409, headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (error?.code === "P0001" && error.message === "AIVANTA_SUBSCRIPTION_INACTIVE") {
+      return NextResponse.json({ error: "This workspace subscription is inactive. Update billing before activating workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+    }
     if (error) throw error;
     return NextResponse.json(
       { workflow: presentWorkflow(data) },

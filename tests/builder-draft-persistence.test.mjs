@@ -53,8 +53,8 @@ test("draft save blocks missing or invalid action configuration before calling p
   const saveBody = source.slice(saveStart, saveEnd);
   assert.match(source, /function getActionConfigurationIssues\(\): string\[\]/);
   assert.match(saveBody, /const actionIssues = getActionConfigurationIssues\(\)/);
-  assert.match(saveBody, /if \(actionIssues.length\)/);
-  assert.match(saveBody, /if \(catalogLoading\)/);
-  assert.match(saveBody, /if \(catalogError\)/);
+  assert.match(saveBody, /if \(actionIssues.length \|\| registryIssues.length\)/);
+  assert.match(saveBody, /if \(!aiRegistrySteps && catalogLoading\)/);
+  assert.match(saveBody, /if \(!aiRegistrySteps && catalogError\)/);
   assert.ok(saveBody.indexOf("getActionConfigurationIssues()") < saveBody.indexOf('fetch("/api/workflows"'));
 });

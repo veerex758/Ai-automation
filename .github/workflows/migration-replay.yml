@@ -43,6 +43,9 @@ jobs:
       - name: Replay all migrations from a clean local database
         run: supabase db reset --local --no-seed
 
+      - name: Run database transaction tests (pgTAP)
+        run: supabase test db --local
+
       - name: Verify local migration inventory
         shell: bash
         run: |

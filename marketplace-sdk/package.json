@@ -1,0 +1,13 @@
+{
+  "name":"@aivanta/marketplace-sdk",
+  "version":"0.1.0",
+  "description":"Typed client for the Aivanta Marketplace developer API",
+  "type":"module",
+  "main":"./dist/index.js",
+  "types":"./dist/index.d.ts",
+  "exports":{".":{"types":"./dist/index.d.ts","import":"./dist/index.js"}},
+  "files":["dist","README.md"],
+  "scripts":{"build":"tsc -p tsconfig.json"},
+  "devDependencies":{"typescript":"^5.9.3"},
+  "license":"MIT"
+}

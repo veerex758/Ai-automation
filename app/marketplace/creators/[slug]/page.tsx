@@ -1,0 +1,13 @@
+import Link from "next/link";
+import {notFound} from "next/navigation";
+import {createClient} from "@/lib/supabase/server";
+import "../../marketplace.css";
+type Props={params:Promise<{slug:string}>};
+export default async function CreatorStorefront({params}:Props){
+ const {slug}=await params,sb=await createClient();
+ const {data:creator,error}=await sb.from("marketplace_creators").select("id,slug,display_name,bio,status,created_at").eq("slug",slug).eq("status","verified").maybeSingle();
+ if(error||!creator)notFound();
+ const {data:products}=await sb.from("marketplace_products").select("id,slug,name,summary,product_type,pricing_type,price_minor,currency,published_at").eq("creator_id",creator.id).eq("status","published").order("published_at",{ascending:false}).limit(60);
+ const items=products??[];
+ return <main className="marketplace-shell"><header className="marketplace-header"><Link href="/marketplace" className="marketplace-brand"><img src="/aivanta-mark.svg" alt=""/> Aivanta <span>Marketplace</span></Link><nav><Link href="/marketplace">Catalog</Link><Link href="/marketplace/creator">Become a creator</Link></nav></header><section className="creator-store-hero"><div className="creator-store-avatar">{creator.display_name.trim().charAt(0).toUpperCase()}</div><div><div className="marketplace-verified">✓ VERIFIED CREATOR</div><h1>{creator.display_name}</h1><p>{creator.bio||"A verified Aivanta marketplace creator."}</p><span>{items.length} published {items.length===1?"product":"products"}</span></div></section><section className="marketplace-products"><div className="marketplace-section-head"><div><small>CREATOR COLLECTION</small><h2>Published automations</h2></div></div>{items.length?<div className="marketplace-grid">{items.map(p=><article className="marketplace-card" key={p.id}><div className="marketplace-card-top"><span className="marketplace-type">{p.product_type}</span><span className="marketplace-verified">✓ Verified</span></div><div className="marketplace-product-art"><span>{p.product_type==="agent"?"✳":p.product_type==="pack"?"▦":"⌘"}</span></div><div className="marketplace-card-body"><h3>{p.name}</h3><p>{p.summary}</p><div className="marketplace-card-bottom"><span>{p.pricing_type==="free"?"Free":new Intl.NumberFormat("en-US",{style:"currency",currency:p.currency}).format(p.price_minor/100)}</span><Link href={"/marketplace/"+p.slug}>View product ↗</Link></div></div></article>)}</div>:<div className="marketplace-empty"><h3>No published products yet</h3><p>This verified creator is preparing their catalog.</p><Link href="/marketplace">Explore other automations →</Link></div>}</section><footer className="marketplace-footer">© Aivanta · Marketplace</footer></main>;
+}

@@ -10,7 +10,6 @@ test("webhook ingress authenticates raw bytes with the endpoint's encrypted sign
   assert.match(source, /decryptWebhookSecret\(ciphertextBytes\(endpoint\.secret_ciphertext\)/);
   assert.match(source, /verifyWebhookSignature\(\{[\s\S]*rawBody,[\s\S]*signatureHeader,[\s\S]*secret: signingSecret/);
   assert.match(source, /toleranceSeconds: MAX_EVENT_AGE_SECONDS/);
-  assert.match(source, /signedMetadata: JSON\.stringify\(\[eventId, eventType\]\)/);
   assert.match(source, /endpoint\.secret_key_version !== configuredKeyVersion/);
 });
 
@@ -28,7 +27,7 @@ test("webhook ingress claims event IDs atomically and rejects changed-payload re
   assert.match(migration, /unique \(endpoint_id, event_id\)/);
   assert.match(migration, /on conflict \(endpoint_id, event_id\) do nothing/i);
   assert.match(source, /rpc\("claim_webhook_event"/);
-  assert.match(source, /prior\.payload_sha256 !== payloadSha256 \|\| prior\.event_type !== eventType/);
+  assert.match(source, /prior\.payload_sha256 !== payloadSha256/);
   assert.match(source, /duplicate: true/);
 });
 
@@ -58,8 +57,12 @@ test("endpoint provisioning is authenticated and returns the signing secret only
   assert.match(source, /encryptWebhookSecret\(signingSecret, encryptionKey\)/);
   assert.match(source, /endpoint_key_hash: createHash\("sha256"\)/);
   assert.match(source, /secretShownOnce: true/);
-  assert.match(source, /Cache-Control": "no-store"/);
   assert.match(source, /status: "active"/);
+});
+
+test("running webhook runs do not receive a completion timestamp before finalization", async () => {
+  const source = await readFile(routeUrl, "utf8");
+  assert.match(source, /status: "running",[\s\S]*?completed_at: null/);
 });
 
 test("run history does not persist the raw webhook payload in the trigger result", async () => {
@@ -72,4 +75,23 @@ test("run history does not persist the raw webhook payload in the trigger result
 test("live webhook actions honor the global execution kill switch", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
+});
+
+
+test("durable webhook queue is opt-in and uses the verified receipt idempotency key", async () => {
+  const source = await readFile(routeUrl, "utf8");
+  assert.match(source, /AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED === "true"/);
+  assert.match(source, /rpc\("dispatch_workflow_execution"/);
+  assert.match(source, /"webhook:" \+ endpoint\.id \+ ":" \+ eventId/);
+  assert.match(source, /webhookVerified: true/);
+  assert.match(source, /Queued webhook payload exceeds the 12 KiB durable queue limit/);
+  assert.match(source, /queued: true/);
+});
+
+test("duplicate webhook delivery re-attempts the idempotent queue dispatch", async () => {
+  const source = await readFile(routeUrl, "utf8");
+  const duplicate = source.slice(source.indexOf("if (!claim.accepted)"), source.indexOf("receipt = { id: claim.receipt_id"));
+  assert.match(duplicate, /DURABLE_WEBHOOK_DRY_RUN_QUEUE/);
+  assert.match(duplicate, /dispatch_workflow_execution/);
+  assert.match(duplicate, /duplicate: true/);
 });

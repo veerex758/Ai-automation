@@ -149,3 +149,44 @@
 .workflow-side-link{transition:background .16s ease,color .16s ease}
 .workflow-side-link:focus-visible{outline:2px solid #c9f26f;outline-offset:2px}
 @media(prefers-reduced-motion:reduce){.workflow-side-link{transition:none}}
+
+/* Graph-first workflow canvas: nodes occupy a stable grid; SVG edges render the saved graph. */
+.workflow-builder-main .graph-canvas{position:relative;min-height:680px;overflow:auto;border:1px solid #dfe8dc;border-radius:14px;background:#fbfdfb;isolation:isolate}
+.workflow-builder-main .graph-grid{position:absolute;inset:0;background-image:radial-gradient(#dce7d9 1px,transparent 1px);background-size:22px 22px;opacity:.7;pointer-events:none}
+.workflow-builder-main .graph-layout{position:relative;width:1000px;height:max(680px,calc(210px * var(--graph-rows,1)));min-height:680px;margin:0 auto}
+.workflow-builder-main .graph-edges{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.workflow-builder-main .graph-edge path{fill:none;stroke:#9ab78a;stroke-width:2.2;marker-end:url(#graph-arrow)}
+.workflow-builder-main .graph-edge-true path{stroke:#5a9d48}
+.workflow-builder-main .graph-edge-false path{stroke:#d58a6b}
+.workflow-builder-main .graph-edge text{font:600 10px 'DM Sans',sans-serif;fill:#64805c;text-anchor:middle;paint-order:stroke;stroke:#fbfdfb;stroke-width:5px;stroke-linejoin:round}
+.workflow-builder-main .graph-node{position:absolute;transform:translate(-50%,-50%);width:210px;min-height:124px;text-align:left;padding:16px 18px 17px 54px;border:1px solid #dce7d9;border-radius:12px;background:#fff;box-shadow:0 5px 16px #284c1710;display:flex;flex-direction:column;gap:6px;cursor:pointer;color:#263c2c}
+.workflow-builder-main .graph-node:hover{border-color:#a8c998;box-shadow:0 8px 24px #284c1718}
+.workflow-builder-main .graph-node-selected{border:2px solid #78a95b;box-shadow:0 0 0 4px #c9f26f40,0 8px 24px #284c1718}
+.workflow-builder-main .graph-node-icon{position:absolute;left:15px;top:17px;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:#eff7e8;font-size:15px}
+.workflow-builder-main .graph-node-kind{font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:#77916d}
+.workflow-builder-main .graph-node strong{font-size:13px;line-height:1.3;color:#263c2c}
+.workflow-builder-main .graph-node small{font-size:10px;line-height:1.45;color:#879487;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.workflow-builder-main .graph-node-port{position:absolute;width:10px;height:10px;border:2px solid #fff;background:#91b77d;border-radius:50%;box-shadow:0 0 0 1px #a4bea0}
+.workflow-builder-main .graph-port-in{left:-6px;top:50%}.workflow-builder-main .graph-port-out{right:-6px;top:50%}
+.workflow-builder-main .graph-node-condition .graph-port-out{background:#d6a55d}
+.workflow-builder-main .graph-node:focus-visible{outline:2px solid #9ac66f;outline-offset:3px}
+@media(max-width:720px){.workflow-builder-main .graph-canvas{min-height:570px}.workflow-builder-main .graph-layout{margin:0;width:1000px}.workflow-builder-main .builder-canvas{overflow-x:auto}}
+
+.workflow-builder-main .graph-connection-editor{display:flex;flex-direction:column;gap:9px;margin:14px 0}
+.workflow-builder-main .graph-connection-editor>label{font-size:10px;font-weight:700;color:#687b68;margin-top:5px}
+.workflow-builder-main .graph-connection-editor>select{width:100%;border:1px solid #dce6d9;border-radius:8px;padding:10px;background:#fff;color:#344b36;font:12px 'DM Sans',sans-serif}
+.workflow-builder-main .graph-edge-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:8px 9px;border:1px solid #e3ebe0;border-radius:8px;background:#fbfdfb;font-size:10px;color:#637663}
+.workflow-builder-main .graph-edge-row b{color:#5c8950;margin-right:5px}
+.workflow-builder-main .graph-edge-row button{border:0;background:#f7e9e5;color:#a45f4a;border-radius:6px;width:24px;height:24px;font-size:16px;cursor:pointer;flex:0 0 auto}
+
+
+/* Interactive graph editor: draggable nodes and actionable connection handles. */
+.workflow-builder-main .graph-node{touch-action:none;user-select:none;cursor:grab}
+.workflow-builder-main .graph-node:active{cursor:grabbing}
+.workflow-builder-main .graph-node-connecting{border-color:#78a95b;box-shadow:0 0 0 4px #c9f26f55,0 8px 24px #284c1718}
+.workflow-builder-main .graph-node-port{z-index:2;display:block;padding:0;cursor:crosshair;touch-action:manipulation}
+.workflow-builder-main .graph-node-port:hover,.workflow-builder-main .graph-node-port:focus-visible{width:15px;height:15px;outline:2px solid #b8df91;outline-offset:2px}
+.workflow-builder-main .graph-port-in{left:-8px;top:calc(50% - 5px)}
+.workflow-builder-main .graph-port-out{right:-8px;top:calc(50% - 5px)}
+.workflow-builder-main .graph-layout{min-width:1000px}
+.workflow-builder-main .graph-node-connecting .graph-port-out{background:#5a9d48}

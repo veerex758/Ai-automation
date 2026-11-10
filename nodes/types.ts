@@ -10,10 +10,14 @@ export type NodeContext = {
   credentials: Readonly<Record<string, Readonly<Record<string, string>>>>;
   logger: { info(message: string, meta?: Record<string, unknown>): void; error(message: string, meta?: Record<string, unknown>): void };
   http: {
-    request(args: { url: string; method: "GET" | "POST"; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
+    request(args: { url: string; method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
   };
   previousOutputs: Readonly<Record<string, unknown>>;
+  /** Worker-side authorization hook, called immediately before every live provider handler. */
+  authorizeOperation?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action" }) => Promise<void>;
   webhook?: { verified: boolean };
+  /** Shared atomic rate-limit backend. Missing backend fails closed. */
+  rateLimit?: { consume(args: { key: string; limit: number; windowMs: number }): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> };
 };
 
 export type NodeOperation<I extends z.ZodTypeAny = z.ZodTypeAny, O extends z.ZodTypeAny = z.ZodTypeAny> = {
