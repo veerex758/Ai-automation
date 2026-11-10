@@ -59,7 +59,7 @@ async function finishClaim(
 ): Promise<boolean> {
   if (cronSchedule) {
     const { data, error } = await callSchedulerRpc(
-      (name, args) => supabase.rpc(name, args),
+      (name: string, args: Record<string, unknown>) => supabase.rpc(name, args),
       "finish_workflow_cron_schedule_claim",
       {
         p_schedule_id: claim.schedule_id,
@@ -72,7 +72,7 @@ async function finishClaim(
     return !error && data === true;
   }
   const { data, error } = await callSchedulerRpc(
-    (name, args) => supabase.rpc(name, args),
+    (name: string, args: Record<string, unknown>) => supabase.rpc(name, args),
     "finish_workflow_schedule_claim",
     {
       p_schedule_id: claim.schedule_id,
@@ -112,7 +112,7 @@ async function dispatchTick(request: NextRequest) {
   }
 
   const { data, error } = await callSchedulerRpc(
-    (name, args) => supabase.rpc(name, args),
+    (name: string, args: Record<string, unknown>) => supabase.rpc(name, args),
     "claim_due_workflow_schedules",
     { p_limit: claimLimit, p_lease_seconds: leaseSeconds },
   );
@@ -173,7 +173,7 @@ async function dispatchTick(request: NextRequest) {
       }
       const idempotencyKey = "schedule:" + claim.schedule_id + ":" + scheduledFor;
       const { data: dispatch, error: dispatchError } = await callSchedulerRpc(
-        (name, args) => supabase.rpc(name, args),
+        (name: string, args: Record<string, unknown>) => supabase.rpc(name, args),
         "dispatch_workflow_execution",
         {
           p_workspace_id: claim.workspace_id,
