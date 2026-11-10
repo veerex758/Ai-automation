@@ -59,6 +59,20 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="reference-features pilot-templates" id="templates">
+        <div className="reference-section-heading">
+          <div className="reference-eyebrow">START WITH A PROVEN PATTERN</div>
+          <h2>Useful automations. Clear next steps.</h2>
+          <p>Choose a starter workflow, review its steps, and adapt it to the way your team works.</p>
+        </div>
+        <div className="reference-feature-grid">
+          <article className="reference-feature-card"><div className="reference-feature-icon">↗</div><h3>Lead Capture &amp; Welcome Email</h3><p>Capture a new enquiry, organize lead details, and prepare a welcome message for review.</p><Link href="/dashboard/templates">Explore starter ↗</Link></article>
+          <article className="reference-feature-card"><div className="reference-feature-icon">◷</div><h3>Support Ticket Triage</h3><p>Structure incoming support requests and prepare the right follow-up task.</p><Link href="/dashboard/templates">Explore starter ↗</Link></article>
+          <article className="reference-feature-card"><div className="reference-feature-icon">✓</div><h3>Lead Follow-up</h3><p>Keep prospects organized and create consistent follow-up tasks.</p><Link href="/dashboard/templates">Explore starter ↗</Link></article>
+        </div>
+        <div className="pilot-template-actions"><Link className="reference-primary" href="/dashboard/templates">Browse all templates <span>→</span></Link><Link className="reference-secondary" href="/dashboard">Start a pilot <span>→</span></Link></div>
+      </section>
+
       <footer className="reference-footer"><Brand light /><span>Describe it. Build it. Trust it.</span><span>© {new Date().getFullYear()} Aivanta</span></footer>
     </main>
   );
