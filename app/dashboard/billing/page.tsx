@@ -123,7 +123,7 @@ export default function BillingPage() {
 
     <section className="billing-panel">
       <h2>Usage this month</h2>
-      <p>Usage is measured against your workspace entitlements.</p>
+      <p>Usage is measured against your workspace entitlements.</p>\n      <p>{data.entitlements.limits.workflow_execution==null?"Custom executions":`${data.entitlements.limits.workflow_execution.toLocaleString()} executions included`} · {data.entitlements.limits.ai_credit==null?"Custom AI credits":`${data.entitlements.limits.ai_credit.toLocaleString()} AI credits included`}</p>
       {metrics.map(metric => {
         const used = Math.max(0, data.entitlements.usage[metric.key] ?? 0);
         const limit = data.entitlements.limits[metric.key];
