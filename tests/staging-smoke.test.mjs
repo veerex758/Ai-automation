@@ -40,3 +40,11 @@ test("staging smoke script requires a hostname that identifies staging or previe
   assert.equal(result.status, 2);
   assert.match(result.stderr, /hostname must clearly identify a staging or preview/);
 });
+
+test("staging workflow requires an explicit protected environment target and has no hard-coded deployment URL", async () => {
+  const workflow = await (await import("node:fs/promises")).readFile(new URL("../.github/workflows/aivanta-staging-smoke.yml", import.meta.url), "utf8");
+  assert.match(workflow, /AIVANTA_STAGING_URL:\s*\$\{\{ vars\.AIVANTA_STAGING_URL \}\}/);
+  assert.match(workflow, /VERCEL_AUTOMATION_BYPASS_SECRET:\s*\$\{\{ secrets\.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/);
+  assert.doesNotMatch(workflow, /AIVANTA_STAGING_URL:\s*https:\/\//);
+  assert.doesNotMatch(workflow, /Diagnose runner DNS/);
+});
