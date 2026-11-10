@@ -12,6 +12,7 @@ import type { NodeContext } from "@/nodes/types";
 import { isProviderLiveEnabled, providerPackLiveId } from "@/lib/workflows/provider-live-gates";
 import { performSafeHttpRequest } from "@/nodes/safe-http";
 import { getWorkerOperationMapping, getWorkerProvider } from "@/lib/workflows/worker-operation-map";
+import { redactSensitiveData } from "@/lib/integrations/redact-sensitive";
 
 
 type Job = {
@@ -217,26 +218,32 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
   return null;
 }
 
-function boundedOutput(value: unknown): Record<string, unknown> {
-  if (Array.isArray(value)) {
+function boundedOutput(value: unknown, knownSecrets: readonly string[] = []): Record<string, unknown> {
+  const safe = redactSensitiveData(value, knownSecrets);
+  if (Array.isArray(safe)) {
     try {
-      if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return { __aivantaArray: value };
+      if (Buffer.byteLength(JSON.stringify(safe), "utf8") <= 12000) return { __aivantaArray: safe };
     } catch { /* omit unserializable loop output */ }
   }
-  if (isRecord(value)) {
+  if (isRecord(safe)) {
     try {
-      if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return value;
+      if (Buffer.byteLength(JSON.stringify(safe), "utf8") <= 12000) return safe;
     } catch { /* omit unserializable provider output */ }
   }
   return { outputOmitted: true };
+}
+
+function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
+  return Object.values(credentials).flatMap((provider) =>
+    Object.values(provider).filter((value): value is string => typeof value === "string" && value.length >= 4));
 }
 
 function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
     logger: {
-      info(message, meta) { console.info("[queue-node]", message, meta ?? {}); },
-      error(message, meta) { console.error("[queue-node]", message, meta ?? {}); },
+      info(message, meta) { console.info("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
+      error(message, meta) { console.error("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
     },
     http: {
       async request(args) {
@@ -349,6 +356,7 @@ export async function runDurableWorker() {
 
       let result: { status: string; steps: Array<{ stepId: string; position: number; type: string; title: string; status: string; message: string; output?: unknown }> };
       const preCheckpointed = new Set<string>();
+      let executionSecrets: string[] = [];
       if (definition.format === "aivanta-registry-v1") {
         const validated = validateRegisteredSteps(definition.steps);
         if (!validated.steps) throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
@@ -377,6 +385,7 @@ export async function runDurableWorker() {
         const credentials = job.execution_mode === "live"
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
+        executionSecrets = knownCredentialValues(credentials);
         const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
@@ -423,7 +432,7 @@ export async function runDurableWorker() {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
               db, job, step, position, completed.status === "succeeded" ? "succeeded" : "skipped",
-              boundedOutput(completed.output),
+              boundedOutput(completed.output, executionSecrets),
             ),
           } : {}),
         });
@@ -460,7 +469,7 @@ export async function runDurableWorker() {
             status: legacyResult.status,
             steps: legacyResult.steps.map((step) => ({
               stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-              status: step.status, message: step.message,
+              status: step.status, message: String(redactSensitiveData(step.message, executionSecrets)),
             })),
           };
         } else {
@@ -489,6 +498,7 @@ export async function runDurableWorker() {
           if (!emailPreview) sendFailed = "EMAIL_PREVIEW_STEP_MISSING";
           if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
             const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
+            executionSecrets = knownCredentialValues(credentials);
             const registrySteps: RegisteredWorkflowStep[] = [
               { id: trigger.id, nodeId: "manual", operationId: "start", kind: "trigger", input },
               {
@@ -572,7 +582,7 @@ export async function runDurableWorker() {
         status: step.status === "succeeded" ? (live ? "executed" : "simulated") : step.status,
         result: step.status === "failed" ? { error: step.message } : {
           message: step.message,
-          ...(live && step.output !== undefined ? { output: boundedOutput(step.output) } : {}),
+          ...(live && step.output !== undefined ? { output: boundedOutput(step.output, executionSecrets) } : {}),
         },
       }));
       const { error: stepsError } = await db.from("workflow_run_steps").upsert(stepRows, { onConflict: "run_id,step_id" });
