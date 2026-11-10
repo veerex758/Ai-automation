@@ -566,7 +566,7 @@ export async function runDurableWorker() {
           : null;
         if (registryStep && (job.execution_mode !== "live" || step.status !== "succeeded")) {
           const checkpointStatus = step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded";
-          await persistCheckpoint(db, job, registryStep, step.position, checkpointStatus, { message: step.message });
+          await persistCheckpoint(db, job, registryStep, step.position, checkpointStatus, { message: String(redactSensitiveData(step.message, executionSecrets)) });
         } else if (!registryStep && !(job.execution_mode === "live" && step.status === "succeeded" && preCheckpointed.has(step.stepId))) {
           const { error: checkpointError } = await db.rpc("checkpoint_execution_step", {
             p_job_id: job.id, p_lease_token: job.lease_token,
