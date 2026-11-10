@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./aivanta-theme.css";
 
 export const metadata: Metadata = {
   title: "Aivanta — Business automation, orchestrated intelligently",
