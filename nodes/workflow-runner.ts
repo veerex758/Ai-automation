@@ -117,7 +117,7 @@ export async function executeRegisteredWorkflow(args: {
     try {
       const executeOnce = async (scope: Record<string, unknown>, iteration?: number) => {
         const localOutputs = { ...outputs, ...scope };
-        const allowMissing = step.nodeId === "if" && step.operationId === "evaluate" && step.input && typeof step.input === "object" && ["exists", "is_empty"].includes(String((step.input as Record<string, unknown>).operator));
+        const allowMissing: boolean = Boolean(step.nodeId === "if" && step.operationId === "evaluate" && step.input && typeof step.input === "object" && ["exists", "is_empty"].includes(String((step.input as Record<string, unknown>).operator)));
         const input = resolveReferences(step.input, localOutputs, args.dryRun, allowMissing);
         const validatedInput = operation.inputSchema.parse(input);
         const checkpointStep = iteration === undefined ? step : { ...step, id: step.id + "__loop_" + (iteration + 1) };
