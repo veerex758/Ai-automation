@@ -7,7 +7,6 @@ import { useParams } from "next/navigation";
 import "./builder.css";
 import RunTestPanel from "./run-test-panel";
 import RegistryOperationSettings from "./registry-operation-settings";
-import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 type RegistryCatalog = { id: string; name: string; icon?: string; category?: string; triggers: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[]; actions: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[] };
 
 type NodeType = "trigger" | "action" | "condition";
@@ -41,6 +40,8 @@ export default function WorkflowBuilderPage() {
   const [versions, setVersions] = useState<WorkflowVersion[]>([]);
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
   const [validating, setValidating] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [webhookProvision, setWebhookProvision] = useState<{ path: string; signingSecret: string; signature: { header: string; format: string; signedMessage: string; eventIdHeader: string; eventTypeHeader: string } } | null>(null);
   const [validation, setValidation] = useState<{ valid: boolean; message: string; checkedAt: string; counts?: { triggers: number; actions: number; conditions: number } } | null>(null);
   const draftRevision = useRef(0);
   const graphCanvasRef = useRef<HTMLDivElement>(null);
@@ -56,6 +57,9 @@ export default function WorkflowBuilderPage() {
   const isFormToLead = /form to lead/i.test(workflow?.name ?? "");
   const isSupportTriage = /support ticket triage/i.test(workflow?.name ?? "");
   const isContentApproval = /content approval/i.test(workflow?.name ?? "");
+  const emailActionNode = definition.nodes.find((node) => node.type === "action" && node.registryNodeId === "email" && node.registryOperationId === "send_email");
+  const liveEmailRecipient = typeof emailActionNode?.registryInput?.to === "string" ? emailActionNode.registryInput.to : emailActionNode?.settings.recipient ?? "";
+  const isWebhookTrigger = definition.nodes.some((node) => node.type === "trigger" && (node.registryNodeId === "webhooks" || node.settings.provider === "webhooks"));
 
   useEffect(() => {
     if (!isDirty) return;
@@ -319,7 +323,13 @@ export default function WorkflowBuilderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           definition: { ...definition, nodes: definition.nodes.map((node) => ({ ...node, settings: node.type === "trigger" ? { event: "manual" } : node.type === "action" && node.registryNodeId ? { provider: "internal", operation: "create_task" } : node.settings })) },
-          registrySteps: buildRegistrySteps(definition),
+          registrySteps: definition.nodes.filter((node) => node.type === "trigger" || node.type === "action").map((node) => ({
+            id: node.id,
+            nodeId: node.registryNodeId ?? (node.type === "trigger" ? "manual" : node.settings.provider === "email" ? "email" : node.settings.provider === "slack" ? "slack" : node.settings.provider === "openai" ? "openai" : "slack"),
+            operationId: node.registryOperationId ?? (node.type === "trigger" ? "start" : node.settings.provider === "email" ? "send_email" : node.settings.provider === "slack" ? "send_message" : node.settings.provider === "openai" ? "generate_text" : "send_message"),
+            kind: node.type === "trigger" ? "trigger" : "action",
+            input: node.registryInput ?? (node.type === "trigger" ? {} : node.settings.provider === "email" ? { to: node.settings.recipient ?? "", subject: node.title, text: node.settings.message ?? node.title } : node.settings.provider === "slack" ? { message: node.settings.message ?? node.title } : node.settings.provider === "openai" ? { prompt: node.settings.message ?? node.title } : { message: node.settings.message ?? node.title }),
+          })),
         }),
       });
       const result = await response.json();
@@ -335,6 +345,84 @@ export default function WorkflowBuilderPage() {
       setError(caught instanceof Error ? caught.message : "Could not save workflow steps.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function activateWorkflow() {
+    if (activating || saving || validating || isDirty || workflow?.status === "active") return;
+    const confirmed = window.confirm("Activate this saved workflow? Live webhook or email actions may run after an authenticated event. AI-generated drafts never activate themselves.");
+    if (!confirmed) return;
+    setActivating(true);
+    setError("");
+    setNotice("");
+    setWebhookProvision(null);
+    let activated = false;
+    try {
+      const response = await fetch("/api/workflows/" + workflowId, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Workflow activation was rejected.");
+      activated = true;
+      setWorkflow((current) => current ? { ...current, status: "active" } : current);
+      if (isWebhookTrigger) {
+        const webhookResponse = await fetch("/api/workflows/" + workflowId + "/webhook", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirm: true }),
+        });
+        const webhookResult = await webhookResponse.json();
+        if (!webhookResponse.ok) {
+          const pauseResponse = await fetch("/api/workflows/" + workflowId, {
+            method: "PATCH", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "paused" }),
+          });
+          if (pauseResponse.ok) {
+            activated = false;
+            setWorkflow((current) => current ? { ...current, status: "paused" } : current);
+            throw new Error((webhookResult.error || "Webhook provisioning failed.") + " The workflow has been paused; fix webhook configuration and try again.");
+          }
+          throw new Error((webhookResult.error || "Webhook provisioning failed.") + " The workflow may still be active; pause it before retrying.");
+        }
+        setWebhookProvision({
+          path: webhookResult.endpoint.path,
+          signingSecret: webhookResult.signingSecret,
+          signature: webhookResult.signature,
+        });
+        setNotice("Workflow activated. Copy the webhook URL and signing secret now; the secret is shown only once.");
+      } else {
+        setNotice("Workflow activated. Live execution remains subject to workspace connection checks and server-side approvals.");
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not activate this workflow.");
+    } finally {
+      setActivating(false);
+    }
+  }
+
+  async function pauseWorkflow() {
+    if (activating || saving || validating || workflow?.status !== "active") return;
+    if (!window.confirm("Pause this workflow? New webhook events will no longer execute it.")) return;
+    setActivating(true);
+    setError("");
+    try {
+      const response = await fetch("/api/workflows/" + workflowId, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "paused" }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not pause this workflow.");
+      setWorkflow((current) => current ? { ...current, status: "paused" } : current);
+      if (isWebhookTrigger) {
+        const revoke = await fetch("/api/workflows/" + workflowId + "/webhook", { method: "DELETE" });
+        if (!revoke.ok) setNotice("Workflow paused. Webhook endpoint revocation needs attention; paused workflows reject incoming events.");
+        else setNotice("Workflow paused and its webhook endpoint revoked.");
+      } else setNotice("Workflow paused.");
+      setWebhookProvision(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not pause this workflow.");
+    } finally {
+      setActivating(false);
     }
   }
 
@@ -360,7 +448,7 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button></div>
+        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button>{workflow?.status === "active" ? <button className="builder-validate" onClick={() => void pauseWorkflow()} disabled={activating || isDirty}>{activating ? "Pausing…" : "Pause workflow"}</button> : <button className="builder-save" onClick={() => void activateWorkflow()} disabled={activating || isDirty || saving || validating || restoringVersion !== null}>{activating ? "Activating…" : "Activate workflow"}</button>}</div>
       </header>
 
       <div className="builder-layout">
@@ -369,11 +457,13 @@ export default function WorkflowBuilderPage() {
           {notice && <div className="builder-notice" role="status">{notice}</div>}
           {validation && <div className={`builder-validation ${validation.valid ? "validation-pass" : "validation-fail"}`} role="status"><span className="validation-mark">{validation.valid ? "✓" : "!"}</span><div><strong>{validation.valid ? "Draft checks passed" : "Draft needs attention"}</strong><p>{validation.message}</p>{validation.counts && <small>{validation.counts.triggers} trigger · {validation.counts.actions} actions · {validation.counts.conditions} conditions</small>}<small>Checked {new Date(validation.checkedAt).toLocaleTimeString()}</small></div></div>}
           {error && <div className="builder-error-banner" role="alert">{error}</div>}
+          {webhookProvision && <section className="builder-notice" role="status"><strong>Webhook endpoint created — copy these details now</strong><p>POST {typeof window !== "undefined" ? window.location.origin : ""}{webhookProvision.path}</p><p>Signing secret: <code>{webhookProvision.signingSecret}</code></p><p>{webhookProvision.signature.header}: {webhookProvision.signature.format}</p><p>Event ID header: {webhookProvision.signature.eventIdHeader} · Event type header: {webhookProvision.signature.eventTypeHeader}</p><p>Signed message: <code>{webhookProvision.signature.signedMessage}</code></p><button type="button" className="builder-validate" onClick={() => void navigator.clipboard.writeText((typeof window !== "undefined" ? window.location.origin : "") + webhookProvision.path)}>Copy webhook URL</button><button type="button" className="builder-validate" onClick={() => void navigator.clipboard.writeText(webhookProvision.signingSecret)}>Copy signing secret</button><small>The signing secret is shown once. Store it securely; refreshing this page will not reveal it again.</small></section>}
           <RunTestPanel
             workflowId={workflowId}
             hasUnsavedChanges={isDirty}
             workflowStatus={workflow?.status ?? "draft"}
-            liveEmailRecipient={definition.nodes.find((node) => node.type === "action" && node.settings.provider === "email" && node.settings.operation === "send_email")?.settings.recipient ?? ""}
+            liveEmailRecipient={liveEmailRecipient}
+            isWebhookTrigger={isWebhookTrigger}
           />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />

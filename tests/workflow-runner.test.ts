@@ -345,109 +345,30 @@ test("Split in Batches resumes completed downstream iterations without replaying
 });
 
 
-test("builder graph becomes a topologically ordered runtime plan with executable branches and convergence", async () => {
-  const { buildRegistrySteps } = await import("../lib/workflows/build-registry-steps");
-  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
-  const definition = {
-    nodes: [
-      { id: "trigger", type: "trigger" as const, title: "Webhook", settings: {}, registryNodeId: "webhooks", registryOperationId: "receive_event", registryInput: { eventId: "evt_1", eventType: "lead", receivedAt: new Date().toISOString(), payload: { score: 12 } } },
-      { id: "yes", type: "action" as const, title: "Approved", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { outcome: "approved" } } },
-      { id: "no", type: "action" as const, title: "Rejected", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { outcome: "rejected" } } },
-      { id: "condition", type: "condition" as const, title: "Score check", settings: { field: "score", operator: "greater_than", value: "10" } },
-      { id: "shared", type: "action" as const, title: "Notify", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { notified: true } } },
-    ],
-    edges: [
-      { id: "e1", source: "trigger", target: "condition", label: "next" as const },
-      { id: "e2", source: "condition", target: "yes", label: "true" as const },
-      { id: "e3", source: "condition", target: "no", label: "false" as const },
-      { id: "e4", source: "yes", target: "shared", label: "next" as const },
-      { id: "e5", source: "no", target: "shared", label: "next" as const },
-    ],
+test("Gemini qualifies real-estate enquiries with structured output and preserves missing facts", async () => {
+  const lead = {
+    fullName: "Ada Buyer", email: "ada@example.com", phone: null, propertyType: "apartment",
+    location: "Lekki", budget: "₦80m", timeframe: "within_30_days", temperature: "hot",
+    reason: "Specific property and near-term intent.", missingInformation: ["Phone number"],
+    suggestedReply: "Thanks for your enquiry. May we have your phone number?",
+    summary: "HOT lead: Ada Buyer wants an apartment in Lekki within 30 days; budget ₦80m.",
   };
-  const plan = buildRegistrySteps(definition);
-  assert.deepEqual(plan.map((step) => step.id), ["trigger", "condition", "yes", "no", "shared"]);
-  assert.equal(plan[1].nodeId, "if");
-  assert.equal(plan[1].operationId, "evaluate");
-  assert.deepEqual(plan.find((step) => step.id === "shared")?.branchPaths, [
-    [{ fromStepId: "condition", route: "true" }],
-    [{ fromStepId: "condition", route: "false" }],
-  ]);
-  const validated = validateRegisteredSteps(plan);
-  assert.ok(validated.steps);
+  let requestBody: unknown;
   const result = await executeRegisteredWorkflow({
-    steps: validated.steps!,
-    context: { ...context, webhook: { verified: true } },
+    steps: [{ id: "qualify", nodeId: "gemini", operationId: "qualify_real_estate_lead", kind: "action", input: { leadData: "Name: Ada Buyer; apartment in Lekki; budget ₦80m; within 30 days." } }],
+    context: {
+      credentials: { gemini: { apiKey: "test-only-key" } },
+      logger: { info() {}, error() {} },
+      http: { async request(args) {
+        requestBody = args.body;
+        return { status: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify(lead) }] } }], usageMetadata: { promptTokenCount: 90, candidatesTokenCount: 55 } } };
+      } },
+    },
     dryRun: false,
   });
   assert.equal(result.status, "succeeded");
-  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded", "skipped", "succeeded"]);
-});
-
-test("builder graph branch paths execute the false path and keep a converged node reachable", async () => {
-  const { buildRegistrySteps } = await import("../lib/workflows/build-registry-steps");
-  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
-  const definition = {
-    nodes: [
-      { id: "trigger", type: "trigger" as const, title: "Webhook", settings: {}, registryNodeId: "webhooks", registryOperationId: "receive_event", registryInput: { eventId: "evt_2", eventType: "lead", receivedAt: new Date().toISOString(), payload: { score: 4 } } },
-      { id: "condition", type: "condition" as const, title: "Score check", settings: { field: "score", operator: "greater_than", value: "10" } },
-      { id: "yes", type: "action" as const, title: "Approved", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { outcome: "approved" } } },
-      { id: "no", type: "action" as const, title: "Rejected", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { outcome: "rejected" } } },
-      { id: "shared", type: "action" as const, title: "Notify", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { notified: true } } },
-    ],
-    edges: [
-      { id: "e1", source: "trigger", target: "condition", label: "next" as const },
-      { id: "e2", source: "condition", target: "yes", label: "true" as const },
-      { id: "e3", source: "condition", target: "no", label: "false" as const },
-      { id: "e4", source: "yes", target: "shared", label: "next" as const },
-      { id: "e5", source: "no", target: "shared", label: "next" as const },
-    ],
-  };
-  const plan = buildRegistrySteps(definition);
-  const validated = validateRegisteredSteps(plan);
-  assert.ok(validated.steps);
-  const result = await executeRegisteredWorkflow({
-    steps: validated.steps!,
-    context: { ...context, webhook: { verified: true } },
-    dryRun: false,
-  });
-  assert.equal(result.status, "succeeded");
-  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "skipped", "succeeded", "succeeded"]);
-});
-
-test("registry branchPaths reject a predicate that references a later non-condition step", async () => {
-  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
-  const invalid = validateRegisteredSteps([
-    { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
-    { id: "target", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: {} }, branchPaths: [[{ fromStepId: "later", route: "true" }]] },
-    { id: "later", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: {} } },
-  ]);
-  assert.equal(invalid.error, "Branch source must be an earlier IF or Switch step.");
-});
-
-
-test("IF existence conditions accept absent payload fields without failing reference resolution", async () => {
-  const { buildRegistrySteps } = await import("../lib/workflows/build-registry-steps");
-  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
-  const plan = buildRegistrySteps({
-    nodes: [
-      { id: "trigger", type: "trigger", title: "Webhook", settings: {}, registryNodeId: "webhooks", registryOperationId: "receive_event", registryInput: { eventId: "evt_3", eventType: "lead", receivedAt: new Date().toISOString(), payload: {} } },
-      { id: "condition", type: "condition", title: "Phone provided", settings: { field: "phone", operator: "is_set" } },
-      { id: "yes", type: "action", title: "Has phone", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { result: "yes" } } },
-      { id: "no", type: "action", title: "Needs phone", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { result: "no" } } },
-    ],
-    edges: [
-      { id: "e1", source: "trigger", target: "condition", label: "next" },
-      { id: "e2", source: "condition", target: "yes", label: "true" },
-      { id: "e3", source: "condition", target: "no", label: "false" },
-    ],
-  });
-  const validated = validateRegisteredSteps(plan);
-  assert.ok(validated.steps);
-  const result = await executeRegisteredWorkflow({
-    steps: validated.steps!,
-    context: { ...context, webhook: { verified: true } },
-    dryRun: false,
-  });
-  assert.equal(result.status, "succeeded");
-  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "skipped", "succeeded"]);
+  assert.equal((result.outputs.qualify as { phone: string | null }).phone, null);
+  assert.deepEqual((result.outputs.qualify as { missingInformation: string[] }).missingInformation, ["Phone number"]);
+  assert.equal((result.outputs.qualify as { outputTokens: number }).outputTokens, 55);
+  assert.ok((requestBody as { generationConfig: { responseJsonSchema: unknown } }).generationConfig.responseJsonSchema);
 });

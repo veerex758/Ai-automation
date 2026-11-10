@@ -87,6 +87,43 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       return NextResponse.json({ error: "Provide a name, description, or status to update." }, { status: 400 });
     }
 
+    if (updates.status === "active") {
+      const { data: candidate, error: candidateError } = await auth.supabase
+        .from("workflows").select("id,version,definition").eq("id", workflowId).maybeSingle();
+      if (candidateError) throw candidateError;
+      if (!candidate) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      const definition = candidate.definition as { format?: unknown; steps?: unknown } | null;
+      if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length !== 3) {
+        return NextResponse.json({ error: "Activation requires a saved three-step registered workflow: trigger, Gemini qualification, and Resend notification." }, { status: 422 });
+      }
+      const steps = definition.steps as Array<{ id?: string; nodeId?: string; operationId?: string; kind?: string; input?: unknown }>;
+      const supported = steps[0]?.kind === "trigger" &&
+        ((steps[0]?.nodeId === "webhooks" && steps[0]?.operationId === "receive_event") || (steps[0]?.nodeId === "manual" && steps[0]?.operationId === "start")) &&
+        steps[1]?.kind === "action" && steps[1]?.nodeId === "gemini" && steps[1]?.operationId === "qualify_real_estate_lead" &&
+        steps[2]?.kind === "action" && steps[2]?.nodeId === "email" && steps[2]?.operationId === "send_email";
+      if (!supported) return NextResponse.json({ error: "Activation currently supports only a trigger → Gemini qualification → Resend notification flow." }, { status: 422 });
+      if (!process.env.GEMINI_API_KEY || !process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL || process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
+        return NextResponse.json({ error: "Configure Gemini, Resend, and the server live-execution switch before activation." }, { status: 503 });
+      }
+      if (steps[0].nodeId === "webhooks" && (!process.env.AIVANTA_WEBHOOK_ENCRYPTION_KEY ||
+          !process.env.AIVANTA_WEBHOOK_SECRET_KEY_VERSION ||
+          !(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY) ||
+          !(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL))) {
+        return NextResponse.json({ error: "Secure webhook provisioning is not configured. The workflow was not activated." }, { status: 503 });
+      }
+      const emailInput = steps[2].input as Record<string, unknown> | undefined;
+      const recipient = typeof emailInput?.to === "string" ? emailInput.to.trim().toLowerCase() : "";
+      const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
+      if (!recipient || recipient.includes("{{") || !allowed.has(recipient)) {
+        return NextResponse.json({ error: "Set a business-owned notification address and add it to the server email allowlist before activation." }, { status: 403 });
+      }
+      const { data: tested, error: testError } = await auth.supabase.from("workflow_runs").select("id")
+        .eq("workflow_id", workflowId).eq("workflow_version", candidate.version)
+        .eq("mode", "dry_run").eq("status", "succeeded").limit(1);
+      if (testError) throw testError;
+      if (!tested?.length) return NextResponse.json({ error: "Run a successful dry-run of this exact workflow version before activating it." }, { status: 409 });
+    }
+
     const { data, error } = await auth.supabase
       .from("workflows")
       .update(updates)
