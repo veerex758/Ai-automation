@@ -16,10 +16,30 @@ function isPublicAddress(address: string): boolean {
   }
   if (isIP(address) === 6) {
     const ip = address.toLowerCase().split("%")[0];
-    // Only globally-routable 2000::/3 addresses; reject documentation and transition ranges.
-    return ip.startsWith("2") || ip.startsWith("3")
-      ? !ip.startsWith("2001:db8:") && !ip.startsWith("2001:10:") && !ip.startsWith("2002:") && !ip.startsWith("3fff:")
-      : false;
+
+    // IPv4-mapped IPv6 must inherit the embedded IPv4 address policy.
+    const mappedDotted = ip.match(/::ffff:(\\d+\\.\\d+\\.\\d+\\.\\d+)$/);
+    if (mappedDotted) return isPublicAddress(mappedDotted[1]);
+    const mappedHex = ip.match(/::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (mappedHex) {
+      const high = Number.parseInt(mappedHex[1], 16);
+      const low = Number.parseInt(mappedHex[2], 16);
+      const embeddedIpv4 = [high >> 8, high & 255, low >> 8, low & 255].join(".");
+      return isPublicAddress(embeddedIpv4);
+    }
+
+    // Only global-unicast 2000::/3 is eligible. This fails closed for
+    // unspecified, loopback, link-local, unique-local, multicast and
+    // IPv4-compatible addresses, including unclassified special ranges.
+    const firstHextet = Number.parseInt(ip.split(":")[0] || "0", 16);
+    if (!Number.isFinite(firstHextet) || firstHextet < 0x2000 || firstHextet > 0x3fff) return false;
+
+    // Reject special-purpose and transition ranges inside 2000::/3.
+    if (ip.startsWith("2001:0:") || ip.startsWith("2001:2:") ||
+        ip.startsWith("2001:10:") || ip.startsWith("2001:20:") ||
+        ip.startsWith("2001:db8:") || ip.startsWith("2002:") ||
+        ip.startsWith("3fff:")) return false;
+    return true;
   }
   return false;
 }
