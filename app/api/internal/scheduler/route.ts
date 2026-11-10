@@ -4,6 +4,8 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { nextCronOccurrence } from "@/lib/workflows/cron";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
+import { callSchedulerRpc } from "@/lib/observability/scheduler-rpc.cjs";
 
 
 export const runtime = "nodejs";
@@ -56,29 +58,46 @@ async function finishClaim(
   nextRunAt?: string,
 ): Promise<boolean> {
   if (cronSchedule) {
-    const { data, error } = await supabase.rpc("finish_workflow_cron_schedule_claim", {
+    const { data, error } = await callSchedulerRpc(
+      (name, args) => supabase.rpc(name, args),
+      "finish_workflow_cron_schedule_claim",
+      {
+        p_schedule_id: claim.schedule_id,
+        p_lease_token: claim.lease_token,
+        p_succeeded: succeeded,
+        p_next_run_at: nextRunAt ?? null,
+        p_error_code: errorCode,
+      },
+    );
+    return !error && data === true;
+  }
+  const { data, error } = await callSchedulerRpc(
+    (name, args) => supabase.rpc(name, args),
+    "finish_workflow_schedule_claim",
+    {
       p_schedule_id: claim.schedule_id,
       p_lease_token: claim.lease_token,
       p_succeeded: succeeded,
-      p_next_run_at: nextRunAt ?? null,
       p_error_code: errorCode,
-    });
-    return !error && data === true;
-  }
-  const { data, error } = await supabase.rpc("finish_workflow_schedule_claim", {
-    p_schedule_id: claim.schedule_id,
-    p_lease_token: claim.lease_token,
-    p_succeeded: succeeded,
-    p_error_code: errorCode,
-  });
+    },
+  );
   if (error) return false;
   return data === true;
 }
 
 async function dispatchTick(request: NextRequest) {
+  const requestId = getRequestId(request.headers.get("x-request-id"));
+  const startedAt = Date.now();
+  const jsonResponse = (body: unknown, init?: ResponseInit) => {
+    const response = NextResponse.json(body, init);
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  };
   if (!isAuthorized(request)) {
     const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_SCHEDULER_SECRET;
-    return NextResponse.json(
+    logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: "rejected", statusCode: secret ? 401 : 503, errorCode: secret ? "SCHEDULER_UNAUTHORIZED" : "SCHEDULER_AUTH_NOT_CONFIGURED" }, console.warn);
+    return jsonResponse(
       { error: secret ? "Unauthorized." : "Scheduler authentication is not configured." },
       { status: secret ? 401 : 503 },
     );
@@ -88,16 +107,18 @@ async function dispatchTick(request: NextRequest) {
   try {
     supabase = createSchedulerClient();
   } catch {
-    return NextResponse.json({ error: "Scheduler database access is not configured." }, { status: 503 });
+    logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: "failure", statusCode: 503, errorCode: "SCHEDULER_DATABASE_NOT_CONFIGURED" }, console.error);
+    return jsonResponse({ error: "Scheduler database access is not configured." }, { status: 503 });
   }
 
-  const { data, error } = await supabase.rpc("claim_due_workflow_schedules", {
-    p_limit: claimLimit,
-    p_lease_seconds: leaseSeconds,
-  });
+  const { data, error } = await callSchedulerRpc(
+    (name, args) => supabase.rpc(name, args),
+    "claim_due_workflow_schedules",
+    { p_limit: claimLimit, p_lease_seconds: leaseSeconds },
+  );
   if (error || !Array.isArray(data)) {
-    console.error("Aivanta scheduler could not claim due schedules.");
-    return NextResponse.json({ error: "Could not claim scheduled workflows." }, { status: 500 });
+    logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: "failure", statusCode: 500, errorCode: "SCHEDULER_CLAIM_FAILED", durationMs: Math.max(0, Date.now() - startedAt) }, console.error);
+    return jsonResponse({ error: "Could not claim scheduled workflows." }, { status: 500 });
   }
 
   const claims = data as ScheduleClaim[];
@@ -151,15 +172,19 @@ async function dispatchTick(request: NextRequest) {
         };
       }
       const idempotencyKey = "schedule:" + claim.schedule_id + ":" + scheduledFor;
-      const { data: dispatch, error: dispatchError } = await supabase.rpc("dispatch_workflow_execution", {
-        p_workspace_id: claim.workspace_id,
-        p_workflow_id: claim.workflow_id,
-        p_workflow_version: claim.workflow_version,
-        p_created_by: scheduleConfig.created_by,
-        p_idempotency_key: idempotencyKey,
-        p_payload: { input: scheduledInput, source: "schedule", scheduleId: claim.schedule_id, scheduledFor },
-        p_max_attempts: 5,
-      });
+      const { data: dispatch, error: dispatchError } = await callSchedulerRpc(
+        (name, args) => supabase.rpc(name, args),
+        "dispatch_workflow_execution",
+        {
+          p_workspace_id: claim.workspace_id,
+          p_workflow_id: claim.workflow_id,
+          p_workflow_version: claim.workflow_version,
+          p_created_by: scheduleConfig.created_by,
+          p_idempotency_key: idempotencyKey,
+          p_payload: { input: scheduledInput, source: "schedule", scheduleId: claim.schedule_id, scheduledFor },
+          p_max_attempts: 5,
+        },
+      );
       if (dispatchError || !dispatch || typeof dispatch !== "object" ||
           typeof (dispatch as Record<string, unknown>).job_id !== "string" ||
           typeof (dispatch as Record<string, unknown>).run_id !== "string") {
@@ -176,6 +201,7 @@ async function dispatchTick(request: NextRequest) {
         // The durable run record is idempotent. If this lease expired, a later
         // worker can safely observe the existing record and finish the schedule.
         failed += 1;
+        logOperationalEvent({ event: "scheduled_workflow", requestId, route: "/api/internal/scheduler", outcome: "failure", statusCode: 500, errorCode: "SCHEDULED_RUN_FINALIZATION_FAILED" }, console.error);
         continue;
       }
       queued += 1;
@@ -186,14 +212,12 @@ async function dispatchTick(request: NextRequest) {
         // The lease expires and can be retried if the database is temporarily unavailable.
       }
       failed += 1;
-      console.error("Aivanta scheduled workflow failed.", {
-        scheduleId: claim.schedule_id,
-        errorCode: failureCode,
-      });
+      logOperationalEvent({ event: "scheduled_workflow", requestId, route: "/api/internal/scheduler", outcome: "failure", statusCode: 500, errorCode: failureCode }, console.error);
     }
   }
 
-  return NextResponse.json({ claimed: claims.length, queued, failed });
+  logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: failed > 0 ? "failure" : "success", statusCode: 200, durationMs: Math.max(0, Date.now() - startedAt), claimed: claims.length, succeeded: queued, failed });
+  return jsonResponse({ claimed: claims.length, queued, failed });
 }
 
 export async function GET(request: NextRequest) {
