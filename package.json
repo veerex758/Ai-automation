@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/workspace-credentials.test.ts tests/provider-catalog.test.ts tests/provider-pack.test.ts tests/catalogue-provider-first-batch.test.ts tests/catalogue-database-pack.test.ts tests/worker-operation-parity.test.ts tests/sql-document-databases.test.ts tests/provider-oauth.test.ts tests/utility-pack.test.ts tests/safe-http-durable-worker.test.ts tests/cron.test.ts tests/workflow-authorization.test.ts tests/marketplace-verification.test.ts tests/marketplace-payment-processing.test.ts && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "tsx --test tests/nodes.test.ts tests/workflow-runner.test.ts tests/webhook-signature.test.ts tests/webhook-secret-crypto.test.ts tests/workspace-credentials.test.ts tests/execution-redaction.test.ts tests/provider-catalog.test.ts tests/provider-pack.test.ts tests/catalogue-provider-first-batch.test.ts tests/catalogue-database-pack.test.ts tests/worker-operation-parity.test.ts tests/sql-document-databases.test.ts tests/provider-oauth.test.ts tests/utility-pack.test.ts tests/safe-http-durable-worker.test.ts tests/cron.test.ts tests/workflow-authorization.test.ts tests/marketplace-verification.test.ts tests/marketplace-payment-processing.test.ts && node --test --test-concurrency=1 tests/*.test.mjs",
     "dev": "next dev",
     "build": "npm run validate:nodes && next build",
     "start": "next start",

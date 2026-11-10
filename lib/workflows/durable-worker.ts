@@ -12,6 +12,7 @@ import type { NodeContext } from "@/nodes/types";
 import { isProviderLiveEnabled, providerPackLiveId } from "@/lib/workflows/provider-live-gates";
 import { performSafeHttpRequest } from "@/nodes/safe-http";
 import { getWorkerOperationMapping, getWorkerProvider } from "@/lib/workflows/worker-operation-map";
+import { redactSensitiveData } from "@/lib/integrations/redact-sensitive";
 
 
 type Job = {
@@ -217,26 +218,35 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
   return null;
 }
 
-function boundedOutput(value: unknown): Record<string, unknown> {
-  if (Array.isArray(value)) {
+function boundedOutput(value: unknown, knownSecrets: readonly string[] = []): Record<string, unknown> {
+  const safe = redactSensitiveData(value, knownSecrets);
+  if (Array.isArray(safe)) {
     try {
-      if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return { __aivantaArray: value };
+      if (Buffer.byteLength(JSON.stringify(safe), "utf8") <= 12000) return { __aivantaArray: safe };
     } catch { /* omit unserializable loop output */ }
   }
-  if (isRecord(value)) {
+  if (isRecord(safe)) {
     try {
-      if (Buffer.byteLength(JSON.stringify(value), "utf8") <= 12000) return value;
+      if (Buffer.byteLength(JSON.stringify(safe), "utf8") <= 12000) return safe;
     } catch { /* omit unserializable provider output */ }
   }
   return { outputOmitted: true };
+}
+
+function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
+  const secretField = /(?:token|key|secret|password|credential|webhook|connection.?string|authorization)/i;
+  return Object.values(credentials).flatMap((provider) =>
+    Object.entries(provider)
+      .filter(([field, value]) => secretField.test(field) && typeof value === "string" && value.length >= 4)
+      .map(([, value]) => value));
 }
 
 function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
     logger: {
-      info(message, meta) { console.info("[queue-node]", message, meta ?? {}); },
-      error(message, meta) { console.error("[queue-node]", message, meta ?? {}); },
+      info(message, meta) { console.info("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
+      error(message, meta) { console.error("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
     },
     http: {
       async request(args) {
@@ -349,6 +359,7 @@ export async function runDurableWorker() {
 
       let result: { status: string; steps: Array<{ stepId: string; position: number; type: string; title: string; status: string; message: string; output?: unknown }> };
       const preCheckpointed = new Set<string>();
+      let executionSecrets: string[] = [];
       if (definition.format === "aivanta-registry-v1") {
         const validated = validateRegisteredSteps(definition.steps);
         if (!validated.steps) throw new Error("INVALID_REGISTRY_WORKFLOW_DEFINITION");
@@ -377,6 +388,7 @@ export async function runDurableWorker() {
         const credentials = job.execution_mode === "live"
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
+        executionSecrets = knownCredentialValues(credentials);
         const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
@@ -423,7 +435,7 @@ export async function runDurableWorker() {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
               db, job, step, position, completed.status === "succeeded" ? "succeeded" : "skipped",
-              boundedOutput(completed.output),
+              boundedOutput(completed.output, executionSecrets),
             ),
           } : {}),
         });
@@ -460,7 +472,7 @@ export async function runDurableWorker() {
             status: legacyResult.status,
             steps: legacyResult.steps.map((step) => ({
               stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-              status: step.status, message: step.message,
+              status: step.status, message: String(redactSensitiveData(step.message, executionSecrets)),
             })),
           };
         } else {
@@ -489,6 +501,7 @@ export async function runDurableWorker() {
           if (!emailPreview) sendFailed = "EMAIL_PREVIEW_STEP_MISSING";
           if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
             const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
+            executionSecrets = knownCredentialValues(credentials);
             const registrySteps: RegisteredWorkflowStep[] = [
               { id: trigger.id, nodeId: "manual", operationId: "start", kind: "trigger", input },
               {
@@ -505,7 +518,7 @@ export async function runDurableWorker() {
                 preCheckpointed.add(step.id);
               },
               onStepComplete: async (step, position, completed) => {
-                await persistCheckpoint(db, job, step, position, "succeeded", boundedOutput(completed.output));
+                await persistCheckpoint(db, job, step, position, "succeeded", boundedOutput(completed.output, executionSecrets));
                 preCheckpointed.add(step.id);
               },
             });
@@ -526,11 +539,11 @@ export async function runDurableWorker() {
               if (step.stepId === emailAction.id) {
                 if (step.status === "skipped") return {
                   stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "skipped", message: step.message,
+                  status: "skipped", message: String(redactSensitiveData(step.message, executionSecrets)),
                 };
                 if (sendFailed) return {
                   stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "failed", message: sendFailed,
+                  status: "failed", message: String(redactSensitiveData(sendFailed, executionSecrets)),
                 };
                 return {
                   stepId: step.stepId, position: step.position, type: step.type, title: step.title,
@@ -540,7 +553,7 @@ export async function runDurableWorker() {
               return {
                 stepId: step.stepId, position: step.position, type: step.type, title: step.title,
                 status: step.status === "skipped" ? "skipped" : "succeeded",
-                message: step.message,
+                message: String(redactSensitiveData(step.message, executionSecrets)),
               };
             }),
           };
@@ -553,13 +566,13 @@ export async function runDurableWorker() {
           : null;
         if (registryStep && (job.execution_mode !== "live" || step.status !== "succeeded")) {
           const checkpointStatus = step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded";
-          await persistCheckpoint(db, job, registryStep, step.position, checkpointStatus, { message: step.message });
+          await persistCheckpoint(db, job, registryStep, step.position, checkpointStatus, { message: String(redactSensitiveData(step.message, executionSecrets)) });
         } else if (!registryStep && !(job.execution_mode === "live" && step.status === "succeeded" && preCheckpointed.has(step.stepId))) {
           const { error: checkpointError } = await db.rpc("checkpoint_execution_step", {
             p_job_id: job.id, p_lease_token: job.lease_token,
             p_step_id: step.stepId, p_position: step.position,
             p_status: step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded",
-            p_input: {}, p_output: { message: step.message },
+            p_input: {}, p_output: { message: String(redactSensitiveData(step.message, executionSecrets)) },
           });
           if (checkpointError) throw new Error("CHECKPOINT_WRITE_FAILED");
         }
@@ -571,8 +584,8 @@ export async function runDurableWorker() {
         position: step.position, step_type: step.type, title: step.title,
         status: step.status === "succeeded" ? (live ? "executed" : "simulated") : step.status,
         result: step.status === "failed" ? { error: step.message } : {
-          message: step.message,
-          ...(live && step.output !== undefined ? { output: boundedOutput(step.output) } : {}),
+          message: String(redactSensitiveData(step.message, executionSecrets)),
+          ...(live && step.output !== undefined ? { output: boundedOutput(step.output, executionSecrets) } : {}),
         },
       }));
       const { error: stepsError } = await db.from("workflow_run_steps").upsert(stepRows, { onConflict: "run_id,step_id" });
