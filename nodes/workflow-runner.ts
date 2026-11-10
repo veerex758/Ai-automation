@@ -20,11 +20,12 @@ export type RegisteredStepResult = {
   error?: string;
 };
 
-function resolveReferences(value: unknown, outputs: Readonly<Record<string, unknown>>, dryRun = false): unknown {
+function resolveReferences(value: unknown, outputs: Readonly<Record<string, unknown>>, dryRun = false, allowMissing = false): unknown {
   const resolvePath = (path: string): unknown => {
     const [stepId, ...parts] = path.split(".");
     if (["__proto__", "prototype", "constructor"].includes(stepId) || parts.some((part) => ["__proto__", "prototype", "constructor"].includes(part))) {
       if (dryRun) return "[dry-run reference: " + path + "]";
+      if (allowMissing) return undefined;
       throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
     }
     let current: unknown = outputs[stepId];
@@ -37,6 +38,7 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
     }
     if (current === null || current === undefined) {
       if (dryRun) return "[dry-run reference: " + path + "]";
+      if (allowMissing) return undefined;
       throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
     }
     return current;
@@ -49,7 +51,7 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
       return typeof current === "string" ? current : JSON.stringify(current);
     });
   }
-  if (Array.isArray(value)) return value.map((item) => resolveReferences(item, outputs, dryRun));
+  if (Array.isArray(value)) return value.map((item) => resolveReferences(item, outputs, dryRun, allowMissing));
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveReferences(item, outputs, dryRun)]));
   }
@@ -115,7 +117,8 @@ export async function executeRegisteredWorkflow(args: {
     try {
       const executeOnce = async (scope: Record<string, unknown>, iteration?: number) => {
         const localOutputs = { ...outputs, ...scope };
-        const input = resolveReferences(step.input, localOutputs, args.dryRun);
+        const allowMissing = step.nodeId === "if" && step.operationId === "evaluate" && step.input && typeof step.input === "object" && ["exists", "is_empty"].includes(String((step.input as Record<string, unknown>).operator));
+        const input = resolveReferences(step.input, localOutputs, args.dryRun, allowMissing);
         const validatedInput = operation.inputSchema.parse(input);
         const checkpointStep = iteration === undefined ? step : { ...step, id: step.id + "__loop_" + (iteration + 1) };
         const position = ++checkpointPosition;
