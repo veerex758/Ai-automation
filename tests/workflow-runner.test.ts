@@ -434,8 +434,8 @@ test("builder graph branch paths execute the false path and keep a converged nod
   assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "skipped", "succeeded", "succeeded"]);
 });
 
-test("registry branchPaths reject a predicate that references a later non-condition step", () => {
-  const { validateRegisteredSteps } = require("../nodes/validate-steps");
+test("registry branchPaths reject a predicate that references a later non-condition step", async () => {
+  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
   const invalid = validateRegisteredSteps([
     { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
     { id: "target", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: {} }, branchPaths: [[{ fromStepId: "later", route: "true" }]] },
