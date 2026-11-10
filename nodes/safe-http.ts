@@ -18,7 +18,7 @@ function isPublicAddress(address: string): boolean {
     const ip = address.toLowerCase().split("%")[0];
 
     // IPv4-mapped IPv6 must inherit the embedded IPv4 address policy.
-    const mappedDotted = ip.match(/::ffff:(\\d+\\.\\d+\\.\\d+\\.\\d+)$/);
+    const mappedDotted = ip.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
     if (mappedDotted) return isPublicAddress(mappedDotted[1]);
     const mappedHex = ip.match(/::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
     if (mappedHex) {
