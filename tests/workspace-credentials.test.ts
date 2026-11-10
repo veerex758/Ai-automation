@@ -221,8 +221,15 @@ test("workspace credential vault accepts MySQL and MongoDB connection strings", 
 
 
 test("credential encryption rejects absent, malformed, and wrong-length key material without leaking values", () => {
-  assert.throws(() => encryptWorkspaceCredentials({ openai: { apiKey: "never-log-this" } }, undefined), /WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED/);
-  assert.throws(() => encryptWorkspaceCredentials({ openai: { apiKey: "never-log-this" } }, "not-base64-key"), /WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID/);
-  assert.throws(() => encryptWorkspaceCredentials({ openai: { apiKey: "never-log-this" } }, Buffer.from("short").toString("base64")), /WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID/);
-  assert.throws(() => decryptWorkspaceCredentials("v1.invalid.invalid.invalid", undefined), /WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED/);
+  const prior = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
+  delete process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
+  try {
+    assert.throws(() => encryptWorkspaceCredentials({ openai: { apiKey: "never-log-this" } }, undefined), /WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED/);
+    assert.throws(() => encryptWorkspaceCredentials({ openai: { apiKey: "never-log-this" } }, "not-base64-key"), /WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID/);
+    assert.throws(() => encryptWorkspaceCredentials({ openai: { apiKey: "never-log-this" } }, Buffer.from("short").toString("base64")), /WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID/);
+    assert.throws(() => decryptWorkspaceCredentials("v1.invalid.invalid.invalid", undefined), /WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED/);
+  } finally {
+    if (prior === undefined) delete process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
+    else process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY = prior;
+  }
 });
