@@ -76,6 +76,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
       statusCode: 500,
       errorCode: "ACTIVITY_RUN_DETAIL_FAILED",
     });
-    return NextResponse.json({ error: "Could not load run details. Please try again." }, { status: 500, headers: { "Cache-Control": "private, no-store, max-age=0" } });
+    return NextResponse.json({ error: "Could not load run details. Please try again." }, { status: 500, headers });
   }
 }
