@@ -184,3 +184,30 @@ test("all registered OAuth provider configs use HTTPS endpoints and declare scop
     assert.equal(config.clientSecretEnv, "AIVANTA_" + provider.toUpperCase() + "_CLIENT_SECRET");
   }
 });
+
+test("OAuth refresh rotates tokens when the provider returns a replacement and uses Basic auth where required", async () => {
+  const oldFetch = globalThis.fetch;
+  const priorId = process.env.AIVANTA_X_TWITTER_CLIENT_ID;
+  const priorSecret = process.env.AIVANTA_X_TWITTER_CLIENT_SECRET;
+  process.env.AIVANTA_X_TWITTER_CLIENT_ID = "client-id";
+  process.env.AIVANTA_X_TWITTER_CLIENT_SECRET = "client-secret";
+  let captured: { url: string; init?: RequestInit } | undefined;
+  globalThis.fetch = (async (input, init) => {
+    captured = { url: String(input), init };
+    return new Response(JSON.stringify({ access_token: "rotated-access", refresh_token: "rotated-refresh", expires_in: 3600, token_type: "Bearer" }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const token = await refreshProviderOAuthToken({ provider: "x_twitter", config: PROVIDER_OAUTH_CONFIG.x_twitter, refreshToken: "old-refresh" });
+    assert.equal(token.access_token, "rotated-access");
+    assert.equal(token.refresh_token, "rotated-refresh");
+    assert.equal(captured?.url, PROVIDER_OAUTH_CONFIG.x_twitter.tokenUrl);
+    const headers = new Headers(captured?.init?.headers);
+    assert.equal(headers.get("authorization"), "Basic " + Buffer.from("client-id:client-secret").toString("base64"));
+    assert.equal(new URLSearchParams(String(captured?.init?.body)).get("refresh_token"), "old-refresh");
+    assert.equal(new URLSearchParams(String(captured?.init?.body)).has("client_secret"), false);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (priorId === undefined) delete process.env.AIVANTA_X_TWITTER_CLIENT_ID; else process.env.AIVANTA_X_TWITTER_CLIENT_ID = priorId;
+    if (priorSecret === undefined) delete process.env.AIVANTA_X_TWITTER_CLIENT_SECRET; else process.env.AIVANTA_X_TWITTER_CLIENT_SECRET = priorSecret;
+  }
+});
