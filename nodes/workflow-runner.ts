@@ -25,13 +25,13 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
     const [stepId, ...parts] = path.split(".");
     if (["__proto__", "prototype", "constructor"].includes(stepId) || parts.some((part) => ["__proto__", "prototype", "constructor"].includes(part))) {
       if (dryRun) return "[dry-run reference: " + path + "]";
-      if (allowMissing) return undefined;
       throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
     }
     let current: unknown = outputs[stepId];
     for (const part of parts) {
       if (!current || typeof current !== "object" || Array.isArray(current) || !Object.prototype.hasOwnProperty.call(current, part)) {
         if (dryRun) return "[dry-run reference: " + path + "]";
+        if (allowMissing) return undefined;
         throw new Error("WORKFLOW_REFERENCE_NOT_FOUND");
       }
       current = (current as Record<string, unknown>)[part];
@@ -53,7 +53,7 @@ function resolveReferences(value: unknown, outputs: Readonly<Record<string, unkn
   }
   if (Array.isArray(value)) return value.map((item) => resolveReferences(item, outputs, dryRun, allowMissing));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveReferences(item, outputs, dryRun)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveReferences(item, outputs, dryRun, allowMissing)]));
   }
   return value;
 }
