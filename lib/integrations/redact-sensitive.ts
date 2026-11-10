@@ -2,8 +2,8 @@ const SENSITIVE_KEY = /(?:authorization|cookie|set-cookie|api[_-]?key|access[_-]
 
 function redactText(value: string, knownSecrets: readonly string[]): string {
   let safe = value
-    .replace(/(Bearer\\s+)[A-Za-z0-9._~+/-]+=*/gi, "$1[REDACTED]")
-    .replace(/(Basic\\s+)[A-Za-z0-9+/]+=*/gi, "$1[REDACTED]");
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, "$1[REDACTED]")
+    .replace(/(Basic\s+)[A-Za-z0-9+/]+=*/gi, "$1[REDACTED]");
   for (const secret of knownSecrets) {
     if (secret.length >= 4) safe = safe.split(secret).join("[REDACTED]");
   }
