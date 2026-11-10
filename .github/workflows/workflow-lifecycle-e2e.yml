@@ -1,0 +1,31 @@
+name: Authenticated workflow lifecycle E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aivanta-workflow-lifecycle-e2e
+  cancel-in-progress: false
+
+jobs:
+  workflow-lifecycle:
+    if: ${{ vars.AIVANTA_E2E_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Verify authenticated draft lifecycle without live provider actions
+        env:
+          AIVANTA_E2E_BASE_URL: ${{ vars.AIVANTA_E2E_BASE_URL }}
+          AIVANTA_E2E_EMAIL: ${{ secrets.AIVANTA_E2E_EMAIL }}
+          AIVANTA_E2E_PASSWORD: ${{ secrets.AIVANTA_E2E_PASSWORD }}
+        run: npm run test:e2e

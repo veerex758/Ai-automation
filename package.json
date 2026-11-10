@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "staging:smoke": "node scripts/staging-smoke.mjs",
     "validate:nodes": "tsx scripts/validate-nodes.ts",
-    "report:providers": "tsx scripts/generate-provider-verification-report.ts"
+    "report:providers": "tsx scripts/generate-provider-verification-report.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -44,6 +45,7 @@
     "typescript": "^5.8.3",
     "@eslint/eslintrc": "^3.3.1",
     "@types/pg": "^8.15.5",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "@playwright/test": "^1.56.1"
   }
 }
