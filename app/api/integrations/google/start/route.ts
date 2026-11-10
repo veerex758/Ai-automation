@@ -24,6 +24,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const config = getGoogleOAuthConfig();
+    const requestOrigin = request.nextUrl.origin;
+    const redirectOrigin = new URL(config.redirectUri).origin;
+    if (requestOrigin !== redirectOrigin) {
+      console.warn("[google-oauth] Preview origin differs from configured OAuth callback origin", { requestHost: request.nextUrl.host, callbackHost: new URL(config.redirectUri).host });
+      return NextResponse.redirect(new URL("/dashboard/connections?google=redirect_uri_host_mismatch", request.url));
+    }
     const state = base64url(randomBytes(32));
     const verifier = base64url(randomBytes(48));
     const challenge = createHash("sha256").update(verifier).digest("base64url");

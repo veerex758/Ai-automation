@@ -459,8 +459,12 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
+    const declaredLength = Number(request.headers.get("content-length") ?? "0");
+    if (declaredLength > 2 * 1024) return json({ error: "Integration test request exceeds the 2 KB limit." }, 413);
+    const rawBody = await request.text();
+    if (Buffer.byteLength(rawBody, "utf8") > 2 * 1024) return json({ error: "Integration test request exceeds the 2 KB limit." }, 413);
     let input: unknown;
-    try { input = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
+    try { input = JSON.parse(rawBody); } catch { return json({ error: "Invalid JSON body." }, 400); }
     const provider = input && typeof input === "object" ? (input as { provider?: unknown }).provider : undefined;
     if (typeof provider !== "string" || !TESTABLE.has(provider)) return json({ error: "This provider does not support a credential test here." }, 400);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
