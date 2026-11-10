@@ -423,3 +423,31 @@ test("registry branchPaths reject a predicate that references a later non-condit
   ]);
   assert.equal(invalid.error, "Branch source must be an earlier IF or Switch step.");
 });
+
+
+test("IF existence conditions accept absent payload fields without failing reference resolution", async () => {
+  const { buildRegistrySteps } = await import("../lib/workflows/build-registry-steps");
+  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
+  const plan = buildRegistrySteps({
+    nodes: [
+      { id: "trigger", type: "trigger", title: "Webhook", settings: {}, registryNodeId: "webhooks", registryOperationId: "receive_event", registryInput: { eventId: "evt_3", eventType: "lead", receivedAt: new Date().toISOString(), payload: {} } },
+      { id: "condition", type: "condition", title: "Phone provided", settings: { field: "phone", operator: "is_set" } },
+      { id: "yes", type: "action", title: "Has phone", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { result: "yes" } } },
+      { id: "no", type: "action", title: "Needs phone", settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { result: "no" } } },
+    ],
+    edges: [
+      { id: "e1", source: "trigger", target: "condition", label: "next" },
+      { id: "e2", source: "condition", target: "yes", label: "true" },
+      { id: "e3", source: "condition", target: "no", label: "false" },
+    ],
+  });
+  const validated = validateRegisteredSteps(plan);
+  assert.ok(validated.steps);
+  const result = await executeRegisteredWorkflow({
+    steps: validated.steps!,
+    context: { ...context, webhook: { verified: true } },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "skipped", "succeeded"]);
+});
