@@ -265,7 +265,7 @@ export default function DashboardPage() {
 
 
   return (
-    <main className="app-shell">
+    <main className="app-shell dashboard-overview-page">
       <aside className="sidebar">
         <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
