@@ -60,3 +60,37 @@
 .auth-tab:focus-visible,.auth-submit:focus-visible{outline:3px solid rgba(169,218,94,.55);outline-offset:2px}
 .auth-form input{box-sizing:border-box}
 @media(prefers-reduced-motion:reduce){.auth-submit{transition:none}.auth-submit:not(:disabled):hover{transform:none}}
+
+
+/* Align authentication surfaces with the shared porcelain / petrol / brass theme. */
+.auth-page{background:var(--aivanta-bg)!important;color:var(--aivanta-ink)!important}
+.auth-page:before{background-image:radial-gradient(#c9c2b6 .55px,transparent .55px)!important;opacity:.12!important;mask-image:linear-gradient(90deg,#000,transparent 78%)!important}
+.auth-orb{display:none!important}
+.auth-header{border-bottom:1px solid var(--aivanta-line)!important}
+.auth-brand{color:var(--aivanta-ink)!important}
+.auth-brand>span:last-child>span{color:var(--aivanta-brass)!important}
+.auth-brand-mark,.auth-card-symbol{background:var(--aivanta-brass-soft)!important;border:1px solid var(--aivanta-line)!important;color:var(--aivanta-petrol)!important;box-shadow:none!important;transform:none!important}
+.auth-back,.auth-kicker,.auth-story>p,.auth-promise span,.auth-bottom-note,.auth-bottom-note span,.auth-secure,.auth-heading p,.auth-card-foot,.auth-footer{color:var(--aivanta-muted)!important}
+.auth-kicker>span,.auth-secure i{background:var(--aivanta-success)!important;box-shadow:0 0 0 4px #e7eee8!important}
+.auth-story h1,.auth-heading h2{color:var(--aivanta-ink)!important}
+.auth-story h1 em{color:var(--aivanta-petrol)!important}
+.auth-promise{border-top-color:var(--aivanta-line)!important}
+.promise-icon{background:var(--aivanta-brass-soft)!important;color:var(--aivanta-petrol)!important}
+.auth-promise strong{color:var(--aivanta-ink)!important}
+.auth-card{background:var(--aivanta-surface)!important;border:1px solid var(--aivanta-line)!important;border-radius:12px!important;box-shadow:var(--aivanta-shadow)!important;backdrop-filter:none!important}
+.auth-tabs{background:var(--aivanta-surface-soft)!important;border-radius:9px!important}
+.auth-tab{color:var(--aivanta-muted)!important}
+.auth-tab.active{background:var(--aivanta-surface)!important;color:var(--aivanta-ink)!important;box-shadow:0 1px 4px rgba(32,42,41,.08)!important}
+.auth-form label{color:var(--aivanta-petrol)!important}
+.auth-form input{background:var(--aivanta-surface)!important;color:var(--aivanta-ink)!important;border:1px solid var(--aivanta-line)!important;border-radius:8px!important;box-shadow:none!important}
+.auth-form input::placeholder{color:#89948f!important}
+.auth-form input:focus{border-color:var(--aivanta-brass)!important;box-shadow:0 0 0 3px var(--aivanta-brass-soft)!important}
+.auth-submit{background:var(--aivanta-petrol)!important;color:#fffefa!important;border:1px solid var(--aivanta-petrol)!important;border-radius:8px!important;box-shadow:none!important}
+.auth-submit:not(:disabled):hover{background:var(--aivanta-petrol-hover)!important;box-shadow:none!important}
+.auth-submit span{color:#e8ddca!important}
+.auth-error{background:#f7eeeb!important;color:var(--aivanta-danger)!important;border-color:#ead8d3!important}
+.auth-success{background:#edf2ed!important;color:var(--aivanta-success)!important;border-color:#d8e2da!important}
+.auth-card-foot{border-top-color:var(--aivanta-line)!important}
+.auth-card-foot span{color:var(--aivanta-petrol)!important}
+.auth-footer{border-top-color:var(--aivanta-line)!important}
+.auth-footer i{background:var(--aivanta-brass)!important}
