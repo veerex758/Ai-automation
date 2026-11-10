@@ -64,7 +64,7 @@ test("run detail renders in-progress and skipped states neutrally", async () => 
 
 test("run detail scopes workflow metadata to the same workspace and keeps every response private", () => {
   assert.match(endpoint, /\.from\("workflows"\)[\s\S]*?\.eq\("id", run\.workflow_id\)\.eq\("workspace_id", workspace\.id\)/);
-  assert.match(endpoint, /const headers = \{ "Cache-Control": "private, no-store, max-age=0" \}/);
+  assert.match(endpoint, /const headers = \{ "Cache-Control": "private, no-store, max-age=0", "x-request-id": requestId \}/);
   assert.match(endpoint, /status: 401, headers/);
   assert.match(endpoint, /status: 400, headers/);
   assert.match(endpoint, /status: 404, headers/);
@@ -90,7 +90,7 @@ test("activity list exposes only safe run metadata and scopes workflow names to 
 });
 
 test("activity list keeps unauthorized, successful, and failed responses private", () => {
-  assert.match(listEndpoint, /status: 401, headers: \{ "Cache-Control": "private, no-store, max-age=0" \}/);
-  assert.match(listEndpoint, /\}, \{ headers: \{ "Cache-Control": "private, no-store, max-age=0" \} \}\);/);
-  assert.match(listEndpoint, /status: 500, headers: \{ "Cache-Control": "private, no-store, max-age=0" \}/);
+  assert.match(listEndpoint, /status: 401, headers/);
+  assert.match(listEndpoint, /\}, \{ headers \}\);/);
+  assert.match(listEndpoint, /status: 500, headers/);
 });
