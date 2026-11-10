@@ -13,7 +13,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
-  const startedAt = Date.now();
+  const requestStartedAt = Date.now();
   const requestId = getRequestId(request.headers.get("x-request-id"));
   const jsonResponse = (body: unknown, init?: ResponseInit) => {
     const response = NextResponse.json(body, init);
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     logOperationalEvent({
       event: "live_workflow_run", requestId, route: "/api/workflows/live-run",
       outcome: "failure", statusCode: 500,
-      durationMs: Math.min(600000, Math.max(0, Date.now() - startedAt)), errorCode,
+      durationMs: Math.min(600000, Math.max(0, Date.now() - requestStartedAt)), errorCode,
     }, console.error);
   };
   // Explicit opt-in keeps existing legacy email behavior unchanged while routing registry-format workflows through the same run-history-backed execution API.
@@ -234,7 +234,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     logOperationalEvent({
       event: "live_workflow_run", requestId, route: "/api/workflows/live-run",
       outcome: "success", statusCode: 201,
-      durationMs: Math.min(600000, Math.max(0, Date.now() - startedAt)),
+      durationMs: Math.min(600000, Math.max(0, Date.now() - requestStartedAt)),
     });
     return jsonResponse({
       run: finalized,
