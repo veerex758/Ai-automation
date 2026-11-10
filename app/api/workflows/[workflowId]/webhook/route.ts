@@ -51,8 +51,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
 
     const encryptionKey = process.env.AIVANTA_WEBHOOK_ENCRYPTION_KEY;
     const keyVersion = process.env.AIVANTA_WEBHOOK_SECRET_KEY_VERSION;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
     if (!encryptionKey || !keyVersion || !serviceRoleKey || !supabaseUrl) {
       return jsonError("Secure webhook provisioning is not configured on this environment.", 503);
     }
