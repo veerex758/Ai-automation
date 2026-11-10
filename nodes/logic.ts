@@ -15,19 +15,6 @@ const filterInput = z.object({
   value: z.unknown().optional().describe("Comparison value; not needed for empty checks."),
 }).strict();
 const filterOutput = z.object({ items: z.array(z.unknown()), count: z.number().int().nonnegative() }).strict();
-const switchInput = z.object({
-  value: z.unknown(),
-  cases: z.array(z.object({
-    value: z.unknown(),
-    route: z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/),
-  }).strict()).max(50),
-  defaultRoute: z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/).optional(),
-}).strict();
-const switchOutput = z.object({
-  route: z.string().min(1).max(64),
-  matched: z.boolean(),
-  matchedIndex: z.number().int().nonnegative().optional(),
-}).strict();
 
 function readPath(value: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((current, key) => {
@@ -74,21 +61,6 @@ export const logicNode: NodeDefinition = {
         const input = filterInput.parse(rawInput);
         const items = input.items.filter((item) => compare(readPath(item, input.field), input.operator, input.value));
         return filterOutput.parse({ items, count: items.length });
-      },
-    },
-    {
-      id: "switch", name: "Switch / Route",
-      description: "Routes a value to the first matching case using strict equality. Supports up to 50 ordered cases and an optional default route; returns a route decision without executing downstream actions.",
-      inputSchema: switchInput, outputSchema: switchOutput,
-      async run(_ctx, rawInput) {
-        const input = switchInput.parse(rawInput);
-        const routes = input.cases.map((item) => item.route);
-        if (new Set(routes).size !== routes.length) throw new Error("LOGIC_SWITCH_DUPLICATE_ROUTE");
-        if (input.defaultRoute && routes.includes(input.defaultRoute)) throw new Error("LOGIC_SWITCH_DEFAULT_ROUTE_CONFLICT");
-        const matchedIndex = input.cases.findIndex((item) => Object.is(item.value, input.value));
-        if (matchedIndex >= 0) return switchOutput.parse({ route: input.cases[matchedIndex].route, matched: true, matchedIndex });
-        if (!input.defaultRoute) throw new Error("LOGIC_SWITCH_NO_MATCH");
-        return switchOutput.parse({ route: input.defaultRoute, matched: false });
       },
     },
   ],
