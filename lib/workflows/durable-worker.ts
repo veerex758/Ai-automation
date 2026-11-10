@@ -234,8 +234,11 @@ function boundedOutput(value: unknown, knownSecrets: readonly string[] = []): Re
 }
 
 function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
+  const secretField = /(?:token|key|secret|password|credential|webhook|connection.?string|authorization)/i;
   return Object.values(credentials).flatMap((provider) =>
-    Object.values(provider).filter((value): value is string => typeof value === "string" && value.length >= 4));
+    Object.entries(provider)
+      .filter(([field, value]) => secretField.test(field) && typeof value === "string" && value.length >= 4)
+      .map(([, value]) => value));
 }
 
 function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string): Omit<NodeContext, "previousOutputs"> {
