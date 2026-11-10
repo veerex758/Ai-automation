@@ -19,7 +19,11 @@ export const GOOGLE_PRODUCTS = {
 
 export type GoogleProduct = keyof typeof GOOGLE_PRODUCTS;
 
-const GOOGLE_IDENTITY_SCOPES = new Set(["openid", "email", "profile"]);
+const GOOGLE_IDENTITY_SCOPES = new Set([
+  "openid", "email", "profile",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+]);
 
 /**
  * If Google returns a granted-scope list, require the product's exact read-only

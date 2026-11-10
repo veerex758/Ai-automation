@@ -80,6 +80,8 @@ test("Google OAuth scope validation allows only identity plus the requested read
   for (const product of ["calendar", "docs", "forms", "youtube", "contacts"]) assert.equal(isGoogleProduct(product), true);
   assert.equal(isGoogleProduct(null), false);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email profile " + gmail), true);
+  assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile " + gmail), true);
+  assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid https://www.googleapis.com/auth/userinfo.email " + gmail), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", gmail), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", null), true);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email " + sheets), false);
@@ -136,4 +138,35 @@ test("each newly supported Google product accepts only its exact read-only scope
     assert.equal(hasOnlyApprovedGoogleScopes(product, "openid email profile " + scope), true);
     assert.equal(hasOnlyApprovedGoogleScopes(product, scope + " https://www.googleapis.com/auth/drive"), false);
   }
+});
+
+
+test("Google OAuth callback distinguishes missing state cookies from state mismatch safely", async () => {
+  const callback = await readFile(new URL("../app/api/integrations/google/callback/route.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/dashboard/connections/page.tsx", import.meta.url), "utf8");
+  assert.match(callback, /state_cookie_missing/);
+  assert.match(callback, /state_mismatch/);
+  assert.match(callback, /stateCookiePresent: Boolean\(expectedState\)/);
+  assert.match(page, /state_cookie_missing:/);
+  assert.match(page, /state_mismatch:/);
+  assert.match(callback, /clearCookies\(connectionsUrl\(request, "state_cookie_missing"\)\)/);
+  assert.match(callback, /clearCookies\(connectionsUrl\(request, "state_mismatch"\)\)/);
+});
+
+test("Google OAuth callback validates state before token exchange and clears cookies on failures", async () => {
+  const callback = await readFile(new URL("../app/api/integrations/google/callback/route.ts", import.meta.url), "utf8");
+  const stateCheck = callback.indexOf('if (!state || !expectedState)');
+  const mismatchCheck = callback.indexOf('if (state !== expectedState)');
+  const tokenExchange = callback.indexOf('https://oauth2.googleapis.com/token');
+  assert.ok(stateCheck >= 0 && mismatchCheck > stateCheck && tokenExchange > mismatchCheck);
+  assert.match(callback, /callback_context_missing/);
+  assert.match(callback, /clearCookies\(connectionsUrl\(request, "callback_context_missing"\)\)/);
+});
+
+
+test("provider OAuth callback stores tokens using server-only CODED Supabase credentials", async () => {
+  const callback = await readFile(new URL("../app/api/integrations/oauth/[provider]/callback/route.ts", import.meta.url), "utf8");
+  assert.match(callback, /NEXT_PUBLIC_SUPABASE_URL \?\? process\.env\.CODED_SUPABASE_URL/);
+  assert.match(callback, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(callback, /CODED_SUPABASE_SECRET_KEY/);
 });
