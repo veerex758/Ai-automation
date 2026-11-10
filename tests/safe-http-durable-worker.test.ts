@@ -36,3 +36,30 @@ test("durable worker routes node HTTP calls through the SSRF-safe transport", as
   assert.match(source, /const response = await performSafeHttpRequest\(/);
   assert.doesNotMatch(source, /const response = await fetch\(args\.url/);
 });
+
+test("safe HTTP transport fails closed for non-global and special-purpose IPv6", async () => {
+  for (const address of [
+    "::",
+    "::1",
+    "fc00::1",
+    "fd00::1",
+    "fe80::1",
+    "ff02::1",
+    "2001:0::1",
+    "2001:2::1",
+    "2001:10::1",
+    "2001:20::1",
+    "2001:db8::1",
+    "2002::1",
+    "3fff::1",
+    "::ffff:127.0.0.1",
+    "::ffff:7f00:1",
+    "::ffff:10.0.0.1",
+  ]) {
+    await assert.rejects(
+      () => performSafeHttpRequest({ url: `http://[${address}]/`, method: "GET", headers: {}, timeoutMs: 1000 }),
+      /HTTP_REQUEST_PRIVATE_HOST_BLOCKED/,
+      address,
+    );
+  }
+});
