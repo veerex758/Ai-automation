@@ -343,3 +343,32 @@ test("Split in Batches resumes completed downstream iterations without replaying
     { items: [4, 3], count: 2 },
   ]);
 });
+
+
+test("Gemini qualifies real-estate enquiries with structured output and preserves missing facts", async () => {
+  const lead = {
+    fullName: "Ada Buyer", email: "ada@example.com", phone: null, propertyType: "apartment",
+    location: "Lekki", budget: "₦80m", timeframe: "within_30_days", temperature: "hot",
+    reason: "Specific property and near-term intent.", missingInformation: ["Phone number"],
+    suggestedReply: "Thanks for your enquiry. May we have your phone number?",
+    summary: "HOT lead: Ada Buyer wants an apartment in Lekki within 30 days; budget ₦80m.",
+  };
+  let requestBody: unknown;
+  const result = await executeRegisteredWorkflow({
+    steps: [{ id: "qualify", nodeId: "gemini", operationId: "qualify_real_estate_lead", kind: "action", input: { leadData: "Name: Ada Buyer; apartment in Lekki; budget ₦80m; within 30 days." } }],
+    context: {
+      credentials: { gemini: { apiKey: "test-only-key" } },
+      logger: { info() {}, error() {} },
+      http: { async request(args) {
+        requestBody = args.body;
+        return { status: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify(lead) }] } }], usageMetadata: { promptTokenCount: 90, candidatesTokenCount: 55 } } };
+      } },
+    },
+    dryRun: false,
+  });
+  assert.equal(result.status, "succeeded");
+  assert.equal((result.outputs.qualify as { phone: string | null }).phone, null);
+  assert.deepEqual((result.outputs.qualify as { missingInformation: string[] }).missingInformation, ["Phone number"]);
+  assert.equal((result.outputs.qualify as { outputTokens: number }).outputTokens, 55);
+  assert.ok((requestBody as { generationConfig: { responseJsonSchema: unknown } }).generationConfig.responseJsonSchema);
+});

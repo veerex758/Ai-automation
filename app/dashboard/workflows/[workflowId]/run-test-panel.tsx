@@ -24,7 +24,7 @@ type RunHistoryItem = {
   steps: Array<{ id: string; status: string; title: string; position: number }>;
 };
 
-export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, liveEmailRecipient }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; liveEmailRecipient: string }) {
+export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, liveEmailRecipient, isWebhookTrigger = false }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; liveEmailRecipient: string; isWebhookTrigger?: boolean }) {
   const [input, setInput] = useState(`{
   "status": "ready",
   "order": { "total": 125 }
@@ -185,7 +185,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
       <button className="builder-run dry-run-submit" type="button" onClick={() => void runTest()} disabled={running || hasUnsavedChanges}>
         {running ? "Testing…" : "▶ Run safe test"}
       </button>
-      <div className="live-integration-card">
+      {!isWebhookTrigger && <div className="live-integration-card">
         <div className="live-integration-top"><strong>Live email integration</strong><span className={integration?.ready ? "integration-ready" : "integration-pending"}>{integration?.ready ? "READY" : "SETUP REQUIRED"}</span></div>
         <p>{workflowStatus !== "active"
           ? "Activate this workflow before a live email can be sent."
@@ -201,7 +201,8 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
         </button>
         {liveError && <p className="dry-run-error" role="alert">{liveError}</p>}
         {liveResult && <div className="live-run-success" role="status"><strong>Durable execution {liveResult.status}</strong><span>Run {liveResult.runId.slice(0, 8)} · {liveResult.attempts} attempt(s) · {liveResult.checkpoints.length} checkpoints</span><p>{liveResult.status === "succeeded" ? "The workflow completed. Its actual step results are saved in run history." : `The workflow stopped and was not automatically replayed. ${liveResult.errorCode ? `Error: ${liveResult.errorCode}. ` : ""}Check run history before deciding what to do next.`}</p></div>}
-      </div>
+      </div>}
+      {isWebhookTrigger && <p className="dry-run-hint">This workflow is webhook-triggered. Live runs start only from a correctly signed inbound event; the manual live-run button is disabled.</p>}
       {result && <div className="dry-run-results" role="status">
         <div className="dry-run-results-heading"><strong>Run passed</strong><span>{version ? `Version ${version} · ` : ""}{result.steps.length} steps</span></div>
         <ol>{result.steps.map((step) => <li key={step.stepId} className={`run-step-${step.status}`}>
