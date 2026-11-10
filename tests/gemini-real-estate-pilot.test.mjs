@@ -44,4 +44,6 @@ test("webhook signing secrets remain server-side and CODED Supabase service cred
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
   assert.match(provision, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(provision, /CODED_SUPABASE_URL/);
+  assert.match(webhook, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(webhook, /CODED_SUPABASE_URL/);
 });
