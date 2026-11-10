@@ -68,7 +68,7 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
         const key = JSON.stringify(path);
         if (!current.some((existing) => JSON.stringify(existing) === key)) current.push(path);
       }
-      if (current.length > 200) throw new Error("Workflow has too many distinct branch paths.");
+      if (current.length > 60) throw new Error("Workflow has too many distinct branch paths.");
       pathsByNode.set(edge.target, current);
     }
   }
