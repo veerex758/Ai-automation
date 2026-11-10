@@ -1,4 +1,4 @@
-import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import type { RegisteredWorkflowStep } from "../../nodes/workflow-runner";
 
 type BuilderNode = {
   id: string; type: "trigger" | "action" | "condition"; title: string;
