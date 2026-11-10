@@ -126,7 +126,7 @@ export async function executeRegisteredWorkflow(args: {
         if (args.dryRun) {
           // Switch / Route is deterministic and side-effect-free, so evaluate it
           // during validation to predict branch selection without running providers.
-          if (step.nodeId === "logic" && step.operationId === "switch") {
+          if (step.nodeId === "switch" && step.operationId === "select_route") {
             const output = operation.outputSchema.parse(await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput));
             await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated", output });
             return { simulated: true as const, output };
