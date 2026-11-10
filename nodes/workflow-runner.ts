@@ -8,6 +8,8 @@ export type RegisteredWorkflowStep = {
   kind: "trigger" | "action";
   input: unknown;
   branch?: { fromStepId: string; route: string };
+  /** OR across paths; predicates inside each path are ANDed. */
+  branchPaths?: Array<Array<{ fromStepId: string; route: string }>>;
   loop?: { sourceStepId: string; itemAs?: string; indexAs?: string; maxIterations?: number };
 };
 
@@ -88,14 +90,15 @@ export async function executeRegisteredWorkflow(args: {
       results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
       continue;
     }
-    if (step.branch) {
-      const source = outputs[step.branch.fromStepId];
-      if (!source || typeof source !== "object" || !Object.prototype.hasOwnProperty.call(source, "route")) {
-        results.push({ stepId: step.id, status: "failed", error: "WORKFLOW_BRANCH_SOURCE_NOT_FOUND" });
-        for (const remaining of args.steps.slice(results.length)) results.push({ stepId: remaining.id, status: "skipped", error: "PREVIOUS_STEP_FAILED" });
-        return { status: "failed", steps: results, outputs };
-      }
-      if ((source as Record<string, unknown>).route !== step.branch.route) {
+    const branchPaths = step.branchPaths ?? (step.branch ? [[step.branch]] : undefined);
+    if (branchPaths) {
+      const selected = branchPaths.some((path) => path.every((predicate) => {
+        const source = outputs[predicate.fromStepId];
+        return Boolean(source && typeof source === "object" &&
+          Object.prototype.hasOwnProperty.call(source, "route") &&
+          (source as Record<string, unknown>).route === predicate.route);
+      }));
+      if (!selected) {
         const skipped: RegisteredStepResult = { stepId: step.id, status: "skipped", error: "BRANCH_NOT_SELECTED" };
         await args.onStepComplete?.(step, ++checkpointPosition, skipped);
         results.push(skipped);
