@@ -20,6 +20,7 @@ test("authenticated workflow draft save, reload, validate, dry-run and activatio
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in to workspace" }).click();
   await expect(page).toHaveURL(/\/dashboard(?:\/|$)/, { timeout: 30_000 });
+  const api = page.context().request;
 
   const name = `E2E draft ${Date.now()}`;
   const definition = {
@@ -41,7 +42,7 @@ test("authenticated workflow draft save, reload, validate, dry-run and activatio
   }];
   let workflowId: string | undefined;
   try {
-    const created = await page.request.post("/api/workflows", {
+    const created = await api.post("/api/workflows", {
       data: { name, description: "Authenticated lifecycle E2E draft.", status: "draft", definition, registrySteps },
     });
     expect(created.status()).toBe(201);
@@ -50,36 +51,36 @@ test("authenticated workflow draft save, reload, validate, dry-run and activatio
     expect(workflowId).toBeTruthy();
     expect(createdBody.workflow.status).toBe("Draft");
 
-    const saved = await page.request.patch(`/api/workflows/${workflowId}/definition`, {
+    const saved = await api.patch(`/api/workflows/${workflowId}/definition`, {
       data: { definition, registrySteps },
     });
     expect(saved.status()).toBe(200);
     expect((await saved.json()).success).toBe(true);
 
-    const reloaded = await page.request.get(`/api/workflows/${workflowId}/definition`);
+    const reloaded = await api.get(`/api/workflows/${workflowId}/definition`);
     expect(reloaded.status()).toBe(200);
     const reloadedBody = await reloaded.json();
     expect(reloadedBody.definition.nodes[0].registryNodeId).toBe("manual");
     expect(reloadedBody.definition.nodes[0].registryOperationId).toBe("start");
 
-    const validation = await page.request.post(`/api/workflows/${workflowId}/definition`, { data: { definition } });
+    const validation = await api.post(`/api/workflows/${workflowId}/definition`, { data: { definition } });
     expect(validation.status()).toBe(200);
     expect((await validation.json()).valid).toBe(true);
 
-    const dryRun = await page.request.post(`/api/workflows/${workflowId}/registry-run`, { data: { dryRun: true } });
+    const dryRun = await api.post(`/api/workflows/${workflowId}/registry-run`, { data: { dryRun: true } });
     expect(dryRun.status()).toBe(201);
     const dryRunBody = await dryRun.json();
     expect(dryRunBody.run.status).toBe("succeeded");
     expect(dryRunBody.run.mode).toBe("dry_run");
     expect(dryRunBody.sideEffectsPerformed).toBe(false);
 
-    const activation = await page.request.patch(`/api/workflows/${workflowId}`, { data: { status: "active" } });
+    const activation = await api.patch(`/api/workflows/${workflowId}`, { data: { status: "active" } });
     expect(activation.status()).toBe(422);
-    const stillDraft = await page.request.get(`/api/workflows/${workflowId}/definition`);
+    const stillDraft = await api.get(`/api/workflows/${workflowId}/definition`);
     expect((await stillDraft.json()).workflow.status).toBe("draft");
   } finally {
     if (workflowId) {
-      const removed = await page.request.delete(`/api/workflows/${workflowId}`);
+      const removed = await api.delete(`/api/workflows/${workflowId}`);
       expect([200, 404]).toContain(removed.status());
     }
   }
