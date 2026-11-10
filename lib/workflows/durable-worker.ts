@@ -515,7 +515,7 @@ export async function runDurableWorker() {
                 preCheckpointed.add(step.id);
               },
               onStepComplete: async (step, position, completed) => {
-                await persistCheckpoint(db, job, step, position, "succeeded", boundedOutput(completed.output));
+                await persistCheckpoint(db, job, step, position, "succeeded", boundedOutput(completed.output, executionSecrets));
                 preCheckpointed.add(step.id);
               },
             });
@@ -536,11 +536,11 @@ export async function runDurableWorker() {
               if (step.stepId === emailAction.id) {
                 if (step.status === "skipped") return {
                   stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "skipped", message: step.message,
+                  status: "skipped", message: String(redactSensitiveData(step.message, executionSecrets)),
                 };
                 if (sendFailed) return {
                   stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "failed", message: sendFailed,
+                  status: "failed", message: String(redactSensitiveData(sendFailed, executionSecrets)),
                 };
                 return {
                   stepId: step.stepId, position: step.position, type: step.type, title: step.title,
@@ -550,7 +550,7 @@ export async function runDurableWorker() {
               return {
                 stepId: step.stepId, position: step.position, type: step.type, title: step.title,
                 status: step.status === "skipped" ? "skipped" : "succeeded",
-                message: step.message,
+                message: String(redactSensitiveData(step.message, executionSecrets)),
               };
             }),
           };
@@ -569,7 +569,7 @@ export async function runDurableWorker() {
             p_job_id: job.id, p_lease_token: job.lease_token,
             p_step_id: step.stepId, p_position: step.position,
             p_status: step.status === "skipped" ? "skipped" : step.status === "failed" ? "failed" : "succeeded",
-            p_input: {}, p_output: { message: step.message },
+            p_input: {}, p_output: { message: String(redactSensitiveData(step.message, executionSecrets)) },
           });
           if (checkpointError) throw new Error("CHECKPOINT_WRITE_FAILED");
         }
@@ -581,7 +581,7 @@ export async function runDurableWorker() {
         position: step.position, step_type: step.type, title: step.title,
         status: step.status === "succeeded" ? (live ? "executed" : "simulated") : step.status,
         result: step.status === "failed" ? { error: step.message } : {
-          message: step.message,
+          message: String(redactSensitiveData(step.message, executionSecrets)),
           ...(live && step.output !== undefined ? { output: boundedOutput(step.output, executionSecrets) } : {}),
         },
       }));
