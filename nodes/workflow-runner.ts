@@ -124,6 +124,13 @@ export async function executeRegisteredWorkflow(args: {
         const position = ++checkpointPosition;
         await args.onStepStart?.(checkpointStep, position, validatedInput);
         if (args.dryRun) {
+          // Switch / Route is deterministic and side-effect-free, so evaluate it
+          // during validation to predict branch selection without running providers.
+          if (step.nodeId === "logic" && step.operationId === "switch") {
+            const output = operation.outputSchema.parse(await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput));
+            await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated", output });
+            return { simulated: true as const, output };
+          }
           await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated" });
           return { simulated: true as const };
         }
@@ -165,7 +172,15 @@ export async function executeRegisteredWorkflow(args: {
         continue;
       }
       const once = await executeOnce({});
-      if (once.simulated) { results.push({ stepId: step.id, status: "simulated" }); continue; }
+      if (once.simulated) {
+        if ("output" in once) {
+          outputs[step.id] = once.output;
+          results.push({ stepId: step.id, status: "simulated", output: once.output });
+        } else {
+          results.push({ stepId: step.id, status: "simulated" });
+        }
+        continue;
+      }
       outputs[step.id] = once.output;
       results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
       if (step.nodeId === "wait" && step.operationId === "delay" && once.output && typeof once.output === "object" && typeof (once.output as Record<string, unknown>).resumeAt === "string") {
