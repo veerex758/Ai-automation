@@ -28,13 +28,11 @@ const knownProductionHosts = new Set([
   "ai-automation-veerex-org.vercel.app",
   "ai-automation-git-main-veerex-org.vercel.app",
 ]);
-const explicitlyApprovedPreviewHosts = new Set([
-  "ai-automation-3oo2aepz3-veerex-org.vercel.app",
-]);
+// Require a target hostname that clearly identifies a staging/preview deployment.
+// The exact URL is supplied by the protected GitHub staging environment, never hard-coded.
 const identifiesNonProduction = host.includes("staging")
   || host.includes("preview")
-  || host.includes("-git-")
-  || explicitlyApprovedPreviewHosts.has(host);
+  || (host.includes("-git-") && !host.includes("-git-main-"));
 
 if (knownProductionHosts.has(host) || !identifiesNonProduction) {
   console.error("Refusing to run smoke tests: hostname must clearly identify a staging or preview deployment.");
