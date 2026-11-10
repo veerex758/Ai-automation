@@ -467,9 +467,9 @@ test("IF existence conditions accept absent payload fields without failing refer
   assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "skipped", "succeeded"]);
 });
 
-test("Switch / Route executes only the selected branch and predicts it in dry-run", async () => {
+test("Switch node predicts branch selection during dry-run without running downstream providers", async () => {
   const steps = [
-    { id: "routeLead", nodeId: "logic", operationId: "switch", kind: "action" as const,
+    { id: "routeLead", nodeId: "switch", operationId: "select_route", kind: "action" as const,
       input: { value: "qualified", cases: [{ value: "new", route: "new_lead" }, { value: "qualified", route: "qualified_lead" }], defaultRoute: "review" } },
     { id: "newPath", nodeId: "data", operationId: "format_text", kind: "action" as const,
       input: { template: "new lead", data: {} }, branchPaths: [[{ fromStepId: "routeLead", route: "new_lead" }]] },
