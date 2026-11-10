@@ -368,3 +368,26 @@ test("Data mapping and text formatting support nested values", async () => {
     data: { customer: { name: "Ada" }, id: 7 },
   }), { text: "Hello Ada (#7)" });
 });
+
+test("Logic Switch routes to the first strict-equality case and validates route names", async () => {
+  const operation = findOperation("logic", "switch", "action");
+  assert.ok(operation);
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} };
+  assert.deepEqual(await operation.run(context, {
+    value: "qualified",
+    cases: [{ value: "new", route: "new_lead" }, { value: "qualified", route: "qualified_lead" }],
+    defaultRoute: "review",
+  }), { route: "qualified_lead", matched: true, matchedIndex: 1 });
+  assert.deepEqual(await operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "new_lead" }], defaultRoute: "review",
+  }), { route: "review", matched: false });
+  await assert.rejects(() => operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "same" }, { value: "qualified", route: "same" }],
+  }), /LOGIC_SWITCH_DUPLICATE_ROUTE/);
+  await assert.rejects(() => operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "new_lead" }], defaultRoute: "new_lead",
+  }), /LOGIC_SWITCH_DEFAULT_ROUTE_CONFLICT/);
+  await assert.rejects(() => operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "new_lead" }],
+  }), /LOGIC_SWITCH_NO_MATCH/);
+});
