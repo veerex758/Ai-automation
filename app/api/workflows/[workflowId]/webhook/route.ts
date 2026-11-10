@@ -118,8 +118,8 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     if (workflowError) throw workflowError;
     if (!workflow) return jsonError("Workflow not found or you do not have access to it.", 404);
 
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
     if (!serviceRoleKey || !supabaseUrl) return jsonError("Secure webhook provisioning is not configured on this environment.", 503);
     const serviceClient = createSupabaseClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
