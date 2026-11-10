@@ -3,7 +3,29 @@ import { isIP } from "node:net";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 
-function isPublicAddress(address: string): boolean {
+function isUnsafeIpv6Address(address: string): boolean {
+  const value = address.toLowerCase().split("%")[0];
+  const mappedDotted = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mappedDotted) return !isPublicAddress(mappedDotted[1]);
+  const mappedHex = value.match(/::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex) {
+    const high = Number.parseInt(mappedHex[1], 16);
+    const low = Number.parseInt(mappedHex[2], 16);
+    const ipv4 = [high >> 8, high & 255, low >> 8, low & 255].join(".");
+    return !isPublicAddress(ipv4);
+  }
+
+  // Only global-unicast 2000::/3 is eligible. Reject special-purpose and
+  // transition ranges inside that aggregate rather than assuming public reachability.
+  const firstHextet = Number.parseInt(value.split(":")[0] || "0", 16);
+  if (!Number.isFinite(firstHextet) || firstHextet < 0x2000 || firstHextet > 0x3fff) return true;
+  return value.startsWith("2001:0:") || value.startsWith("2001:2:") ||
+    value.startsWith("2001:10:") || value.startsWith("2001:20:") ||
+    value.startsWith("2001:db8:") || value.startsWith("2002:") || value.startsWith("3fff:") ||
+    value.startsWith("64:ff9b:");
+}
+
+export function isPublicAddress(address: string): boolean {
   if (isIP(address) === 4) {
     const p = address.split(".").map(Number);
     const [a, b, c] = p;
@@ -14,13 +36,7 @@ function isPublicAddress(address: string): boolean {
       (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
       (a === 203 && b === 0 && c === 113));
   }
-  if (isIP(address) === 6) {
-    const ip = address.toLowerCase().split("%")[0];
-    // Only globally-routable 2000::/3 addresses; reject documentation and transition ranges.
-    return ip.startsWith("2") || ip.startsWith("3")
-      ? !ip.startsWith("2001:db8:") && !ip.startsWith("2001:10:") && !ip.startsWith("2002:") && !ip.startsWith("3fff:")
-      : false;
-  }
+  if (isIP(address) === 6) return !isUnsafeIpv6Address(address);
   return false;
 }
 
