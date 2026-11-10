@@ -134,7 +134,7 @@ export default function WorkflowBuilderPage() {
 
   function connectNodes(source: string, target: string, label: "true" | "false" | "next") {
     if (source === target) return;
-    const duplicate = (definition.edges ?? []).some((edge) => edge.source === source && edge.target === target);
+    const duplicate = (definition.edges ?? []).some((edge) => edge.source === source && edge.target === target && edge.label === label);
     if (duplicate) { setNotice("Those nodes are already connected."); setConnectingFrom(null); return; }
     const sourceNode = definition.nodes.find((node) => node.id === source);
     if (!sourceNode || (label !== "next" && sourceNode.type !== "condition")) return;

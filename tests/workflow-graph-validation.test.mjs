@@ -76,3 +76,18 @@ test("rejects condition nodes without both branches and non-condition fan-out", 
   });
   assert.equal(actionFanOut.error, "Only condition steps can have multiple outgoing connections.");
 });
+
+
+test("condition true and false routes may converge on the same destination", () => {
+  const result = validateDefinition({
+    version: 1,
+    nodes: [trigger, condition, action("shared")],
+    edges: [
+      { id: "start-check", source: "start", target: "check", label: "next" },
+      { id: "check-true", source: "check", target: "shared", label: "true" },
+      { id: "check-false", source: "check", target: "shared", label: "false" }
+    ]
+  });
+  assert.ok(result.definition, result.error);
+  assert.equal(result.definition.edges.filter((edge) => edge.source === "check").length, 2);
+});
