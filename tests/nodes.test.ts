@@ -372,3 +372,17 @@ test("Data mapping and text formatting support nested values", async () => {
     data: { customer: { name: "Ada" }, id: 7 },
   }), { text: "Hello Ada (#7)" });
 });
+
+test("Switch node returns the first matching route and uses its default otherwise", async () => {
+  const operation = findOperation("switch", "select_route", "action");
+  assert.ok(operation);
+  const context = { credentials: {}, logger: { info() {}, error() {} }, http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {} };
+  assert.deepEqual(await operation.run(context, {
+    value: "qualified",
+    cases: [{ value: "new", route: "new_lead" }, { value: "qualified", route: "qualified_lead" }],
+    defaultRoute: "review",
+  }), { route: "qualified_lead", matchedCase: 1 });
+  assert.deepEqual(await operation.run(context, {
+    value: "unknown", cases: [{ value: "new", route: "new_lead" }], defaultRoute: "review",
+  }), { route: "review", matchedCase: null });
+});
