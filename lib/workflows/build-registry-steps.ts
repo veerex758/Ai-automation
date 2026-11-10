@@ -2,7 +2,7 @@ import type { RegisteredWorkflowStep } from "../../nodes/workflow-runner";
 
 type BuilderNode = {
   id: string; type: "trigger" | "action" | "condition"; title: string;
-  settings: Record<string, string>; registryNodeId?: string; registryOperationId?: string;
+  settings: Record<string, string | undefined>; registryNodeId?: string; registryOperationId?: string;
   registryInput?: Record<string, unknown>;
 };
 type BuilderEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
