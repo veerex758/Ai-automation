@@ -130,7 +130,7 @@ export default function BillingPage() {
         const unlimited = limit == null;
         const percent = unlimited || limit <= 0 ? 0 : Math.min(100, Math.round(used / limit * 100));
         return <div className="usage-row" key={metric.key}>
-          <div className="usage-label"><strong>{metric.label}</strong><span>{used.toLocaleString()} / {limit == null ? "Unlimited" : limit.toLocaleString()}</span></div>
+          <div className="usage-label"><strong>{metric.label}</strong><span>{used.toLocaleString()} / {limit == null ? "Custom limit" : limit.toLocaleString()}</span></div>
           <div className="usage-track" aria-label={`${metric.label}: ${used} of ${unlimited ? "unlimited" : limit}`}>
             <span style={{ width: `${percent}%` }} />
           </div>
