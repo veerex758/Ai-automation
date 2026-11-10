@@ -115,7 +115,8 @@ export default function AgentsPage() {
     finally { setBusy(false); }
   }
 
-  const visible = agents.filter(agent => (agent.name + " " + agent.description).toLowerCase().includes(search.toLowerCase()) && (filter === "all" || agent.status === filter));
+  const statusFilter = filter;
+  const filteredAgents = agents.filter(agent => (agent.name + " " + agent.description).toLowerCase().includes(search.toLowerCase()) && (statusFilter === "all" || agent.status === statusFilter));
 
   return <main className="app-shell agents-shell">
     <aside className="sidebar">
@@ -135,7 +136,7 @@ export default function AgentsPage() {
         <div className="agents-grid">
           <section className="agent-list-panel"><h2>Agent library <span>{agents.length}</span></h2>
             <div className="agent-list-tools"><input aria-label="Search agents" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}/><select aria-label="Filter status" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All</option><option value="ready">Ready</option><option value="draft">Draft</option><option value="paused">Paused</option></select></div>
-            {loading ? <p role="status">Loading agents…</p> : visible.length === 0 ? <div className="agent-empty">{agents.length ? "No agents match your filters." : "No agents yet. Create your first agent to get started."}</div> : visible.map(agent => <button type="button" className={selected?.id === agent.id ? "agent-row active" : "agent-row"} key={agent.id} onClick={() => selectAgent(agent)}><span className="agent-avatar">✺</span><span><strong>{agent.name}</strong><small>{agent.model_provider} · {agent.status}</small></span><span aria-hidden="true">›</span></button>)}
+            {loading ? <p role="status">Loading agents…</p> : filteredAgents.length === 0 ? <div className="agent-empty">{agents.length ? "No agents match your filters." : "No agents yet. Create your first agent to get started."}</div> : filteredAgents.map(agent => <button type="button" className={selected?.id === agent.id ? "agent-row active" : "agent-row"} key={agent.id} onClick={() => selectAgent(agent)}><span className="agent-avatar">✺</span><span><strong>{agent.name}</strong><small>{agent.model_provider} · {agent.status}</small></span><span aria-hidden="true">›</span></button>)}
             {!loading && error && <button type="button" className="secondary" onClick={() => void load()}>Retry loading</button>}
           </section>
           <section className="agent-editor"><h2>{creating ? "New agent" : selected ? "Agent configuration" : "Choose an agent"}</h2>
