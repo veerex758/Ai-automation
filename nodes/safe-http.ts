@@ -35,7 +35,7 @@ function isPublicAddress(address: string): boolean {
     if (!Number.isFinite(firstHextet) || firstHextet < 0x2000 || firstHextet > 0x3fff) return false;
 
     // Reject special-purpose and transition ranges inside 2000::/3.
-    if (ip.startsWith("2001:0:") || ip.startsWith("2001:2:") ||
+    if (ip.startsWith("2001::") || ip.startsWith("2001:0:") || ip.startsWith("2001:2:") ||
         ip.startsWith("2001:10:") || ip.startsWith("2001:20:") ||
         ip.startsWith("2001:db8:") || ip.startsWith("2002:") ||
         ip.startsWith("3fff:")) return false;
