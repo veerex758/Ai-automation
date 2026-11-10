@@ -5,7 +5,7 @@ import { request as httpsRequest } from "node:https";
 
 function isUnsafeIpv6Address(address: string): boolean {
   const value = address.toLowerCase().split("%")[0];
-  const mappedDotted = value.match(/::ffff:(\\d+\\.\\d+\\.\\d+\\.\\d+)$/);
+  const mappedDotted = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (mappedDotted) return !isPublicAddress(mappedDotted[1]);
   const mappedHex = value.match(/::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
   if (mappedHex) {
@@ -21,7 +21,7 @@ function isUnsafeIpv6Address(address: string): boolean {
   if (!Number.isFinite(firstHextet) || firstHextet < 0x2000 || firstHextet > 0x3fff) return true;
   return value.startsWith("2001:0:") || value.startsWith("2001:2:") ||
     value.startsWith("2001:10:") || value.startsWith("2001:20:") ||
-    value.startsWith("2001:db8:") || value.startsWith("2002:") ||
+    value.startsWith("2001:db8:") || value.startsWith("2002:") || value.startsWith("3fff:") ||
     value.startsWith("64:ff9b:");
 }
 
