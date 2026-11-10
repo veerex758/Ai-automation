@@ -466,3 +466,22 @@ test("IF existence conditions accept absent payload fields without failing refer
   assert.equal(result.status, "succeeded");
   assert.deepEqual(result.steps.map((step) => step.status), ["succeeded", "succeeded", "skipped", "succeeded"]);
 });
+
+test("Switch / Route executes only the selected branch and predicts it in dry-run", async () => {
+  const steps = [
+    { id: "routeLead", nodeId: "logic", operationId: "switch", kind: "action" as const,
+      input: { value: "qualified", cases: [{ value: "new", route: "new_lead" }, { value: "qualified", route: "qualified_lead" }], defaultRoute: "review" } },
+    { id: "newPath", nodeId: "data", operationId: "format_text", kind: "action" as const,
+      input: { template: "new lead", data: {} }, branchPaths: [[{ fromStepId: "routeLead", route: "new_lead" }]] },
+    { id: "qualifiedPath", nodeId: "data", operationId: "format_text", kind: "action" as const,
+      input: { template: "qualified lead", data: {} }, branchPaths: [[{ fromStepId: "routeLead", route: "qualified_lead" }]] },
+  ];
+  const dry = await executeRegisteredWorkflow({ steps, context, dryRun: true });
+  assert.equal(dry.status, "succeeded");
+  assert.equal((dry.outputs.routeLead as { route: string }).route, "qualified_lead");
+  assert.deepEqual(dry.steps.map(step => step.status), ["simulated", "skipped", "simulated"]);
+  const live = await executeRegisteredWorkflow({ steps, context, dryRun: false });
+  assert.equal(live.status, "succeeded");
+  assert.deepEqual(live.steps.map(step => step.status), ["succeeded", "skipped", "succeeded"]);
+  assert.equal((live.outputs.qualifiedPath as { text: string }).text, "qualified lead");
+});
