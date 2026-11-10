@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaidPlan } from "@/lib/billing/paystack";
 export const dynamic = "force-dynamic";
 const planCatalog = [
@@ -18,7 +17,7 @@ export async function GET() {
  const {data:entitlement,error:entitlementError}=await supabase.rpc("get_workspace_entitlements",{p_workspace_id:workspace.id});
  if(entitlementError)return NextResponse.json({error:"Billing entitlements are not available yet. Apply the Phase 5 migration."},{status:503,headers:{"Cache-Control":"private,no-store"}});
  const {data:subscription}=await supabase.from("workspace_subscriptions").select("plan_key,status,current_period_start,current_period_end,cancel_at_period_end,billing_provider").eq("workspace_id",workspace.id).maybeSingle();
- const admin=createAdminClient(),{data:payments}=await admin.from("billing_payments").select("id,reference,plan_slug,amount_minor,currency,status,paid_at,created_at").eq("workspace_id",workspace.id).order("created_at",{ascending:false}).limit(20);
+ const {data:payments}=await supabase.from("billing_payments").select("id,reference,plan_slug,amount_minor,currency,status,paid_at,created_at").eq("workspace_id",workspace.id).order("created_at",{ascending:false}).limit(20);
  const configuredPlans=planCatalog.map(p=>({...p,checkout:p.checkout.map(slug=>{const plan=getPaidPlan(slug);return plan?{slug:plan.slug,amount_minor:plan.amountMinor,currency:plan.currency}:null}).filter(Boolean)}));
  return NextResponse.json({workspace_id:workspace.id,entitlements:{...entitlement,billing:{...(entitlement.billing??{}),checkout_enabled:Boolean(process.env.PAYSTACK_SECRET_KEY&&configuredPlans.some(p=>p.checkout.length))}},subscription:subscription??{plan_key:"free",status:"active",billing_provider:null},payments:payments??[],plans:configuredPlans},{headers:{"Cache-Control":"private,no-store"}});
 }
