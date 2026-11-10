@@ -9,8 +9,7 @@ type BuilderEdge = { id: string; source: string; target: string; label: "true" |
 type BuilderDefinition = { nodes: BuilderNode[]; edges?: BuilderEdge[] };
 
 const conditionOperators: Record<string, string> = {
-  equals: "equals", not_equals: "not_equals", contains: "contains",
-  greater_than: "greater_than", less_than: "less_than", is_set: "exists", is_empty: "is_empty",
+  equals: "equals", contains: "contains", greater_than: "greater_than", less_than: "less_than", is_set: "exists",
 };
 
 function actionFor(node: BuilderNode) {
@@ -84,13 +83,15 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
     } else if (node.type === "condition") {
       const field = node.settings.field?.trim() ?? "";
       if (!field) throw new Error("Configure the field for condition: " + node.title);
-      const reference = field.startsWith("{{") && field.endsWith("}}") ? field : "{{" + trigger.id + ".payload." + field + "}}";
+      const reference = field.startsWith("{{") && field.endsWith("}}") ? field : field.startsWith(trigger.id + ".") ? "{{" + field + "}}" : "{{" + trigger.id + "." + (field.startsWith("payload.") ? field : "payload." + field) + "}}";
       if (!/^\{\{[a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})+\}\}$/.test(reference)) throw new Error("Use a valid field path or step expression for condition: " + node.title);
-      const operator = conditionOperators[node.settings.operator ?? "equals"] ?? "equals";
+      const rawOperator = node.settings.operator ?? "equals";
+      const operator = conditionOperators[rawOperator];
+      if (!operator) throw new Error("Choose a supported condition operator for: " + node.title);
       const rawValue = node.settings.value ?? "";
       const compareTo = ["greater_than", "less_than"].includes(operator) && rawValue.trim() !== "" && Number.isFinite(Number(rawValue)) ? Number(rawValue) : rawValue;
       nodeId = "if"; operationId = "evaluate"; kind = "action";
-      input = { value: reference, operator, ...(operator === "exists" || operator === "is_empty" ? {} : { compareTo }) };
+      input = { value: reference, operator, ...(operator === "exists" ? {} : { compareTo }) };
     } else {
       const action = actionFor(node);
       nodeId = action.nodeId; operationId = action.operationId; kind = "action"; input = action.input;
