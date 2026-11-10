@@ -1,0 +1,119 @@
+/* Aivanta premium neutral design system
+   Warm porcelain, graphite, deep petrol and restrained antique brass.
+   Loaded after page styles so the same system applies across marketing, dashboard,
+   builder, connections, settings and workflow surfaces. */
+:root {
+  color-scheme: light;
+  --aivanta-bg: #f4f2ed;
+  --aivanta-surface: #fffefa;
+  --aivanta-surface-soft: #eeece5;
+  --aivanta-ink: #202a29;
+  --aivanta-muted: #687370;
+  --aivanta-line: #e1ded5;
+  --aivanta-petrol: #244c49;
+  --aivanta-petrol-hover: #1c3e3b;
+  --aivanta-brass: #a98555;
+  --aivanta-brass-soft: #f2eadf;
+  --aivanta-success: #527365;
+  --aivanta-warning: #987344;
+  --aivanta-danger: #a35c51;
+  --aivanta-shadow: 0 12px 34px rgba(32, 42, 41, .065);
+  --aivanta-focus: rgba(169, 133, 85, .42);
+}
+html, body { background: var(--aivanta-bg); color: var(--aivanta-ink); }
+body { accent-color: var(--aivanta-petrol); }
+::selection { background: #e8ddca; color: var(--aivanta-ink); }
+:where(a,button,input,textarea,select,[tabindex]):focus-visible {
+  outline: 2px solid var(--aivanta-brass) !important;
+  outline-offset: 3px;
+}
+
+/* Shared navigation, cards, borders and page surfaces */
+.nav, .dashboard-topbar, .builder-topbar { background: rgba(255,254,250,.94) !important; border-color: var(--aivanta-line) !important; }
+.nav-links, .breadcrumbs, .builder-breadcrumb { color: var(--aivanta-muted) !important; }
+.nav-cta, .subtle-button, .builder-secondary-button, .icon-button {
+  color: var(--aivanta-ink) !important; background: var(--aivanta-surface) !important; border-color: var(--aivanta-line) !important;
+}
+.workflow-card, .capability-card, .security-badge, .connection-card, .connections-list,
+.workspace-integration-manager, .stat-card, .workflow-table, .canvas-panel, .step-settings,
+.create-modal, .marketing-sub-card {
+  background: var(--aivanta-surface) !important; border-color: var(--aivanta-line) !important;
+  box-shadow: var(--aivanta-shadow);
+}
+.trust-strip, .table-header, .flow-canvas, .workspace-integration-form,
+.settings-kind, .help-card, .dashboard-footnote, .notice-bar {
+  background-color: var(--aivanta-surface-soft) !important; border-color: var(--aivanta-line) !important;
+}
+.hero-bottom-line, .footer, .workflow-meta, .canvas-toolbar, .canvas-foot { border-color: var(--aivanta-line) !important; }
+
+/* Primary actions: deep petrol, never neon lime */
+.button-dark, .create-button, .connection-button, .workspace-integration-form button,
+.builder-primary-button, .reference-primary, .nav-cta-primary {
+  background: var(--aivanta-petrol) !important; border-color: var(--aivanta-petrol) !important; color: #fffefa !important;
+}
+.button-dark:hover, .create-button:hover, .connection-button:hover,
+.workspace-integration-form button:not(:disabled):hover, .builder-primary-button:hover {
+  background: var(--aivanta-petrol-hover) !important; border-color: var(--aivanta-petrol-hover) !important;
+}
+.button-light { background: var(--aivanta-brass-soft) !important; color: var(--aivanta-ink) !important; }
+.text-link, .capability-card>a, .connections-top a, .builder-breadcrumb a { color: var(--aivanta-petrol) !important; }
+.nav-links a:hover, .text-link:hover, .builder-breadcrumb a:hover { color: var(--aivanta-brass) !important; }
+
+/* Dashboard and builder navigation */
+.app-shell, .builder-shell { background: var(--aivanta-bg) !important; color: var(--aivanta-ink) !important; }
+.sidebar { background: #263432 !important; border-color: #344441 !important; color: #f4f2ed !important; }
+.sidebar-label, .workspace-copy small, .profile-button small { color: #b5c0ba !important; }
+.side-link { color: #c3ccc6 !important; }
+.side-link:hover { background: rgba(255,254,250,.08) !important; color: #fffefa !important; }
+.side-link.selected { background: rgba(255,254,250,.14) !important; color: #fffefa !important; }
+.workspace-switch { border-color: rgba(255,255,255,.16) !important; }
+.workspace-avatar, .profile-avatar, .top-avatar { background: #e8ddca !important; color: #344441 !important; }
+.builder-sidebar { background: #263432 !important; color: #f4f2ed !important; }
+.builder-workspace { border-color: rgba(255,255,255,.17) !important; }
+.builder-workspace>span, .builder-sidebar-bottom, .builder-help-mark { background: #344744 !important; color: #e8ddca !important; }
+.builder-nav-label { color: #b5c0ba !important; }
+.builder-nav-link { color: #c3ccc6 !important; }
+.builder-nav-link.active, .builder-nav-link:hover { background: rgba(255,254,250,.12) !important; color: #fffefa !important; }
+.builder-name-input, .welcome-row h1, .stat-number { color: var(--aivanta-ink) !important; }
+.welcome-row h1 span { color: var(--aivanta-brass) !important; }
+.environment-badge { color: var(--aivanta-muted) !important; border-color: var(--aivanta-line) !important; background: var(--aivanta-surface) !important; }
+.filter-tab.active-filter { color: var(--aivanta-petrol) !important; border-color: var(--aivanta-line) !important; }
+.filter-tab>span, .stat-symbol, .workflow-app-icon.lime, .workspace-avatar {
+  background: var(--aivanta-brass-soft) !important; color: var(--aivanta-brass) !important;
+}
+
+/* Builder canvas and settings */
+.builder-workspace-grid .canvas-panel, .builder-workspace-grid .step-settings { border-color: var(--aivanta-line) !important; }
+.canvas-grid { background-image: radial-gradient(#d8d2c7 1px, transparent 1px) !important; }
+.builder-node { border-color: var(--aivanta-line) !important; box-shadow: 0 4px 14px rgba(32,42,41,.045) !important; }
+.builder-node:hover, .builder-node.selected-node { border-color: #bca17b !important; box-shadow: 0 0 0 3px var(--aivanta-brass-soft) !important; }
+.node-trigger, .settings-icon, .capability-icon, .security-mark { background: var(--aivanta-brass-soft) !important; color: var(--aivanta-brass) !important; }
+.node-action { background: #e8efed !important; color: var(--aivanta-petrol) !important; }
+.node-condition { background: #f0ece5 !important; color: #89745c !important; }
+.canvas-add-node { background: #f8f6f1 !important; border-color: #cfc1ac !important; color: var(--aivanta-petrol) !important; }
+.settings-input:focus, .settings-textarea:focus { border-color: var(--aivanta-brass) !important; box-shadow: 0 0 0 3px var(--aivanta-brass-soft) !important; }
+
+/* Connections and status feedback */
+.connections-page { color: var(--aivanta-ink) !important; }
+.connections-top span, .connections-eyebrow, .dash-eyebrow, .builder-eyebrow { color: var(--aivanta-brass) !important; }
+.connections-hero p, .connection-card-copy p, .connections-list-heading p,
+.connections-empty, .connections-footnote, .workspace-integration-form>p { color: var(--aivanta-muted) !important; }
+.connection-button, .workspace-integration-form button { background: var(--aivanta-petrol) !important; }
+.workspace-integration-form { background: #f8f6f1 !important; border-color: var(--aivanta-line) !important; }
+.workspace-integration-form select, .workspace-secret-field input,
+.settings-input, .settings-textarea, .search-box { background: var(--aivanta-surface) !important; color: var(--aivanta-ink) !important; border-color: var(--aivanta-line) !important; }
+.connections-notice, .builder-notice, .notice-bar { background: #edf2ed !important; color: #456457 !important; border-color: #d8e2da !important; }
+.connections-error { background: #f7eeeb !important; color: var(--aivanta-danger) !important; }
+.connection-status, .status-active { color: var(--aivanta-success) !important; }
+.status-active { background: #edf2ed !important; }
+.status-draft { background: #eeece7 !important; color: #747a74 !important; }
+.status-paused { background: #f4eee5 !important; color: var(--aivanta-warning) !important; }
+
+/* Marketing accents and decorative elements */
+.brand-period, h1 span, .section-heading h2 em { color: var(--aivanta-brass) !important; }
+.pulse, .environment-badge i { background: var(--aivanta-brass) !important; box-shadow: 0 0 0 4px var(--aivanta-brass-soft) !important; }
+.preview-glow { background: radial-gradient(circle, rgba(169,133,85,.13) 0%, rgba(169,133,85,.055) 45%, transparent 72%) !important; }
+.dark-section, .cta-card { background: #263432 !important; }
+.dark-inner h2 span, .principle-arrow { color: #d5bd99 !important; }
+.cta-decoration { color: rgba(232,221,202,.055) !important; }
+.capability-card:hover { border-color: #c6b394 !important; }
