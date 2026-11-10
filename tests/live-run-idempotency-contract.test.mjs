@@ -54,7 +54,7 @@ test("handles concurrent unique-key collisions before a second provider executio
   const collisionBlock = route.slice(collision, providerExecution);
   assert.match(collisionBlock, /\.eq\(["']idempotency_key["'],\s*idempotencyKey\)/);
   assert.match(collisionBlock, /\.eq\(["']created_by["'],\s*user\.id\)/);
-  assert.match(collisionBlock, /\.eq\(["']workflow_id["'],\s*workflowId\)/);
+  assert.match(collisionBlock, /\.eq\(["']workflow_id["'],\s*workflow\.id\)/);
   assert.match(collisionBlock, /duplicate:\s*true/);
 });
 
