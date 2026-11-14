@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
-import { findOperation, getPublicNodeCatalog } from "@/nodes/registry";
+import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (usageError) return jsonResponse({ error: "Usage metering unavailable. Apply Phase 5 billing migration." }, { status: 503 });
     if (!usage?.allowed) return jsonResponse({ error: "Monthly AI generation limit reached. Upgrade your plan.", entitlement: usage }, { status: 402 });
 
-    const nodeCatalog = getPublicNodeCatalog();
+    const nodeCatalog = getExecutableNodeCatalog();
     const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog, mode: "registry" });
     const registrySteps = result.registrySteps;
     if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return jsonResponse({ error: "The generated plan did not pass registry validation." }, { status: 422 });
