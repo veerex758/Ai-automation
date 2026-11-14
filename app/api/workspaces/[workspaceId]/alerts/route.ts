@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 type Context = { params: Promise<{ workspaceId: string }> };
@@ -9,13 +10,7 @@ async function authorize(workspaceId: string) {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { response: NextResponse.json({ error: "Authentication required." }, { status: 401, headers }) };
-  const [{ data: workspace, error: we }, { data: member, error: me }] = await Promise.all([
-    supabase.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle(),
-    supabase.from("workspace_members").select("role").eq("workspace_id", workspaceId).eq("user_id", user.id).maybeSingle(),
-  ]);
-  if (we || me) return { response: NextResponse.json({ error: "Could not verify workspace access." }, { status: 503, headers }) };
-  const role = workspace?.owner_id === user.id ? "owner" : member?.role;
-  if (!workspace || !role || !["owner", "admin"].includes(role)) return { response: NextResponse.json({ error: "Workspace owner/admin access required." }, { status: 403, headers }) };
+  if (!(await hasWorkspacePermission(supabase, workspaceId, user.id, "operations.manage"))) return { response: NextResponse.json({ error: "Workspace operations.manage permission required." }, { status: 403, headers }) };
   return { user };
 }
 export async function GET(_request: Request, context: Context) {
