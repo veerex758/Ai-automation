@@ -34,7 +34,7 @@ select workflow_id,id,product_version_id from public.marketplace_installations w
 on conflict(workflow_id) do nothing;
 
 create or replace function public.marketplace_capture_installation_workflow_binding()
-returns trigger language plpgsql security definer set search_path=public,pg_temp as $
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
 declare existing_installation uuid;
 begin
  if new.workflow_id is null then return new; end if;
@@ -43,7 +43,7 @@ begin
  select installation_id into existing_installation from public.marketplace_installation_workflow_bindings where workflow_id=new.workflow_id;
  if existing_installation is distinct from new.id then raise exception 'marketplace_workflow_already_bound'; end if;
  return new;
-end $;
+end $$;
 drop trigger if exists marketplace_capture_installation_workflow_binding on public.marketplace_installations;
 create trigger marketplace_capture_installation_workflow_binding
  after insert or update of workflow_id,product_version_id on public.marketplace_installations
