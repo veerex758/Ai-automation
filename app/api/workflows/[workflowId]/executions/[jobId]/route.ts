@@ -79,7 +79,7 @@ export async function PATCH(
 
     const db = serviceClient();
     const { data, error } = await db.rpc("cancel_execution_job", {
-      p_job_id: jobId, p_workspace_id: workflow.workspace_id,
+      p_job_id: jobId, p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
     });
     if (error) throw error;
     if (data === "not_found") return NextResponse.json({ error: "Execution not found." }, { status: 404 });
