@@ -173,7 +173,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   ]).has(step.nodeId + "." + step.operationId)) return true;
   const providerPackProvider = providerPackLiveId(step);
   if (providerPackProvider) return isProviderLiveEnabled(providerPackProvider, process.env.AIVANTA_LIVE_INTEGRATIONS);
-  const provider = step.kind === "action" ? providerForStep(step) : null;
+  const provider = providerForStep(step);
   if (!provider) return false;
   // Every external provider, including OpenAI, Gemini, Resend and both Slack
   // actions, must have its own explicit server-side opt-in. Unknown paths fail closed.
