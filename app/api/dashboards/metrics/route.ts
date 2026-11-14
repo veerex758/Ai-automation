@@ -17,7 +17,7 @@ export async function GET() {
       supabase.from("workflow_runs").select("id",{count:"exact",head:true}).eq("workspace_id",workspace.id).gte("created_at",since).in("status",["succeeded","completed"]),
       supabase.from("workflow_runs").select("id",{count:"exact",head:true}).eq("workspace_id",workspace.id).gte("created_at",since).in("status",["failed","dead_letter"]),
       supabase.from("agents").select("id",{count:"exact",head:true}).eq("workspace_id",workspace.id),
-      supabase.from("workspace_integrations").select("id",{count:"exact",head:true}).eq("workspace_id",workspace.id)
+      supabase.from("workspace_integrations").select("id",{count:"exact",head:true}).eq("workspace_id",workspace.id).eq("status","connected").eq("last_test_status","passed")
     ]);
     const problem = [workflows.error,runs.error,succeeded.error,failed.error,agents.error,integrations.error].find(Boolean);
     if (problem) throw problem;
