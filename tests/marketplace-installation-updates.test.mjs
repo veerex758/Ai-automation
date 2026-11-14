@@ -61,3 +61,9 @@ test("Marketplace installation dry-run accepts the verified legacy artifact form
  assert.match(directRun,/runDryRun\(legacy\.definition, \{\}\)/);
  assert.match(directRun,/sideEffectsPerformed:false/);
 });
+
+test("version replacement and uninstall retire old schedules and webhook endpoints",()=>{
+ assert.match(migration,/update public\.workflow_schedules set enabled=false where workflow_id=i\.workflow_id/);
+ assert.match(migration,/update public\.webhook_endpoints set status='revoked' where workflow_id=i\.workflow_id/);
+ assert.match(migration,/update public\.workflow_schedules set enabled=false where workflow_id=w\.id/);
+});
