@@ -14,9 +14,9 @@ const definitions: ToolDefinition[] = [
     name: "workflow_list",
     description: "List workflows in the current workspace. Read-only.",
     parameters: {
-      type: "OBJECT",
+      type: "object",
       properties: {
-        status: { type: "STRING", enum: ["draft", "active", "paused", "archived"], description: "Optional workflow status filter." },
+        status: { type: "string", enum: ["draft", "active", "paused", "archived"], description: "Optional workflow status filter." },
       },
     },
   },
@@ -25,8 +25,8 @@ const definitions: ToolDefinition[] = [
     name: "workflow_get",
     description: "Read one workflow in the current workspace by its UUID. Read-only.",
     parameters: {
-      type: "OBJECT",
-      properties: { workflow_id: { type: "STRING", description: "Workflow UUID." } },
+      type: "object",
+      properties: { workflow_id: { type: "string", description: "Workflow UUID." } },
       required: ["workflow_id"],
     },
   },
@@ -34,7 +34,7 @@ const definitions: ToolDefinition[] = [
     id: "integrations.list",
     name: "integration_list",
     description: "List connected integrations and verification status for the current workspace. Never returns credentials or tokens.",
-    parameters: { type: "OBJECT", properties: {} },
+    parameters: { type: "object", properties: {} },
   },
 ];
 
