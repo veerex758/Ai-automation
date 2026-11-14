@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
+import { runDurableWorker } from "@/lib/workflows/durable-worker";
 import { decryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
 import { verifyWebhookSignature } from "@/lib/webhooks/verify-signature";
 import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
@@ -179,6 +180,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
     }).eq("id", receipt.id);
     if (receiptError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
+
+    after(async () => {
+      try { await runDurableWorker(); }
+      catch (error) {
+        console.error("[webhook-ingress] durable worker wake failed", {
+          code: error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "WORKER_WAKE_FAILED",
+        });
+      }
+    });
 
     return NextResponse.json({
       accepted: true, queued: true, duplicate: !claim.accepted,
