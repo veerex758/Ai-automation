@@ -179,7 +179,7 @@ begin
  if lower(trim(p_email))<>v_invite.email then return jsonb_build_object('accepted',false,'reason','email_mismatch'); end if;
  insert into public.workspace_members(workspace_id,user_id,role)
  values(v_invite.workspace_id,p_user_id,v_invite.role)
- on conflict(workspace_id,user_id) do update set role=excluded.role;
+ on conflict(workspace_id,user_id) do nothing;
  update public.workspace_invitations set status='accepted',accepted_at=now() where id=v_invite.id;
  return jsonb_build_object('accepted',true,'workspace_id',v_invite.workspace_id,'role',v_invite.role);
 end $$;
