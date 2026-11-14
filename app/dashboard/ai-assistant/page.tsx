@@ -101,7 +101,7 @@ export default function AIAssistantPage() {
 
   return <main className="app-shell ai-assistant-shell">
     <aside className="sidebar">
-      <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark"><img className="brand-logo" src="/rexnora-mark.svg" alt="" aria-hidden="true" /></span><span>Rexnora</span></Link>
+      <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
       <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></div>
       <div className="sidebar-label">WORKSPACE</div>
       <nav className="side-nav" aria-label="Workspace navigation">{[["Dashboard", "/dashboard", "▦"], ["Workflows", "/dashboard#workflows", "↗"], ["Integrations", "/dashboard/integrations", "⌘"], ["AI Agents", "/dashboard/ai-assistant", "✺"], ["Templates", "/dashboard/templates", "▧"], ["Analytics", "/dashboard/analytics", "▥"], ["Activity logs", "/dashboard/activity", "◷"], ["Billing", "/dashboard/billing", "◇"], ["Settings", "/dashboard/settings", "⚙"]].map(([label, href, icon]) => <Link key={label} href={href} className={label === "AI Agents" ? "side-link selected" : "side-link"}><span className="side-icon">{icon}</span>{label}</Link>)}</nav>
