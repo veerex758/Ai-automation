@@ -45,7 +45,7 @@ test("invalid branch sources and incomplete conditional branches are rejected", 
       { id: "e1", source: "start", target: "plain", label: "next" },
       { id: "e2", source: "plain", target: "branch", label: "true" },
     ],
-  }), /Only IF and Switch nodes/);
+  }), /Only IF nodes/);
   const condition = { id: "condition", type: "condition" as const, title: "Check", settings: { field: "{{start.payload.value}}", operator: "equals", value: "yes" } };
   assert.throws(() => buildRegistrySteps({
     nodes: [trigger, condition, action("yes")],
