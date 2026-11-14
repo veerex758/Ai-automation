@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -10,6 +11,7 @@ export async function GET() {
     const {data:{user},error:authError} = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({error:"Authentication required."},{status:401,headers});
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "dashboards.view"))) return NextResponse.json({ error: "Workspace dashboards.view permission required." }, { status: 403, headers });
     const since = new Date(Date.now()-30*86400000).toISOString();
     const [workflows,runs,succeeded,failed,agents,integrations] = await Promise.all([
       supabase.from("workflows").select("id",{count:"exact",head:true}).eq("workspace_id",workspace.id),
