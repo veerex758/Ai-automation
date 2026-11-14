@@ -279,7 +279,7 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
       });
       if (leaseError || renewed !== true) {
         leaseState.lost = true;
-        leaseState.controller.abort();
+        leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
         throw new Error("EXECUTION_LEASE_LOST");
       }
       const mapping = getWorkerOperationMapping({ nodeId, operationId, kind });
