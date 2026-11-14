@@ -194,7 +194,10 @@ export default function WorkflowBuilderPage() {
       // from its legacy placeholder definition. Build the canvas from those steps
       // so the user reviews the actual proposed workflow rather than one empty trigger.
       const steps = Array.isArray(payload.registrySteps) ? payload.registrySteps : [];
-      const generated: Definition = steps.length
+      const hasGeneratedGraph = Boolean(payload.definition?.nodes?.some((node) => node.registryNodeId));
+      const generated: Definition = hasGeneratedGraph
+        ? payload.definition as Definition
+        : steps.length
         ? {
             version: 1,
             nodes: steps.map((step, index) => {
