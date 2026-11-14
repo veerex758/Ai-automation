@@ -219,6 +219,15 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
   return null;
 }
 
+function safeWebhookTriggerOutput(job: Job): Record<string, unknown> {
+  const input = isRecord(job.payload?.input) ? job.payload.input : {};
+  return {
+    eventId: typeof input.eventId === "string" ? input.eventId : "omitted",
+    eventType: typeof input.eventType === "string" ? input.eventType : "omitted",
+    receivedAt: typeof input.receivedAt === "string" ? input.receivedAt : "omitted",
+    payloadSha256: typeof job.payload.payloadSha256 === "string" ? job.payload.payloadSha256 : "omitted",
+  };
+}
 function boundedOutput(value: unknown, knownSecrets: readonly string[] = []): Record<string, unknown> {
   const safe = redactSensitiveData(value, knownSecrets);
   if (Array.isArray(safe)) {
@@ -443,6 +452,11 @@ export async function runDurableWorker() {
             completedStepIds.push(checkpoint.step_id);
           }
         }
+        // Keep raw webhook data in the server-only job payload for wait/resume.
+        // Persist only stable event metadata and a payload hash in checkpoints.
+        if (source === "webhook" && steps[0]?.nodeId === "webhooks" && isRecord(job.payload?.input)) {
+          initialOutputs[steps[0].id] = job.payload.input;
+        }
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
           onWorkflowError: async (event) => {
@@ -468,7 +482,7 @@ export async function runDurableWorker() {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
               db, job, step, position, completed.status === "succeeded" ? "succeeded" : "skipped",
-              boundedOutput(completed.output, executionSecrets),
+              step.nodeId === "webhooks" ? safeWebhookTriggerOutput(job) : boundedOutput(completed.output, executionSecrets),
             ),
           } : {}),
         });
@@ -490,7 +504,7 @@ export async function runDurableWorker() {
             title: (steps[index]?.nodeId + "." + steps[index]?.operationId).slice(0, 80),
             status: step.status,
             message: step.error ?? (step.status === "succeeded" ? "Registered operation executed." : "Registered operation validated; no provider action was executed."),
-            output: step.output,
+            output: steps[index]?.nodeId === "webhooks" ? safeWebhookTriggerOutput(job) : step.output,
           })),
         };
       } else {
