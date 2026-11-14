@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
+import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
 
