@@ -1,6 +1,7 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
 import Link from "next/link";
+import CustomRoles from "./custom-roles";
 import "./workspaces.css";
 type Workspace={id:string;name:string;owner_id:string;created_at:string};
 type Member={user_id:string;email:string|null;role:string;joined_at:string};
@@ -76,6 +77,7 @@ export default function WorkspacesPage(){
    {members.map(m=><article className="workspace-member" key={m.user_id}><div><strong>{m.email||m.user_id}</strong><small>Joined {new Date(m.joined_at).toLocaleDateString()}</small></div>{m.role==="owner"?<span className="workspace-current">Owner</span>:<><select value={m.role} onChange={e=>void updateRole(m.user_id,e.target.value)}><option value="member">Member</option><option value="admin">Administrator</option></select><button onClick={()=>void removeMember(m.user_id)}>Remove</button></>}</article>)}
    {!members.length&&<p>No members loaded. Select a workspace where you have owner/admin access.</p>}
   </section>
+  {active&&<CustomRoles workspaceId={active} />}
   <section className="workspace-admin-panel workspace-team-panel"><h2>Pending invitations</h2>{invitations.map(i=><article className="workspace-member" key={i.id}><div><strong>{i.email}</strong><small>{i.role} · Expires {new Date(i.expires_at).toLocaleDateString()}</small></div><span className="workspace-current">{i.status}</span>{i.status==="pending"&&<button onClick={()=>void revokeInvitation(i.id)}>Revoke</button>}</article>)}{!invitations.length&&<p>No invitations for this workspace.</p>}</section>
   <section className="workspace-admin-panel workspace-team-panel"><h2>Security settings</h2><p>Control who can invite teammates. Live external actions continue to require the existing approval safeguards.</p><label className="workspace-security-toggle"><span><strong>Allow administrators to invite members</strong><small>When disabled, only the workspace owner can create invitations.</small></span><input type="checkbox" checked={allowInvites} disabled={workspaces.find(w=>w.id===active)?.owner_id!==currentUserId} onChange={e=>{setAllowInvites(e.target.checked);setSecurityDirty(true);}}/></label><div className="workspace-security-policy"><strong>Approval required for live external actions</strong><span>Always on · enforced by execution policy</span></div><button onClick={()=>void saveSecurity()} disabled={!securityDirty||busy||workspaces.find(w=>w.id===active)?.owner_id!==currentUserId}>Save security settings</button></section>
   {workspaces.find(w=>w.id===active)?.owner_id===currentUserId&&<section className="workspace-admin-panel workspace-team-panel"><h2>Transfer ownership</h2><p>Ownership transfer is immediate and audited. The previous owner becomes an administrator.</p><label>New workspace owner<select value={newOwner} onChange={e=>setNewOwner(e.target.value)}><option value="">Choose an existing member</option>{members.filter(m=>m.role!=="owner").map(m=><option key={m.user_id} value={m.user_id}>{m.email||m.user_id}</option>)}</select></label><button onClick={()=>void transferOwnership()} disabled={busy||!newOwner}>Transfer ownership</button></section>}
