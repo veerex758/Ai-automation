@@ -20,7 +20,7 @@ export async function POST(request:Request){
   if(eventError&&eventError.code!=="23505")throw eventError;
   const {data:prior}=await admin.from("billing_webhook_events").select("processed_at").eq("event_key",event.id).maybeSingle();
   if(prior?.processed_at)return NextResponse.json({received:true,duplicate:true});
-  const {error:settleError}=await admin.rpc("settle_stripe_workspace_payment",{p_payment_id:payment.id,p_session_id:session.id,p_paid_at:new Date((session.created||Math.floor(Date.now()/1000))*1000).toISOString()});
+  const {error:settleError}=await admin.rpc("settle_stripe_workspace_payment",{p_payment_id:payment.id,p_session_id:session.id,p_paid_at:new Date().toISOString()});
   if(settleError)throw settleError;
   const {error:markError}=await admin.from("billing_webhook_events").update({processed_at:new Date().toISOString()}).eq("event_key",event.id);
   if(markError)throw markError;
