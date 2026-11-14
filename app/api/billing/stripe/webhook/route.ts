@@ -9,8 +9,19 @@ export async function POST(request:Request){
  const stripe=new Stripe(secret);let event:Stripe.Event;
  try{const signature=request.headers.get("stripe-signature");if(!signature)throw new Error("missing_signature");event=stripe.webhooks.constructEvent(raw,signature,webhookSecret);}
  catch{return NextResponse.json({error:"Invalid Stripe signature."},{status:401});}
- if(event.type!=="checkout.session.completed")return NextResponse.json({received:true});
+ if(!["checkout.session.completed","checkout.session.expired","checkout.session.async_payment_failed"].includes(event.type))return NextResponse.json({received:true});
  const session=event.data.object as Stripe.Checkout.Session;
+ if(event.type!=="checkout.session.completed"){
+  if(typeof session.metadata?.payment_id!=="string")return NextResponse.json({received:true});
+  try{
+   const admin=createAdminClient(),status=event.type==="checkout.session.expired"?"abandoned":"failed";
+   const {error:updateError}=await admin.from("billing_payments").update({status,updated_at:new Date().toISOString()}).eq("id",session.metadata.payment_id).eq("provider","stripe").eq("status","pending");
+   if(updateError)throw updateError;
+   const {error:eventError}=await admin.from("billing_webhook_events").insert({provider:"stripe",event_key:event.id,event_type:event.type,reference:session.id,processed_at:new Date().toISOString()});
+   if(eventError&&eventError.code!=="23505")throw eventError;
+   return NextResponse.json({received:true});
+  }catch(error){console.error("Stripe failed checkout event could not be recorded:",error);return NextResponse.json({error:"Stripe event processing failed."},{status:503});}
+ }
  if(session.payment_status!=="paid"||typeof session.metadata?.payment_id!=="string")return NextResponse.json({error:"Checkout session is not paid or lacks payment metadata."},{status:422});
  try{
   const admin=createAdminClient(),{data:payment,error}=await admin.from("billing_payments").select("id,provider,workspace_id,amount_minor,currency,status").eq("id",session.metadata.payment_id).maybeSingle();
