@@ -182,15 +182,17 @@ begin
   return new;
  else
   if old.verification_status='approved' and new.verification_status='revoked' then
-   update public.workflows w set status='paused',updated_at=now() from public.marketplace_installations i
-    where i.product_version_id=new.id and i.workflow_id=w.id and i.status='active';
-   update public.marketplace_installations set status='paused' where product_version_id=new.id and status='active';
-   insert into public.marketplace_customer_notices(user_id,product_id,installation_id,notice_type,title,body)
-   select distinct i.installed_by,new.product_id,i.id,'verification_revoked','Marketplace version revoked',
-    'The exact version installed in this workspace was revoked. Its workflow has been paused and cannot execute until a verified version is installed.'
-   from public.marketplace_installations i where i.product_version_id=new.id and i.status<>'removed';
    if exists(select 1 from public.marketplace_products p where p.id=new.product_id and p.current_version_id=new.id and p.status in ('published','verified')) then
+    -- Product-level trigger performs the single global pause + notice fan-out.
     update public.marketplace_products set status='revoked',updated_at=now() where id=new.product_id;
+   else
+    update public.workflows w set status='paused',updated_at=now() from public.marketplace_installations i
+     where i.product_version_id=new.id and i.workflow_id=w.id and i.status='active';
+    update public.marketplace_installations set status='paused' where product_version_id=new.id and status='active';
+    insert into public.marketplace_customer_notices(user_id,product_id,installation_id,notice_type,title,body)
+    select distinct i.installed_by,new.product_id,i.id,'verification_revoked','Marketplace version revoked',
+     'The exact version installed in this workspace was revoked. Its workflow has been paused and cannot execute until a verified version is installed.'
+    from public.marketplace_installations i where i.product_version_id=new.id and i.status<>'removed';
    end if;
   end if;
   return new;
