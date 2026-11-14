@@ -202,3 +202,18 @@ test("Error Trigger dispatches active same-workspace subscribers through the dur
   assert.match(workerService, /source === "error_trigger"/);
   assert.match(workerService, /step\.nodeId === "error_trigger"/);
 });
+
+const cancellationMigration = readFileSync(
+  new URL("../supabase/migrations/20261114110000_aivanta_execution_cancellation.sql", import.meta.url),
+  "utf8",
+);
+
+test("durable execution supports safe cancellation for queued and leased work", () => {
+  assert.match(cancellationMigration, /cancel_requested_at/);
+  assert.match(cancellationMigration, /status = 'cancelled'/);
+  assert.match(cancellationMigration, /return 'cancellation_requested'/);
+  assert.match(cancellationMigration, /finish_cancelled_execution_job/);
+  assert.match(cancellationMigration, /revoke all on function public\.cancel_execution_job/);
+  assert.match(workerService, /finish_cancelled_execution_job/);
+  assert.match(workerService, /EXECUTION_CANCELLED/);
+});
