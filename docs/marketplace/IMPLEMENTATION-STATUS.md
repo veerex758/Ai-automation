@@ -11,12 +11,12 @@ Source of truth: `docs/marketplace/MASTER-SPEC.md`. This ledger separates merged
 | Immutable product versions/private artifact storage/checksum | Implemented on main | Version submission, private bucket and integrity/hash verification. |
 | Automated checks + reviewer exact version/hash approval + publication gate | Implemented on main | `lib/marketplace/verification.ts`, reviewer queue/decision/publish RPC, verification tests. Reviewer must remain independent of creator. |
 | Customer install into own workspace, inactive draft copy | Implemented on main | Install RPC + private artifact materialization. No execution on install. |
-| Configure connections, dry-run, activate, pause, update/rollback/version pin, uninstall | In PR #175 | Lifecycle RPC/API now configures (without storing credentials), requires successful side-effect-free registry dry-run before activation, and supports pause/uninstall. Version update/rollback and authenticated lifecycle E2E still pending. |
+| Configure connections, dry-run, activate, pause, update/rollback/version pin, uninstall | In this PR | Workspace-owned connection IDs are validated and resolved by the durable worker; updates pin only the latest approved version, rollback only restores previously installed still-approved versions, both create a fresh inactive draft and retain archived history; successful dry-run remains required before activation. Authenticated staging/browser E2E remains outstanding. |
 | Product ratings eligible only after purchase/install | In PR #175 | Rating API/table, RLS, one review per product/user, published-only display. CI/replay pending. |
 | Abuse/IP/security/privacy reports + moderation | In PR #175 | Report submission, moderator queue, audited triage/closure, reporter notice. CI/replay pending. |
 | Customer notices (permissions/integrations/usage/revocation/updates) | In PR #175 | Inbox/read state plus product/version trust-change fan-out; suspension/revocation pauses active installations and notifies affected install owners. Browser acceptance remains. |
 | Creator analytics views/install/conversion/gross/refunds/earnings/subscriptions | Implemented foundation on main | Analytics RPC/route; event completeness and conversion-quality acceptance pending. |
-| Admin/reviewer moderation, creator suspension, product emergency revoke/customer notification | Partial | Creator and product moderation primitives exist; full emergency installation/runtime revoke and notification propagation not yet accepted. |
+| Admin/reviewer moderation, creator suspension, product emergency revoke/customer notification | In this PR / partial acceptance | Exact-version revocation pauses installations pinned to that version, disables their schedules and webhook ingress, sends affected-customer notices, and the durable worker rechecks the pinned version before every live step. Connected staging and in-flight provider-call incident testing remain outstanding. |
 | Creator/customer legal policies, support/refund and appeal journey | Partial | Support/refund foundations exist; public policy acknowledgement and full appeal/support journeys remain. |
 
 ## Phase B — creator monetization
@@ -45,7 +45,7 @@ Source of truth: `docs/marketplace/MASTER-SPEC.md`. This ledger separates merged
 | Developer API/SDK, keys/scopes/rate limits/audit | Implemented foundation on main | API key lifecycle, v1 route, SDK and rate-limit/audit migrations; publish/draft endpoint coverage and external developer acceptance pending. |
 
 ## Release blockers / gates (all phases)
-- PR #175 must pass CI, migration replay, database service checks; merge only after exact head is green/mergeable.
+- PR #209 must pass CI, migration replay, database service checks; merge only after exact head is green/mergeable.
 - Review every new migration and replay from clean local database; **no hosted Supabase migration has been applied by this work**.
 - Provider sandbox credentials/eligible Paystack USD and Stripe accounts, KYC/tax, webhook setup and verified statements are needed for actual payment, subscription and payout tests. Checkout/payout/refund live flags remain off unless explicitly authorized.
 - Authenticated staging/browser E2E is blocked until Vercel deployment quota is available; old preview does not contain current main.
