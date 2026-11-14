@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const WORKSPACE_PERMISSIONS = [
   "workflows.view", "workflows.create", "workflows.edit", "workflows.delete", "workflows.execute",
@@ -36,7 +37,8 @@ export async function getWorkspacePermissions(
     return { role, customRoleId: member?.custom_role_id ?? null, permissions: Object.fromEntries(WORKSPACE_PERMISSIONS.map((key) => [key, true])) as WorkspacePermissionMap };
   }
   if (member?.custom_role_id) {
-    const { data: customRole, error } = await supabase.from("workspace_custom_roles")
+    const admin = createAdminClient();
+    const { data: customRole, error } = await admin.from("workspace_custom_roles")
       .select("permissions").eq("id", member.custom_role_id).eq("workspace_id", workspaceId).maybeSingle();
     if (error) throw error;
     const raw = customRole?.permissions && typeof customRole.permissions === "object" ? customRole.permissions as Record<string, unknown> : {};
