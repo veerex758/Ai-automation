@@ -18,4 +18,7 @@ test("all durable entry points provide a verified workspace actor for metering",
  assert.ok(webhook.includes("p_created_by: dispatchActor"));
  assert.ok(webhook.includes("endpoint.created_by"));
  assert.ok(scheduler.includes("p_created_by: scheduleConfig.created_by"));
+ assert.ok(migration.includes("reserve_workspace_execution_service"));
+ assert.ok(webhook.includes("reserve_workspace_execution_service"));
+ assert.ok(webhook.includes("AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED"));
 });
