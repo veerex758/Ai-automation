@@ -19,6 +19,8 @@ test("execution cancellation endpoint derives workspace from authenticated workf
   assert.match(route, /from\("workflows"\)[\s\S]*?select\("id,workspace_id"\)/);
   assert.match(route, /cancel_execution_job/);
   assert.match(route, /p_workspace_id: workflow\.workspace_id/);
+  assert.match(route, /p_workflow_id: workflow\.id/);
+  assert.match(migration, /workflow_id = p_workflow_id/);
 });
 
 test("durable worker stops a cancelled run and records the terminal cancelled state", () => {
