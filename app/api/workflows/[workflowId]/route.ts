@@ -114,7 +114,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         try {
           steps = buildRegistrySteps({
             nodes: checked.definition.nodes,
-            edges: Array.isArray(stored?.edges) ? stored.edges as Array<{ id: string; source: string; target: string; label: "true" | "false" | "next" }> : [],
+            edges: Array.isArray(stored?.edges)
+              ? stored.edges as Array<{ id: string; source: string; target: string; label: "true" | "false" | "next" }>
+              : checked.definition.nodes.slice(1).map((node, index) => ({
+                  id: "legacy-next-" + (index + 1),
+                  source: checked.definition!.nodes[index].id,
+                  target: node.id,
+                  label: "next" as const,
+                })),
           });
         } catch (cause) {
           return NextResponse.json({ error: cause instanceof Error ? cause.message : "Workflow graph is invalid." }, { status: 422 });
