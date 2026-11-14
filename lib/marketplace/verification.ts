@@ -12,10 +12,10 @@ const secretPatterns=[
  /\bgh[pousr]_[A-Za-z0-9]{30,}\b/,
 ];
 const unsafeBehaviorPatterns=[
- {id:"dynamic_code_execution",label:"No dynamic code execution or privileged runtime access",pattern:new RegExp(String.raw`\\b(?:eval\\s*\\(|new\\s+Function\\s*\\(|Function\\s*\\(|require\\s*\\(\\s*["'](?:node:)?(?:child_process|worker_threads|vm|fs|net|tls)["'])`,"i"),detail:"Dynamic code execution or privileged runtime module access is not permitted in marketplace artifacts"},
- {id:"credential_exfiltration",label:"No credential harvesting or exfiltration behavior",pattern:new RegExp(String.raw`(?:process\\.env|document\\.cookie|access[_-]?token|refresh[_-]?token)[\\s\\S]{0,240}(?:fetch|https?\\.request|webhook|send)\\s*\\(`,"i"),detail:"Potential credential-to-network exfiltration pattern detected"},
- {id:"obfuscated_payload",label:"No encoded executable payloads",pattern:new RegExp(String.raw`(?:atob\\s*\\(|Buffer\\.from\\([^)]*,\\s*["']base64["']\\))[\\s\\S]{0,160}(?:eval|Function|fetch|https?\\.request)`,"i"),detail:"Encoded payload combined with execution or network behavior requires manual security investigation"},
- {id:"destructive_operations",label:"No destructive infrastructure operations",pattern:new RegExp(String.raw`(?:rm\\s+-rf|mkfs(?:\\.|\\s)|DROP\\s+DATABASE|TRUNCATE\\s+TABLE|delete\\s+from\\s+auth\\.users)`,"i"),detail:"Potential destructive operation detected"},
+ {id:"dynamic_code_execution",label:"No dynamic code execution or privileged runtime access",pattern:new RegExp(String.raw`\b(?:eval\s*\(|new\s+Function\s*\(|Function\s*\(|require\s*\(\s*["'](?:node:)?(?:child_process|worker_threads|vm|fs|net|tls)["'])`,"i"),detail:"Dynamic code execution or privileged runtime module access is not permitted in marketplace artifacts"},
+ {id:"credential_exfiltration",label:"No credential harvesting or exfiltration behavior",pattern:new RegExp(String.raw`(?:process\.env|document\.cookie|access[_-]?token|refresh[_-]?token)[\s\S]{0,240}(?:fetch|https?\.request|webhook|send)\s*\(`,"i"),detail:"Potential credential-to-network exfiltration pattern detected"},
+ {id:"obfuscated_payload",label:"No encoded executable payloads",pattern:new RegExp(String.raw`(?:atob\s*\(|Buffer\.from\([^)]*,\s*["']base64["']\))[\s\S]{0,160}(?:eval|Function|fetch|https?\.request)`,"i"),detail:"Encoded payload combined with execution or network behavior requires manual security investigation"},
+ {id:"destructive_operations",label:"No destructive infrastructure operations",pattern:new RegExp(String.raw`(?:rm\s+-rf|mkfs(?:\.|\s)|DROP\s+DATABASE|TRUNCATE\s+TABLE|delete\s+from\s+auth\.users)`,"i"),detail:"Potential destructive operation detected"},
 ];
 function canonicalize(value:unknown):unknown{
  if(Array.isArray(value))return value.map(canonicalize);
