@@ -1,6 +1,7 @@
 import {NextResponse} from "next/server";
 import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
+import {hasWorkspacePermission} from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 type Ctx={params:Promise<{workspaceId:string}>};
@@ -13,7 +14,7 @@ async function authorize(workspaceId:string){
  ]);
  if(we||me)return {response:NextResponse.json({error:"Could not verify workspace."},{status:503,headers})};
  const role=workspace?.owner_id===user.id?"owner":member?.role;
- if(!workspace||!role||!["owner","admin"].includes(role))return {response:NextResponse.json({error:"Workspace owner/admin access required."},{status:403,headers})};
+ if(!workspace||!role||!(await hasWorkspacePermission(supabase,workspaceId,user.id,"members.manage")))return {response:NextResponse.json({error:"Workspace members.manage permission required."},{status:403,headers})};
  return {supabase,user,workspace,role};
 }
 export async function GET(_request:Request,ctx:Ctx){
