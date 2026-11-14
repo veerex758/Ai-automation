@@ -29,6 +29,9 @@ type BillingData = {
     billing_provider?: string | null;
     current_period_end?: string | null;
     cancel_at_period_end?: boolean;
+    pending_plan_key?: string | null;
+    pending_plan_effective_at?: string | null;
+    grace_until?: string | null;
   };
   entitlements: {
     plan: string;
@@ -142,6 +145,8 @@ export default function BillingPage() {
           {" · "}{data.subscription.billing_provider ?? "No payment provider"}
           {data.subscription.current_period_end ? ` · Period ends ${date(data.subscription.current_period_end)}` : ""}
           {data.subscription.cancel_at_period_end ? " · Cancellation scheduled" : ""}
+          {data.subscription.pending_plan_key ? " · Downgrade to " + data.subscription.pending_plan_key + " on " + date(data.subscription.pending_plan_effective_at) : ""}
+          {data.subscription.grace_until ? " · Payment grace ends " + date(data.subscription.grace_until) : ""}
         </p>
       </div>
       <div className="billing-current-actions">
