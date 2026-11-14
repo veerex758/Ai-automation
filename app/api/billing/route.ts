@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrCreateDefaultWorkspace, getWorkspaceRole, canManageWorkspaceBilling } from "@/lib/supabase/workspace";
 import { createClient } from "@/lib/supabase/server";
-import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { getPaidPlan } from "@/lib/billing/paystack";
 export const dynamic = "force-dynamic";
 const planCatalog = [
