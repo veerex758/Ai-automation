@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import {getOrCreateDefaultWorkspace,getWorkspaceRole,canManageWorkspaceBilling} from "@/lib/supabase/workspace";
 import {NextResponse} from "next/server";
 import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
@@ -21,7 +22,10 @@ export async function POST(request:Request){
   const stripe=new Stripe(secret),price=await stripe.prices.retrieve(priceId);
   if(!price.active||price.currency.toUpperCase()!==plan.currency||price.unit_amount!==plan.amountMinor||price.type!=="one_time")
    return NextResponse.json({error:"Stripe price does not match the approved Aivanta plan price."},{status:409});
-  const workspace=await getOrCreateDefaultWorkspace(client),reference=createPaymentReference(),admin=createAdminClient();
+  const workspace=await getOrCreateDefaultWorkspace(client);
+  const role=await getWorkspaceRole(client,workspace.id,user.id);
+  if(!canManageWorkspaceBilling(role))return NextResponse.json({error:"Workspace owner or admin access required for billing changes."},{status:403});
+  const reference=createPaymentReference(),admin=createAdminClient();
   const {data:payment,error:insertError}=await admin.from("billing_payments").insert({
    workspace_id:workspace.id,user_id:user.id,provider:"stripe",reference,plan_slug:plan.slug,
    amount_minor:plan.amountMinor,currency:plan.currency,status:"pending"
