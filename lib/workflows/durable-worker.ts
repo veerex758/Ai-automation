@@ -360,6 +360,7 @@ export async function runDurableWorker() {
         throw new Error("LIVE_EXECUTION_DISABLED");
       }
       let marketplaceConnectionMap: Record<string, string> = {};
+      let marketplaceInstallationFound = false;
       if (job.execution_mode === "live") {
         const { data: runtimeAllowed, error: runtimeGuardError } = await db.rpc("marketplace_assert_installation_runtime", { p_workflow_id: job.workflow_id });
         if (runtimeGuardError || runtimeAllowed !== true) throw new Error("MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE");
@@ -367,6 +368,7 @@ export async function runDurableWorker() {
           .select("configuration,status").eq("workflow_id", job.workflow_id).maybeSingle();
         if (installationError) throw new Error("MARKETPLACE_INSTALLATION_LOOKUP_FAILED");
         if (installation) {
+          marketplaceInstallationFound = true;
           if (installation.status !== "active") throw new Error("MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE");
           const config = isRecord(installation.configuration) ? installation.configuration : {};
           const mappings = isRecord(config.connections) ? config.connections : {};
@@ -404,6 +406,11 @@ export async function runDurableWorker() {
             : step);
         }
         const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value) && value !== "rss_feed"));
+        if (job.execution_mode === "live" && marketplaceInstallationFound) {
+          for (const provider of requiredProviders) {
+            if (!marketplaceConnectionMap[provider]) throw new Error("MARKETPLACE_CONNECTION_MAPPING_REQUIRED");
+          }
+        }
         const credentials = job.execution_mode === "live"
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders, marketplaceConnectionMap)
           : {};
