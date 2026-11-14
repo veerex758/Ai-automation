@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         }
         if (edge.label !== "next") {
           const source = registrySteps.find((step) => (step as { id: string }).id === edge.source) as { nodeId?: string; operationId?: string } | undefined;
-          if (!source || !["if", "switch"].includes(source.nodeId ?? "")) return jsonResponse({ error: "Only IF and Switch nodes can create true/false connections." }, { status: 422 });
+          if (!source || source.nodeId !== "if" || source.operationId !== "evaluate") return jsonResponse({ error: "Only IF nodes can create true/false connections." }, { status: 422 });
         }
         edgeIds.add(edge.id);
         edges.push({ id: edge.id, source: edge.source, target: edge.target, label: edge.label as "next" | "true" | "false" });
