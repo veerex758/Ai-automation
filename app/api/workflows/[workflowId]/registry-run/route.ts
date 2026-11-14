@@ -73,6 +73,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (workflowError) throw workflowError;
     if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     if (!dryRun && workflow.status !== "active") return NextResponse.json({ error: "Activate this workflow before live execution." }, { status: 409 });
+    if (!dryRun) {
+      const { data: marketplaceInstallation, error: marketplaceLookupError } = await supabase
+        .from("marketplace_installations").select("id").eq("workflow_id", workflowId).maybeSingle();
+      if (marketplaceLookupError) throw marketplaceLookupError;
+      if (marketplaceInstallation) return NextResponse.json({
+        error: "Marketplace-installed workflows must execute through the durable worker so version approval, connection mapping and emergency revocation are enforced."
+      }, { status: 403 });
+    }
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
     if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
