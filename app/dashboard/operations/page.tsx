@@ -1,8 +1,9 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
 import Link from "next/link";
+import AlertSettings from "./alert-settings";
 import "./operations.css";
-type Ops={alerts:string[];queue:Record<string,number>;workers:Array<{worker_id:string;status:string;health:string;last_seen_at:string;last_error_code:string|null}>;dead_letters:Array<{id:string;error_code:string;attempts:number;failed_at:string;replayed_at:string|null}>;performance:{runs_24h:number;average_latency_ms:number|null;failed_runs_24h:number};provider_failures:Record<string,number>;integrations:Array<{provider:string;status:string;last_test_status:string;updated_at:string}>;recent_jobs:Array<{id:string;status:string;attempts:number;worker_id:string|null;last_error_code:string|null;created_at:string}>};
+type Ops={workspace_id:string;alerts:string[];queue:Record<string,number>;workers:Array<{worker_id:string;status:string;health:string;last_seen_at:string;last_error_code:string|null}>;dead_letters:Array<{id:string;error_code:string;attempts:number;failed_at:string;replayed_at:string|null}>;performance:{runs_24h:number;average_latency_ms:number|null;failed_runs_24h:number};provider_failures:Record<string,number>;integrations:Array<{provider:string;status:string;last_test_status:string;updated_at:string}>;recent_jobs:Array<{id:string;status:string;attempts:number;worker_id:string|null;last_error_code:string|null;created_at:string}>};
 export default function OperationsPage(){
  const [data,setData]=useState<Ops|null>(null);const [error,setError]=useState("");const [loading,setLoading]=useState(true);
  const load=useCallback(async()=>{setLoading(true);setError("");try{const r=await fetch("/api/operations",{cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.error||"Could not load operations.");setData(d as Ops);}catch(e){setError(e instanceof Error?e.message:"Could not load operations.");}finally{setLoading(false);}},[]);
@@ -26,6 +27,7 @@ export default function OperationsPage(){
    </div>
    <section className="operations-panel"><h2>Dead-letter queue</h2>{data.dead_letters.length?data.dead_letters.map(d=><div className="operations-row" key={d.id}><div><strong>{d.error_code}</strong><small>{new Date(d.failed_at).toLocaleString()} · {d.attempts} attempts</small></div><span>{d.replayed_at?"Replayed":"Needs review"}</span></div>):<p>No dead-letter jobs recorded for this workspace.</p>}</section>
    <section className="operations-panel"><h2>Recent execution jobs</h2><div className="operations-table"><div className="operations-table-head"><span>JOB</span><span>STATUS</span><span>ATTEMPTS</span><span>LAST ERROR</span></div>{data.recent_jobs.map(j=><div className="operations-table-row" key={j.id}><span>{j.id.slice(0,8)}</span><span>{j.status}</span><span>{j.attempts}</span><span>{j.last_error_code||"—"}</span></div>)}</div></section>
+   <AlertSettings workspaceId={data.workspace_id} />
    <p className="operations-footnote">Diagnostics are read-only. Job replay, credential changes and provider actions are not triggered from this screen.</p>
   </>}
  </main>;
