@@ -279,7 +279,7 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <aside className="builder-sidebar">
-        <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/rexnora-mark.svg" alt="" aria-hidden="true" /></span>Rexnora</Link>
+        <Link className="builder-brand" href="/"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
         <div className="builder-workspace"><span>A</span><div><strong>{workspaceName}</strong><small>Free workspace</small></div><b>⌄</b></div>
         <div className="builder-nav-label">WORKSPACE</div>
         <Link className="builder-nav-link" href="/dashboard"><span>▦</span>Dashboard</Link>
