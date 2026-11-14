@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 const routeUrl = new URL("../app/api/webhooks/[endpointKey]/route.ts", import.meta.url);
 const workerUrl = new URL("../lib/workflows/durable-worker.ts", import.meta.url);
 const migrationUrl = new URL("../supabase/migrations/20261029222027_aivanta_webhook_ingress_foundation.sql", import.meta.url);
-const queueMigrationUrl = new URL("../supabase/migrations/20261114120000_aivanta_durable_webhook_live_queue.sql", import.meta.url);
+const queueMigrationUrl = new URL("../supabase/migrations/20261114072358_aivanta_durable_webhook_live_queue.sql", import.meta.url);
 
 test("webhook ingress authenticates raw bytes with the endpoint encrypted signing secret", async () => {
   const source = await readFile(routeUrl, "utf8");
