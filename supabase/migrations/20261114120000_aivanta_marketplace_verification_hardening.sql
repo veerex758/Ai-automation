@@ -9,7 +9,7 @@ begin
  if auth.role()<>'service_role' then raise exception 'service_role_required'; end if;
  if p_status not in ('approved','rejected','changes_requested') then raise exception 'invalid_verification_status'; end if;
  if p_reviewer_id is null or not exists(select 1 from auth.users where id=p_reviewer_id) then raise exception 'valid_reviewer_required'; end if;
- if jsonb_typeof(p_checks)<>'array' then raise exception 'verification_checks_must_be_array'; end if;
+ if p_checks is null or jsonb_typeof(p_checks) is distinct from 'array' then raise exception 'verification_checks_must_be_array'; end if;
  select * into v from public.marketplace_product_versions where id=p_version_id and product_id=p_product_id for update;
  if not found then raise exception 'version_not_found'; end if;
  select * into p from public.marketplace_products where id=p_product_id for update;
@@ -80,6 +80,7 @@ begin
  select * into p from public.marketplace_products where id=p_product_id for update;
  if not found or (p_reviewer_id=v.created_by or p_reviewer_id=p.created_by
   or exists(select 1 from public.marketplace_creators c where c.id=p.creator_id and c.user_id=p_reviewer_id)) then raise exception 'independent_reviewer_required'; end if;
+ if p.current_version_id is distinct from p_version_id then raise exception 'only_current_version_can_be_reverified'; end if;
  update public.marketplace_product_versions set verification_status='pending',verified_at=null,verified_by=null where id=p_version_id;
  update public.marketplace_products set status='submitted',current_version_id=p_version_id,updated_at=now() where id=p_product_id;
  insert into public.marketplace_verification_reviews(product_id,version_id,review_type,status,notes)
