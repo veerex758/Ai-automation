@@ -18,7 +18,7 @@ This inventory distinguishes executable workflow definitions from the user-facin
 | Productivity/developer catalogue nodes | 9 | Jira, Asana, Trello, ClickUp, Monday.com, Todoist, Airtable, Bitbucket and Netlify |
 | Commerce/support catalogue nodes | 10 | WooCommerce, PayPal, Paddle, Lemon Squeezy, Square, Razorpay, Zoom, Cal.com, Twilio Voice and DocuSign |
 | Social/marketing catalogue nodes | 7 | X/Twitter, LinkedIn, Facebook Pages, Instagram, TikTok, Mailchimp and Typeform |
-| Database/storage catalogue nodes | 7 | Supabase, PostgreSQL, MySQL, MongoDB, Redis, Firebase/Firestore, Dropbox, AWS S3 and Cloudflare R2 |
+| Database/storage catalogue nodes | 9 | Supabase, PostgreSQL, MySQL, MongoDB, Redis, Firebase/Firestore, Dropbox, AWS S3 and Cloudflare R2 |
 
 The 122-node count is protected by `tests/provider-catalog.test.ts`. The test also asserts that all 100 provider-directory entries are registered, including MySQL and MongoDB, and that every registered operation has exactly one worker mapping.
 
