@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -63,10 +64,9 @@ export async function POST(request: Request, context: Context) {
       const webhook = typeof body.webhook_url === "string" ? body.webhook_url.trim() : "";
       if (webhook.length > 500 || !/^https:\/\/hooks\.slack\.com\/services\/[A-Z0-9]+\/[A-Z0-9]+\/[A-Za-z0-9]+$/.test(webhook)) return NextResponse.json({ error: "Use a valid Slack incoming webhook URL." }, { status: 400, headers });
       destination = "Slack incoming webhook";
-      const { data: inserted, error: insertError } = await admin.from("workspace_alert_destinations").insert({ workspace_id: workspaceId, channel, destination, encrypted_secret: "pending", created_by: access.user.id }).select("id").single();
-      if (insertError) throw insertError;
-      encrypted_secret = encryptWorkspaceCredentials({ slack: { webhookUrl: webhook } }, undefined, workspaceId + ":alert-slack:" + inserted.id);
-      const { data, error } = await admin.from("workspace_alert_destinations").update({ encrypted_secret }).eq("id", inserted.id).select("id,channel,destination,enabled,created_at").single();
+      const id = randomUUID();
+      encrypted_secret = encryptWorkspaceCredentials({ slack: { webhookUrl: webhook } }, undefined, workspaceId + ":alert-slack:" + id);
+      const { data, error } = await admin.from("workspace_alert_destinations").insert({ id, workspace_id: workspaceId, channel, destination, encrypted_secret, created_by: access.user.id }).select("id,channel,destination,enabled,created_at").single();
       if (error) throw error;
       return NextResponse.json({ destination: data }, { status: 201, headers });
     }
