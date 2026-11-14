@@ -9,7 +9,7 @@ test("staging an update does not switch or pause the currently active installati
  assert.match(sql,/insert into public\.marketplace_installation_staged_versions/);
  assert.doesNotMatch(sql,/update public\.marketplace_installations set product_version_id=target\.id/);
  assert.match(route,/marketplace_installation_staged_versions/);
- assert.match(route,/marketplace_mark_staged_installation_ready/);
+ assert.match(route,/marketplace_mark_staged_installation_ready/);\n assert.match(route,/i.status==="active"&&!staged/);
  assert.match(ui,/currently active workflow remains live/);
 });
 test("candidate becomes live only after successful dry-run and explicit commit",()=>{
