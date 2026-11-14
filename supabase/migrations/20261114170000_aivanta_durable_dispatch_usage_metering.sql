@@ -75,3 +75,34 @@ create or replace function public.dispatch_workflow_execution(
 $$;
 revoke all on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer) from public,anon,authenticated;
 grant execute on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer) to service_role;
+
+create or replace function public.reserve_workspace_execution_service(
+ p_workspace_id uuid,p_actor_id uuid,p_idempotency_key text,p_source text
+) returns jsonb language plpgsql security definer set search_path='' as $$
+declare subscription_row public.workspace_subscriptions%rowtype;v_plan text:='free';v_limit integer:=300;v_used bigint:=0;v_period date:=date_trunc('month',now())::date;
+begin
+ if auth.role()<>'service_role' then raise exception 'service role required' using errcode='42501';end if;
+ if p_workspace_id is null or p_actor_id is null or p_idempotency_key is null or length(p_idempotency_key) not between 1 and 200
+  or p_source not in ('webhook','scheduler','system') then raise exception 'invalid service execution reservation' using errcode='22023';end if;
+ if not exists(select 1 from public.workspaces w where w.id=p_workspace_id and (w.owner_id=p_actor_id or exists(select 1 from public.workspace_members m where m.workspace_id=w.id and m.user_id=p_actor_id))) then
+  raise exception 'execution actor is not a workspace member' using errcode='42501';
+ end if;
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_workspace_id::text,0));
+ if exists(select 1 from public.workspace_usage u where u.workspace_id=p_workspace_id and u.metric='workflow_execution' and u.metadata->>'idempotency_key'=p_idempotency_key) then
+  return jsonb_build_object('allowed',true,'duplicate',true);
+ end if;
+ select * into subscription_row from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
+ if found then
+  v_plan:=case when subscription_row.pending_plan_key is not null and subscription_row.pending_plan_effective_at<=now() then subscription_row.pending_plan_key else subscription_row.plan_key end;
+  if subscription_row.status not in ('active','trialing') or subscription_row.current_period_end<=now() then return jsonb_build_object('allowed',false,'reason','subscription_inactive','plan',v_plan);end if;
+  v_limit:=case v_plan when 'starter' then 2000 when 'pro' then 10000 when 'business' then 50000 when 'enterprise' then subscription_row.custom_execution_limit else 300 end;
+ end if;
+ if v_limit is null then return jsonb_build_object('allowed',false,'reason','enterprise_limits_not_configured','plan',v_plan);end if;
+ select coalesce(sum(u.quantity),0) into v_used from public.workspace_usage u where u.workspace_id=p_workspace_id and u.period_start=v_period and u.metric='workflow_execution';
+ if v_used+1>v_limit then return jsonb_build_object('allowed',false,'reason','limit_reached','used',v_used,'limit',v_limit,'plan',v_plan);end if;
+ insert into public.workspace_usage(workspace_id,metric,quantity,period_start,actor_user_id,metadata)
+ values(p_workspace_id,'workflow_execution',1,v_period,p_actor_id,jsonb_build_object('source',p_source,'idempotency_key',p_idempotency_key));
+ return jsonb_build_object('allowed',true,'duplicate',false,'used',v_used+1,'limit',v_limit,'plan',v_plan);
+end $$;
+revoke all on function public.reserve_workspace_execution_service(uuid,uuid,text,text) from public,anon,authenticated;
+grant execute on function public.reserve_workspace_execution_service(uuid,uuid,text,text) to service_role;
