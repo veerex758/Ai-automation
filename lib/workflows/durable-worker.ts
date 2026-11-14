@@ -530,7 +530,8 @@ export async function runDurableWorker() {
           const emailPreview = legacyResult.steps.find((step) => step.stepId === emailAction.id);
           if (!emailPreview) sendFailed = "EMAIL_PREVIEW_STEP_MISSING";
           if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
-            const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
+            if (marketplaceInstallationFound && !marketplaceConnectionMap.resend) throw new Error("MARKETPLACE_CONNECTION_MAPPING_REQUIRED");
+            const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]), marketplaceConnectionMap);
             executionSecrets = knownCredentialValues(credentials);
             const registrySteps: RegisteredWorkflowStep[] = [
               { id: trigger.id, nodeId: "manual", operationId: "start", kind: "trigger", input },
@@ -544,6 +545,8 @@ export async function runDurableWorker() {
               context: executionContext(credentials, false, db, job.workspace_id),
               dryRun: false,
               onStepStart: async (step, position) => {
+                const { data: stillAllowed, error: guardError } = await db.rpc("marketplace_assert_installation_runtime", { p_workflow_id: job.workflow_id });
+                if (guardError || stillAllowed !== true) throw new Error("MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE");
                 await persistCheckpoint(db, job, step, position, "started");
                 preCheckpointed.add(step.id);
               },
