@@ -124,3 +124,21 @@ begin
 end $$;
 revoke all on function public.record_execution_worker_heartbeat(text,text,uuid,text) from public,anon,authenticated;
 grant execute on function public.record_execution_worker_heartbeat(text,text,uuid,text) to service_role;
+
+-- Atomic workspace creation: create the workspace and its owner membership together.
+create or replace function public.create_workspace_for_current_user(p_name text)
+returns table(id uuid,name text)
+language plpgsql
+security invoker
+set search_path=public,pg_temp
+as $$
+declare v_user uuid:=auth.uid(); v_id uuid;
+begin
+ if v_user is null then raise exception 'authentication required' using errcode='42501'; end if;
+ if p_name is null or char_length(trim(p_name)) not between 1 and 120 then raise exception 'invalid workspace name' using errcode='22023'; end if;
+ insert into public.workspaces(name,owner_id) values(trim(p_name),v_user) returning workspaces.id into v_id;
+ insert into public.workspace_members(workspace_id,user_id,role) values(v_id,v_user,'owner');
+ return query select w.id,w.name from public.workspaces w where w.id=v_id;
+end $$;
+revoke all on function public.create_workspace_for_current_user(text) from public,anon;
+grant execute on function public.create_workspace_for_current_user(text) to authenticated;
