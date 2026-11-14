@@ -66,7 +66,7 @@ export default function ActivityPage() {
   return (
     <main className="app-shell activity-shell">
       <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span><span>Aivanta<span className="brand-period">.</span></span></Link>
+        <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark"><img className="brand-logo" src="/rexnora-mark.svg" alt="" aria-hidden="true"/></span><span>Rexnora<span className="brand-period">.</span></span></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Private workspace activity</small></span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
@@ -99,7 +99,7 @@ export default function ActivityPage() {
             </article>)}
             {!loading && !error && visibleRuns.length === 0 && <div className="activity-empty"><strong>{runs.length ? "No runs match this filter" : "No workflow runs yet"}</strong><p>{runs.length ? "Choose another status to see more activity." : "Run a workflow test from the builder and its result will appear here."}</p>{!runs.length && <Link className="create-button" href="/dashboard">Open dashboard <span>↗</span></Link>}</div>}
           </div>
-          <p className="activity-footnote">Activity is workspace-scoped and read-only. Workflow execution remains subject to the safety gates configured for Aivanta.</p>
+          <p className="activity-footnote">Activity is workspace-scoped and read-only. Workflow execution remains subject to the safety gates configured for Rexnora.</p>
         </div>
       </section>
     </main>
