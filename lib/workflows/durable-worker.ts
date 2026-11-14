@@ -36,11 +36,12 @@ function client() {
   });
 }
 
-async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct): Promise<string> {
-  const { data: connection, error } = await db.from("google_connections")
+async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct, connectionId?: string): Promise<string> {
+  let connectionQuery = db.from("google_connections")
     .select("id,encrypted_credentials,expires_at,status,scopes")
-    .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
-    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected");
+  if (connectionId) connectionQuery = connectionQuery.eq("id", connectionId);
+  const { data: connection, error } = await connectionQuery.order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
   if (!connection) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
   const requiredScope = GOOGLE_PRODUCTS[product].scopes[0];
@@ -82,7 +83,7 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
   return updated.access_token;
 }
 
-async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>): Promise<WorkspaceCredentials> {
+async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>, connectionMap: Record<string, string> = {}): Promise<WorkspaceCredentials> {
   const credentials: WorkspaceCredentials = {};
   for (const provider of providers) {
     const googleProductByProvider: Record<string, GoogleProduct> = {
@@ -92,14 +93,16 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
     const googleProduct = googleProductByProvider[provider];
     if (provider === "rss_feed") { credentials[provider] = {}; continue; }
     if (googleProduct) {
-      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
+      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct, connectionMap[provider]) };
       continue;
     }
     if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
-    const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider).maybeSingle();
+    let integrationQuery = db.from("workspace_integrations")
+      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider);
+    if (connectionMap[provider]) integrationQuery = integrationQuery.eq("id", connectionMap[provider]);
+    const { data: integration, error: integrationError } = await integrationQuery.maybeSingle();
     if (integrationError) throw new Error("WORKSPACE_INTEGRATION_LOOKUP_FAILED");
     if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed") {
       throw new Error(provider === "resend" ? "EMAIL_CONNECTION_REQUIRED" : provider.toUpperCase() + "_CONNECTION_REQUIRED");
@@ -356,6 +359,24 @@ export async function runDurableWorker() {
       if (job.execution_mode === "live" && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         throw new Error("LIVE_EXECUTION_DISABLED");
       }
+      const marketplaceConnectionMap: Record<string, string> = {};
+      let marketplaceInstallationFound = false;
+      if (job.execution_mode === "live") {
+        const { data: runtimeAllowed, error: runtimeGuardError } = await db.rpc("marketplace_assert_installation_runtime", { p_workflow_id: job.workflow_id });
+        if (runtimeGuardError || runtimeAllowed !== true) throw new Error("MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE");
+        const { data: installation, error: installationError } = await db.from("marketplace_installations")
+          .select("configuration,status").eq("workflow_id", job.workflow_id).maybeSingle();
+        if (installationError) throw new Error("MARKETPLACE_INSTALLATION_LOOKUP_FAILED");
+        if (installation) {
+          marketplaceInstallationFound = true;
+          if (installation.status !== "active") throw new Error("MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE");
+          const config = isRecord(installation.configuration) ? installation.configuration : {};
+          const mappings = isRecord(config.connections) ? config.connections : {};
+          for (const [provider, connectionId] of Object.entries(mappings)) {
+            if (typeof connectionId === "string") marketplaceConnectionMap[provider] = connectionId;
+          }
+        }
+      }
 
       let result: { status: string; steps: Array<{ stepId: string; position: number; type: string; title: string; status: string; message: string; output?: unknown }> };
       const preCheckpointed = new Set<string>();
@@ -385,8 +406,13 @@ export async function runDurableWorker() {
             : step);
         }
         const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value) && value !== "rss_feed"));
+        if (job.execution_mode === "live" && marketplaceInstallationFound) {
+          for (const provider of requiredProviders) {
+            if (!marketplaceConnectionMap[provider]) throw new Error("MARKETPLACE_CONNECTION_MAPPING_REQUIRED");
+          }
+        }
         const credentials = job.execution_mode === "live"
-          ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
+          ? await workspaceCredentials(db, job.workspace_id, requiredProviders, marketplaceConnectionMap)
           : {};
         executionSecrets = knownCredentialValues(credentials);
         const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
@@ -432,7 +458,11 @@ export async function runDurableWorker() {
             }
           },
           ...(job.execution_mode === "live" ? {
-            onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
+            onStepStart: async (step, position) => {
+              const { data: stillAllowed, error: guardError } = await db.rpc("marketplace_assert_installation_runtime", { p_workflow_id: job.workflow_id });
+              if (guardError || stillAllowed !== true) throw new Error("MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE");
+              await persistCheckpoint(db, job, step, position, "started");
+            },
             onStepComplete: async (step, position, completed) => persistCheckpoint(
               db, job, step, position, completed.status === "succeeded" ? "succeeded" : "skipped",
               boundedOutput(completed.output, executionSecrets),
@@ -500,7 +530,8 @@ export async function runDurableWorker() {
           const emailPreview = legacyResult.steps.find((step) => step.stepId === emailAction.id);
           if (!emailPreview) sendFailed = "EMAIL_PREVIEW_STEP_MISSING";
           if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
-            const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
+            if (marketplaceInstallationFound && !marketplaceConnectionMap.resend) throw new Error("MARKETPLACE_CONNECTION_MAPPING_REQUIRED");
+            const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]), marketplaceConnectionMap);
             executionSecrets = knownCredentialValues(credentials);
             const registrySteps: RegisteredWorkflowStep[] = [
               { id: trigger.id, nodeId: "manual", operationId: "start", kind: "trigger", input },
@@ -514,6 +545,8 @@ export async function runDurableWorker() {
               context: executionContext(credentials, false, db, job.workspace_id),
               dryRun: false,
               onStepStart: async (step, position) => {
+                const { data: stillAllowed, error: guardError } = await db.rpc("marketplace_assert_installation_runtime", { p_workflow_id: job.workflow_id });
+                if (guardError || stillAllowed !== true) throw new Error("MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE");
                 await persistCheckpoint(db, job, step, position, "started");
                 preCheckpointed.add(step.id);
               },

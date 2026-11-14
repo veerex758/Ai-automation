@@ -98,7 +98,7 @@ test("legacy enqueue RPC also writes the immutable workflow snapshot", () => {
 test("durable worker executes registered steps only for explicitly gated live jobs", () => {
   assert.match(workerService, /executeRegisteredWorkflow\(/);
   assert.match(workerService, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
-  assert.match(workerService, /workspaceCredentials\(db, job\.workspace_id, requiredProviders\)/);
+  assert.match(workerService, /workspaceCredentials\(db, job\.workspace_id, requiredProviders, marketplaceConnectionMap\)/);
   assert.match(workerService, /onStepStart/);
   assert.match(workerService, /onStepComplete/);
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
