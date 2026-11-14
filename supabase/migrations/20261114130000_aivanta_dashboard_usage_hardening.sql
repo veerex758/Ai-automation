@@ -203,3 +203,28 @@ begin
 end $$;
 revoke all on function public.transfer_workspace_ownership(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.transfer_workspace_ownership(uuid,uuid) to service_role;
+
+create or replace function public.consume_ai_generation_usage(p_workspace_id uuid,p_idempotency_key text)
+returns jsonb language plpgsql security definer set search_path=public,private,pg_temp as $$
+declare v_plan text:='free';v_status text:='active';v_custom_ai integer;v_limit integer;v_ai bigint:=0;v_generations bigint:=0;v_period date:=date_trunc('month',now())::date;v_actor uuid:=auth.uid();
+begin
+ if v_actor is null or not private.is_workspace_member(p_workspace_id) then raise exception 'workspace access denied' using errcode='42501';end if;
+ if p_idempotency_key is null or length(p_idempotency_key)<8 or length(p_idempotency_key)>128 then raise exception 'invalid AI generation request' using errcode='22023';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_workspace_id::text,0));
+ if exists(select 1 from public.workspace_usage where workspace_id=p_workspace_id and metric='ai_generation' and metadata->>'idempotency_key'=p_idempotency_key) then return jsonb_build_object('allowed',true,'duplicate',true);end if;
+ select plan_key,status,custom_ai_credit_limit into v_plan,v_status,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
+ v_plan:=coalesce(v_plan,'free');v_status:=coalesce(v_status,'active');
+ if v_status not in ('active','trialing') then return jsonb_build_object('allowed',false,'reason','subscription_inactive');end if;
+ v_limit:=case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 when 'enterprise' then v_custom_ai else 25 end;
+ if v_limit is null then return jsonb_build_object('allowed',false,'reason','enterprise_limits_not_configured');end if;
+ select coalesce(sum(quantity),0) into v_ai from public.workspace_usage where workspace_id=p_workspace_id and period_start=v_period and metric='ai_credit';
+ select coalesce(sum(quantity),0) into v_generations from public.workspace_usage where workspace_id=p_workspace_id and period_start=v_period and metric='ai_generation';
+ if v_ai+1>v_limit or v_generations+1>v_limit then return jsonb_build_object('allowed',false,'reason','limit_reached','ai_credits_used',v_ai,'generations_used',v_generations,'limit',v_limit,'plan',v_plan);end if;
+ insert into public.workspace_usage(workspace_id,metric,quantity,period_start,actor_user_id,metadata)
+ values
+ (p_workspace_id,'ai_generation',1,v_period,v_actor,jsonb_build_object('feature','workflow_draft_generation','idempotency_key',p_idempotency_key)),
+ (p_workspace_id,'ai_credit',1,v_period,v_actor,jsonb_build_object('feature','workflow_draft_generation','idempotency_key',p_idempotency_key));
+ return jsonb_build_object('allowed',true,'ai_credits_used',v_ai+1,'generations_used',v_generations+1,'limit',v_limit,'plan',v_plan);
+end $$;
+revoke all on function public.consume_ai_generation_usage(uuid,text) from public,anon;
+grant execute on function public.consume_ai_generation_usage(uuid,text) to authenticated;
