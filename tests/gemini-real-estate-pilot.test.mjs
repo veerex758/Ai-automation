@@ -33,14 +33,14 @@ test("activation validates any saved registry graph and gates live execution by 
   assert.doesNotMatch(activation, /qualify_real_estate_lead/);
 });
 
-test("manual and signed-webhook live paths allow only the explicit Gemini qualification operation", () => {
-  for (const source of [registryRun, webhook]) {
-    assert.match(source, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
-    assert.match(source, /GEMINI_API_KEY/);
-    assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-    assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  }
-  assert.match(webhook, /hourlyRuns/);
+test("legacy synchronous registry pilot remains constrained while signed webhooks use durable execution", () => {
+  assert.match(registryRun, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
+  assert.match(registryRun, /GEMINI_API_KEY/);
+  assert.match(registryRun, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+  assert.match(webhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true"/);
+  assert.match(webhook, /validateDurableLiveSteps\(steps\)/);
+  assert.match(webhook, /p_execution_mode: "live"/);
+  assert.match(webhook, /webhookVerified: true/);
 });
 
 test("webhook signing secrets remain server-side and CODED Supabase service credentials are supported", () => {
