@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const migration = readFileSync(new URL("../supabase/migrations/20261114110000_aivanta_execution_cancellation.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../supabase/migrations/20261114072354_aivanta_execution_cancellation.sql", import.meta.url), "utf8");
 const route = readFileSync(new URL("../app/api/workflows/[workflowId]/executions/[jobId]/route.ts", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const panel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
