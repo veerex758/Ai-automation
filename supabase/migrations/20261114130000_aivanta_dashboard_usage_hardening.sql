@@ -36,7 +36,7 @@ begin
   select coalesce(sum(quantity),0) into v_used from public.workspace_usage where workspace_id=p_workspace_id and period_start=v_period and metric=p_metric;
   return jsonb_build_object('allowed',true,'duplicate',true,'metric',p_metric,'used',v_used);
  end if;
- select plan_key,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit into v_plan,v_status,v_custom_workflows,v_custom_executions,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
+ select case when pending_plan_key is not null and pending_plan_effective_at<=now() then pending_plan_key else plan_key end,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit into v_plan,v_status,v_custom_workflows,v_custom_executions,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
  v_plan:=coalesce(v_plan,'free'); v_status:=coalesce(v_status,'active'); v_period:=date_trunc('month',now())::date;
  if v_status not in ('active','trialing') or exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then return jsonb_build_object('allowed',false,'reason','subscription_inactive','plan',v_plan); end if;
  v_limit:=case v_plan when 'starter' then case p_metric when 'workflow_created' then 10 when 'workflow_execution' then 2000 when 'ai_credit' then 500 else 500 end when 'pro' then case p_metric when 'workflow_created' then 50 when 'workflow_execution' then 10000 when 'ai_credit' then 2500 else 2500 end when 'business' then case p_metric when 'workflow_created' then 200 when 'workflow_execution' then 50000 when 'ai_credit' then 15000 else 15000 end when 'enterprise' then case p_metric when 'workflow_created' then v_custom_workflows when 'workflow_execution' then v_custom_executions else v_custom_ai end else case p_metric when 'workflow_created' then 2 when 'workflow_execution' then 300 when 'ai_credit' then 25 else 25 end end;
@@ -55,7 +55,7 @@ returns jsonb language plpgsql security definer set search_path=public,private,p
 declare v_plan text:='free'; v_status text:='active'; v_start date:=date_trunc('month',now())::date; v_workflows bigint:=0; v_exec bigint:=0; v_ai bigint:=0; v_agents bigint:=0; v_generations bigint:=0; v_workflow_limit integer:=2; v_execution_limit integer:=300; v_ai_limit integer:=25;
 begin
  if auth.uid() is null or not private.is_workspace_member(p_workspace_id) then raise exception 'workspace access denied' using errcode='42501'; end if;
- select plan_key,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit into v_plan,v_status,v_workflow_limit,v_execution_limit,v_ai_limit from public.workspace_subscriptions where workspace_id=p_workspace_id;
+ select case when pending_plan_key is not null and pending_plan_effective_at<=now() then pending_plan_key else plan_key end,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit into v_plan,v_status,v_workflow_limit,v_execution_limit,v_ai_limit from public.workspace_subscriptions where workspace_id=p_workspace_id;
  v_plan:=coalesce(v_plan,'free'); v_status:=coalesce(v_status,'active'); v_start:=date_trunc('month',now())::date;
  if exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then v_status:='expired'; end if;
  if v_plan<>'enterprise' then v_workflow_limit:=case v_plan when 'starter' then 10 when 'pro' then 50 when 'business' then 200 else 2 end; v_execution_limit:=case v_plan when 'starter' then 2000 when 'pro' then 10000 when 'business' then 50000 else 300 end; v_ai_limit:=case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 else 25 end; end if;
@@ -78,7 +78,7 @@ begin
  if exists(select 1 from public.workspace_usage where workspace_id=p_workspace_id and metric='agent_run' and metadata->>'idempotency_key'=p_idempotency_key) then
   return jsonb_build_object('allowed',true,'duplicate',true);
  end if;
- select plan_key,status,custom_ai_credit_limit into v_plan,v_status,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
+ select case when pending_plan_key is not null and pending_plan_effective_at<=now() then pending_plan_key else plan_key end,status,custom_ai_credit_limit into v_plan,v_status,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
  v_plan:=coalesce(v_plan,'free'); v_status:=coalesce(v_status,'active');
  if v_status not in ('active','trialing') or exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then return jsonb_build_object('allowed',false,'reason','subscription_inactive'); end if;
  v_limit:=case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 when 'enterprise' then v_custom_ai else 25 end;
@@ -215,7 +215,7 @@ begin
  if p_idempotency_key is null or length(p_idempotency_key)<8 or length(p_idempotency_key)>128 then raise exception 'invalid AI generation request' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_workspace_id::text,0));
  if exists(select 1 from public.workspace_usage where workspace_id=p_workspace_id and metric='ai_generation' and metadata->>'idempotency_key'=p_idempotency_key) then return jsonb_build_object('allowed',true,'duplicate',true);end if;
- select plan_key,status,custom_ai_credit_limit into v_plan,v_status,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
+ select case when pending_plan_key is not null and pending_plan_effective_at<=now() then pending_plan_key else plan_key end,status,custom_ai_credit_limit into v_plan,v_status,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
  v_plan:=coalesce(v_plan,'free');v_status:=coalesce(v_status,'active');
  if v_status not in ('active','trialing') or exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then return jsonb_build_object('allowed',false,'reason','subscription_inactive');end if;
  v_limit:=case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 when 'enterprise' then v_custom_ai else 25 end;
