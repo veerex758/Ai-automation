@@ -255,6 +255,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
           p_max_attempts: 5,
         });
         const queued = dispatch as Record<string, unknown> | null;
+        if (dispatchError && String(dispatchError.message).includes("AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED")) {
+          await db.from("webhook_event_receipts").update({ status: "failed", failure_code: "AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED" }).eq("id", claim.receipt_id);
+          return jsonError("Workspace execution quota reached. Upgrade the plan before retrying this webhook.", 402);
+        }
         if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
           throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
         }
@@ -279,6 +283,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         p_max_attempts: 5,
       });
       const queued = dispatch as Record<string, unknown> | null;
+      if (dispatchError && String(dispatchError.message).includes("AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED")) {
+        await db.from("webhook_event_receipts").update({ status: "failed", failure_code: "AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED" }).eq("id", receipt.id);
+        return jsonError("Workspace execution quota reached. Upgrade the plan before retrying this webhook.", 402);
+      }
       if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
         throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
       }
