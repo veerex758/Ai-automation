@@ -11,6 +11,6 @@ test("provider verification report publishes current inventory and blocks unveri
   assert.ok(report.includes("Coming-soon provider entries: **0**"));
   assert.ok(report.includes("Worker-operation parity"));
   assert.ok(report.includes("Authenticated staging workflow acceptance"));
-  assert.ok(report.includes("No provider is labelled production-live-verified"));
+  assert.ok(report.includes("No provider should be labelled production-live-verified"));
   assert.ok(report.includes("MySQL and MongoDB"));
 });
