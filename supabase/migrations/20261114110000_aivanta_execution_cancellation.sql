@@ -12,17 +12,18 @@ alter table public.execution_jobs
 
 create or replace function public.cancel_execution_job(
   p_job_id uuid,
-  p_workspace_id uuid
+  p_workspace_id uuid,
+  p_workflow_id uuid
 ) returns text
 language plpgsql security definer set search_path = ''
 as $$
 declare job_row public.execution_jobs%rowtype;
 begin
-  if p_job_id is null or p_workspace_id is null then
+  if p_job_id is null or p_workspace_id is null or p_workflow_id is null then
     raise exception using errcode = '22023', message = 'Invalid execution cancellation request';
   end if;
   select * into job_row from public.execution_jobs
-  where id = p_job_id and workspace_id = p_workspace_id
+  where id = p_job_id and workspace_id = p_workspace_id and workflow_id = p_workflow_id
   for update;
   if not found then return 'not_found'; end if;
 
@@ -49,7 +50,7 @@ begin
   return 'not_cancellable';
 end;
 $$;
-revoke all on function public.cancel_execution_job(uuid,uuid) from public, anon, authenticated;
+revoke all on function public.cancel_execution_job(uuid,uuid,uuid) from public, anon, authenticated;
 grant execute on function public.cancel_execution_job(uuid,uuid) to service_role;
 
 create or replace function public.finish_cancelled_execution_job(
