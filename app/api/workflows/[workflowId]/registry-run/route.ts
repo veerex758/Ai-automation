@@ -83,13 +83,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
-    if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
-      return NextResponse.json({ error: "This endpoint requires a saved aivanta-registry-v1 workflow definition." }, { status: 422 });
-    }
-    const steps = definition.steps as RegisteredWorkflowStep[];
-    if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
-      typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
-      return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
+    const isRegistry = Boolean(definition && definition.format === "aivanta-registry-v1");
+    let steps: RegisteredWorkflowStep[] = [];
+    let legacyDryRun: ReturnType<typeof runDryRun> | null = null;
+    if (isRegistry) {
+      if (!Array.isArray(definition?.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
+        return NextResponse.json({ error: "Registry workflow definition is malformed." }, { status: 422 });
+      }
+      steps = definition.steps as RegisteredWorkflowStep[];
+      if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
+        typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
+        return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
+      }
+    } else {
+      if (!dryRun) return NextResponse.json({ error: "Legacy Marketplace workflows are supported for safe dry-run only; live execution requires the durable registry worker." }, { status: 422 });
+      const legacy = validateDefinition(workflow.definition);
+      if (!legacy.definition) return NextResponse.json({ error: "Installed workflow definition is invalid." }, { status: 422 });
+      legacyDryRun = runDryRun(legacy.definition, {});
+      if (legacyDryRun.sideEffectsPerformed !== false) return NextResponse.json({ error: "Marketplace dry-run attempted an external side effect and was blocked." }, { status: 422 });
     }
     if (!dryRun) {
       // Until each provider has its own workspace-scoped connection and explicit live-action gate,
@@ -133,6 +144,30 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     });
     if (executionUsageError) return NextResponse.json({ error: "Execution billing meter unavailable. Apply the subscription migration." }, { status: 503 });
     if (!executionUsage?.allowed) return NextResponse.json({ error: "Monthly workflow execution allowance reached. Upgrade your plan.", entitlement: executionUsage }, { status: 402 });
+
+    // Marketplace catalog artifacts currently use the validated legacy workflow schema.
+    // They are allowed only through this side-effect-free preview path.
+    if (legacyDryRun) {
+      const completedAt = new Date().toISOString();
+      const { data: run, error: runError } = await supabase.from("workflow_runs").insert({
+        workspace_id: workflow.workspace_id, workflow_id: workflow.id, workflow_version: workflow.version,
+        mode: "dry_run", status: legacyDryRun.status, created_by: user.id,
+        idempotency_key: null, started_at: new Date(startedAt).toISOString(), completed_at: completedAt,
+        duration_ms: Math.min(600000, Date.now() - startedAt),
+        error_message: legacyDryRun.status === "failed" ? "One or more workflow steps failed during safe preview." : null,
+      }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
+      if (runError) throw runError;
+      const rows = legacyDryRun.steps.map((step) => ({
+        run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: step.position,
+        step_type: step.type, title: step.title, status: step.status,
+        result: { message: step.message, sideEffectsPerformed: false },
+      }));
+      if (rows.length) {
+        const { error: rowsError } = await supabase.from("workflow_run_steps").insert(rows);
+        if (rowsError) throw rowsError;
+      }
+      return NextResponse.json({run,steps:rows,sideEffectsPerformed:false},{status:201});
+    }
 
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
