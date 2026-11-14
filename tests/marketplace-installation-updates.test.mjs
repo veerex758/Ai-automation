@@ -51,7 +51,7 @@ test("runtime revocation is checked before every marketplace live step and old w
 });
 
 test("revoking a non-current installed version pauses only affected installations and notifies their owners",()=>{
- assert.match(migration,/where i.product_version_id=new.id and i.status='active'/);
+ assert.match(migration,/where i.product_version_id=new.id and i.workflow_id=w.id and i.status='active'/);
  assert.match(migration,/Marketplace version revoked/);
  assert.match(migration,/verification_revoked/);
 });
