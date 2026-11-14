@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -11,7 +12,7 @@ function validWidgets(value: unknown): value is Array<{id:string;type:string;tit
     && w.type === "metric" && typeof w.title === "string" && w.title.trim().length > 0 && w.title.length <= 60
     && typeof w.metric === "string" && allowedMetrics.has(w.metric));
 }
-async function access() {
+async function access(permission: "dashboards.view" | "dashboards.manage" = "dashboards.view") {
   const supabase = await createClient(); const {data:{user},error} = await supabase.auth.getUser();
   if (error || !user) return {response:NextResponse.json({error:"Authentication required."},{status:401,headers})};
   const workspace = await getOrCreateDefaultWorkspace(supabase);
@@ -34,7 +35,7 @@ export async function GET(_request:Request,context:{params:Promise<{dashboardId:
 }
 export async function PATCH(request:Request,context:{params:Promise<{dashboardId:string}>}) {
   try {
-    const a = await access(); if ("response" in a) return a.response;
+    const a = await access("dashboards.manage"); if ("response" in a) return a.response;
     const {dashboardId} = await context.params;
     const raw = await request.text();
     if (new TextEncoder().encode(raw).byteLength > 16384) return NextResponse.json({error:"Dashboard payload too large."},{status:413,headers});
@@ -74,7 +75,7 @@ export async function PATCH(request:Request,context:{params:Promise<{dashboardId
 }
 export async function DELETE(_request:Request,context:{params:Promise<{dashboardId:string}>}) {
   try {
-    const a = await access(); if ("response" in a) return a.response;
+    const a = await access("dashboards.manage"); if ("response" in a) return a.response;
     const {dashboardId} = await context.params;
     const {data,error} = await a.supabase.from("workspace_dashboards").delete()
       .eq("id",dashboardId).eq("workspace_id",a.workspace.id).select("id").maybeSingle();
