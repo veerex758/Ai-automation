@@ -1,6 +1,8 @@
 -- Staging runtime reconciliation: wait/resume, error outbox, rate limiting, Google products, encrypted integration writes.
 
 -- This migration preserves the already-installed cancellation status and cancellation-aware finalizer.
+-- Remove the legacy exact four-argument overload so worker RPC calls resolve to the cancellation-aware six-argument function with defaults.
+drop function if exists public.finish_execution_job(uuid,uuid,boolean,text);
 
 -- Durable Wait/Delay support. Waiting jobs release their lease and resume
 -- from persisted step checkpoints without consuming a retry attempt.
