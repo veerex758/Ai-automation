@@ -241,7 +241,7 @@ function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
       .map(([, value]) => value));
 }
 
-function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string, job: Job, leaseState: { lost: boolean; controller: AbortController }): Omit<NodeContext, "previousOutputs"> {
+function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string, job: Job, leaseState: { lost: boolean; cancelled: boolean; controller: AbortController }): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
     signal: leaseState.controller.signal,
@@ -264,7 +264,16 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
       },
     },
     authorizeOperation: async ({ nodeId, operationId, kind }) => {
+      if (leaseState.cancelled) throw new Error("EXECUTION_CANCELLED");
       if (leaseState.lost || leaseState.controller.signal.aborted) throw new Error("EXECUTION_LEASE_LOST");
+      const { data: cancellation, error: cancellationError } = await db.from("execution_jobs")
+        .select("cancel_requested_at").eq("id", job.id).eq("lease_token", job.lease_token).maybeSingle();
+      if (cancellationError) throw new Error("EXECUTION_LEASE_CHECK_FAILED");
+      if (cancellation?.cancel_requested_at) {
+        leaseState.cancelled = true;
+        leaseState.controller.abort(new Error("EXECUTION_CANCELLED"));
+        throw new Error("EXECUTION_CANCELLED");
+      }
       const { data: renewed, error: leaseError } = await db.rpc("heartbeat_execution_job", {
         p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
       });
@@ -337,13 +346,13 @@ export async function runDurableWorker() {
     throw new Error("WORKER_CLAIM_FAILED");
   }
 
-  let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
+  let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0, cancelled = 0;
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
     const workflowErrorEvent: { current: { code: string; message: string; stepId: string } | null } = { current: null };
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
-    const leaseState = { lost: false, controller: new AbortController() };
+    const leaseState = { lost: false, cancelled: false, controller: new AbortController() };
     try {
       heartbeatTimer = setInterval(() => {
         if (heartbeatInFlight) return;
@@ -355,12 +364,20 @@ export async function runDurableWorker() {
             });
             if (heartbeatError || renewed !== true) {
               leaseState.lost = true;
-              leaseState.controller.abort();
+              leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
               console.warn("Aivanta worker heartbeat was not renewed; provider execution will stop.", { jobId: job.id });
+              return;
+            }
+            const { data: cancellation, error: cancellationError } = await db.from("execution_jobs")
+              .select("cancel_requested_at").eq("id", job.id).eq("lease_token", job.lease_token).maybeSingle();
+            if (cancellationError) throw new Error("EXECUTION_LEASE_CHECK_FAILED");
+            if (cancellation?.cancel_requested_at) {
+              leaseState.cancelled = true;
+              leaseState.controller.abort(new Error("EXECUTION_CANCELLED"));
             }
           } catch {
             leaseState.lost = true;
-            leaseState.controller.abort();
+            leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
             console.warn("Aivanta worker heartbeat failed; provider execution will stop.", { jobId: job.id });
           } finally {
             heartbeatInFlight = false;
@@ -616,19 +633,27 @@ export async function runDurableWorker() {
       succeeded++;
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
-      const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
-        p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false,
-        p_error_code: workflowErrorEvent.current?.code ?? outcome,
-        p_error_step_id: workflowErrorEvent.current?.stepId ?? null,
-        p_error_message: workflowErrorEvent.current?.message ?? outcome,
-      });
-      if (finishError || finished === "lease_lost") leaseLost++;
-      else if (finished === "dead_letter") deadLettered++;
-      else if (finished === "retry_wait") retried++;
+      if (outcome === "EXECUTION_CANCELLED") {
+        const { data: cancelledResult, error: cancelError } = await db.rpc("finish_cancelled_execution_job", {
+          p_job_id: job.id, p_lease_token: job.lease_token,
+        });
+        if (cancelError || cancelledResult !== true) leaseLost++;
+        else cancelled++;
+      } else {
+        const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
+          p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false,
+          p_error_code: workflowErrorEvent.current?.code ?? outcome,
+          p_error_step_id: workflowErrorEvent.current?.stepId ?? null,
+          p_error_message: workflowErrorEvent.current?.message ?? outcome,
+        });
+        if (finishError || finished === "lease_lost") leaseLost++;
+        else if (finished === "dead_letter") deadLettered++;
+        else if (finished === "retry_wait") retried++;
+      }
       console.error("Aivanta execution job failed.", { jobId: job.id, errorCode: outcome });
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
   }
-  return { claimed: data.length, succeeded, retried, deadLettered, leaseLost };
+  return { claimed: data.length, succeeded, retried, deadLettered, leaseLost, cancelled };
 }
