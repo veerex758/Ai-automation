@@ -34,7 +34,7 @@ export async function PATCH(request:Request,ctx:Ctx){
   const admin=createAdminClient();
   const {data:target,error:targetError}=await admin.from("workspace_members").select("role").eq("workspace_id",workspaceId).eq("user_id",body.user_id).maybeSingle();
   if(targetError)throw targetError;if(!target||target.role==="owner")return NextResponse.json({error:"The workspace owner role cannot be changed here."},{status:409,headers});
-  if(a.role==="admin"&&target.role==="admin")return NextResponse.json({error:"Only the owner can change an administrator."},{status:403,headers});
+  if(target.role==="admin"&&a.role!=="owner")return NextResponse.json({error:"Only the owner can change an administrator."},{status:403,headers});
   const {error}=await admin.from("workspace_members").update({role:body.role}).eq("workspace_id",workspaceId).eq("user_id",body.user_id);
   if(error)throw error;
   return NextResponse.json({updated:true},{headers});
@@ -47,7 +47,7 @@ export async function DELETE(request:Request,ctx:Ctx){
  try{
   const admin=createAdminClient();const {data:target,error:targetError}=await admin.from("workspace_members").select("role").eq("workspace_id",workspaceId).eq("user_id",userId).maybeSingle();
   if(targetError)throw targetError;if(!target||target.role==="owner")return NextResponse.json({error:"Workspace owner cannot be removed."},{status:409,headers});
-  if(a.role==="admin"&&target.role==="admin")return NextResponse.json({error:"Only the owner can remove an administrator."},{status:403,headers});
+  if(target.role==="admin"&&a.role!=="owner")return NextResponse.json({error:"Only the owner can remove an administrator."},{status:403,headers});
   const {error}=await admin.from("workspace_members").delete().eq("workspace_id",workspaceId).eq("user_id",userId);
   if(error)throw error;return NextResponse.json({removed:true},{headers});
  }catch(e){console.error("Workspace member removal failed:",e);return NextResponse.json({error:"Could not remove member."},{status:503,headers});}
