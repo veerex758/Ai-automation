@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
@@ -11,12 +12,7 @@ export async function GET(){
   const {data:{user},error:authError}=await supabase.auth.getUser();
   if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
   const workspace=await getOrCreateDefaultWorkspace(supabase);
-  const {data:membership,error:memberError}=await supabase.from("workspace_members").select("role").eq("workspace_id",workspace.id).eq("user_id",user.id).maybeSingle();
-  if(memberError)throw memberError;
-  const {data:owner,error:ownerError}=await supabase.from("workspaces").select("owner_id").eq("id",workspace.id).maybeSingle();
-  if(ownerError)throw ownerError;
-  const role=owner?.owner_id===user.id?"owner":membership?.role;
-  if(!role||!["owner","admin"].includes(role))return NextResponse.json({error:"Workspace owner or admin access required."},{status:403,headers});
+  if (!(await hasWorkspacePermission(supabase,workspace.id,user.id,"operations.view"))) return NextResponse.json({error:"Workspace operations.view permission required."},{status:403,headers});
   const admin=createAdminClient(),since=new Date(Date.now()-24*60*60*1000).toISOString();
   const [jobs,dead,workers,runs,integrations,queued,running,retry,waiting,succeeded,deadCount]=await Promise.all([
    admin.from("execution_jobs").select("id,status,attempts,max_attempts,worker_id,last_error_code,created_at,started_at,completed_at,lease_until").eq("workspace_id",workspace.id).order("created_at",{ascending:false}).limit(200),
