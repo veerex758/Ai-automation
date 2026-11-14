@@ -3,7 +3,7 @@ import {useCallback,useEffect,useState} from "react";
 
 type Connection={id:string;provider:string;label:string};
 type Version={id:string;version:string;verification_status:string;changelog?:string};
-type Detail={installation:{id:string;status:string;workflow_id:string|null;product_status:string;product_version_id:string;configuration:Record<string,unknown>};currentVersion:Version|null;latestVersion:Version|null;updateAvailable:boolean;rollbackVersions:Version[];requiredIntegrations:unknown[];connections:Connection[]};
+type Detail={stagedVersion?:{workflow_id:string;product_version_id:string;status:"configuring"|"ready";transition_action:"update"|"rollback"}|null;installation:{id:string;status:string;workflow_id:string|null;product_status:string;product_version_id:string;configuration:Record<string,unknown>};currentVersion:Version|null;latestVersion:Version|null;updateAvailable:boolean;rollbackVersions:Version[];requiredIntegrations:unknown[];connections:Connection[]};
 export default function MarketplaceInstallationManager({installationId,productName,version,initialStatus}:{installationId:string;productName:string;version:string;initialStatus:string}){
  const [detail,setDetail]=useState<Detail|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[rollbackId,setRollbackId]=useState(""),[mappings,setMappings]=useState<Record<string,string>>({});
  const load=useCallback(async()=>{const r=await fetch("/api/marketplace/installations/"+installationId+"/lifecycle",{cache:"no-store"});const x=await r.json();if(!r.ok)throw Error(x.error??"Could not load installation.");setDetail(x as Detail);const current=x.installation?.configuration?.connections;setMappings(current&&typeof current==="object"?current as Record<string,string>:{});},[installationId]);
@@ -20,13 +20,13 @@ export default function MarketplaceInstallationManager({installationId,productNa
   <button type="button" disabled={busy} onClick={saveConnections} style={{marginTop:8}}>Save connection mappings</button>
   <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:16}}>
    {detail?.installation.status==="active"?<button disabled={busy} onClick={()=>act("pause")}>Pause</button>:null}
-   {detail?.installation.status==="configuring"?<button disabled={busy} onClick={()=>act("dry_run")}>Run dry-test</button>:null}
+   {(detail?.installation.status==="configuring"||detail?.stagedVersion?.status==="configuring")?<button disabled={busy} onClick={()=>act("dry_run")}>{detail?.stagedVersion?"Test candidate version":"Run dry-test"}</button>:null}{detail?.stagedVersion?.status==="ready"?<button disabled={busy} onClick={()=>act("activate_update")}>Apply tested {detail.stagedVersion.transition_action}</button>:null}
    {detail?.installation.status==="ready"?<button disabled={busy} onClick={()=>act("activate")}>Activate</button>:null}
-   {detail?.updateAvailable?<button disabled={busy||detail.installation.status==="active"} onClick={()=>act("update",detail.latestVersion?.id)}>Update to {detail.latestVersion?.version}</button>:null}
-   {detail?.rollbackVersions?.length?<><select value={rollbackId} onChange={e=>setRollbackId(e.target.value)}><option value="">Choose rollback version</option>{detail.rollbackVersions.map(v=><option key={v.id} value={v.id}>{v.version}</option>)}</select><button disabled={busy||!rollbackId||detail.installation.status==="active"} onClick={()=>act("rollback",rollbackId)}>Rollback</button></>:null}
+   {detail?.updateAvailable&&!detail.stagedVersion?<button disabled={busy} onClick={()=>act("update",detail.latestVersion?.id)}>Stage update to {detail.latestVersion?.version}</button>:null}
+   {detail?.rollbackVersions?.length&&!detail.stagedVersion?<><select value={rollbackId} onChange={e=>setRollbackId(e.target.value)}><option value="">Choose rollback version</option>{detail.rollbackVersions.map(v=><option key={v.id} value={v.id}>{v.version}</option>)}</select><button disabled={busy||!rollbackId} onClick={()=>act("rollback",rollbackId)}>Stage rollback</button></>:null}
    {detail?.installation.status!=="removed"?<button disabled={busy||detail.installation.status==="active"} onClick={()=>act("uninstall")}>Uninstall</button>:null}
   </div>
-  {detail?.installation.status==="active"&&detail.updateAvailable?<p>Pause the workflow before updating or rolling back.</p>:null}
+  {detail?.stagedVersion?<p role="status">Candidate {detail.stagedVersion.transition_action} is {detail.stagedVersion.status}. The currently active workflow remains live until you apply the successfully tested candidate.</p>:null}
   {notice&&<p role="status">{notice}</p>}{error&&<p role="alert" style={{color:"crimson"}}>{error}</p>}
  </article>;
 }
