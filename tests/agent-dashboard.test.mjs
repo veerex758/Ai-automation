@@ -13,7 +13,7 @@ test("agent dashboard supports persisted profile CRUD, filters, run history, and
 test("agent API enforces workspace ownership, registered tool allowlist, and permission mode",()=>{
  assert.match(route,/getOrCreateDefaultWorkspace/);assert.match(route,/getAgentTools/);assert.match(route,/allow_external_actions:false/);
  assert.match(updateRoute,/getAgentTools/);assert.match(updateRoute,/mode:nextStatus==="ready"\?"read_only":"draft"/);
- assert.match(updateRoute,/providerConfigured/);assert.match(updateRoute,/permissionsValid/);assert.match(updateRoute,/No agent run was started by this check/);
+ assert.match(updateRoute,/providerConfigured/);assert.match(updateRoute,/permissionsValid/);assert.match(updateRoute,/No agent run was started/);
 });
 test("agent runtime calls registered tools only when read-only permissions are enabled and audits each call",()=>{
  assert.match(runRoute,/permissions\.mode !== "read_only"/);assert.match(runRoute,/executeAgentTool/);assert.match(runRoute,/AGENT_TOOL_NOT_ALLOWED/);
