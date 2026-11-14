@@ -4,3 +4,4 @@
 
 .billing-stripe-checkout{margin-top:7px}.billing-stripe-checkout button{width:100%;border:1px solid #dce3d9;background:#fff;color:#344638;border-radius:7px;padding:9px 10px;font-size:10px;font-weight:700;cursor:pointer}.billing-stripe-checkout button:disabled{opacity:.5;cursor:not-allowed}.billing-stripe-checkout small{display:block;color:#a34d3d;font-size:9px;margin-top:5px}.billing-payment-retry{display:flex;gap:8px;flex-wrap:wrap;grid-column:1/-1}.billing-payment-retry button{font-size:9px;padding:7px 9px}
 .billing-receipt-link{font-size:9px;color:#536f43;text-decoration:none;white-space:nowrap}
+.billing-usage-warning{font-size:10px;color:#966b39;margin:7px 0 0}.billing-usage-warning a{color:#536f43;font-weight:700;text-decoration:underline}
