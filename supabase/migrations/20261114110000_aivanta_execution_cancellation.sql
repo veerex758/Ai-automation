@@ -51,7 +51,7 @@ begin
 end;
 $$;
 revoke all on function public.cancel_execution_job(uuid,uuid,uuid) from public, anon, authenticated;
-grant execute on function public.cancel_execution_job(uuid,uuid) to service_role;
+grant execute on function public.cancel_execution_job(uuid,uuid,uuid) to service_role;
 
 create or replace function public.finish_cancelled_execution_job(
   p_job_id uuid,
