@@ -1,6 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { findOperation } from "@/nodes/registry";
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 });
     if (workflow.status !== "active") return NextResponse.json({ error: "Only active workflows can be dispatched." }, { status: 409 });
     const registryFormat = isRecord(workflow.definition) && workflow.definition.format === "aivanta-registry-v1";
     if (registryFormat) {

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { getWorkerOperationMapping } from "@/lib/workflows/worker-operation-map";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await authenticatedWorkspace();
     if ("response" in auth) return auth.response;
+    if (!(await hasWorkspacePermission(auth.supabase, auth.workspace.id, auth.user.id, "integrations.view"))) return json({ error: "Workspace integrations.view permission required." }, 403);
     const { data, error } = await adminClient().from("workspace_provider_operation_approvals")
       .select("id,provider,node_id,operation_id,decision,decided_by,decided_at,reason")
       .eq("workspace_id", auth.workspace.id)

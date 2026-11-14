@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 import type { NodeContext } from "@/nodes/types";
 
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 });
     if (!dryRun && workflow.status !== "active") return NextResponse.json({ error: "Activate this workflow before live execution." }, { status: 409 });
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;

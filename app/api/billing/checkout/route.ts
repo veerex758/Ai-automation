@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { getOrCreateDefaultWorkspace, getWorkspaceRole, canManageWorkspaceBilling } from "@/lib/supabase/workspace";
 import { createClient } from "@/lib/supabase/server";
-import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createPaymentReference, getPaidPlan } from "@/lib/billing/paystack";
 export const runtime = "nodejs";
@@ -14,7 +14,10 @@ export async function POST(request: Request) {
     const secret = process.env.PAYSTACK_SECRET_KEY;
     if (!secret) return NextResponse.json({ error: "Payment provider is not configured." }, { status: 503 });
     if (!user.email) return NextResponse.json({ error: "Account email is required." }, { status: 400 });
-    const workspace = await getOrCreateDefaultWorkspace(client), reference = createPaymentReference(), admin = createAdminClient();
+    const workspace = await getOrCreateDefaultWorkspace(client);
+    const role = await getWorkspaceRole(client, workspace.id, user.id);
+    if (!canManageWorkspaceBilling(role)) return NextResponse.json({ error: "Workspace owner or admin access required for billing changes." }, { status: 403 });
+    const reference = createPaymentReference(), admin = createAdminClient();
     const { error: insertError } = await admin.from("billing_payments").insert({ workspace_id: workspace.id, user_id: user.id, reference, plan_slug: plan.slug, amount_minor: plan.amountMinor, currency: plan.currency, status: "pending" });
     if (insertError) throw insertError;
     const response = await fetch("https://api.paystack.co/transaction/initialize", { method: "POST", headers: { Authorization: "Bearer " + secret, "Content-Type": "application/json" }, body: JSON.stringify({ email: user.email, amount: plan.amountMinor, currency: plan.currency, reference, callback_url: new URL("/dashboard/billing/verify", request.url).toString(), metadata: { workspace_id: workspace.id, user_id: user.id, plan_slug: plan.slug, plan_key: plan.planKey, interval: plan.interval } }), cache: "no-store" });
