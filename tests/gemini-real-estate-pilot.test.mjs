@@ -19,27 +19,28 @@ test("Gemini lead qualification is a registered structured operation and does no
   assert.match(node, /responseJsonSchema: leadJsonSchema/);
 });
 
-test("activation is explicit, constrained to the supported three-step pilot, and requires an exact-version successful dry-run", () => {
+test("activation validates any saved registry graph and gates live execution by version, connections, and approvals", () => {
   assert.match(activation, /updates\.status === "active"/);
-  assert.match(activation, /definition\.steps\.length !== 3/);
-  assert.match(activation, /steps\[1\].*nodeId === "gemini"/s);
-  assert.match(activation, /steps\[2\].*nodeId === "email"/s);
-  assert.match(activation, /GEMINI_API_KEY/);
-  assert.match(activation, /RESEND_API_KEY/);
-  assert.match(activation, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+  assert.match(activation, /validateRegisteredSteps\(stored\.steps\)/);
+  assert.match(activation, /validateDurableLiveSteps\(steps\)/);
   assert.match(activation, /workflow_version", candidate\.version/);
   assert.match(activation, /mode", "dry_run"/);
   assert.match(activation, /status", "succeeded"/);
+  assert.match(activation, /workspace_integrations/);
+  assert.match(activation, /google_connections/);
+  assert.match(activation, /workspace_provider_operation_approvals/);
+  assert.doesNotMatch(activation, /definition\.steps\.length !== 3/);
+  assert.doesNotMatch(activation, /qualify_real_estate_lead/);
 });
 
-test("manual and signed-webhook live paths allow only the explicit Gemini qualification operation", () => {
-  for (const source of [registryRun, webhook]) {
-    assert.match(source, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
-    assert.match(source, /GEMINI_API_KEY/);
-    assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-    assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  }
-  assert.match(webhook, /hourlyRuns/);
+test("legacy synchronous registry pilot remains constrained while signed webhooks use durable execution", () => {
+  assert.match(registryRun, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
+  assert.match(registryRun, /GEMINI_API_KEY/);
+  assert.match(registryRun, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+  assert.match(webhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true"/);
+  assert.match(webhook, /validateDurableLiveSteps\(steps\)/);
+  assert.match(webhook, /p_execution_mode: "live"/);
+  assert.match(webhook, /webhookVerified: true/);
 });
 
 test("webhook signing secrets remain server-side and CODED Supabase service credentials are supported", () => {

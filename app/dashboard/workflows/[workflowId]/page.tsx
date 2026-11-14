@@ -183,9 +183,52 @@ export default function WorkflowBuilderPage() {
     setError(""); setNotice("Generating a reviewable draft…");
     try {
       const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
-      const payload = await response.json();
-      if (!response.ok || !payload.definition?.nodes?.length) throw new Error(payload.error || "AI could not create a draft.");
-      const generated = payload.definition as Definition;
+      const payload = await response.json() as {
+        definition?: Definition;
+        registrySteps?: Array<{ id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> }>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || "AI could not create a draft.");
+
+      // Registry generation returns executable, schema-validated steps separately
+      // from its legacy placeholder definition. Build the canvas from those steps
+      // so the user reviews the actual proposed workflow rather than one empty trigger.
+      const steps = Array.isArray(payload.registrySteps) ? payload.registrySteps : [];
+      const hasGeneratedGraph = Boolean(payload.definition?.nodes?.some((node) => node.registryNodeId));
+      const generated: Definition = hasGeneratedGraph
+        ? payload.definition as Definition
+        : steps.length
+        ? {
+            version: 1,
+            nodes: steps.map((step, index) => {
+              const provider = registryCatalog.find((item) => item.id === step.nodeId);
+              const operation = (step.kind === "trigger" ? provider?.triggers : provider?.actions)
+                ?.find((item) => item.id === step.operationId);
+              const settings: Record<string, string> = step.kind === "trigger"
+                ? { event: "manual" }
+                : { provider: step.nodeId, operation: step.operationId };
+              return {
+                id: step.id,
+                type: step.kind,
+                title: operation?.name || provider?.name || step.operationId,
+                description: operation?.description || provider?.name || "Registered workflow operation.",
+                settings,
+                registryNodeId: step.nodeId,
+                registryOperationId: step.operationId,
+                registryInput: step.input,
+                position: { x: 170, y: 90 + index * 210 },
+              };
+            }),
+            edges: steps.slice(1).map((step, index) => ({
+              id: `ai-edge-${index + 1}`,
+              source: steps[index].id,
+              target: step.id,
+              label: "next" as const,
+            })),
+          }
+        : payload.definition as Definition;
+
+      if (!generated?.nodes?.length) throw new Error("AI could not create a reviewable workflow draft.");
       const normalized = { ...generated, edges: generated.edges ?? generated.nodes.slice(1).map((node, index) => ({ id: "ai-edge-" + index, source: generated.nodes[index].id, target: node.id, label: "next" as const })) };
       draftRevision.current += 1; setValidation(null); setDefinition(normalized); setSelectedId(normalized.nodes[0]?.id ?? "");
       setNotice("AI draft loaded onto the canvas. Review and edit it, then Save workflow; it has not been executed.");
@@ -457,7 +500,6 @@ export default function WorkflowBuilderPage() {
             workflowId={workflowId}
             hasUnsavedChanges={isDirty}
             workflowStatus={workflow?.status ?? "draft"}
-            liveEmailRecipient={liveEmailRecipient}
             isWebhookTrigger={isWebhookTrigger}
           />
           <div className="builder-canvas">

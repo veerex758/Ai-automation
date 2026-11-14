@@ -102,7 +102,7 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /onStepStart/);
   assert.match(workerService, /onStepComplete/);
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
-  assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
+  assert.match(workerService, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED === "true"/);
   assert.match(workerService, /p_limit: 1/);
   assert.match(workerService, /length > MAX_LIVE_ACTION_STEPS/);
   assert.match(workerService, /MAX_LIVE_ACTION_STEPS = 30/);
@@ -201,4 +201,19 @@ test("Error Trigger dispatches active same-workspace subscribers through the dur
   assert.match(workerService, /job\.execution_mode === "live" && source !== "error_trigger"/);
   assert.match(workerService, /source === "error_trigger"/);
   assert.match(workerService, /step\.nodeId === "error_trigger"/);
+});
+
+const cancellationMigration = readFileSync(
+  new URL("../supabase/migrations/20261114072354_aivanta_execution_cancellation.sql", import.meta.url),
+  "utf8",
+);
+
+test("durable execution supports safe cancellation for queued and leased work", () => {
+  assert.match(cancellationMigration, /cancel_requested_at/);
+  assert.match(cancellationMigration, /status = 'cancelled'/);
+  assert.match(cancellationMigration, /return 'cancellation_requested'/);
+  assert.match(cancellationMigration, /finish_cancelled_execution_job/);
+  assert.match(cancellationMigration, /revoke all on function public\.cancel_execution_job/);
+  assert.match(workerService, /finish_cancelled_execution_job/);
+  assert.match(workerService, /EXECUTION_CANCELLED/);
 });

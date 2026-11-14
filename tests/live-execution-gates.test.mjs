@@ -18,7 +18,9 @@ test("durable live execution resolves providers from the complete registry opera
   assert.match(durableWorker, /getWorkerOperationMapping, getWorkerProvider/);
   assert.match(durableWorker, /return providerPackLiveId\(step\) \?\? getWorkerProvider\(step\)/);
   assert.match(workerOperationMap, /entries\.map/);
+  assert.match(durableWorker, /const provider = providerForStep\(step\);/);
   assert.match(durableWorker, /return isProviderLiveEnabled\(provider, process\.env\.AIVANTA_LIVE_INTEGRATIONS\)/);
+  assert.doesNotMatch(durableWorker, /step\.kind === "action" \? providerForStep\(step\) : null/);
   assert.match(durableWorker, /WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED/);
   assert.match(durableWorker, /AIVANTA_LIVE_VOICE_RECIPIENTS/);
   assert.match(durableWorker, /AIVANTA_LIVE_PUBLISHING_ENABLED/);

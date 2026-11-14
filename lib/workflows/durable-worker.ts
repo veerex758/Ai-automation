@@ -159,6 +159,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
   }
+  if (step.kind === "trigger" && step.nodeId === "webhooks" && step.operationId === "receive_event") return process.env.AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED === "true";
   if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture"))) return true;
   if (step.kind === "action" && new Set([
     "if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields",
@@ -172,7 +173,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   ]).has(step.nodeId + "." + step.operationId)) return true;
   const providerPackProvider = providerPackLiveId(step);
   if (providerPackProvider) return isProviderLiveEnabled(providerPackProvider, process.env.AIVANTA_LIVE_INTEGRATIONS);
-  const provider = step.kind === "action" ? providerForStep(step) : null;
+  const provider = providerForStep(step);
   if (!provider) return false;
   // Every external provider, including OpenAI, Gemini, Resend and both Slack
   // actions, must have its own explicit server-side opt-in. Unknown paths fail closed.
@@ -218,6 +219,15 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
   return null;
 }
 
+function safeWebhookTriggerOutput(job: Job): Record<string, unknown> {
+  const input = isRecord(job.payload?.input) ? job.payload.input : {};
+  return {
+    eventId: typeof input.eventId === "string" ? input.eventId : "omitted",
+    eventType: typeof input.eventType === "string" ? input.eventType : "omitted",
+    receivedAt: typeof input.receivedAt === "string" ? input.receivedAt : "omitted",
+    payloadSha256: typeof job.payload.payloadSha256 === "string" ? job.payload.payloadSha256 : "omitted",
+  };
+}
 function boundedOutput(value: unknown, knownSecrets: readonly string[] = []): Record<string, unknown> {
   const safe = redactSensitiveData(value, knownSecrets);
   if (Array.isArray(safe)) {
@@ -241,9 +251,10 @@ function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
       .map(([, value]) => value));
 }
 
-function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string): Omit<NodeContext, "previousOutputs"> {
+function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string, job: Job, leaseState: { lost: boolean; cancelled: boolean; controller: AbortController }): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
+    signal: leaseState.controller.signal,
     logger: {
       info(message, meta) { console.info("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
       error(message, meta) { console.error("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
@@ -257,11 +268,30 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
           headers: args.headers ?? {},
           body: args.body,
           timeoutMs,
+          signal: leaseState.controller.signal,
         });
         return { status: response.status, body: response.body };
       },
     },
     authorizeOperation: async ({ nodeId, operationId, kind }) => {
+      if (leaseState.cancelled) throw new Error("EXECUTION_CANCELLED");
+      if (leaseState.lost || leaseState.controller.signal.aborted) throw new Error("EXECUTION_LEASE_LOST");
+      const { data: cancellation, error: cancellationError } = await db.from("execution_jobs")
+        .select("cancel_requested_at").eq("id", job.id).eq("lease_token", job.lease_token).maybeSingle();
+      if (cancellationError) throw new Error("EXECUTION_LEASE_CHECK_FAILED");
+      if (cancellation?.cancel_requested_at) {
+        leaseState.cancelled = true;
+        leaseState.controller.abort(new Error("EXECUTION_CANCELLED"));
+        throw new Error("EXECUTION_CANCELLED");
+      }
+      const { data: renewed, error: leaseError } = await db.rpc("heartbeat_execution_job", {
+        p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
+      });
+      if (leaseError || renewed !== true) {
+        leaseState.lost = true;
+        leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
+        throw new Error("EXECUTION_LEASE_LOST");
+      }
       const mapping = getWorkerOperationMapping({ nodeId, operationId, kind });
       if (!mapping) throw new Error("WORKER_OPERATION_MAPPING_MISSING");
       if (!mapping.provider) return;
@@ -326,12 +356,13 @@ export async function runDurableWorker() {
     throw new Error("WORKER_CLAIM_FAILED");
   }
 
-  let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
+  let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0, cancelled = 0;
   for (const job of data as Job[]) {
     let outcome = "EXECUTION_FAILED";
     const workflowErrorEvent: { current: { code: string; message: string; stepId: string } | null } = { current: null };
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
+    const leaseState = { lost: false, cancelled: false, controller: new AbortController() };
     try {
       heartbeatTimer = setInterval(() => {
         if (heartbeatInFlight) return;
@@ -342,10 +373,22 @@ export async function runDurableWorker() {
               p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
             });
             if (heartbeatError || renewed !== true) {
-              console.warn("Aivanta worker heartbeat was not renewed.", { jobId: job.id });
+              leaseState.lost = true;
+              leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
+              console.warn("Aivanta worker heartbeat was not renewed; provider execution will stop.", { jobId: job.id });
+              return;
+            }
+            const { data: cancellation, error: cancellationError } = await db.from("execution_jobs")
+              .select("cancel_requested_at").eq("id", job.id).eq("lease_token", job.lease_token).maybeSingle();
+            if (cancellationError) throw new Error("EXECUTION_LEASE_CHECK_FAILED");
+            if (cancellation?.cancel_requested_at) {
+              leaseState.cancelled = true;
+              leaseState.controller.abort(new Error("EXECUTION_CANCELLED"));
             }
           } catch {
-            console.warn("Aivanta worker heartbeat failed.", { jobId: job.id });
+            leaseState.lost = true;
+            leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
+            console.warn("Aivanta worker heartbeat failed; provider execution will stop.", { jobId: job.id });
           } finally {
             heartbeatInFlight = false;
           }
@@ -378,8 +421,7 @@ export async function runDurableWorker() {
         if (source === "error_trigger" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "error_trigger" || steps[0]?.operationId !== "capture")) {
           throw new Error("INVALID_ERROR_TRIGGER_DEFINITION");
         }
-        if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
+        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || source === "webhook" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
@@ -389,7 +431,7 @@ export async function runDurableWorker() {
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
         executionSecrets = knownCredentialValues(credentials);
-        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
+        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id, job, leaseState);
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
@@ -409,6 +451,11 @@ export async function runDurableWorker() {
               ? checkpoint.output.__aivantaArray : checkpoint.output;
             completedStepIds.push(checkpoint.step_id);
           }
+        }
+        // Keep raw webhook data in the server-only job payload for wait/resume.
+        // Persist only stable event metadata and a payload hash in checkpoints.
+        if (source === "webhook" && steps[0]?.nodeId === "webhooks" && isRecord(job.payload?.input)) {
+          initialOutputs[steps[0].id] = job.payload.input;
         }
         const registryResult = await executeRegisteredWorkflow({
           steps, context, dryRun: job.execution_mode !== "live", initialOutputs, completedStepIds,
@@ -435,7 +482,7 @@ export async function runDurableWorker() {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
               db, job, step, position, completed.status === "succeeded" ? "succeeded" : "skipped",
-              boundedOutput(completed.output, executionSecrets),
+              step.nodeId === "webhooks" ? safeWebhookTriggerOutput(job) : boundedOutput(completed.output, executionSecrets),
             ),
           } : {}),
         });
@@ -457,7 +504,7 @@ export async function runDurableWorker() {
             title: (steps[index]?.nodeId + "." + steps[index]?.operationId).slice(0, 80),
             status: step.status,
             message: step.error ?? (step.status === "succeeded" ? "Registered operation executed." : "Registered operation validated; no provider action was executed."),
-            output: step.output,
+            output: steps[index]?.nodeId === "webhooks" ? safeWebhookTriggerOutput(job) : step.output,
           })),
         };
       } else {
@@ -511,7 +558,7 @@ export async function runDurableWorker() {
             ];
             const liveResult = await executeRegisteredWorkflow({
               steps: registrySteps,
-              context: executionContext(credentials, false, db, job.workspace_id),
+              context: executionContext(credentials, false, db, job.workspace_id, job, leaseState),
               dryRun: false,
               onStepStart: async (step, position) => {
                 await persistCheckpoint(db, job, step, position, "started");
@@ -596,23 +643,33 @@ export async function runDurableWorker() {
       const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
         p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: true, p_error_code: null,
       });
-      if (finishError || finished !== "succeeded") { leaseLost++; continue; }
+      if (finishError) { leaseLost++; continue; }
+      if (finished === "cancelled") { cancelled++; continue; }
+      if (finished !== "succeeded") { leaseLost++; continue; }
       succeeded++;
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
-      const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
-        p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false,
-        p_error_code: workflowErrorEvent.current?.code ?? outcome,
-        p_error_step_id: workflowErrorEvent.current?.stepId ?? null,
-        p_error_message: workflowErrorEvent.current?.message ?? outcome,
-      });
-      if (finishError || finished === "lease_lost") leaseLost++;
-      else if (finished === "dead_letter") deadLettered++;
-      else if (finished === "retry_wait") retried++;
+      if (outcome === "EXECUTION_CANCELLED") {
+        const { data: cancelledResult, error: cancelError } = await db.rpc("finish_cancelled_execution_job", {
+          p_job_id: job.id, p_lease_token: job.lease_token,
+        });
+        if (cancelError || cancelledResult !== true) leaseLost++;
+        else cancelled++;
+      } else {
+        const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
+          p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: false,
+          p_error_code: workflowErrorEvent.current?.code ?? outcome,
+          p_error_step_id: workflowErrorEvent.current?.stepId ?? null,
+          p_error_message: workflowErrorEvent.current?.message ?? outcome,
+        });
+        if (finishError || finished === "lease_lost") leaseLost++;
+        else if (finished === "dead_letter") deadLettered++;
+        else if (finished === "retry_wait") retried++;
+      }
       console.error("Aivanta execution job failed.", { jobId: job.id, errorCode: outcome });
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
   }
-  return { claimed: data.length, succeeded, retried, deadLettered, leaseLost };
+  return { claimed: data.length, succeeded, retried, deadLettered, leaseLost, cancelled };
 }

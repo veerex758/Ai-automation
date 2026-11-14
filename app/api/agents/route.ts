@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { getAgentTools } from "@/lib/agents/tool-runtime";
 
 const headers={"Cache-Control":"private, no-store"};
 const toolPattern=/^[a-z][a-z0-9._:-]{0,79}$/;
@@ -18,8 +19,9 @@ function cleanAgent(input: unknown) {
  if(instructions.length>12000)return {error:"Instructions cannot exceed 12,000 characters."};
  if(model.length<1||model.length>120)return {error:"Model name must be 1–120 characters."};
  if(tools.length>30||tools.some(x=>typeof x!=="string"||!toolPattern.test(x)))return {error:"Select up to 30 valid tool identifiers."};
+ try { getAgentTools(tools as string[]); } catch { return {error:"Choose only approved read-only tools: workflow.list, workflow.get, integrations.list."}; }
  const status=v.status==="paused"?"paused":v.status==="ready"?"ready":"draft";
- return {value:{name,description,instructions,model_provider:provider,model_name:model,tool_ids:[...new Set(tools as string[])],permissions:{mode:"draft",allow_external_actions:false},status}};
+ return {value:{name,description,instructions,model_provider:provider,model_name:model,tool_ids:[...new Set(tools as string[])],permissions:{mode:status==="ready"?"read_only":"draft",allow_external_actions:false},status}};
 }
 async function auth(){
  const supabase=await createClient();const {data:{user},error}=await supabase.auth.getUser();
