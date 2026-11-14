@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
 
 export const runtime = "nodejs";
@@ -62,6 +64,7 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.view"))) return json({ error: "Workspace integrations.view permission required." }, 403);
     const { data, error } = await supabase.from("workspace_integrations")
       .select("id,provider,status,display_name,last_tested_at,last_test_status,updated_at")
       .eq("workspace_id", workspace.id).order("provider", { ascending: true });
@@ -106,12 +109,7 @@ export async function POST(request: NextRequest) {
     const displayName = typeof body.displayName === "string" && body.displayName.trim()
       ? body.displayName.trim().slice(0, 120) : labels[provider];
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
-      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
-    if (membershipError) throw membershipError;
-    if (!membership || !["owner", "admin"].includes(membership.role)) {
-      return json({ error: "Only workspace owners and admins can manage integrations." }, 403);
-    }
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.manage"))) return json({ error: "Workspace integrations.manage permission required." }, 403);
 
     let encrypted: string;
     try {
