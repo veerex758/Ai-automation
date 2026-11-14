@@ -23,7 +23,7 @@ Source of truth: `docs/marketplace/MASTER-SPEC.md`. This ledger separates merged
 
 | Blueprint item | State | Evidence / remaining acceptance |
 |---|---|---|
-| Provider checkout, signed webhook, idempotent purchase + entitlement | Implemented foundation on main | Paystack/Stripe adapters, atomic finalization, webhook processing tests. Provider sandbox checkout still unexecuted. |
+| Provider checkout, signed webhook, idempotent purchase + entitlement | Implemented foundation on main; sandbox isolation in PR #209 | Stripe/Paystack adapters, atomic finalization and signed webhook/reversal processor. New gated sandbox session API/RPC is simulated only and explicitly creates no purchase, entitlement or ledger entry. Actual provider sandbox checkout/renewal/refund/dispute/reconciliation still requires test credentials and finance approval. |
 | 20/80 ledger, refunds/reversals/chargebacks | Implemented foundation on main | Append-only financial ledger and reversal/reconciliation tests. Live provider statement matching is external acceptance. |
 | Creator earnings/balance/statements/payout requests | Implemented on main | Creator earnings/payout APIs, SQL ledger RPCs and finance review. |
 | Creator payout profile/onboarding/tax/eligibility/holds | Implemented gate foundation | Payout profile, verified/tax/hold checks; actual provider KYC is country/account dependent. |
