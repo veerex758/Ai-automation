@@ -11,6 +11,7 @@ export default function OperationsPage(){
   <header className="operations-header"><div><Link href="/dashboard">← Workspace</Link><p>PLATFORM CONTROL</p><h1>Operational monitoring</h1><span>Queue, worker, execution and integration health for this workspace.</span></div><button onClick={()=>void load()} disabled={loading}>↻ Refresh diagnostics</button></header>
   {error&&<p className="operations-error" role="alert">{error}</p>}
   {loading&&!data?<p>Loading operational diagnostics…</p>:data&&<>
+   {data.alerts.length>0&&<section className="operations-panel operations-alerts"><h2>Active alerts</h2>{data.alerts.map(alert=><p key={alert}>⚠ {alert}</p>)}</section>}
    <section className="operations-stats">
     <article><small>QUEUED</small><strong>{data.queue.queued||0}</strong><span>Waiting to run</span></article>
     <article><small>RUNNING</small><strong>{data.queue.running||0}</strong><span>Leased jobs</span></article>
