@@ -182,3 +182,24 @@ begin
 end $$;
 revoke all on function public.accept_workspace_invitation(text,uuid,text) from public,anon,authenticated;
 grant execute on function public.accept_workspace_invitation(text,uuid,text) to service_role;
+
+create or replace function public.transfer_workspace_ownership(p_workspace_id uuid,p_new_owner_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_owner uuid;
+begin
+ if auth.role()<>'service_role' then raise exception 'service role required' using errcode='42501'; end if;
+ select owner_id into v_owner from public.workspaces where id=p_workspace_id for update;
+ if not found then raise exception 'workspace not found' using errcode='P0002'; end if;
+ if p_new_owner_id is null or p_new_owner_id=v_owner then raise exception 'new owner must be a different workspace member' using errcode='22023'; end if;
+ if not exists(select 1 from public.workspace_members where workspace_id=p_workspace_id and user_id=p_new_owner_id) then
+  raise exception 'new owner must already be a workspace member' using errcode='22023';
+ end if;
+ update public.workspaces set owner_id=p_new_owner_id,updated_at=now() where id=p_workspace_id;
+ update public.workspace_members set role='admin' where workspace_id=p_workspace_id and user_id=v_owner;
+ update public.workspace_members set role='owner' where workspace_id=p_workspace_id and user_id=p_new_owner_id;
+ insert into public.audit_events(workspace_id,actor_user_id,event_type,resource_type,resource_id,metadata)
+ values(p_workspace_id,v_owner,'workspace.ownership_transferred','workspace',p_workspace_id::text,jsonb_build_object('previous_owner_id',v_owner,'new_owner_id',p_new_owner_id));
+ return jsonb_build_object('transferred',true,'previous_owner_id',v_owner,'new_owner_id',p_new_owner_id);
+end $$;
+revoke all on function public.transfer_workspace_ownership(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.transfer_workspace_ownership(uuid,uuid) to service_role;
