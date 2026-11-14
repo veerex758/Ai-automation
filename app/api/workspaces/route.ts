@@ -15,7 +15,7 @@ export async function GET(){
   if(listError)throw listError;
   const cookieStore=await cookies(),activeId=cookieStore.get("aivanta_active_workspace")?.value;
   const selected=(data??[]).find(w=>w.id===activeId)??await getOrCreateDefaultWorkspace(supabase);
-  return NextResponse.json({workspaces:data??[],active_workspace_id:selected.id},{headers});
+  return NextResponse.json({workspaces:data??[],active_workspace_id:selected.id,user_id:user.id},{headers});
  }catch(error){console.error("Workspace list failed:",error);return NextResponse.json({error:"Could not load workspaces."},{status:503,headers});}
 }
 export async function POST(request:Request){
