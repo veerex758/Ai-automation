@@ -45,6 +45,7 @@ async function runTools(
     const startedAt = Date.now();
     try {
       const result = await executeAgentTool(supabase, workspaceId, tool.id, call.args);
+      if (Buffer.byteLength(JSON.stringify(result), "utf8") > 12000) throw new Error("AGENT_TOOL_OUTPUT_TOO_LARGE");
       const { error: auditError } = await supabase.from("agent_activity").insert({
         workspace_id: workspaceId, agent_id: agentId, actor_user_id: actorUserId,
         event_type: "agent.tool_executed",
@@ -184,7 +185,8 @@ export async function POST(request: NextRequest, context: Context) {
     if (!output) throw new Error("AI_EMPTY_RESPONSE");
     const { error: completeError } = await a.supabase.from("agent_runs").update({ status: "completed", output: output.slice(0, 20000), finished_at: new Date().toISOString() }).eq("id", run.id);
     if (completeError) throw new Error("AGENT_RUN_PERSIST_FAILED");
-    await a.supabase.from("agent_activity").insert({ workspace_id: agent.workspace_id, agent_id: agent.id, actor_user_id: a.user.id, event_type: "agent.run_completed", details: { run_id: run.id, provider: agent.model_provider, tools_enabled: toolDefinitions.map((tool) => tool.id) } });
+    const { error: auditError } = await a.supabase.from("agent_activity").insert({ workspace_id: agent.workspace_id, agent_id: agent.id, actor_user_id: a.user.id, event_type: "agent.run_completed", details: { run_id: run.id, provider: agent.model_provider, tools_enabled: toolDefinitions.map((tool) => tool.id) } });
+    if (auditError) throw new Error("AGENT_RUN_AUDIT_FAILED");
     return NextResponse.json({ run: { id: run.id, status: "completed", output } }, { headers });
   } catch (error) {
     errorCode = error instanceof Error && /^[A-Z0-9_]{1,80}$/.test(error.message) ? error.message : "AI_PROVIDER_ERROR";
