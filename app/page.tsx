@@ -11,7 +11,7 @@ const features = [["⌘","Workflows","& Automations"],["♧","AI-Powered","Assis
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return <Link className={compact ? "rx-brand rx-brand-compact" : "rx-brand"} href="/" aria-label="Rexnora home">
-    <span className="rx-mark"><img src="/rexnora-mark.svg" alt="" /></span><span className="rx-wordmark">REXNORA</span>
+    <img className="rx-lockup" src="/rexnora-lockup.svg" alt="Rexnora" style={{width:compact?"168px":"240px",height:compact?"34px":"48px",objectFit:"contain"}}/>
   </Link>;
 }
 
