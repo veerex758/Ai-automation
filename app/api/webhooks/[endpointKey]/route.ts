@@ -166,7 +166,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       p_workflow_version: workflow.version,
       p_created_by: null,
       p_idempotency_key: "webhook:" + endpoint.id + ":" + eventKey,
-      p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
+      p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id, payloadSha256 },
       p_max_attempts: 1,
       p_execution_mode: "live",
     });
