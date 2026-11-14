@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOrCreateDefaultWorkspace, getWorkspaceRole, canManageWorkspaceBilling } from "@/lib/supabase/workspace";
+import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getPaidPlan } from "@/lib/billing/paystack";
@@ -15,7 +15,6 @@ export async function GET() {
  const supabase=await createClient(),{data:{user},error}=await supabase.auth.getUser();
  if(error||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers:{"Cache-Control":"private,no-store"}});
  const workspace=await getOrCreateDefaultWorkspace(supabase);
- const role=await getWorkspaceRole(supabase,workspace.id,user.id);
  if(!(await hasWorkspacePermission(supabase,workspace.id,user.id,"billing.view")))return NextResponse.json({error:"Workspace billing.view permission required."},{status:403,headers:{"Cache-Control":"private,no-store"}});
  const {data:entitlement,error:entitlementError}=await supabase.rpc("get_workspace_entitlements",{p_workspace_id:workspace.id});
  if(entitlementError)return NextResponse.json({error:"Billing entitlements are not available yet. Apply the Phase 5 migration."},{status:503,headers:{"Cache-Control":"private,no-store"}});
