@@ -24,7 +24,7 @@ test("revocation is privileged, reasoned, version-specific and audited",()=>{
 test("reverification creates a new queued review and returns revoked version to pending",()=>{
  assert.match(migration,/marketplace_require_reverification/);
  assert.match(migration,/verification_status='pending'/);
- assert.match(migration,/review_type='reverification'/);
+ assert.match(migration,/'reverification','queued'/);
  assert.match(migration,/marketplace_reverification_required/);
 });
 
