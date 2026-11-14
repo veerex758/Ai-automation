@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type WorkspaceSummary = {
   id: string;
@@ -51,15 +52,24 @@ export async function getWorkspaceRole(
 ): Promise<string | null> {
   const [{ data: workspace, error: workspaceError }, { data: membership, error: membershipError }] = await Promise.all([
     supabase.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle(),
-    supabase.from("workspace_members").select("role").eq("workspace_id", workspaceId).eq("user_id", userId).maybeSingle(),
+    supabase.from("workspace_members").select("role,custom_role_id").eq("workspace_id", workspaceId).eq("user_id", userId).maybeSingle(),
   ]);
   if (workspaceError) throw workspaceError;
   if (membershipError) throw membershipError;
   if (!workspace) return null;
   if (workspace.owner_id === userId) return "owner";
-  return membership?.role ?? null;
+  if (!membership) return null;
+  if (membership.custom_role_id) {
+    const admin = createAdminClient();
+    const { data: customRole, error } = await admin.from("workspace_custom_roles").select("permissions").eq("id", membership.custom_role_id).eq("workspace_id", workspaceId).maybeSingle();
+    if (error) throw error;
+    const permissions = customRole?.permissions as Record<string, unknown> | null;
+    if (permissions?.["billing.manage"] === true) return "billing_manager";
+    return "custom_member";
+  }
+  return membership.role ?? null;
 }
 
 export function canManageWorkspaceBilling(role: string | null): boolean {
-  return role === "owner" || role === "admin";
+  return role === "owner" || role === "admin" || role === "billing_manager";
 }
