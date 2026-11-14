@@ -241,9 +241,10 @@ function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
       .map(([, value]) => value));
 }
 
-function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string): Omit<NodeContext, "previousOutputs"> {
+function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string, job: Job, leaseState: { lost: boolean; controller: AbortController }): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
+    signal: leaseState.controller.signal,
     logger: {
       info(message, meta) { console.info("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
       error(message, meta) { console.error("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
@@ -257,11 +258,21 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
           headers: args.headers ?? {},
           body: args.body,
           timeoutMs,
+          signal: leaseState.controller.signal,
         });
         return { status: response.status, body: response.body };
       },
     },
     authorizeOperation: async ({ nodeId, operationId, kind }) => {
+      if (leaseState.lost || leaseState.controller.signal.aborted) throw new Error("EXECUTION_LEASE_LOST");
+      const { data: renewed, error: leaseError } = await db.rpc("heartbeat_execution_job", {
+        p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
+      });
+      if (leaseError || renewed !== true) {
+        leaseState.lost = true;
+        leaseState.controller.abort();
+        throw new Error("EXECUTION_LEASE_LOST");
+      }
       const mapping = getWorkerOperationMapping({ nodeId, operationId, kind });
       if (!mapping) throw new Error("WORKER_OPERATION_MAPPING_MISSING");
       if (!mapping.provider) return;
@@ -332,6 +343,7 @@ export async function runDurableWorker() {
     const workflowErrorEvent: { current: { code: string; message: string; stepId: string } | null } = { current: null };
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     let heartbeatInFlight = false;
+    const leaseState = { lost: false, controller: new AbortController() };
     try {
       heartbeatTimer = setInterval(() => {
         if (heartbeatInFlight) return;
@@ -342,10 +354,14 @@ export async function runDurableWorker() {
               p_job_id: job.id, p_lease_token: job.lease_token, p_lease_seconds: 120,
             });
             if (heartbeatError || renewed !== true) {
-              console.warn("Aivanta worker heartbeat was not renewed.", { jobId: job.id });
+              leaseState.lost = true;
+              leaseState.controller.abort();
+              console.warn("Aivanta worker heartbeat was not renewed; provider execution will stop.", { jobId: job.id });
             }
           } catch {
-            console.warn("Aivanta worker heartbeat failed.", { jobId: job.id });
+            leaseState.lost = true;
+            leaseState.controller.abort();
+            console.warn("Aivanta worker heartbeat failed; provider execution will stop.", { jobId: job.id });
           } finally {
             heartbeatInFlight = false;
           }
@@ -389,7 +405,7 @@ export async function runDurableWorker() {
           ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
           : {};
         executionSecrets = knownCredentialValues(credentials);
-        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
+        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id, job, leaseState);
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
@@ -511,7 +527,7 @@ export async function runDurableWorker() {
             ];
             const liveResult = await executeRegisteredWorkflow({
               steps: registrySteps,
-              context: executionContext(credentials, false, db, job.workspace_id),
+              context: executionContext(credentials, false, db, job.workspace_id, job, leaseState),
               dryRun: false,
               onStepStart: async (step, position) => {
                 await persistCheckpoint(db, job, step, position, "started");
