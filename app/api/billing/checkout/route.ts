@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrCreateDefaultWorkspace, getWorkspaceRole, canManageWorkspaceBilling } from "@/lib/supabase/workspace";
 import { createClient } from "@/lib/supabase/server";
-import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createPaymentReference, getPaidPlan } from "@/lib/billing/paystack";
 export const runtime = "nodejs";
