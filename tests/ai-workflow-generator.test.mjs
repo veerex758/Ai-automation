@@ -121,3 +121,24 @@ test("registry mode rejects unexpected top-level fields", async () => {
   const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], execute: true };
   await assert.rejects(generateWorkflow({ prompt: "Start manually", mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);
 });
+
+test("registry mode preserves an explicit conditional graph for server-side validation", async () => {
+  const plan = {
+    registrySteps: [
+      { id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+      { id: "check", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "{{start.payload.score}}", operator: "greater_than", compareTo: 10 } },
+      { id: "yes", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "qualified" } } },
+      { id: "no", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "review" } } },
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "check", label: "next" },
+      { id: "e2", source: "check", target: "yes", label: "true" },
+      { id: "e3", source: "check", target: "no", label: "false" },
+    ],
+  };
+  const result = await generateWorkflow({ prompt: "Qualify leads and branch based on score", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) });
+  assert.deepEqual(result.registrySteps, plan.registrySteps);
+  assert.deepEqual(result.edges, plan.edges);
+  assert.equal(result.saved, false);
+  assert.equal(result.executed, false);
+});
