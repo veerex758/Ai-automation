@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -184,10 +185,41 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       if (!validatedRegistry.steps) {
         return NextResponse.json({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
       }
+      let persistedSteps = validatedRegistry.steps;
+      if (hasExplicitRegistrySteps) {
+        const rawNodes = definitionToSave.nodes;
+        if (!Array.isArray(rawNodes) || rawNodes.length !== validatedRegistry.steps.length) {
+          return NextResponse.json({ error: "Every executable registry step must have a matching canvas node." }, { status: 422 });
+        }
+        const registryById = new Map(validatedRegistry.steps.map((step) => [step.id, step]));
+        const graphNodes = (rawNodes as Array<{ id: string; type: "trigger" | "action" | "condition"; title: string; settings: Record<string, string | undefined>; position?: unknown }>).map((node) => {
+          const step = registryById.get(node.id);
+          if (!step) return node;
+          return { ...node, registryNodeId: step.nodeId, registryOperationId: step.operationId, registryInput: step.input as Record<string, unknown> };
+        });
+        if (graphNodes.some((node) => !registryById.has(node.id))) {
+          return NextResponse.json({ error: "The canvas contains a node without a registered execution step." }, { status: 422 });
+        }
+        const graphEdges = Array.isArray(definitionToSave.edges)
+          ? definitionToSave.edges as Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }>
+          : [];
+        let graphSteps: RegisteredWorkflowStep[];
+        try { graphSteps = buildRegistrySteps({ nodes: graphNodes, edges: graphEdges }); }
+        catch (cause) { return NextResponse.json({ error: cause instanceof Error ? cause.message : "Workflow graph is invalid." }, { status: 422 }); }
+        const rebuilt = validateRegisteredSteps(graphSteps);
+        if (!rebuilt.steps) return NextResponse.json({ error: rebuilt.error || "Workflow graph is invalid." }, { status: 422 });
+        const mismatched = rebuilt.steps.length !== validatedRegistry.steps.length || rebuilt.steps.some((step) => {
+          const expected = registryById.get(step.id);
+          return !expected || expected.nodeId !== step.nodeId || expected.operationId !== step.operationId || expected.kind !== step.kind ||
+            JSON.stringify(expected.input) !== JSON.stringify(step.input);
+        });
+        if (mismatched) return NextResponse.json({ error: "Canvas connections and registered execution steps do not match. Rebuild or regenerate the draft before saving." }, { status: 422 });
+        persistedSteps = rebuilt.steps;
+      }
       definitionToSave = {
         ...definitionToSave,
         format: "aivanta-registry-v1",
-        steps: validatedRegistry.steps,
+        steps: persistedSteps,
       };
     }
 
@@ -203,7 +235,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     }
     const saved = Array.isArray(data) ? data[0] : data;
     if (!saved) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    return NextResponse.json({ success: true, version: saved.saved_version, definition: validated.definition, registry: shouldSaveRegistry ? { format: "aivanta-registry-v1", steps: registryStepsInput } : null });
+    return NextResponse.json({ success: true, version: saved.saved_version, definition: validated.definition, registry: shouldSaveRegistry ? { format: "aivanta-registry-v1", steps: (definitionToSave.steps as RegisteredWorkflowStep[]) } : null });
   } catch (error) {
     console.error("Failed to save Aivanta workflow definition:", error);
     return NextResponse.json({ error: "Could not save workflow steps. Try again." }, { status: 500 });
