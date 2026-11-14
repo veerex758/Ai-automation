@@ -18,10 +18,10 @@ async function authorize(workspaceId:string){
 }
 export async function GET(_request:Request,ctx:Ctx){
  const {workspaceId}=await ctx.params;const a=await authorize(workspaceId);if("response"in a)return a.response;
- const admin=createAdminClient();const {data:members,error}=await admin.from("workspace_members").select("user_id,role,created_at").eq("workspace_id",workspaceId).order("created_at",{ascending:true});
+ const admin=createAdminClient();const {data:members,error}=await admin.from("workspace_members").select("user_id,role,custom_role_id,created_at").eq("workspace_id",workspaceId).order("created_at",{ascending:true});
  if(error)return NextResponse.json({error:"Could not load workspace members."},{status:503,headers});
  const {data:users}=await admin.auth.admin.listUsers({page:1,perPage:1000});
- const mapped=(members??[]).map(m=>({user_id:m.user_id,role:m.role,joined_at:m.created_at,email:users?.users.find(u=>u.id===m.user_id)?.email??null}));
+ const mapped=(members??[]).map(m=>({user_id:m.user_id,role:m.role,custom_role_id:m.custom_role_id??null,joined_at:m.created_at,email:users?.users.find(u=>u.id===m.user_id)?.email??null}));
  return NextResponse.json({workspace:a.workspace,members:mapped},{headers});
 }
 export async function PATCH(request:Request,ctx:Ctx){
