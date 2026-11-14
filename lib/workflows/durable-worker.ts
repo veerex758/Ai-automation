@@ -359,7 +359,7 @@ export async function runDurableWorker() {
       if (job.execution_mode === "live" && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         throw new Error("LIVE_EXECUTION_DISABLED");
       }
-      let marketplaceConnectionMap: Record<string, string> = {};
+      const marketplaceConnectionMap: Record<string, string> = {};
       let marketplaceInstallationFound = false;
       if (job.execution_mode === "live") {
         const { data: runtimeAllowed, error: runtimeGuardError } = await db.rpc("marketplace_assert_installation_runtime", { p_workflow_id: job.workflow_id });
