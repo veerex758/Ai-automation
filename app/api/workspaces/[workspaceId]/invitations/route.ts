@@ -51,3 +51,15 @@ export async function POST(request:Request,ctx:Ctx){
   return NextResponse.json({invitation:invite,invite_url:inviteUrl,email_sent:emailSent},{status:201,headers});
  }catch(e){console.error("Workspace invitation create failed:",e);return NextResponse.json({error:"Could not create invitation."},{status:503,headers});}
 }
+
+export async function DELETE(request:Request,ctx:Ctx){
+ const {workspaceId}=await ctx.params;const a=await authorize(workspaceId);if("response"in a)return a.response;
+ const invitationId=new URL(request.url).searchParams.get("invitation_id");
+ if(!invitationId)return NextResponse.json({error:"Invitation id is required."},{status:400,headers});
+ try{
+  const admin=createAdminClient();
+  const {data,error}=await admin.from("workspace_invitations").update({status:"revoked"}).eq("id",invitationId).eq("workspace_id",workspaceId).eq("status","pending").select("id").maybeSingle();
+  if(error)throw error;if(!data)return NextResponse.json({error:"Pending invitation not found."},{status:404,headers});
+  return NextResponse.json({revoked:true},{headers});
+ }catch(error){console.error("Workspace invitation revoke failed:",error);return NextResponse.json({error:"Could not revoke invitation."},{status:503,headers});}
+}
