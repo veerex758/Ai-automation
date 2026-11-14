@@ -23,7 +23,7 @@ type RunHistoryItem = {
   steps: Array<{ id: string; status: string; title: string; position: number }>;
 };
 
-export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, liveEmailRecipient, isWebhookTrigger = false }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; liveEmailRecipient: string; isWebhookTrigger?: boolean }) {
+export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, isWebhookTrigger = false }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; isWebhookTrigger?: boolean }) {
   const [input, setInput] = useState(`{
   "status": "ready",
   "order": { "total": 125 }
