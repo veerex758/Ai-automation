@@ -21,8 +21,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { data: workflow, error: workflowError } = await supabase.from("workflows")
       .select("id,workspace_id,status,definition").eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow)
-    if (workflow && !(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 }); return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 });
     if (workflow.status !== "active") return NextResponse.json({ error: "Activate the workflow before scheduling it." }, { status: 409 });
     const rawDefinition = workflow.definition as Record<string, unknown> | null;
     if (rawDefinition?.format === "aivanta-registry-v1") {
