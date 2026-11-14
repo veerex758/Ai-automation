@@ -427,7 +427,7 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <aside className="workflow-side-nav">
-        <Link className="workflow-side-brand" href="/"><span><img src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span>Aivanta</Link>
+        <Link className="workflow-side-brand" href="/"><span><img src="/aivanta-mark.svg" alt="" aria-hidden="true"/></span>REXNORA</Link>
         <div className="workflow-side-label">WORKSPACE</div>
         <Link className="workflow-side-link" href="/dashboard"><span>▦</span>Dashboard</Link>
         <Link className="workflow-side-link active" href="/dashboard#workflows"><span>↗</span>Workflows</Link>
