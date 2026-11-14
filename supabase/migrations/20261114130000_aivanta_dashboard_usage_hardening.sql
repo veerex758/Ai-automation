@@ -93,3 +93,34 @@ begin
 end $$;
 revoke all on function public.consume_agent_run_usage(uuid,uuid,text) from public,anon;
 grant execute on function public.consume_agent_run_usage(uuid,uuid,text) to authenticated;
+
+-- Server-owned worker heartbeat registry for operational diagnostics.
+create table if not exists public.execution_worker_heartbeats (
+  worker_id text primary key check (length(worker_id) between 1 and 100),
+  status text not null check (status in ('polling','processing','idle','error')),
+  current_job_id uuid references public.execution_jobs(id) on delete set null,
+  last_error_code text,
+  last_seen_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table public.execution_worker_heartbeats enable row level security;
+revoke all on public.execution_worker_heartbeats from public,anon,authenticated;
+grant all on public.execution_worker_heartbeats to service_role;
+
+create or replace function public.record_execution_worker_heartbeat(
+  p_worker_id text,p_status text,p_job_id uuid default null,p_error_code text default null
+) returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if auth.role()<>'service_role' then raise exception 'service role required' using errcode='42501'; end if;
+ if p_worker_id is null or length(p_worker_id) not between 1 and 100
+   or p_status not in ('polling','processing','idle','error')
+   or (p_error_code is not null and p_error_code !~ '^[A-Z0-9_]{1,80}$') then
+  raise exception 'invalid worker heartbeat' using errcode='22023';
+ end if;
+ insert into public.execution_worker_heartbeats(worker_id,status,current_job_id,last_error_code,last_seen_at,updated_at)
+ values(p_worker_id,p_status,p_job_id,p_error_code,now(),now())
+ on conflict(worker_id) do update set status=excluded.status,current_job_id=excluded.current_job_id,
+   last_error_code=excluded.last_error_code,last_seen_at=now(),updated_at=now();
+end $$;
+revoke all on function public.record_execution_worker_heartbeat(text,text,uuid,text) from public,anon,authenticated;
+grant execute on function public.record_execution_worker_heartbeat(text,text,uuid,text) to service_role;
