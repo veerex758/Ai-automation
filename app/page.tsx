@@ -29,8 +29,8 @@ export default function Home() {
         <div className="reference-hero-inner">
           <div className="reference-hero-copy">
             <div className="reference-eyebrow">AI-POWERED AUTOMATION PLATFORM</div>
-            <h1 id="hero-title">Automate More.<br /><span>Achieve More.</span></h1>
-            <p>Rexnora helps teams turn ideas into clear workflow drafts, review every step, and prepare automations with control built in.</p>
+            <h1 id="hero-title">Intelligence in<br /><span>motion.</span></h1>
+            <p>Describe it. Build it. Run it. Rexnora helps individuals, teams and businesses turn ideas into reliable automations with control built in.</p>
             <div className="reference-hero-actions"><Link className="reference-primary" href="/dashboard">Get Started <span>→</span></Link><a className="reference-secondary" href="#product-preview"><span className="play-icon">▶</span> Watch Demo</a></div>
             <div className="reference-trust-points"><span>▣ Workspace-scoped access</span><span>♧ Human-reviewed drafts</span><span>⊘ No automatic execution</span></div>
           </div>
