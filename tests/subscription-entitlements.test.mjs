@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const migration = await readFile(new URL("../supabase/migrations/20261107130000_aivanta_subscription_entitlements.sql", import.meta.url), "utf8");
 const hardeningMigration = await readFile(new URL("../supabase/migrations/20261107131500_aivanta_subscription_entitlement_hardening.sql", import.meta.url), "utf8");
+const saasMigration = await readFile(new URL("../supabase/migrations/20261114130000_aivanta_dashboard_usage_hardening.sql", import.meta.url), "utf8");
 const workflowRoute = await readFile(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
 const agentRunRoute = await readFile(new URL("../app/api/agents/[agentId]/runs/route.ts", import.meta.url), "utf8");
 const aiRoute = await readFile(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
@@ -32,7 +33,9 @@ test("active workflow caps are enforced transactionally and AI usage consumes AI
   assert.match(hardeningMigration, /workflows_enforce_active_entitlement/);
   assert.match(hardeningMigration, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
-  assert.match(agentRunRoute, /p_metric: "ai_credit".*feature: "agent_run"/);
+  assert.match(agentRunRoute, /consume_agent_run_usage/);
+  assert.ok(saasMigration.includes("'agent_run'"));
+  assert.ok(saasMigration.includes("'ai_credit'"));
   assert.match(aiRoute, /p_metric: "ai_credit".*workflow_draft_generation/);
   assert.match(registryRunRoute, /p_metric: "workflow_execution"/);
   assert.match(registryRunRoute, /The blueprint defines one workflow run as one execution/);
