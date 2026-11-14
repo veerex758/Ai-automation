@@ -45,7 +45,7 @@ export async function POST(request:Request,ctx:Ctx){
   let emailSent=false;
   const resendKey=process.env.RESEND_API_KEY,from=process.env.RESEND_FROM_EMAIL;
   if(resendKey&&from){
-   const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:"Bearer "+resendKey,"Content-Type":"application/json"},body:JSON.stringify({from,to:[email],subject:"You are invited to an Aivanta workspace",html:"<p>You have been invited to join "+a.workspace.name+" as "+role+".</p><p><a href=\""+inviteUrl+"\">Accept workspace invitation</a></p><p>This link expires in 7 days.</p>"}),cache:"no-store"});
+   const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:"Bearer "+resendKey,"Content-Type":"application/json"},body:JSON.stringify({from,to:[email],subject:"You are invited to an Aivanta workspace",text:"You have been invited to join "+a.workspace.name+" as "+role+".\n\nAccept the workspace invitation: "+inviteUrl+"\n\nThis link expires in 7 days."}),cache:"no-store"});
    emailSent=response.ok;
   }
   return NextResponse.json({invitation:invite,invite_url:inviteUrl,email_sent:emailSent},{status:201,headers});
