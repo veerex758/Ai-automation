@@ -108,7 +108,7 @@ export async function performSafeHttpRequest(input: {
         resolve({ status: response.statusCode ?? 0, body: parsed, headers: responseHeaders });
       });
     });
-    const abort = () => req.destroy(new Error("EXECUTION_LEASE_LOST"));
+    const abort = () => req.destroy(input.signal?.reason instanceof Error ? input.signal.reason : new Error("EXECUTION_LEASE_LOST"));
     input.signal?.addEventListener("abort", abort, { once: true });
     if (input.signal?.aborted) abort();
     const timer = setTimeout(() => req.destroy(new Error("HTTP_REQUEST_TIMEOUT")), input.timeoutMs);
