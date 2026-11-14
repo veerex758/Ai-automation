@@ -51,8 +51,7 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
     if (byId.get(edge.target)?.type === "trigger") throw new Error("A workflow connection cannot point into the trigger.");
     if (edge.label !== "next") {
       const source = byId.get(edge.source)!;
-      const isSwitch = source.type === "action" && source.registryNodeId === "switch" && source.registryOperationId === "select_route";
-      if (source.type !== "condition" && !isSwitch) throw new Error("Only IF and Switch nodes can create true/false connections.");
+      if (source.type !== "condition") throw new Error("Only IF nodes can create true/false connections.");
     }
     const edgeKey = edge.source + ":" + edge.target + ":" + edge.label;
     if (edgeKeys.has(edgeKey)) throw new Error("Duplicate workflow connections are not allowed.");
