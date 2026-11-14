@@ -17,6 +17,14 @@ export async function POST(request:NextRequest,ctx:Ctx){
   if(error||!review)return NextResponse.json({error:"Review not found."},{status:404,headers});
   const version=Array.isArray(review.marketplace_product_versions)?review.marketplace_product_versions[0]:review.marketplace_product_versions;
   if(!version)return NextResponse.json({error:"Submitted version is unavailable."},{status:409,headers});
+  if(version.created_by===auth.user.id)return NextResponse.json({error:"Independent review is required. Creators cannot review their own product versions."},{status:403,headers});
+  if(action==="revoke"){
+   const notes=typeof body.notes==="string"?body.notes.trim():"";
+   if(notes.length<5)return NextResponse.json({error:"A reason of at least five characters is required."},{status:400,headers});
+   const {data,error}=await auth.admin.rpc("marketplace_revoke_version",{p_product_id:review.product_id,p_version_id:review.version_id,p_reviewer_id:auth.user.id,p_reason:notes});
+   if(error)return NextResponse.json({error:"Only an approved version can be revoked by an independent reviewer."},{status:409,headers});
+   return NextResponse.json({result:data},{headers});
+  }
   const artifactPathParts=typeof version.artifact_path==="string"?version.artifact_path.split("/"):[];
   if(artifactPathParts.length!==3||artifactPathParts[0]!==version.created_by||artifactPathParts[1]!==review.product_id||artifactPathParts.some((part:string)=>!part||part==="."||part===".."||part.includes("\\")))return NextResponse.json({error:"Submitted artifact path is unavailable."},{status:409,headers});
   const {data:artifactFile,error:artifactError}=await auth.admin.storage.from("marketplace-artifacts").download(version.artifact_path);
@@ -24,15 +32,9 @@ export async function POST(request:NextRequest,ctx:Ctx){
   if(artifactFile.size>524288)return NextResponse.json({error:"The submitted artifact exceeds the 512 KiB verification limit."},{status:413,headers});
   const storedArtifact=verifyMarketplaceStoredArtifact(await artifactFile.text(),version.manifest,version.artifact_sha256);
   const verification=storedArtifact.verification;
-  if(version.created_by===auth.user.id)return NextResponse.json({error:"Independent review is required. Creators cannot review their own product versions."},{status:403,headers});
-  if(action==="revoke"||action==="require_reverification"){
+  if(action==="require_reverification"){
    const notes=typeof body.notes==="string"?body.notes.trim():"";
    if(notes.length<5)return NextResponse.json({error:"A reason of at least five characters is required."},{status:400,headers});
-   if(action==="revoke"){
-    const {data,error}=await auth.admin.rpc("marketplace_revoke_version",{p_product_id:review.product_id,p_version_id:review.version_id,p_reviewer_id:auth.user.id,p_reason:notes});
-    if(error)return NextResponse.json({error:"Only an approved version can be revoked by an independent reviewer."},{status:409,headers});
-    return NextResponse.json({result:data},{headers});
-   }
    if(!storedArtifact.integrityPassed||!verification.passed)return NextResponse.json({error:"Reverification is blocked until the original artifact passes integrity and security checks.",checks:verification.checks},{status:422,headers});
    const {data,error}=await auth.admin.rpc("marketplace_require_reverification",{p_product_id:review.product_id,p_version_id:review.version_id,p_reviewer_id:auth.user.id,p_reason:notes});
    if(error)return NextResponse.json({error:"Only a revoked version can be submitted for reverification."},{status:409,headers});
