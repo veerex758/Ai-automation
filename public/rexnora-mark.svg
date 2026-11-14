@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" fill="none" role="img" aria-label="Rexnora"><defs><linearGradient id="silver" x1="15" y1="8" x2="105" y2="92" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset=".48" stop-color="#DCE3ED"/><stop offset="1" stop-color="#94A3B8"/></linearGradient></defs><path d="M13 14H65C89 14 105 28 105 49C105 64 96 75 81 80L108 94H76L42 74H30L12 94H0L31 58H65C77 58 84 54 84 46C84 38 77 34 65 34H13L0 14H13Z" fill="url(#silver)"/><path d="M41 73L59 53L81 80L108 94H76L41 73Z" fill="#B8C4D4" opacity=".72"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 112" fill="none" role="img" aria-label="Rexnora">
+<defs><linearGradient id="rxSilver" x1="18" y1="9" x2="103" y2="105" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset=".52" stop-color="#E4EAF2"/><stop offset="1" stop-color="#9AA8BA"/></linearGradient></defs>
+<path d="M13 12H75C101 12 116 27 116 48C116 65 105 77 86 82L115 104H80L43 75H28L9 104H0L31 57H75C88 57 95 53 95 45C95 37 88 32 75 32H26L13 12Z" fill="url(#rxSilver)"/>
+<path d="M43 75L63 53L86 82L115 104H80L43 75Z" fill="#B8C4D4" opacity=".68"/>
+<path d="M0 104L30 60L45 75L28 104H0Z" fill="url(#rxSilver)"/>
+</svg>
