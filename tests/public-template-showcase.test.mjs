@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 async function sourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -29,13 +30,13 @@ test("public homepage presents the Rexnora brand and real platform entry points"
 });
 
 test("application pages do not reference the retired Aivanta logo asset", async () => {
-  const appDirectory = new URL("../app/", import.meta.url);
+  const appDirectory = fileURLToPath(new URL("../app/", import.meta.url));
   const files = await sourceFiles(appDirectory);
   const matches = [];
   for (const file of files) {
     const source = await readFile(file, "utf8");
     if (source.includes("/aivanta-mark.svg")) {
-      matches.push(relative(appDirectory.pathname, file));
+      matches.push(relative(appDirectory, file));
     }
   }
   assert.deepEqual(matches, [], "Replace retired Aivanta logo references with the Rexnora brand assets.");
