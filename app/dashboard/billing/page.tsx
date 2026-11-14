@@ -38,7 +38,7 @@ type BillingData = {
     status: string;
     usage: Record<string, number>;
     limits: Record<string, number | null>;
-    billing: { checkout_enabled: boolean; stripe_checkout_enabled?: boolean };
+    billing: { checkout_enabled: boolean; stripe_checkout_enabled?: boolean; stripe_subscription_enabled?: boolean; paystack_recurring_enabled?: boolean };
   };
   payments?: Payment[];
   plans: Plan[];
