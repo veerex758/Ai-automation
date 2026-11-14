@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
 
     const nodeCatalog = getExecutableNodeCatalog();
     const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog, mode: "registry" });
+    if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
     const registrySteps = result.registrySteps;
     if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return jsonResponse({ error: "The generated plan did not pass registry validation." }, { status: 422 });
     const seen = new Set<string>();
