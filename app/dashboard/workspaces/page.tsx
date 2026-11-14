@@ -10,6 +10,7 @@ export default function WorkspacesPage(){
  const [members,setMembers]=useState<Member[]>([]),[invitations,setInvitations]=useState<Invitation[]>([]);
  const [name,setName]=useState(""),[email,setEmail]=useState(""),[role,setRole]=useState("member");
  const [inviteUrl,setInviteUrl]=useState(""),[notice,setNotice]=useState(""),[error,setError]=useState("");
+ const [newOwner,setNewOwner]=useState("");
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
  const load=useCallback(async()=>{
   setLoading(true);setError("");
@@ -40,6 +41,15 @@ export default function WorkspacesPage(){
   try{const r=await fetch("/api/workspaces/"+active+"/members",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id,role:nextRole})}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not update role.");await loadTeam(active);setNotice("Member role updated.");}
   catch(e){setError(e instanceof Error?e.message:"Could not update role.");}
  }
+ async function transferOwnership(){
+  if(!active||!newOwner||!window.confirm("Transfer workspace ownership? You will become an administrator."))return;
+  setBusy(true);try{const r=await fetch("/api/workspaces/"+active+"/transfer",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({new_owner_id:newOwner})}),d=await r.json();if(!r.ok)throw new Error(d.error||"Transfer failed.");setNotice("Workspace ownership transferred.");setNewOwner("");await loadTeam(active);await load();}
+  catch(e){setError(e instanceof Error?e.message:"Could not transfer ownership.");}finally{setBusy(false);}
+ }
+ async function revokeInvitation(id:string){
+  try{const r=await fetch("/api/workspaces/"+active+"/invitations?invitation_id="+encodeURIComponent(id),{method:"DELETE"}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not revoke invitation.");await loadTeam(active);setNotice("Invitation revoked.");}
+  catch(e){setError(e instanceof Error?e.message:"Could not revoke invitation.");}
+ }
  async function removeMember(user_id:string){
   if(!window.confirm("Remove this member from the workspace?"))return;
   try{const r=await fetch("/api/workspaces/"+active+"/members?user_id="+encodeURIComponent(user_id),{method:"DELETE"}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not remove member.");await loadTeam(active);setNotice("Member removed.");}
@@ -60,6 +70,7 @@ export default function WorkspacesPage(){
    {members.map(m=><article className="workspace-member" key={m.user_id}><div><strong>{m.email||m.user_id}</strong><small>Joined {new Date(m.joined_at).toLocaleDateString()}</small></div>{m.role==="owner"?<span className="workspace-current">Owner</span>:<><select value={m.role} onChange={e=>void updateRole(m.user_id,e.target.value)}><option value="member">Member</option><option value="admin">Administrator</option></select><button onClick={()=>void removeMember(m.user_id)}>Remove</button></>}</article>)}
    {!members.length&&<p>No members loaded. Select a workspace where you have owner/admin access.</p>}
   </section>
-  <section className="workspace-admin-panel workspace-team-panel"><h2>Pending invitations</h2>{invitations.map(i=><article className="workspace-member" key={i.id}><div><strong>{i.email}</strong><small>{i.role} · Expires {new Date(i.expires_at).toLocaleDateString()}</small></div><span className="workspace-current">{i.status}</span></article>)}{!invitations.length&&<p>No invitations for this workspace.</p>}</section>
+  <section className="workspace-admin-panel workspace-team-panel"><h2>Pending invitations</h2>{invitations.map(i=><article className="workspace-member" key={i.id}><div><strong>{i.email}</strong><small>{i.role} · Expires {new Date(i.expires_at).toLocaleDateString()}</small></div><span className="workspace-current">{i.status}</span>{i.status==="pending"&&<button onClick={()=>void revokeInvitation(i.id)}>Revoke</button>}</article>)}{!invitations.length&&<p>No invitations for this workspace.</p>}</section>
+  {members.some(m=>m.role==="owner")&&<section className="workspace-admin-panel workspace-team-panel"><h2>Transfer ownership</h2><p>Ownership transfer is immediate and audited. The previous owner becomes an administrator.</p><label>New workspace owner<select value={newOwner} onChange={e=>setNewOwner(e.target.value)}><option value="">Choose an existing member</option>{members.filter(m=>m.role!=="owner").map(m=><option key={m.user_id} value={m.user_id}>{m.email||m.user_id}</option>)}</select></label><button onClick={()=>void transferOwnership()} disabled={busy||!newOwner}>Transfer ownership</button></section>}
  </main>;
 }
