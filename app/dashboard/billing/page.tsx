@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./billing.css";
 import BillingCheckout from "./billing-checkout";
-import BillingStripeCheckout from "./billing-stripe-checkout";
+import BillingStripeCheckout from "./billing-stripe-checkout";\nimport BillingStripeSubscription from "./billing-stripe-subscription";\nimport BillingPaystackMandate from "./billing-paystack-mandate";
 
 type CheckoutOption = { slug: string; amount_minor: number; currency: string };
 type Plan = {
@@ -196,7 +196,7 @@ export default function BillingPage() {
                 ? plan.checkout.map(option => <div key={option.slug}>
                     <small className="billing-configured-price">{money(option.amount_minor, option.currency)} · {option.slug.endsWith("annual") ? "annual" : "monthly"}</small>
                     <BillingCheckout plan={option.slug} enabled={data.entitlements.billing.checkout_enabled} />
-                    <BillingStripeCheckout plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} />
+                    <BillingStripeCheckout plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} />\n                    <BillingStripeSubscription plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_subscription_enabled)} />\n                    <BillingPaystackMandate plan={option.slug} enabled={Boolean(data.entitlements.billing.paystack_recurring_enabled)} />
                   </div>)
                 : <span className="billing-current-label">Checkout not configured</span>}
         </article>)}
