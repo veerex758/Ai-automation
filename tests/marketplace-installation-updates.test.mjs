@@ -35,6 +35,7 @@ test("connection mappings are validated against the same workspace and consumed 
  assert.match(lifecycle,/last_test_status/);
  assert.match(worker,/marketplaceConnectionMap/);
  assert.match(worker,/connectionMap\[provider\]/);
+ assert.match(worker,/new Set\(\["resend"\]\), marketplaceConnectionMap\)/);
 });
 
 test("runtime revocation is checked before every marketplace live step and old workflow versions are blocked",()=>{
@@ -44,6 +45,7 @@ test("runtime revocation is checked before every marketplace live step and old w
  assert.match(migration,/marketplace_capture_installation_workflow_binding/);
  assert.match(worker,/MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE/);
  assert.match(worker,/stillAllowed/);
+ assert.match(worker,/MARKETPLACE_INSTALLATION_REVOKED_OR_INACTIVE/);
  assert.match(directRun,/Marketplace-installed workflows must execute through the durable worker/);
  assert.match(liveRun,/Marketplace-installed workflows must execute through the durable worker/);
 });
