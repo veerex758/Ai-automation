@@ -214,7 +214,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       if (!dryRun) {
         const { data, error } = await supabase.from("workflow_runs").update({
           status: finalStatus, completed_at: new Date().toISOString(), duration_ms: Math.min(600000, Date.now() - startedAt),
-          error_message: execution.status === "failed" ? "One or more registered workflow steps failed." : null,
+          error_message: finalStatus === "failed" ? "One or more registered workflow steps failed." : null,
         }).eq("id", run.id).eq("status", "running")
           .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
         if (error) throw error;
