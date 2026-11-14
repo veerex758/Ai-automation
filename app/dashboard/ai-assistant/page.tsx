@@ -110,7 +110,7 @@ export default function AIAssistantPage() {
     <section className="dashboard-main">
       <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>AI Assistant</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Draft mode</span><span className="top-avatar">AI</span></div></header>
       <div className="dashboard-content ai-assistant-content">
-        <div className="ai-assistant-intro"><div className="assistant-symbol">✺</div><div><div className="dash-eyebrow">AIVANTA AI ASSISTANT <span className="assistant-beta">BETA</span></div><h1>Describe it. We&apos;ll build the draft.</h1><p>Describe an outcome, ask follow-up questions, and refine the workflow in conversation. Rexnora validates every operation against its live node registry.</p></div></div>
+        <div className="ai-assistant-intro"><div className="assistant-symbol">✺</div><div><div className="dash-eyebrow">REXNORA AI ASSISTANT <span className="assistant-beta">BETA</span></div><h1>Describe it. We&apos;ll build the draft.</h1><p>Describe an outcome, ask follow-up questions, and refine the workflow in conversation. Rexnora validates every operation against its live node registry.</p></div></div>
         <div className="assistant-layout">
           <section className="assistant-chat-panel">
             <div className="assistant-chat-header"><div className="assistant-avatar">✺</div><div><strong>Rexnora Assistant</strong><small>Conversational workflow drafting · no actions executed</small></div><span className="assistant-status">Ready</span></div>
