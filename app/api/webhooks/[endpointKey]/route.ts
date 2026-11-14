@@ -125,7 +125,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     const endpointHash = createHash("sha256").update(endpointKey, "utf8").digest("hex");
     db = serviceClient();
     const { data: endpoint, error: endpointError } = await db.from("webhook_endpoints")
-      .select("id,workspace_id,workflow_id,secret_ciphertext,secret_key_version,status")
+      .select("id,workspace_id,workflow_id,created_by,secret_ciphertext,secret_key_version,status")
       .eq("endpoint_key_hash", endpointHash).maybeSingle();
     if (endpointError) throw endpointError;
     if (!endpoint || endpoint.status !== "active") return jsonError("Webhook endpoint not found or disabled.", 404);
@@ -161,6 +161,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       .eq("id", endpoint.workflow_id).eq("workspace_id", endpoint.workspace_id).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow || workflow.status !== "active") return jsonError("The linked workflow is not active.", 409);
+    const { data: workspaceOwner, error: workspaceOwnerError } = await db.from("workspaces").select("owner_id").eq("id", endpoint.workspace_id).maybeSingle();
+    if (workspaceOwnerError) throw workspaceOwnerError;
+    const dispatchActor = endpoint.created_by ?? workspaceOwner?.owner_id;
+    if (typeof dispatchActor !== "string") return jsonError("Webhook workspace has no valid execution owner.", 503);
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
     if (!definition || definition.format !== "aivanta-registry-v1" ||
@@ -240,7 +244,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         // have been lost after queue commit.
         const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
           p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
-          p_workflow_version: workflow.version, p_created_by: null,
+          p_workflow_version: workflow.version, p_created_by: dispatchActor,
           p_idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
           p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
           p_max_attempts: 5,
