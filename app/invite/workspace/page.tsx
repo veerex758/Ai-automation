@@ -1,9 +1,10 @@
 "use client";
-import {useState} from "react";
+import {useEffect,useState} from "react";
 import Link from "next/link";
-import {useSearchParams,useRouter} from "next/navigation";
+import {useRouter} from "next/navigation";
 export default function AcceptWorkspaceInvitation(){
- const params=useSearchParams(),router=useRouter(),token=params.get("token")||"";
+ const router=useRouter();const [token,setToken]=useState("");
+ useEffect(()=>{setToken(new URLSearchParams(window.location.search).get("token")||"");},[]);
  const [busy,setBusy]=useState(false),[error,setError]=useState("");
  async function accept(){
   setBusy(true);setError("");
