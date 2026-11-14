@@ -6,20 +6,21 @@ type Workspace={id:string;name:string;owner_id:string;created_at:string};
 type Member={user_id:string;email:string|null;role:string;joined_at:string};
 type Invitation={id:string;email:string;role:string;status:string;expires_at:string};
 export default function WorkspacesPage(){
- const [workspaces,setWorkspaces]=useState<Workspace[]>([]),[active,setActive]=useState("");
+ const [workspaces,setWorkspaces]=useState<Workspace[]>([]),[active,setActive]=useState(""),[currentUserId,setCurrentUserId]=useState("");
  const [members,setMembers]=useState<Member[]>([]),[invitations,setInvitations]=useState<Invitation[]>([]);
  const [name,setName]=useState(""),[email,setEmail]=useState(""),[role,setRole]=useState("member");
  const [inviteUrl,setInviteUrl]=useState(""),[notice,setNotice]=useState(""),[error,setError]=useState("");
  const [newOwner,setNewOwner]=useState("");
+ const [allowInvites,setAllowInvites]=useState(true),[securityDirty,setSecurityDirty]=useState(false);
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
  const load=useCallback(async()=>{
   setLoading(true);setError("");
-  try{const r=await fetch("/api/workspaces",{cache:"no-store"}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not load workspaces.");setWorkspaces(d.workspaces||[]);setActive(d.active_workspace_id||"");}
+  try{const r=await fetch("/api/workspaces",{cache:"no-store"}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not load workspaces.");setWorkspaces(d.workspaces||[]);setActive(d.active_workspace_id||"");setCurrentUserId(d.user_id||"");}
   catch(e){setError(e instanceof Error?e.message:"Could not load workspaces.");}
   finally{setLoading(false);}
  },[]);
  const loadTeam=useCallback(async(id:string)=>{
-  try{const [m,i]=await Promise.all([fetch("/api/workspaces/"+id+"/members",{cache:"no-store"}),fetch("/api/workspaces/"+id+"/invitations",{cache:"no-store"})]);const md=await m.json(),idat=await i.json();if(!m.ok)throw new Error(md.error||"Could not load members.");setMembers(md.members||[]);setInvitations(idat.invitations||[]);}
+  try{const [m,i,s]=await Promise.all([fetch("/api/workspaces/"+id+"/members",{cache:"no-store"}),fetch("/api/workspaces/"+id+"/invitations",{cache:"no-store"}),fetch("/api/workspaces/"+id+"/security",{cache:"no-store"})]);const md=await m.json(),idat=await i.json(),sd=await s.json();if(!m.ok)throw new Error(md.error||"Could not load members.");if(!s.ok)throw new Error(sd.error||"Could not load security settings.");setMembers(md.members||[]);setInvitations(idat.invitations||[]);setAllowInvites(sd.settings?.allow_member_invites!==false);setSecurityDirty(false);}
   catch(e){setError(e instanceof Error?e.message:"Could not load workspace team.");}
  },[]);
  useEffect(()=>{void load()},[load]);
@@ -40,6 +41,11 @@ export default function WorkspacesPage(){
  async function updateRole(user_id:string,nextRole:string){
   try{const r=await fetch("/api/workspaces/"+active+"/members",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id,role:nextRole})}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not update role.");await loadTeam(active);setNotice("Member role updated.");}
   catch(e){setError(e instanceof Error?e.message:"Could not update role.");}
+ }
+ async function saveSecurity(){
+  if(!active)return;setBusy(true);setError("");
+  try{const r=await fetch("/api/workspaces/"+active+"/security",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({allow_member_invites:allowInvites})}),d=await r.json();if(!r.ok)throw new Error(d.error||"Could not update security policy.");setAllowInvites(d.settings.allow_member_invites);setSecurityDirty(false);setNotice("Workspace security policy updated.");}
+  catch(e){setError(e instanceof Error?e.message:"Could not update security policy.");}finally{setBusy(false);}
  }
  async function transferOwnership(){
   if(!active||!newOwner||!window.confirm("Transfer workspace ownership? You will become an administrator."))return;
@@ -71,6 +77,7 @@ export default function WorkspacesPage(){
    {!members.length&&<p>No members loaded. Select a workspace where you have owner/admin access.</p>}
   </section>
   <section className="workspace-admin-panel workspace-team-panel"><h2>Pending invitations</h2>{invitations.map(i=><article className="workspace-member" key={i.id}><div><strong>{i.email}</strong><small>{i.role} · Expires {new Date(i.expires_at).toLocaleDateString()}</small></div><span className="workspace-current">{i.status}</span>{i.status==="pending"&&<button onClick={()=>void revokeInvitation(i.id)}>Revoke</button>}</article>)}{!invitations.length&&<p>No invitations for this workspace.</p>}</section>
+  <section className="workspace-admin-panel workspace-team-panel"><h2>Security settings</h2><p>Control who can invite teammates. Live external actions continue to require the existing approval safeguards.</p><label className="workspace-security-toggle"><span><strong>Allow administrators to invite members</strong><small>When disabled, only the workspace owner can create invitations.</small></span><input type="checkbox" checked={allowInvites} disabled={workspaces.find(w=>w.id===active)?.owner_id!==currentUserId} onChange={e=>{setAllowInvites(e.target.checked);setSecurityDirty(true);}}/></label><div className="workspace-security-policy"><strong>Approval required for live external actions</strong><span>Always on · enforced by execution policy</span></div><button onClick={()=>void saveSecurity()} disabled={!securityDirty||busy||workspaces.find(w=>w.id===active)?.owner_id!==currentUserId}>Save security settings</button></section>
   {members.some(m=>m.role==="owner")&&<section className="workspace-admin-panel workspace-team-panel"><h2>Transfer ownership</h2><p>Ownership transfer is immediate and audited. The previous owner becomes an administrator.</p><label>New workspace owner<select value={newOwner} onChange={e=>setNewOwner(e.target.value)}><option value="">Choose an existing member</option>{members.filter(m=>m.role!=="owner").map(m=><option key={m.user_id} value={m.user_id}>{m.email||m.user_id}</option>)}</select></label><button onClick={()=>void transferOwnership()} disabled={busy||!newOwner}>Transfer ownership</button></section>}
  </main>;
 }
