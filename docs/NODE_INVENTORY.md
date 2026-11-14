@@ -19,6 +19,7 @@ This inventory distinguishes executable workflow definitions from the user-facin
 | Commerce/support catalogue nodes | 10 | WooCommerce, PayPal, Paddle, Lemon Squeezy, Square, Razorpay, Zoom, Cal.com, Twilio Voice and DocuSign |
 | Social/marketing catalogue nodes | 7 | X/Twitter, LinkedIn, Facebook Pages, Instagram, TikTok, Mailchimp and Typeform |
 | Database/storage catalogue nodes | 9 | Supabase, PostgreSQL, MySQL, MongoDB, Redis, Firebase/Firestore, Dropbox, AWS S3 and Cloudflare R2 |
+| Core, integration and data definitions | 29 | Core trigger, data transformation, logic and execution primitives outside the provider/utility packs above |
 
 The 122-node count is protected by `tests/provider-catalog.test.ts`. The test also asserts that all 100 provider-directory entries are registered, including MySQL and MongoDB, and that every registered operation has exactly one worker mapping.
 
