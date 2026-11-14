@@ -24,6 +24,29 @@ export async function POST(request:NextRequest,ctx:C){const sb=await createClien
   if(transitionError){const m=transitionError.message??"";return NextResponse.json({error:m.includes("pause_installation_before_version_transition")?"Pause the installation before updating or rolling back.":m.includes("rollback_target_not_in_installation_history")?"That version is not in this installation history.":"The installation version transition was rejected."},{status:409,headers:h});}
   return NextResponse.json({installation:transition,message:"A fresh inactive draft was created. Recheck connections, run a successful dry-run, then activate."},{headers:h});
  }
- if(action==="configure"){const config=b.configuration;if(!config||typeof config!=="object"||Array.isArray(config)||hasSecret(config))return NextResponse.json({error:"Configuration must be an object of connection mappings and non-secret options; credentials are never stored in Marketplace configuration."},{status:400,headers:h});const encoded=JSON.stringify(config);if(encoded.length>5000)return NextResponse.json({error:"Configuration exceeds 5,000 characters."},{status:413,headers:h});const {data,error:rpcError}=await a.rpc("marketplace_installation_lifecycle",{p_installation_id:i.id,p_actor_id:user.id,p_action:"configure",p_configuration:config});if(rpcError)return NextResponse.json({error:"Could not save installation configuration."},{status:409,headers:h});return NextResponse.json({installation:data},{headers:h})}
+ if(action==="configure"){
+  const config=b.configuration;
+  if(!config||typeof config!=="object"||Array.isArray(config)||hasSecret(config))return NextResponse.json({error:"Configuration must contain non-secret connection mappings and options only."},{status:400,headers:h});
+  const keys=Object.keys(config as Record<string,unknown>);
+  if(keys.some(k=>!["connections","options"].includes(k)))return NextResponse.json({error:"Only connections and options are supported."},{status:400,headers:h});
+  const connections=(config as Record<string,unknown>).connections;
+  if(connections!==undefined){
+   if(!connections||typeof connections!=="object"||Array.isArray(connections))return NextResponse.json({error:"Connection mappings must be an object."},{status:400,headers:h});
+   for(const [provider,id] of Object.entries(connections as Record<string,unknown>)){
+    if(!/^[a-z][a-z0-9_]{0,63}$/.test(provider)||typeof id!=="string"||!uuid.test(id))return NextResponse.json({error:"Each connection mapping needs a provider and valid connection ID."},{status:400,headers:h});
+    if(provider==="gmail"||provider==="sheets"){
+     const {data:connection}=await a.from("google_connections").select("id,product,status").eq("id",id).eq("workspace_id",i.workspace_id).maybeSingle();
+     if(!connection||connection.product!==provider||connection.status!=="connected")return NextResponse.json({error:"A mapped Google connection is not connected to this workspace."},{status:409,headers:h});
+    }else{
+     const {data:connection}=await a.from("workspace_integrations").select("id,provider,status,last_test_status").eq("id",id).eq("workspace_id",i.workspace_id).maybeSingle();
+     if(!connection||connection.provider!==provider||connection.status!=="connected"||connection.last_test_status!=="passed")return NextResponse.json({error:"A mapped integration is not verified and connected to this workspace."},{status:409,headers:h});
+    }
+   }
+  }
+  const encoded=JSON.stringify(config);if(encoded.length>5000)return NextResponse.json({error:"Configuration exceeds 5,000 characters."},{status:413,headers:h});
+  const {data,error:rpcError}=await a.rpc("marketplace_installation_lifecycle",{p_installation_id:i.id,p_actor_id:user.id,p_action:"configure",p_configuration:config});
+  if(rpcError)return NextResponse.json({error:"Could not save installation configuration."},{status:409,headers:h});
+  return NextResponse.json({installation:data},{headers:h})
+ }
  if(action==="dry_run"){if(!i.workflow_id)return NextResponse.json({error:"Installed draft workflow is missing."},{status:409,headers:h});const url=new URL("/api/workflows/"+i.workflow_id+"/registry-run",request.url);const response=await fetch(url,{method:"POST",headers:{cookie:request.headers.get("cookie")??"", "Content-Type":"application/json"},body:JSON.stringify({dryRun:true}),cache:"no-store"});const result=await response.json();if(!response.ok||result?.run?.status!=="succeeded")return NextResponse.json({error:"Dry-run did not succeed. Installation remains inactive.",dryRun:result},{status:422,headers:h});const {data,error:readyError}=await a.rpc("marketplace_installation_lifecycle",{p_installation_id:i.id,p_actor_id:user.id,p_action:"mark_ready",p_configuration:null});if(readyError)return NextResponse.json({error:"Dry-run succeeded but installation readiness could not be recorded."},{status:409,headers:h});return NextResponse.json({installation:data,dryRun:{status:result.run.status,run_id:result.run.id,sideEffectsPerformed:false}},{headers:h})}
  const {data,error:transitionError}=await a.rpc("marketplace_installation_lifecycle",{p_installation_id:i.id,p_actor_id:user.id,p_action:action,p_configuration:null});if(transitionError){const m=transitionError.message??"";return NextResponse.json({error:m.includes("successful_dry_run_required")?"A successful dry-run is required before activation.":m.includes("product_version_no_longer_current")?"This version is no longer current and verified.":m.includes("installation_not_active")?"Only active installations can be paused.":"Installation transition was rejected."},{status:409,headers:h})}return NextResponse.json({installation:data},{headers:h})}
