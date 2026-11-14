@@ -163,7 +163,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     if (!workflow || workflow.status !== "active") return jsonError("The linked workflow is not active.", 409);
     const { data: workspaceOwner, error: workspaceOwnerError } = await db.from("workspaces").select("owner_id").eq("id", endpoint.workspace_id).maybeSingle();
     if (workspaceOwnerError) throw workspaceOwnerError;
-    const dispatchActor = endpoint.created_by ?? workspaceOwner?.owner_id;
+    const { data: creatorMembership, error: creatorMembershipError } = endpoint.created_by
+      ? await db.from("workspace_members").select("user_id").eq("workspace_id", endpoint.workspace_id).eq("user_id", endpoint.created_by).maybeSingle()
+      : { data: null, error: null };
+    if (creatorMembershipError) throw creatorMembershipError;
+    const dispatchActor = endpoint.created_by && (endpoint.created_by === workspaceOwner?.owner_id || creatorMembership)
+      ? endpoint.created_by : workspaceOwner?.owner_id;
     if (typeof dispatchActor !== "string") return jsonError("Webhook workspace has no valid execution owner.", 503);
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
