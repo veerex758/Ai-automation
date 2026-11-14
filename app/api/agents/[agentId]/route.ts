@@ -1,5 +1,6 @@
 import {NextResponse,type NextRequest} from "next/server";
 import {createClient} from "@/lib/supabase/server";
+import {getAgentTools} from "@/lib/agents/tool-runtime";
 const headers={"Cache-Control":"private, no-store"};
 type Ctx={params:Promise<{agentId:string}>};
 async function setup(){const supabase=await createClient();const {data:{user},error}=await supabase.auth.getUser();if(error||!user)return {response:NextResponse.json({error:"Authentication required."},{status:401,headers})};return {supabase,user};}
@@ -12,9 +13,13 @@ if("instructions"in update&&(typeof update.instructions!=="string"||update.instr
 if("model_provider"in update&&!["gemini","openai"].includes(String(update.model_provider)))return NextResponse.json({error:"Unsupported provider."},{status:400,headers});
 if("model_name"in update&&(typeof update.model_name!=="string"||!update.model_name.trim()||update.model_name.length>120))return NextResponse.json({error:"Invalid model."},{status:400,headers});
 if("tool_ids"in update&&(!Array.isArray(update.tool_ids)||update.tool_ids.length>30||update.tool_ids.some(x=>typeof x!=="string"||!/^[a-z][a-z0-9._:-]{0,79}$/.test(x))))return NextResponse.json({error:"Invalid tool selection."},{status:400,headers});
+if("tool_ids"in update){try{getAgentTools(update.tool_ids as string[])}catch{return NextResponse.json({error:"Choose only approved read-only tools: workflow.list, workflow.get, integrations.list."},{status:400,headers});}}
 if("status"in update&&!["draft","ready","paused"].includes(String(update.status)))return NextResponse.json({error:"Invalid status."},{status:400,headers});
 if(!Object.keys(update).length)return NextResponse.json({error:"No editable fields supplied."},{status:400,headers});
-update.permissions={mode:"draft",allow_external_actions:false};
+const {data:currentAgent,error:currentError}=await a.supabase.from("agents").select("status").eq("id",agentId).single();
+if(currentError||!currentAgent)return NextResponse.json({error:"Agent not found."},{status:404,headers});
+const nextStatus=typeof update.status==="string"?update.status:currentAgent.status;
+update.permissions={mode:nextStatus==="ready"?"read_only":"draft",allow_external_actions:false};
 const {data:agent,error}=await a.supabase.from("agents").update(update).eq("id",agentId).select("id,name,status,updated_at").single();if(error||!agent)return NextResponse.json({error:"Agent not found or update not permitted."},{status:404,headers});
 await a.supabase.from("agent_activity").insert({workspace_id:(await a.supabase.from("agents").select("workspace_id").eq("id",agentId).single()).data?.workspace_id,agent_id:agentId,actor_user_id:a.user.id,event_type:"agent.updated",details:{fields:Object.keys(update)}});
 return NextResponse.json({agent},{headers});}catch(e){console.error("Agent update failed",e);return NextResponse.json({error:"Could not update agent."},{status:500,headers});}}
