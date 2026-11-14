@@ -28,6 +28,7 @@ export async function POST(request:NextRequest,ctx:C){const sb=await createClien
   return NextResponse.json({installation:transition,message:"A fresh inactive draft was created. Recheck connections, run a successful dry-run, then activate."},{headers:h});
  }
  if(action==="configure"){
+  if(i.status==="active"&&!staged)return NextResponse.json({error:"Pause the installation before changing its live connection mappings; staged candidate mappings do not interrupt the active version."},{status:409,headers:h});
   const config=b.configuration;
   if(!config||typeof config!=="object"||Array.isArray(config)||hasSecret(config))return NextResponse.json({error:"Configuration must contain non-secret connection mappings and options only."},{status:400,headers:h});
   const keys=Object.keys(config as Record<string,unknown>);
