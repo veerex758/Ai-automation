@@ -43,3 +43,23 @@ export async function getOrCreateDefaultWorkspace(
 
   return { id: workspace.id, name: workspace.name };
 }
+
+export async function getWorkspaceRole(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+): Promise<string | null> {
+  const [{ data: workspace, error: workspaceError }, { data: membership, error: membershipError }] = await Promise.all([
+    supabase.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle(),
+    supabase.from("workspace_members").select("role").eq("workspace_id", workspaceId).eq("user_id", userId).maybeSingle(),
+  ]);
+  if (workspaceError) throw workspaceError;
+  if (membershipError) throw membershipError;
+  if (!workspace) return null;
+  if (workspace.owner_id === userId) return "owner";
+  return membership?.role ?? null;
+}
+
+export function canManageWorkspaceBilling(role: string | null): boolean {
+  return role === "owner" || role === "admin";
+}
