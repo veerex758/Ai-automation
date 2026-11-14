@@ -201,14 +201,15 @@ export default function WorkflowBuilderPage() {
               const provider = registryCatalog.find((item) => item.id === step.nodeId);
               const operation = (step.kind === "trigger" ? provider?.triggers : provider?.actions)
                 ?.find((item) => item.id === step.operationId);
+              const settings: Record<string, string> = step.kind === "trigger"
+                ? { event: "manual" }
+                : { provider: step.nodeId, operation: step.operationId };
               return {
                 id: step.id,
                 type: step.kind,
                 title: operation?.name || provider?.name || step.operationId,
                 description: operation?.description || provider?.name || "Registered workflow operation.",
-                settings: step.kind === "trigger"
-                  ? { event: "manual" }
-                  : { provider: step.nodeId, operation: step.operationId },
+                settings,
                 registryNodeId: step.nodeId,
                 registryOperationId: step.operationId,
                 registryInput: step.input,
