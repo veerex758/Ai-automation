@@ -41,8 +41,14 @@ export async function GET(){
   const workerRows=(workers.data??[]).map(w=>({...w,health:now-Date.parse(w.last_seen_at)<120000?"healthy":now-Date.parse(w.last_seen_at)<600000?"stale":"offline"}));
   const providerFailures:Record<string,number>={};
   for(const job of jobRows){if(job.last_error_code){const key=String(job.last_error_code).split("_")[0].toLowerCase();providerFailures[key]=(providerFailures[key]??0)+1;}}
+  const alerts:string[]=[];
+  if(counts.queued+counts.retry_wait+counts.waiting>=25)alerts.push("Queue backlog has reached 25 or more jobs.");
+  if(counts.dead_letter>0)alerts.push("Dead-letter jobs require investigation.");
+  if(runRows.filter(r=>r.status==="failed").length>=5)alerts.push("Five or more workflow runs failed in the last 24 hours.");
+  if(workerRows.some(w=>w.health==="offline"))alerts.push("One or more workers have not sent a heartbeat in ten minutes.");
+  if((integrations.data??[]).some(i=>i.last_test_status==="failed"))alerts.push("One or more workspace integrations have failed their latest connection test.");
   return NextResponse.json({
-   workspace_id:workspace.id,generated_at:new Date().toISOString(),
+   workspace_id:workspace.id,generated_at:new Date().toISOString(),alerts,
    queue:{...counts,observed_jobs:jobRows.length,oldest_queued_at:jobRows.filter(j=>j.status==="queued"||j.status==="retry_wait"||j.status==="waiting").at(-1)?.created_at??null},
    workers:workerRows,dead_letters:dead.data??[],
    performance:{runs_24h:runRows.length,average_latency_ms:avgLatency,failed_runs_24h:runRows.filter(r=>r.status==="failed").length},
