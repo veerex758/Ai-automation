@@ -66,7 +66,7 @@ export default function ActivityPage() {
   return (
     <main className="app-shell activity-shell">
       <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark"><img className="brand-logo" src="/rexnora-mark.svg" alt="" aria-hidden="true"/></span><span>Rexnora<span className="brand-period">.</span></span></Link>
+        <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Private workspace activity</small></span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
