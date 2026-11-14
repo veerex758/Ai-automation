@@ -73,7 +73,7 @@ export default function LoginPage() {
       <div className="auth-orb auth-orb-one" aria-hidden="true" />
       <div className="auth-orb auth-orb-two" aria-hidden="true" />
       <header className="auth-header">
-        <Link className="auth-brand" href="/" aria-label="Rexnora home"><span className="auth-brand-mark"><img src="/rexnora-mark.svg" alt="" aria-hidden="true" /></span><span>Rexnora<span>.</span></span></Link>
+        <Link className="auth-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"172px",height:"36px",objectFit:"contain"}} /></Link>
         <Link className="auth-back" href="/">Back to home <span>↗</span></Link>
       </header>
 
