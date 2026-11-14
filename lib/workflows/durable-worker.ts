@@ -159,6 +159,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
   }
+  if (step.kind === "trigger" && step.nodeId === "webhooks" && step.operationId === "receive_event") return process.env.AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED === "true";
   if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture"))) return true;
   if (step.kind === "action" && new Set([
     "if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields",
@@ -411,8 +412,7 @@ export async function runDurableWorker() {
         if (source === "error_trigger" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "error_trigger" || steps[0]?.operationId !== "capture")) {
           throw new Error("INVALID_ERROR_TRIGGER_DEFINITION");
         }
-        if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
+        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || source === "webhook" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
