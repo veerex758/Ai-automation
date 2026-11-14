@@ -176,6 +176,10 @@ begin
   if should_pause then
    update public.workflows w set status='paused',updated_at=now() from public.marketplace_installations i where i.product_id=new.id and i.workflow_id=w.id and i.status='active';
    update public.marketplace_installations set status='paused' where product_id=new.id and status='active';
+   update public.workflow_schedules set enabled=false where workflow_id in
+    (select i.workflow_id from public.marketplace_installations i where i.product_id=new.id and i.status='paused' and i.workflow_id is not null);
+   update public.webhook_endpoints set status='revoked' where workflow_id in
+    (select i.workflow_id from public.marketplace_installations i where i.product_id=new.id and i.status='paused' and i.workflow_id is not null);
   end if;
   insert into public.marketplace_customer_notices(user_id,product_id,installation_id,notice_type,title,body)
   select distinct i.installed_by,new.id,i.id,notice_kind,notice_title,notice_body from public.marketplace_installations i where i.product_id=new.id and i.status<>'removed';
@@ -189,6 +193,10 @@ begin
     update public.workflows w set status='paused',updated_at=now() from public.marketplace_installations i
      where i.product_version_id=new.id and i.workflow_id=w.id and i.status='active';
     update public.marketplace_installations set status='paused' where product_version_id=new.id and status='active';
+    update public.workflow_schedules set enabled=false where workflow_id in
+     (select i.workflow_id from public.marketplace_installations i where i.product_version_id=new.id and i.status='paused' and i.workflow_id is not null);
+    update public.webhook_endpoints set status='revoked' where workflow_id in
+     (select i.workflow_id from public.marketplace_installations i where i.product_version_id=new.id and i.status='paused' and i.workflow_id is not null);
     insert into public.marketplace_customer_notices(user_id,product_id,installation_id,notice_type,title,body)
     select distinct i.installed_by,new.product_id,i.id,'verification_revoked','Marketplace version revoked',
      'The exact version installed in this workspace was revoked. Its workflow has been paused and cannot execute until a verified version is installed.'
