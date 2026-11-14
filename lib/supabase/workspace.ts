@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 
 export type WorkspaceSummary = {
   id: string;
@@ -13,6 +14,17 @@ export type WorkspaceSummary = {
 export async function getOrCreateDefaultWorkspace(
   supabase: SupabaseClient,
 ): Promise<WorkspaceSummary> {
+  const cookieStore = await cookies();
+  const activeWorkspaceId = cookieStore.get("aivanta_active_workspace")?.value;
+  if (activeWorkspaceId && /^[0-9a-f-]{36}$/i.test(activeWorkspaceId)) {
+    const { data: activeWorkspace, error: activeError } = await supabase.from("workspaces")
+      .select("id,name").eq("id",activeWorkspaceId).maybeSingle();
+    if (activeError) throw activeError;
+    if (activeWorkspace && typeof activeWorkspace.id === "string" && typeof activeWorkspace.name === "string") {
+      return { id: activeWorkspace.id, name: activeWorkspace.name };
+    }
+  }
+
   const { data, error } = await supabase.rpc("get_or_create_default_workspace");
 
   if (error) throw error;
