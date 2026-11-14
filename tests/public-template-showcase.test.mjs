@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 test("public homepage presents the Rexnora brand and real platform entry points", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/aivanta-theme.css", import.meta.url), "utf8");
   assert.match(page, /src="\/rexnora-lockup\.svg"/);
   assert.match(page, /src="\/rexnora-mark\.svg"/);
   assert.match(page, /Intelligence in/);
