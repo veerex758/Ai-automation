@@ -16,7 +16,7 @@ export async function getOrCreateDefaultWorkspace(
 ): Promise<WorkspaceSummary> {
   const cookieStore = await cookies();
   const activeWorkspaceId = cookieStore.get("aivanta_active_workspace")?.value;
-  if (activeWorkspaceId && /^[0-9a-f-]{36}$/i.test(activeWorkspaceId)) {
+  if (activeWorkspaceId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activeWorkspaceId)) {
     const { data: activeWorkspace, error: activeError } = await supabase.from("workspaces")
       .select("id,name").eq("id",activeWorkspaceId).maybeSingle();
     if (activeError) throw activeError;
