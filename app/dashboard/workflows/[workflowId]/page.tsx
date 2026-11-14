@@ -500,7 +500,6 @@ export default function WorkflowBuilderPage() {
             workflowId={workflowId}
             hasUnsavedChanges={isDirty}
             workflowStatus={workflow?.status ?? "draft"}
-            liveEmailRecipient={liveEmailRecipient}
             isWebhookTrigger={isWebhookTrigger}
           />
           <div className="builder-canvas">
