@@ -4,12 +4,14 @@ import { readFileSync } from "node:fs";
 
 const route = readFileSync(new URL("../app/api/integrations/workspace/route.ts", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
+const permissionHelper = readFileSync(new URL("../lib/supabase/permissions.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/20261102091000_aivanta_workspace_integration_secret_upsert.sql", import.meta.url), "utf8");
 
 test("workspace integration API authenticates and restricts credential management to admins", () => {
   assert.match(route, /auth\.getUser\(\)/);
-  assert.match(route, /workspace_members/);
-  assert.match(route, /\["owner", "admin"\]/);
+  assert.match(route, /hasWorkspacePermission/);
+  assert.match(route, /integrations.manage/);
+  assert.match(permissionHelper, /workspace_members/);
   assert.match(route, /encryptWorkspaceCredentials/);
   for (const provider of ["notion", "hubspot", "twilio", "shopify", "stripe", "linear"]) {
     assert.match(route, new RegExp('"' + provider + '"'));
