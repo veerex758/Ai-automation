@@ -72,8 +72,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .select("id, workspace_id, version, definition, status")
       .eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow)
-    if (workflow && !(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 }); return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 });
     if (workflow.status !== "active") return NextResponse.json({ error: "Only active workflows can be dispatched." }, { status: 409 });
     const registryFormat = isRecord(workflow.definition) && workflow.definition.format === "aivanta-registry-v1";
     if (registryFormat) {
