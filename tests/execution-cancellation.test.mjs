@@ -9,7 +9,7 @@ const panel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-
 
 test("cancellation RPC immediately cancels queued work and requests cancellation for leased work", () => {
   assert.match(migration, /status in \('queued','running','retry_wait','waiting','succeeded','dead_letter','cancelled'\)/);
-  assert.match(migration, /status = 'cancellation_requested'/);
+  assert.match(migration, /return 'cancellation_requested'/);
   assert.match(migration, /cancel_requested_at = coalesce\(cancel_requested_at, now\(\)\)/);
   assert.match(migration, /finish_cancelled_execution_job/);
 });
