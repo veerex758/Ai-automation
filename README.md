@@ -1,4 +1,4 @@
-# Aivanta
+# Rexnora
 
 AI-powered business automation for teams that want clear, dependable workflows and thoughtfully applied AI.
 
