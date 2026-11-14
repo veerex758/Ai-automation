@@ -1,4 +1,5 @@
 import {NextResponse,type NextRequest} from "next/server";import {createClient as createAdmin} from "@supabase/supabase-js";import {createClient} from "@/lib/supabase/server";
+import {verifyMarketplaceStoredArtifact} from "@/lib/marketplace/verification";
 const h={"Cache-Control":"private, no-store"};type C={params:Promise<{installationId:string}>};const uuid=/^[0-9a-f-]{36}$/i;
 function admin(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL??process.env.NEXT_PUBLIC_CODED_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY??process.env.CODED_SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw Error("Installation lifecycle service unavailable");return createAdmin(u,k,{auth:{autoRefreshToken:false,persistSession:false}})}
 function hasSecret(value:unknown):boolean{if(Array.isArray(value))return value.some(hasSecret);if(value&&typeof value==="object")return Object.entries(value).some(([k,v])=>/(secret|token|password|apikey|credential|private.?key)/i.test(k)||hasSecret(v));return false}
