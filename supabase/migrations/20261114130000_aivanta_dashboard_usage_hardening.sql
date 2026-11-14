@@ -142,3 +142,43 @@ begin
 end $$;
 revoke all on function public.create_workspace_for_current_user(text) from public,anon;
 grant execute on function public.create_workspace_for_current_user(text) to authenticated;
+
+-- Workspace invitations are server-managed; raw invitation tokens are never stored.
+create table if not exists public.workspace_invitations (
+ id uuid primary key default gen_random_uuid(),
+ workspace_id uuid not null references public.workspaces(id) on delete cascade,
+ email text not null check (email=lower(trim(email)) and char_length(email) between 3 and 320),
+ role text not null check (role in ('admin','member')),
+ token_hash text not null unique check (token_hash ~ '^[a-f0-9]{64}$'),
+ invited_by uuid not null references auth.users(id) on delete restrict,
+ status text not null default 'pending' check (status in ('pending','accepted','revoked','expired')),
+ expires_at timestamptz not null default now()+interval '7 days',
+ accepted_at timestamptz,
+ created_at timestamptz not null default now()
+);
+create index if not exists workspace_invitations_workspace_created_idx on public.workspace_invitations(workspace_id,created_at desc);
+alter table public.workspace_invitations enable row level security;
+revoke all on public.workspace_invitations from public,anon,authenticated;
+grant all on public.workspace_invitations to service_role;
+
+create or replace function public.accept_workspace_invitation(p_token_hash text,p_user_id uuid,p_email text)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_invite public.workspace_invitations%rowtype;
+begin
+ if auth.role()<>'service_role' then raise exception 'service role required' using errcode='42501'; end if;
+ select * into v_invite from public.workspace_invitations
+  where token_hash=p_token_hash and status='pending' for update;
+ if not found then return jsonb_build_object('accepted',false,'reason','invalid_or_used'); end if;
+ if v_invite.expires_at<=now() then
+  update public.workspace_invitations set status='expired' where id=v_invite.id;
+  return jsonb_build_object('accepted',false,'reason','expired');
+ end if;
+ if lower(trim(p_email))<>v_invite.email then return jsonb_build_object('accepted',false,'reason','email_mismatch'); end if;
+ insert into public.workspace_members(workspace_id,user_id,role)
+ values(v_invite.workspace_id,p_user_id,v_invite.role)
+ on conflict(workspace_id,user_id) do update set role=excluded.role;
+ update public.workspace_invitations set status='accepted',accepted_at=now() where id=v_invite.id;
+ return jsonb_build_object('accepted',true,'workspace_id',v_invite.workspace_id,'role',v_invite.role);
+end $$;
+revoke all on function public.accept_workspace_invitation(text,uuid,text) from public,anon,authenticated;
+grant execute on function public.accept_workspace_invitation(text,uuid,text) to service_role;
