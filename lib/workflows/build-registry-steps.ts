@@ -89,7 +89,7 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
 
   for (const node of nodes) {
     const nodeEdges = outgoing.get(node.id) ?? [];
-    if (nodeEdges.length && (node.type === "condition" || (node.type === "action" && node.registryNodeId === "switch" && node.registryOperationId === "select_route"))) {
+    if (nodeEdges.length && node.type === "condition") {
       if (!nodeEdges.some((edge) => edge.label === "true") || !nodeEdges.some((edge) => edge.label === "false")) {
         throw new Error("Every IF or Switch node with downstream work needs true and false paths.");
       }
