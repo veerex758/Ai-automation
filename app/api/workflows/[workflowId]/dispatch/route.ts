@@ -2,7 +2,6 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
-import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { findOperation } from "@/nodes/registry";
