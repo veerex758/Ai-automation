@@ -62,6 +62,7 @@ export async function performSafeHttpRequest(input: {
   headers: Record<string, string>;
   body?: unknown;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<{ status: number; body: unknown; headers: Record<string, string> }> {
   let url: URL;
   try { url = new URL(input.url); } catch { throw new Error("HTTP_REQUEST_INVALID_URL"); }
@@ -72,7 +73,9 @@ export async function performSafeHttpRequest(input: {
       (url.protocol === "http:" && url.port && url.port !== "80")) {
     throw new Error("HTTP_REQUEST_PORT_NOT_ALLOWED");
   }
+  if (input.signal?.aborted) throw new Error("EXECUTION_LEASE_LOST");
   const target = await resolvePublicHost(url.hostname);
+  if (input.signal?.aborted) throw new Error("EXECUTION_LEASE_LOST");
   const body = input.body === undefined ? undefined : typeof input.body === "string" ? input.body : JSON.stringify(input.body);
   if (body && Buffer.byteLength(body, "utf8") > 65536) throw new Error("HTTP_REQUEST_BODY_TOO_LARGE");
   const headers = { ...input.headers };
@@ -105,9 +108,12 @@ export async function performSafeHttpRequest(input: {
         resolve({ status: response.statusCode ?? 0, body: parsed, headers: responseHeaders });
       });
     });
+    const abort = () => req.destroy(new Error("EXECUTION_LEASE_LOST"));
+    input.signal?.addEventListener("abort", abort, { once: true });
+    if (input.signal?.aborted) abort();
     const timer = setTimeout(() => req.destroy(new Error("HTTP_REQUEST_TIMEOUT")), input.timeoutMs);
-    req.on("error", (error) => { clearTimeout(timer); reject(error); });
-    req.on("close", () => clearTimeout(timer));
+    req.on("error", (error) => { clearTimeout(timer); input.signal?.removeEventListener("abort", abort); reject(error); });
+    req.on("close", () => { clearTimeout(timer); input.signal?.removeEventListener("abort", abort); });
     if (body !== undefined) req.write(body);
     req.end();
   });
