@@ -58,10 +58,14 @@ The configured Stripe Price must be active, one-time, and match the Aivanta plan
 - Invitations are token-hash stored, single-use, email-matched and expire after seven days.
 - Ownership transfer is owner-only and audited.
 - The workspace security policy can restrict administrator invitations. Live external operations remain approval-gated.
+- Owners/admins can create workspace custom roles from the Workspaces & team page. Custom roles grant explicit permissions for workflows, integrations, dashboards, billing, members, operations and settings; unassigned members retain the default member permission set. Owner/admin privileges are not reduced by custom-role assignment.
 
 ## Operational monitoring
 
 - The workspace Operations page is owner/admin-only.
 - Worker heartbeats are emitted by the durable worker.
 - Queue counts are exact database counts; recent job samples, dead letters, worker freshness, integration test state and 24-hour execution latency are displayed.
-- Alerts are diagnostic signals; they are shown in the dashboard and are not yet delivered to external notification channels.
+- The Operations page supports email and Slack destinations, event filters and minimum severity. Slack incoming webhook URLs are encrypted with `AIVANTA_CREDENTIALS_ENCRYPTION_KEY` and workspace/destination-bound associated data.
+- Email delivery requires `RESEND_API_KEY` and `RESEND_FROM_EMAIL`; configure a verified sender domain with Resend before enabling it.
+- `POST /api/internal/operations/alerts` evaluates workspace queue, dead-letter, worker, workflow and provider signals and delivers enabled alerts. It requires `Authorization: Bearer <CRON_SECRET>`. Schedule it from a trusted cron provider at an interval supported by the deployment plan; successful deliveries are deduplicated per destination/event for 15 minutes and attempts are recorded in `workspace_alert_deliveries`.
+- Delivery failures are recorded with sanitized error codes; webhook secrets are never returned by the settings API.
