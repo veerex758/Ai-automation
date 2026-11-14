@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await authenticatedWorkspace();
     if ("response" in auth) return auth.response;
-    if (!(await hasWorkspacePermission(auth.supabase, auth.workspace.id, auth.user.id, "integrations.manage"))) return json({ error: "Workspace integrations.manage permission required." }, 403);
+    if (!(await hasWorkspacePermission(auth.supabase, auth.workspace.id, auth.user.id, "integrations.view"))) return json({ error: "Workspace integrations.view permission required." }, 403);
     const { data, error } = await adminClient().from("workspace_provider_operation_approvals")
       .select("id,provider,node_id,operation_id,decision,decided_by,decided_at,reason")
       .eq("workspace_id", auth.workspace.id)
