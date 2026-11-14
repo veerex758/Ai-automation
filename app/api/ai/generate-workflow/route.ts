@@ -84,7 +84,6 @@ export async function POST(request: NextRequest) {
         edgeIds.add(edge.id);
         edges.push({ id: edge.id, source: edge.source, target: edge.target, label: edge.label as "next" | "true" | "false" });
       }
-      const byStep = new Map(registrySteps.map((step) => [(step as { id: string }).id, step as { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> }]));
       const outgoing = new Map([...ids].map((id) => [id, edges.filter((edge) => edge.source === id)]));
       const visited = new Set<string>();
       const queue = [String((registrySteps[0] as { id: string }).id)];
