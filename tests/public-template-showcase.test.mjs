@@ -7,7 +7,8 @@ async function sourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
     const path = join(directory, entry.name);
-    return entry.isDirectory() ? sourceFiles(path) : /\\.(tsx|ts|jsx|js)$/.test(entry.name) ? [path] : [];
+    if (entry.isDirectory()) return sourceFiles(path);
+    return [".tsx", ".ts", ".jsx", ".js"].some((extension) => entry.name.endsWith(extension)) ? [path] : [];
   }));
   return nested.flat();
 }
@@ -15,16 +16,16 @@ async function sourceFiles(directory) {
 test("public homepage presents the Rexnora brand and real platform entry points", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/aivanta-theme.css", import.meta.url), "utf8");
-  assert.match(page, /src="\\/rexnora-lockup\\.svg"/);
-  assert.match(page, /src="\\/rexnora-mark\\.svg"/);
-  assert.match(page, /Intelligence in/);
-  assert.match(page, /Describe it\\. Build it\\. Run it\\./);
-  assert.match(page, /id="platform"/);
-  assert.match(page, /href="\\/dashboard\\/templates"/);
-  assert.match(page, /Workflows/);
-  assert.match(page, /AI-Powered/);
-  assert.match(styles, /\\.rx-home/);
-  assert.match(styles, /@media\\s*\\(\\s*max-width:\\s*700px\\s*\\)/);
+  assert.ok(page.includes('src="/rexnora-lockup.svg"'));
+  assert.ok(page.includes('src="/rexnora-mark.svg"'));
+  assert.ok(page.includes("Intelligence in"));
+  assert.ok(page.includes("Describe it. Build it. Run it."));
+  assert.ok(page.includes('id="platform"'));
+  assert.ok(page.includes('href="/dashboard/templates"'));
+  assert.ok(page.includes("Workflows"));
+  assert.ok(page.includes("AI-Powered"));
+  assert.ok(styles.includes(".rx-home"));
+  assert.ok(styles.includes("@media(max-width:700px)"));
 });
 
 test("application pages do not reference the retired Aivanta logo asset", async () => {
