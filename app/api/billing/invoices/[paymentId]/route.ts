@@ -1,4 +1,5 @@
 import {NextResponse} from "next/server";
+import {getOrCreateDefaultWorkspace,getWorkspaceRole,canManageWorkspaceBilling} from "@/lib/supabase/workspace";
 import {createClient} from "@/lib/supabase/server";
 import {getOrCreateDefaultWorkspace} from "@/lib/supabase/workspace";
 export const dynamic="force-dynamic";
@@ -8,6 +9,8 @@ export async function GET(_request:Request,ctx:{params:Promise<{paymentId:string
   const supabase=await createClient(),{data:{user},error:authError}=await supabase.auth.getUser();
   if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401});
   const workspace=await getOrCreateDefaultWorkspace(supabase),{paymentId}=await ctx.params;
+  const role=await getWorkspaceRole(supabase,workspace.id,user.id);
+  if(!canManageWorkspaceBilling(role))return NextResponse.json({error:"Workspace owner or admin access required to view payment receipts."},{status:403});
   const [{data:payment,error:paymentError},{data:workspaceRow,error:workspaceError}]=await Promise.all([
    supabase.from("billing_payments").select("id,reference,provider,plan_slug,amount_minor,currency,status,paid_at,created_at").eq("id",paymentId).eq("workspace_id",workspace.id).maybeSingle(),
    supabase.from("workspaces").select("name").eq("id",workspace.id).maybeSingle()
