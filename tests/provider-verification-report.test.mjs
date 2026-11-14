@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 const report = await readFile(new URL("../docs/integrations/provider-verification-report.md", import.meta.url), "utf8");
 
 test("provider verification report publishes all registry mappings and clearly blocks unverified live execution", () => {
-  assert.ok(report.includes("- Catalogue entries: 100"));
+  assert.ok(report.includes("Provider directory: **100**"));
   assert.ok(report.includes("- All native registry operations: 148"));
   assert.ok(report.includes("- Worker operation mappings: 148"));
   assert.ok(report.includes("- Missing mappings: 0"));
