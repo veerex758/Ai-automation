@@ -1,13 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root{--ink:#18211d;--muted:#69746e;--paper:#f7f8f4;--green:#c9f26f;--line:#e4e8e1;--deep:#19231f}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 .shell{width:min(1160px,calc(100% - 64px));margin:0 auto}
 .nav{height:88px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(24,33,29,.08)}
-.brand{display:inline-flex;align-items:center;gap:10px;font-family:Manrope,sans-serif;font-size:22px;font-weight:800;letter-spacing:-1px}
+.brand{display:inline-flex;align-items:center;gap:10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;letter-spacing:-1px}
 .brand-mark{display:grid;place-items:center;width:32px;height:32px;background:var(--green);border-radius:10px;font-size:23px;line-height:1;color:var(--deep);transform:rotate(-5deg)}
 .brand-period{color:#8ab33b}
 .nav-links{display:flex;gap:34px;color:#5d6962;font-size:13px;font-weight:600}

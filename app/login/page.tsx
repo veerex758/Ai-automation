@@ -73,7 +73,7 @@ export default function LoginPage() {
       <div className="auth-orb auth-orb-one" aria-hidden="true" />
       <div className="auth-orb auth-orb-two" aria-hidden="true" />
       <header className="auth-header">
-        <Link className="auth-brand" href="/" aria-label="Aivanta home"><span className="auth-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta<span>.</span></span></Link>
+        <Link className="auth-brand" href="/" aria-label="REXNORA home"><span className="auth-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>REXNORA<span>.</span></span></Link>
         <Link className="auth-back" href="/">Back to home <span>↗</span></Link>
       </header>
 
@@ -109,7 +109,7 @@ export default function LoginPage() {
           <div className="auth-card-foot"><span>⌑</span> Your session is protected by Supabase Auth.</div>
         </div>
       </section>
-      <footer className="auth-footer"><span>© {new Date().getFullYear()} Aivanta</span><span>Clarity in every step <i /> Control by design</span></footer>
+      <footer className="auth-footer"><span>© {new Date().getFullYear()} REXNORA</span><span>Clarity in every step <i /> Control by design</span></footer>
     </main>
   );
 }
