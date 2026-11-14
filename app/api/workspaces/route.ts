@@ -11,10 +11,11 @@ export async function GET(){
  try{
   const supabase=await createClient(),{data:{user},error}=await supabase.auth.getUser();
   if(error||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
+  const resolvedWorkspace=await getOrCreateDefaultWorkspace(supabase);
   const {data,error:listError}=await supabase.from("workspaces").select("id,name,owner_id,created_at").order("created_at",{ascending:true});
   if(listError)throw listError;
   const cookieStore=await cookies(),activeId=cookieStore.get("aivanta_active_workspace")?.value;
-  const selected=(data??[]).find(w=>w.id===activeId)??await getOrCreateDefaultWorkspace(supabase);
+  const selected=(data??[]).find(w=>w.id===activeId)??resolvedWorkspace;
   return NextResponse.json({workspaces:data??[],active_workspace_id:selected.id,user_id:user.id},{headers});
  }catch(error){console.error("Workspace list failed:",error);return NextResponse.json({error:"Could not load workspaces."},{status:503,headers});}
 }
