@@ -161,7 +161,7 @@ export default function BillingPage() {
 
     <section className="billing-panel">
       <h2>Usage this month</h2>
-      <p>Usage is measured against your workspace entitlements.</p>\n      <p>{data.entitlements.limits.workflow_execution==null?"Custom executions":`${data.entitlements.limits.workflow_execution.toLocaleString()} executions included`} · {data.entitlements.limits.ai_credit==null?"Custom AI credits":`${data.entitlements.limits.ai_credit.toLocaleString()} AI credits included`}</p>
+      <p>Usage is measured against your workspace entitlements and resets on the first day of each calendar month.</p>\n      <p>{data.entitlements.limits.workflow_execution==null?"Custom executions":`${data.entitlements.limits.workflow_execution.toLocaleString()} executions included`} · {data.entitlements.limits.ai_credit==null?"Custom AI credits":`${data.entitlements.limits.ai_credit.toLocaleString()} AI credits included`}</p>
       {metrics.map(metric => {
         const used = Math.max(0, data.entitlements.usage[metric.key] ?? 0);
         const limit = data.entitlements.limits[metric.key];
@@ -172,11 +172,12 @@ export default function BillingPage() {
           <div className="usage-track" aria-label={`${metric.label}: ${used} of ${unlimited ? "unlimited" : limit}`}>
             <span style={{ width: `${percent}%` }} />
           </div>
+          {!unlimited && percent >= 80 && <p className="billing-usage-warning" role="status">{metric.label} has reached {percent}% of the plan allowance. <a href="#billing-plans">Review upgrade options</a>.</p>}
         </div>;
       })}
     </section>
 
-    <section className="billing-panel">
+    <section className="billing-panel" id="billing-plans">
       <h2>Choose a plan</h2>
       <p>Checkout is available only for prices configured and verified by Aivanta.</p>
       <div className="billing-plans">
