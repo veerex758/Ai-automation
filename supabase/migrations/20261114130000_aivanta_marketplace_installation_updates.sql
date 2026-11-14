@@ -18,6 +18,38 @@ alter table public.marketplace_installation_history enable row level security;
 revoke all on public.marketplace_installation_history from public,anon,authenticated;
 grant select,insert on public.marketplace_installation_history to service_role;
 
+-- Immutable workflow-to-installation bindings survive workflow deletion and version changes.
+-- This lets the runtime guard reject already-queued jobs for superseded workflows.
+create table if not exists public.marketplace_installation_workflow_bindings (
+ workflow_id uuid primary key,
+ installation_id uuid not null,
+ product_version_id uuid not null,
+ created_at timestamptz not null default now()
+);
+alter table public.marketplace_installation_workflow_bindings enable row level security;
+revoke all on public.marketplace_installation_workflow_bindings from public,anon,authenticated;
+grant select,insert on public.marketplace_installation_workflow_bindings to service_role;
+insert into public.marketplace_installation_workflow_bindings(workflow_id,installation_id,product_version_id)
+select workflow_id,id,product_version_id from public.marketplace_installations where workflow_id is not null
+on conflict(workflow_id) do nothing;
+
+create or replace function public.marketplace_capture_installation_workflow_binding()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $
+declare existing_installation uuid;
+begin
+ if new.workflow_id is null then return new; end if;
+ insert into public.marketplace_installation_workflow_bindings(workflow_id,installation_id,product_version_id)
+ values(new.workflow_id,new.id,new.product_version_id) on conflict(workflow_id) do nothing;
+ select installation_id into existing_installation from public.marketplace_installation_workflow_bindings where workflow_id=new.workflow_id;
+ if existing_installation is distinct from new.id then raise exception 'marketplace_workflow_already_bound'; end if;
+ return new;
+end $;
+drop trigger if exists marketplace_capture_installation_workflow_binding on public.marketplace_installations;
+create trigger marketplace_capture_installation_workflow_binding
+ after insert or update of workflow_id,product_version_id on public.marketplace_installations
+ for each row execute function public.marketplace_capture_installation_workflow_binding();
+revoke all on function public.marketplace_capture_installation_workflow_binding() from public,anon,authenticated;
+
 -- Update/rollback always materialize a fresh draft. Prior customer workflows remain archived
 -- and their immutable version/configuration snapshots remain available for rollback.
 create or replace function public.marketplace_transition_installation_version(
@@ -139,11 +171,12 @@ grant execute on function public.marketplace_installation_lifecycle(uuid,uuid,te
 -- A workflow in installation history is an obsolete version and can never execute.
 create or replace function public.marketplace_assert_installation_runtime(p_workflow_id uuid)
 returns boolean language plpgsql security definer set search_path=public,pg_temp as $$
-declare i public.marketplace_installations; p public.marketplace_products; v public.marketplace_product_versions;
+declare binding public.marketplace_installation_workflow_bindings; i public.marketplace_installations; p public.marketplace_products; v public.marketplace_product_versions;
 begin
- select * into i from public.marketplace_installations where workflow_id=p_workflow_id limit 1;
+ select * into binding from public.marketplace_installation_workflow_bindings where workflow_id=p_workflow_id;
  if found then
-  if i.status<>'active' then return false; end if;
+  select * into i from public.marketplace_installations where id=binding.installation_id;
+  if not found or i.workflow_id is distinct from p_workflow_id or i.product_version_id is distinct from binding.product_version_id or i.status<>'active' then return false; end if;
   select * into p from public.marketplace_products where id=i.product_id;
   if not found or p.status<>'published' then return false; end if;
   select * into v from public.marketplace_product_versions where id=i.product_version_id and product_id=i.product_id;
