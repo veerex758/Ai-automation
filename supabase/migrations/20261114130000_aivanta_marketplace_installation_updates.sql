@@ -99,6 +99,8 @@ begin
    insert into public.marketplace_installation_history(installation_id,product_version_id,workflow_id,configuration,artifact_sha256,transition_action,changed_by)
    values(i.id,i.product_version_id,i.workflow_id,i.configuration,old_version.artifact_sha256,p_action,p_actor_id);
    update public.workflows set status='archived',updated_at=now() where id=i.workflow_id and workspace_id=i.workspace_id;
+   update public.workflow_schedules set enabled=false where workflow_id=i.workflow_id;
+   update public.webhook_endpoints set status='revoked' where workflow_id=i.workflow_id;
   else
    raise exception 'installed_workflow_missing';
   end if;
@@ -158,6 +160,8 @@ begin
  else
   if i.status='removed' then raise exception 'installation_already_removed'; end if;
   update public.workflows set status='archived',updated_at=now() where id=w.id;
+  update public.workflow_schedules set enabled=false where workflow_id=w.id;
+  update public.webhook_endpoints set status='revoked' where workflow_id=w.id;
   update public.marketplace_installations set status='removed',removed_at=now(),activated_at=null where id=i.id returning * into result;
  end if;
  insert into public.marketplace_admin_audit(actor_id,action,entity_type,entity_id,details)
