@@ -3,7 +3,6 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
-import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
 
 export const runtime = "nodejs";
