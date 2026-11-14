@@ -80,6 +80,7 @@ const navItems = [
   { label: "Activity logs", icon: "◷" },
   { label: "Dashboard Builder", icon: "▦" },
   { label: "Operations", icon: "⌁" },
+  { label: "Workspaces & team", icon: "♧" },
 ];
 
 export default function DashboardPage() {
@@ -273,7 +274,7 @@ export default function DashboardPage() {
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
-          {navItems.map((item) => item.label === "Integrations" ? <Link key={item.label} href="/dashboard/connections" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}<span className="soon-tag">NEW</span></Link> : item.label === "Dashboard Builder" ? <Link key={item.label} href="/dashboard/dashboards" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : item.label === "Operations" ? <Link key={item.label} href="/dashboard/operations" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : <button key={item.label} className={activeNav === item.label ? "side-link selected" : "side-link"} onClick={() => { setActiveNav(item.label); if (item.label !== "Overview" && item.label !== "Workflows") setNotice(item.label + " is part of the upcoming workspace release."); }}><span className="side-icon">{item.icon}</span>{item.label}</button>)}
+          {navItems.map((item) => item.label === "Integrations" ? <Link key={item.label} href="/dashboard/connections" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}<span className="soon-tag">NEW</span></Link> : item.label === "Dashboard Builder" ? <Link key={item.label} href="/dashboard/dashboards" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : item.label === "Operations" ? <Link key={item.label} href="/dashboard/operations" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : item.label === "Workspaces & team" ? <Link key={item.label} href="/dashboard/workspaces" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : <button key={item.label} className={activeNav === item.label ? "side-link selected" : "side-link"} onClick={() => { setActiveNav(item.label); if (item.label !== "Overview" && item.label !== "Workflows") setNotice(item.label + " is part of the upcoming workspace release."); }}><span className="side-icon">{item.icon}</span>{item.label}</button>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
         <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
