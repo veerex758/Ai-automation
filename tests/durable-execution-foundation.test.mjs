@@ -102,7 +102,7 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /onStepStart/);
   assert.match(workerService, /onStepComplete/);
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
-  assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
+  assert.match(workerService, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED === "true"/);
   assert.match(workerService, /p_limit: 1/);
   assert.match(workerService, /length > MAX_LIVE_ACTION_STEPS/);
   assert.match(workerService, /MAX_LIVE_ACTION_STEPS = 30/);
