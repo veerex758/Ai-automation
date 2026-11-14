@@ -204,7 +204,7 @@ test("Error Trigger dispatches active same-workspace subscribers through the dur
 });
 
 const cancellationMigration = readFileSync(
-  new URL("../supabase/migrations/20261114110000_aivanta_execution_cancellation.sql", import.meta.url),
+  new URL("../supabase/migrations/20261114072354_aivanta_execution_cancellation.sql", import.meta.url),
   "utf8",
 );
 
