@@ -36,7 +36,8 @@ test("active workflow caps are enforced transactionally and AI usage consumes AI
   assert.match(agentRunRoute, /consume_agent_run_usage/);
   assert.ok(saasMigration.includes("'agent_run'"));
   assert.ok(saasMigration.includes("'ai_credit'"));
-  assert.match(aiRoute, /p_metric: "ai_credit".*workflow_draft_generation/);
+  assert.match(aiRoute, /consume_ai_generation_usage/);
+  assert.ok(saasMigration.includes("ai_generation"));
   assert.match(registryRunRoute, /p_metric: "workflow_execution"/);
   assert.match(registryRunRoute, /The blueprint defines one workflow run as one execution/);
   assert.ok(hardeningMigration.includes("enterprise"));
