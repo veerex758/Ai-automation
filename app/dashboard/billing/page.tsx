@@ -43,6 +43,8 @@ const metrics = [
   { key: "workflow_created", label: "Active workflows" },
   { key: "workflow_execution", label: "Workflow executions" },
   { key: "ai_credit", label: "AI credits" },
+  { key: "agent_run", label: "Agent runs" },
+  { key: "ai_generation", label: "AI generations" },
 ];
 
 function money(amountMinor: number, currency: string) {
