@@ -33,6 +33,9 @@ export async function POST(request:Request,ctx:Ctx){
   if(role==="admin"&&a.role!=="owner")return NextResponse.json({error:"Only the workspace owner can invite administrators."},{status:403,headers});
   const token=randomBytes(32).toString("hex"),tokenHash=createHash("sha256").update(token).digest("hex");
   const admin=createAdminClient();
+  const {data:securitySettings,error:securityError}=await admin.from("workspace_security_settings").select("allow_member_invites").eq("workspace_id",workspaceId).maybeSingle();
+  if(securityError)throw securityError;
+  if(a.role==="admin"&&securitySettings?.allow_member_invites===false)return NextResponse.json({error:"Workspace owner has disabled administrator invitations."},{status:403,headers});
   const {data:existing}=await admin.from("workspace_members").select("user_id").eq("workspace_id",workspaceId);
   const invitedUser=(existing??[]).some(m=>m.user_id===a.user.id);
   if(!invitedUser)return NextResponse.json({error:"Workspace membership required."},{status:403,headers});
