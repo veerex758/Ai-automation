@@ -10,6 +10,8 @@ create table if not exists public.workspace_dashboards (
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 create index if not exists workspace_dashboards_workspace_updated_idx on public.workspace_dashboards(workspace_id,updated_at desc);
+drop trigger if exists workspace_dashboards_set_updated_at on public.workspace_dashboards;
+create trigger workspace_dashboards_set_updated_at before update on public.workspace_dashboards for each row execute function public.set_updated_at();
 alter table public.workspace_dashboards enable row level security;
 drop policy if exists workspace_dashboards_member_read on public.workspace_dashboards;
 create policy workspace_dashboards_member_read on public.workspace_dashboards for select to authenticated using (private.is_workspace_member(workspace_id));
@@ -36,7 +38,7 @@ begin
  end if;
  select plan_key,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit into v_plan,v_status,v_custom_workflows,v_custom_executions,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
  v_plan:=coalesce(v_plan,'free'); v_status:=coalesce(v_status,'active'); v_period:=date_trunc('month',now())::date;
- if v_status not in ('active','trialing') then return jsonb_build_object('allowed',false,'reason','subscription_inactive','plan',v_plan); end if;
+ if v_status not in ('active','trialing') or exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then return jsonb_build_object('allowed',false,'reason','subscription_inactive','plan',v_plan); end if;
  v_limit:=case v_plan when 'starter' then case p_metric when 'workflow_created' then 10 when 'workflow_execution' then 2000 when 'ai_credit' then 500 else 500 end when 'pro' then case p_metric when 'workflow_created' then 50 when 'workflow_execution' then 10000 when 'ai_credit' then 2500 else 2500 end when 'business' then case p_metric when 'workflow_created' then 200 when 'workflow_execution' then 50000 when 'ai_credit' then 15000 else 15000 end when 'enterprise' then case p_metric when 'workflow_created' then v_custom_workflows when 'workflow_execution' then v_custom_executions else v_custom_ai end else case p_metric when 'workflow_created' then 2 when 'workflow_execution' then 300 when 'ai_credit' then 25 else 25 end end;
  if v_limit is null then return jsonb_build_object('allowed',false,'reason','enterprise_limits_not_configured','plan',v_plan); end if;
  if p_metric='workflow_created' then select count(*) into v_used from public.workflows where workspace_id=p_workspace_id and status='active';
@@ -55,6 +57,7 @@ begin
  if auth.uid() is null or not private.is_workspace_member(p_workspace_id) then raise exception 'workspace access denied' using errcode='42501'; end if;
  select plan_key,status,custom_workflow_limit,custom_execution_limit,custom_ai_credit_limit into v_plan,v_status,v_workflow_limit,v_execution_limit,v_ai_limit from public.workspace_subscriptions where workspace_id=p_workspace_id;
  v_plan:=coalesce(v_plan,'free'); v_status:=coalesce(v_status,'active'); v_start:=date_trunc('month',now())::date;
+ if exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then v_status:='expired'; end if;
  if v_plan<>'enterprise' then v_workflow_limit:=case v_plan when 'starter' then 10 when 'pro' then 50 when 'business' then 200 else 2 end; v_execution_limit:=case v_plan when 'starter' then 2000 when 'pro' then 10000 when 'business' then 50000 else 300 end; v_ai_limit:=case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 else 25 end; end if;
  select count(*) into v_workflows from public.workflows where workspace_id=p_workspace_id and status='active';
  select coalesce(sum(quantity) filter(where metric='workflow_execution'),0),coalesce(sum(quantity) filter(where metric='ai_credit'),0),coalesce(sum(quantity) filter(where metric='agent_run'),0),coalesce(sum(quantity) filter(where metric='ai_generation'),0) into v_exec,v_ai,v_agents,v_generations from public.workspace_usage where workspace_id=p_workspace_id and period_start=v_start;
@@ -77,7 +80,7 @@ begin
  end if;
  select plan_key,status,custom_ai_credit_limit into v_plan,v_status,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
  v_plan:=coalesce(v_plan,'free'); v_status:=coalesce(v_status,'active');
- if v_status not in ('active','trialing') then return jsonb_build_object('allowed',false,'reason','subscription_inactive'); end if;
+ if v_status not in ('active','trialing') or exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then return jsonb_build_object('allowed',false,'reason','subscription_inactive'); end if;
  v_limit:=case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 when 'enterprise' then v_custom_ai else 25 end;
  if v_limit is null then return jsonb_build_object('allowed',false,'reason','enterprise_limits_not_configured'); end if;
  select coalesce(sum(quantity),0) into v_agents from public.workspace_usage where workspace_id=p_workspace_id and period_start=v_period and metric='agent_run';
@@ -214,7 +217,7 @@ begin
  if exists(select 1 from public.workspace_usage where workspace_id=p_workspace_id and metric='ai_generation' and metadata->>'idempotency_key'=p_idempotency_key) then return jsonb_build_object('allowed',true,'duplicate',true);end if;
  select plan_key,status,custom_ai_credit_limit into v_plan,v_status,v_custom_ai from public.workspace_subscriptions where workspace_id=p_workspace_id for update;
  v_plan:=coalesce(v_plan,'free');v_status:=coalesce(v_status,'active');
- if v_status not in ('active','trialing') then return jsonb_build_object('allowed',false,'reason','subscription_inactive');end if;
+ if v_status not in ('active','trialing') or exists(select 1 from public.workspace_subscriptions where workspace_id=p_workspace_id and current_period_end<=now()) then return jsonb_build_object('allowed',false,'reason','subscription_inactive');end if;
  v_limit:=case v_plan when 'starter' then 500 when 'pro' then 2500 when 'business' then 15000 when 'enterprise' then v_custom_ai else 25 end;
  if v_limit is null then return jsonb_build_object('allowed',false,'reason','enterprise_limits_not_configured');end if;
  select coalesce(sum(quantity),0) into v_ai from public.workspace_usage where workspace_id=p_workspace_id and period_start=v_period and metric='ai_credit';
