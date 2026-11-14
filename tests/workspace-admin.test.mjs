@@ -18,9 +18,10 @@ test("workspace creation and active workspace selection are membership checked",
  assert.ok(switchRoute.includes("from(\"workspaces\")"));
 });
 test("member role changes protect owner and administrator boundaries",()=>{
- assert.ok(memberRoute.includes('["owner","admin"]'));
+ assert.ok(memberRoute.includes("hasWorkspacePermission"));
+ assert.ok(memberRoute.includes('"members.manage"'));
  assert.ok(memberRoute.includes('target.role==="owner"'));
- assert.ok(memberRoute.includes('a.role==="admin"&&target.role==="admin"'));
+ assert.ok(memberRoute.includes('target.role==="admin"&&a.role!=="owner"'));
 });
 test("workspace invitations store token hashes, expire and require matching verified email",()=>{
  assert.ok(migration.includes("workspace_invitations"));
