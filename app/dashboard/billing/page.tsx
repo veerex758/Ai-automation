@@ -140,8 +140,15 @@ export default function BillingPage() {
           {data.subscription.cancel_at_period_end ? " · Cancellation scheduled" : ""}
         </p>
       </div>
-      <span className="billing-chip">{active ? "Access active" : "Access restricted"}</span>
+      <div className="billing-current-actions">
+        <span className="billing-chip">{active ? "Access active" : "Access restricted"}</span>
+        {data.subscription.plan_key !== "free" && data.subscription.status !== "canceled" && !data.subscription.cancel_at_period_end && (
+          <button type="button" disabled={canceling} onClick={() => void cancelSubscription()}>{canceling ? "Scheduling…" : "Cancel at period end"}</button>
+        )}
+      </div>
     </section>
+    {billingMessage && <p role="status" className="billing-note">{billingMessage}</p>}
+    {error && <p role="alert" className="billing-error">{error}</p>}
 
     <section className="billing-panel">
       <h2>Usage this month</h2>
