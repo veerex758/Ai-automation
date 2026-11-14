@@ -8,7 +8,7 @@ const nodeTypes = readFileSync(new URL("../nodes/types.ts", import.meta.url), "u
 
 test("worker aborts provider execution when heartbeat or lease renewal fails", () => {
   assert.match(worker, /leaseState\.lost = true/);
-  assert.match(worker, /leaseState\.controller\.abort\(\)/);
+  assert.match(worker, /leaseState\.controller\.abort\(new Error\("EXECUTION_LEASE_LOST"\)\)/);
   assert.match(worker, /heartbeat_execution_job/);
   assert.match(worker, /EXECUTION_LEASE_LOST/);
 });
