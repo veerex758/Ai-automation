@@ -9,8 +9,8 @@ test("worker heartbeats are server owned and service role only",()=>{
  assert.match(migration,/execution_worker_heartbeats/);assert.match(migration,/record_execution_worker_heartbeat/);
  assert.match(worker,/record_execution_worker_heartbeat/);
 });
-test("operations endpoint requires workspace owner or admin and returns queue and worker telemetry",()=>{
- assert.match(route,/auth\.getUser\(\)/);assert.match(route,/\["owner","admin"\]/);
+test("operations endpoint requires granular workspace operations permission and returns queue and worker telemetry",()=>{
+ assert.match(route,/auth\.getUser\(\)/);assert.match(route,/hasWorkspacePermission/);assert.match(route,/"operations.view"/);
  assert.match(route,/execution_jobs/);assert.match(route,/execution_dead_letters/);assert.match(route,/execution_worker_heartbeats/);
 });
 test("operations page displays worker, queue, dead-letter and provider diagnostics",()=>{
