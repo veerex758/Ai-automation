@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./billing.css";
 import BillingCheckout from "./billing-checkout";
-import BillingStripeCheckout from "./billing-stripe-checkout";\nimport BillingStripeSubscription from "./billing-stripe-subscription";\nimport BillingPaystackMandate from "./billing-paystack-mandate";
+import BillingStripeCheckout from "./billing-stripe-checkout";\nimport BillingStripeSubscription from "./billing-stripe-subscription";\nimport BillingPaystackMandate from "./billing-paystack-mandate";\nimport BillingTaxInvoice from "./billing-tax-invoice";
 
 type CheckoutOption = { slug: string; amount_minor: number; currency: string };
 type Plan = {
@@ -211,7 +211,7 @@ export default function BillingPage() {
             <div><strong>{payment.plan_slug.replaceAll("-", " ")}</strong><small>{date(payment.created_at)}</small></div>
             <span>{money(payment.amount_minor, payment.currency)} · {payment.provider}</span>
             <span className={`billing-payment-status ${payment.status}`}>{payment.status.replaceAll("_", " ")}</span>
-            {payment.status === "success" && <a className="billing-receipt-link" href={"/api/billing/invoices/" + payment.id} target="_blank" rel="noreferrer">View receipt ↗</a>}
+            {payment.status === "success" && <a className="billing-receipt-link" href={"/api/billing/invoices/" + payment.id} target="_blank" rel="noreferrer">View receipt ↗</a>\n            <BillingTaxInvoice paymentId={payment.id} />}
             {(payment.status === "failed" || payment.status === "abandoned") && <div className="billing-payment-retry"><BillingCheckout plan={payment.plan_slug} enabled={data.entitlements.billing.checkout_enabled} /><BillingStripeCheckout plan={payment.plan_slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} /></div>}
           </div>)}</div>
         : <p>No payments have been recorded for this workspace yet.</p>}
