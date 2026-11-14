@@ -63,6 +63,8 @@ export default function BillingPage() {
   const [data, setData] = useState<BillingData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [canceling, setCanceling] = useState(false);
+  const [billingMessage, setBillingMessage] = useState("");
 
   const loadBilling = useCallback(async () => {
     setLoading(true);
@@ -83,6 +85,26 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => { void loadBilling(); }, [loadBilling]);
+
+  const cancelSubscription = async () => {
+    if (!window.confirm("Schedule this workspace subscription to end after the current paid period?")) return;
+    setCanceling(true);
+    setBillingMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/billing/cancel", { method: "POST" });
+      const payload = await response.json() as { error?: string; cancellation?: { access_until?: string; already_scheduled?: boolean } };
+      if (!response.ok) throw new Error(payload.error || "Could not schedule cancellation.");
+      setBillingMessage(payload.cancellation?.already_scheduled
+        ? "Cancellation is already scheduled."
+        : `Automatic renewal is stopped. Your paid access remains available until ${date(payload.cancellation?.access_until)}.`);
+      await loadBilling();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not schedule cancellation.");
+    } finally {
+      setCanceling(false);
+    }
+  };
 
   if (loading) {
     return <main className="billing-shell" aria-busy="true">
