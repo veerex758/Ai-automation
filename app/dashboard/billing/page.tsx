@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./billing.css";
 import BillingCheckout from "./billing-checkout";
+import BillingStripeCheckout from "./billing-stripe-checkout";
 
 type CheckoutOption = { slug: string; amount_minor: number; currency: string };
 type Plan = {
@@ -13,6 +14,7 @@ type Plan = {
 };
 type Payment = {
   id: string;
+  provider: string;
   plan_slug: string;
   amount_minor: number;
   currency: string;
@@ -33,7 +35,7 @@ type BillingData = {
     status: string;
     usage: Record<string, number>;
     limits: Record<string, number | null>;
-    billing: { checkout_enabled: boolean };
+    billing: { checkout_enabled: boolean; stripe_checkout_enabled?: boolean };
   };
   payments?: Payment[];
   plans: Plan[];
@@ -188,6 +190,7 @@ export default function BillingPage() {
                 ? plan.checkout.map(option => <div key={option.slug}>
                     <small className="billing-configured-price">{money(option.amount_minor, option.currency)} · {option.slug.endsWith("annual") ? "annual" : "monthly"}</small>
                     <BillingCheckout plan={option.slug} enabled={data.entitlements.billing.checkout_enabled} />
+                    <BillingStripeCheckout plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} />
                   </div>)
                 : <span className="billing-current-label">Checkout not configured</span>}
         </article>)}
@@ -200,8 +203,9 @@ export default function BillingPage() {
       {data.payments?.length
         ? <div className="billing-payment-list">{data.payments.map(payment => <div className="billing-payment-row" key={payment.id}>
             <div><strong>{payment.plan_slug.replaceAll("-", " ")}</strong><small>{date(payment.created_at)}</small></div>
-            <span>{money(payment.amount_minor, payment.currency)}</span>
+            <span>{money(payment.amount_minor, payment.currency)} · {payment.provider}</span>
             <span className={`billing-payment-status ${payment.status}`}>{payment.status.replaceAll("_", " ")}</span>
+            {(payment.status === "failed" || payment.status === "abandoned") && <div className="billing-payment-retry"><BillingCheckout plan={payment.plan_slug} enabled={data.entitlements.billing.checkout_enabled} /><BillingStripeCheckout plan={payment.plan_slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} /></div>}
           </div>)}</div>
         : <p>No payments have been recorded for this workspace yet.</p>}
     </section>
