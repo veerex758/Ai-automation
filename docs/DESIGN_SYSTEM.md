@@ -39,3 +39,26 @@ This document is the source of truth for Rexnora's visual identity: premium, pre
 3. Preserve the approved palette, spacing, typography, border and status patterns.
 4. The concept image is a visual north star, not a claim that every pictured feature is implemented.
 5. Keep technical identifiers and database migration names stable during the visual rebrand; change user-facing brand surfaces without rewriting persisted data.
+
+## Reference composition (approved visual)
+
+The public homepage follows the supplied reference composition:
+- Upper left: large silver R symbol, vertical divider, uppercase REXNORA wordmark, “Intelligence in motion.” headline, “Describe it. Build it. Run it.” subline, ivory Get Started CTA and outlined Explore Platform CTA.
+- Upper right: Brand Colour System panel with seven named swatches and exact hex values; Inter and Geist type specimens; five brand values with cool-blue line iconography.
+- Lower left: overlapping dark product dashboard preview with narrow navigation rail, search/top actions, welcome hero, orbital Rexnora mark and three metric tiles.
+- Lower right: “Build. Automate. Scale.” statement, short platform description, thin blue/lavender rule and six capability tiles.
+- Background: Obsidian with restrained sculptural curved/ribbon geometry, soft depth and no neon-green or generic rainbow AI gradients.
+
+## Exact palette
+
+| Token | Hex | Use |
+|---|---|---|
+| Obsidian | `#0B0F14` | Primary canvas |
+| Slate | `#1A1F29` | Surface |
+| Charcoal | `#2A2F3A` | Borders |
+| Royal Blue | `#3B82F6` | Primary accent |
+| Lavender | `#8B5CF6` | Secondary accent |
+| Ivory | `#F8FAFC` | Main text |
+| Muted | `#94A3B8` | Secondary text |
+
+The same visual language carries into authentication, dashboard, builder, AI assistant, integrations, activity, agents and marketplace surfaces. Keep each surface responsive and preserve existing application behaviour.
