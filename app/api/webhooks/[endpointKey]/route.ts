@@ -3,21 +3,19 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { decryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
 import { verifyWebhookSignature } from "@/lib/webhooks/verify-signature";
-import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
-import type { NodeContext } from "@/nodes/types";
+import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_EVENT_AGE_SECONDS = 300;
-const DURABLE_WEBHOOK_DRY_RUN_QUEUE = process.env.AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED === "true";
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error("WEBHOOK_SERVICE_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
@@ -53,52 +51,12 @@ function ciphertextBytes(value: unknown): Buffer {
   throw new Error("WEBHOOK_SECRET_CIPHERTEXT_INVALID");
 }
 
-function executionContext(): Omit<NodeContext, "previousOutputs"> {
-  const credentials: Record<string, Record<string, string>> = {};
-  if (process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
-  if (process.env.GEMINI_API_KEY) credentials.gemini = { apiKey: process.env.GEMINI_API_KEY };
-  if (process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
-    credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
-  }
-  return {
-    credentials,
-    logger: {
-      info(message, meta) { console.info("[webhook-node]", message, meta ?? {}); },
-      error(message, meta) { console.error("[webhook-node]", message, meta ?? {}); },
-    },
-    http: {
-      async request(args) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), args.timeoutMs ?? 15000);
-        try {
-          const response = await fetch(args.url, {
-            method: args.method,
-            headers: args.headers,
-            body: args.body === undefined ? undefined : JSON.stringify(args.body),
-            signal: controller.signal,
-            redirect: "error",
-          });
-          const raw = await response.text();
-          let body: unknown = raw;
-          try { body = raw ? JSON.parse(raw) : raw; } catch {}
-          return { status: response.status, body };
-        } finally {
-          clearTimeout(timer);
-        }
-      },
-    },
-  };
-}
-
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ endpointKey: string }> }) {
-  const startedAt = Date.now();
-  let receipt: { id: string; endpoint_id: string } | null = null;
-  let runId: string | null = null;
+  let receipt: { id: string } | null = null;
   let db: ReturnType<typeof serviceClient> | null = null;
   try {
     const { endpointKey } = await context.params;
@@ -108,7 +66,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
 
     const rawBody = await readBoundedBody(request);
     if (!rawBody) return jsonError("Webhook payload exceeds the 256 KiB limit.", 413);
-
     const eventId = request.headers.get("x-aivanta-event-id")?.trim() ?? "";
     const eventType = request.headers.get("x-aivanta-event-type")?.trim() ?? "";
     const signatureHeader = request.headers.get("x-aivanta-signature");
@@ -120,7 +77,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     try { payloadValue = JSON.parse(rawBody.toString("utf8")); } catch {
       return jsonError("Webhook payload must be valid JSON.", 400);
     }
-    if (!isRecord(payloadValue)) return jsonError("Webhook payload must be a JSON object.", 400);
+    if (!payloadValue || typeof payloadValue !== "object" || Array.isArray(payloadValue)) {
+      return jsonError("Webhook payload must be a JSON object.", 400);
+    }
 
     const endpointHash = createHash("sha256").update(endpointKey, "utf8").digest("hex");
     db = serviceClient();
@@ -133,234 +92,108 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     const encryptionKey = process.env.AIVANTA_WEBHOOK_ENCRYPTION_KEY;
     const configuredKeyVersion = process.env.AIVANTA_WEBHOOK_SECRET_KEY_VERSION;
     if (!encryptionKey || !configuredKeyVersion || endpoint.secret_key_version !== configuredKeyVersion) {
-      console.error("[webhook-ingress] secret decryption configuration unavailable", { endpointId: endpoint.id });
       return jsonError("Webhook endpoint is not configured for secure verification.", 503);
     }
-
     let signingSecret: string;
-    try {
-      signingSecret = decryptWebhookSecret(ciphertextBytes(endpoint.secret_ciphertext), encryptionKey);
-    } catch {
-      console.error("[webhook-ingress] stored signing secret could not be decrypted", { endpointId: endpoint.id });
-      return jsonError("Webhook endpoint is not configured for secure verification.", 503);
-    }
+    try { signingSecret = decryptWebhookSecret(ciphertextBytes(endpoint.secret_ciphertext), encryptionKey); }
+    catch { return jsonError("Webhook endpoint is not configured for secure verification.", 503); }
     const verification = verifyWebhookSignature({
-      rawBody,
-      signedMetadata: JSON.stringify([eventId, eventType]),
-      signatureHeader,
-      secret: signingSecret,
-      toleranceSeconds: MAX_EVENT_AGE_SECONDS,
+      rawBody, signedMetadata: JSON.stringify([eventId, eventType]), signatureHeader,
+      secret: signingSecret, toleranceSeconds: MAX_EVENT_AGE_SECONDS,
     });
     signingSecret = "";
-    if (!verification.ok) {
-      return jsonError("Webhook signature is missing, invalid, or stale.", 401);
-    }
+    if (!verification.ok) return jsonError("Webhook signature is missing, invalid, or stale.", 401);
 
     const { data: workflow, error: workflowError } = await db.from("workflows")
       .select("id,workspace_id,version,definition,status")
       .eq("id", endpoint.workflow_id).eq("workspace_id", endpoint.workspace_id).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow || workflow.status !== "active") return jsonError("The linked workflow is not active.", 409);
+    if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true" ||
+        process.env.AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true") {
+      return jsonError("Durable live webhook execution is disabled by the server.", 503);
+    }
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
-    if (!definition || definition.format !== "aivanta-registry-v1" ||
-        !Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
+    if (!definition || definition.format !== "aivanta-registry-v1") {
       return jsonError("The linked workflow does not have a supported registry execution plan.", 422);
     }
-    const steps = definition.steps as RegisteredWorkflowStep[];
-    if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" ||
-      typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
-      (step.kind !== "trigger" && step.kind !== "action") || !("input" in step))) {
-      return jsonError("The linked workflow execution plan is malformed.", 422);
-    }
+    const validated = validateRegisteredSteps(definition.steps);
+    if (!validated.steps) return jsonError(validated.error || "The linked workflow execution plan is invalid.", 422);
+    const steps = validated.steps;
     const trigger = steps[0];
-    if (trigger.kind !== "trigger" || trigger.nodeId !== "webhooks" || trigger.operationId !== "receive_event" ||
-        steps.filter((step) => step.kind === "trigger").length !== 1) {
+    if (trigger.kind !== "trigger" || trigger.nodeId !== "webhooks" || trigger.operationId !== "receive_event") {
       return jsonError("The linked workflow must start with the verified webhook trigger.", 422);
     }
+    const livePolicyError = validateDurableLiveSteps(steps);
+    if (livePolicyError) return jsonError("This workflow is not approved for live webhook execution.", 403);
 
-    // Inbound events must not bypass the same live-action policy as manual runs.
-    const unsupportedLiveStep = steps.find((step) =>
-      (step.kind === "trigger" && !(step.nodeId === "webhooks" && step.operationId === "receive_event")) ||
-      (step.kind === "action" && !((step.nodeId === "email" && step.operationId === "send_email") || (step.nodeId === "gemini" && step.operationId === "qualify_real_estate_lead")) ));
-    if (unsupportedLiveStep) return jsonError("This workflow contains an action that is not enabled for live webhook execution.", 403);
-    if (steps.some((step) => step.kind === "action") && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-      return jsonError("Live workflow execution is disabled by the server.", 503);
-    }
-    if (steps.some((step) => step.nodeId === "gemini") && !process.env.GEMINI_API_KEY) return jsonError("Gemini is not configured for live execution.", 503);
-    if (steps.some((step) => step.nodeId === "email") && (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL)) return jsonError("Resend is not configured for live execution.", 503);
     const hourAgo = new Date(Date.now() - 3600000).toISOString();
-    const { count: hourlyRuns, error: usageError } = await db.from("workflow_runs").select("id", { count: "exact", head: true })
+    const { count: hourlyRuns, error: usageError } = await db.from("workflow_runs")
+      .select("id", { count: "exact", head: true })
       .eq("workflow_id", workflow.id).eq("mode", "live").gte("created_at", hourAgo);
     if (usageError) throw usageError;
     if ((hourlyRuns ?? 0) >= 100) return jsonError("This workflow reached its hourly usage limit. Try again later.", 429);
-    const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
-      .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-    for (const step of steps) {
-      if (step.nodeId === "email" && step.operationId === "send_email") {
-        const recipient = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
-        if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
-          return jsonError("Webhook workflow email recipients must be literal addresses on the server allowlist.", 403);
-        }
-      }
-    }
 
-    const eventInput = {
-      eventId,
-      eventType,
-      receivedAt: new Date().toISOString(),
-      payload: payloadValue,
-    };
-    if (DURABLE_WEBHOOK_DRY_RUN_QUEUE && Buffer.byteLength(JSON.stringify(eventInput), "utf8") > 12000) {
-      return jsonError("Queued webhook payload exceeds the 12 KiB durable queue limit.", 413);
+    const eventInput = { eventId, eventType, receivedAt: new Date().toISOString(), payload: payloadValue };
+    if (Buffer.byteLength(JSON.stringify(eventInput), "utf8") > 12000) {
+      return jsonError("Webhook payload exceeds the 12 KiB durable queue limit.", 413);
     }
-
     const payloadSha256 = createHash("sha256").update(rawBody).digest("hex");
     const { data: claimRows, error: claimError } = await db.rpc("claim_webhook_event", {
-      target_endpoint_id: endpoint.id,
-      target_event_id: eventId,
-      target_event_type: eventType,
-      target_payload_sha256: payloadSha256,
+      target_endpoint_id: endpoint.id, target_event_id: eventId,
+      target_event_type: eventType, target_payload_sha256: payloadSha256,
     });
     if (claimError) throw claimError;
     const claim = Array.isArray(claimRows) ? claimRows[0] : claimRows;
     if (!claim || typeof claim.accepted !== "boolean" || typeof claim.receipt_id !== "string") {
       throw new Error("WEBHOOK_RECEIPT_CLAIM_FAILED");
     }
+    receipt = { id: claim.receipt_id };
     if (!claim.accepted) {
       const { data: prior, error: priorError } = await db.from("webhook_event_receipts")
-        .select("payload_sha256,status").eq("id", claim.receipt_id).maybeSingle();
+        .select("payload_sha256").eq("id", claim.receipt_id).maybeSingle();
       if (priorError) throw priorError;
       if (prior && prior.payload_sha256 !== payloadSha256) {
         return jsonError("This event ID was already used for a different payload.", 409);
       }
-      if (DURABLE_WEBHOOK_DRY_RUN_QUEUE) {
-        // A retry must re-attempt the idempotent queue RPC. The receipt may have
-        // been claimed before a transient failure, or the previous response may
-        // have been lost after queue commit.
-        const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
-          p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
-          p_workflow_version: workflow.version, p_created_by: null,
-          p_idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
-          p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
-          p_max_attempts: 5,
-        });
-        const queued = dispatch as Record<string, unknown> | null;
-        if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
-          throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
-        }
-        const { error: receiptError } = await db.from("webhook_event_receipts").update({
-          status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
-        }).eq("id", claim.receipt_id);
-        if (receiptError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
-        return NextResponse.json({ accepted: true, queued: true, duplicate: true, jobId: queued.job_id, runId: queued.run_id, mode: "dry_run" }, { status: 202 });
-      }
-      return NextResponse.json({ accepted: true, duplicate: true, receiptStatus: prior?.status ?? "accepted" }, { status: 200 });
-    }
-    receipt = { id: claim.receipt_id, endpoint_id: endpoint.id };
-
-    if (DURABLE_WEBHOOK_DRY_RUN_QUEUE) {
-      const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
-        p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
-        p_workflow_version: workflow.version, p_created_by: null,
-        p_idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
-        p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
-        p_max_attempts: 5,
-      });
-      const queued = dispatch as Record<string, unknown> | null;
-      if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
-        throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
-      }
-      const { error: receiptUpdateError } = await db.from("webhook_event_receipts").update({
-        status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
-      }).eq("id", receipt.id);
-      if (receiptUpdateError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
-      return NextResponse.json({
-        accepted: true, queued: true, duplicate: false,
-        jobId: queued.job_id, runId: queued.run_id, mode: "dry_run",
-      }, { status: 202 });
     }
 
-    const executionSteps = steps.map((step, index) => index === 0 ? { ...step, input: eventInput } : step);
-    const { data: run, error: runInsertError } = await db.from("workflow_runs").insert({
-      workspace_id: workflow.workspace_id,
-      workflow_id: workflow.id,
-      workflow_version: workflow.version,
-      mode: "live",
-      status: "running",
-      created_by: null,
-      idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
-      started_at: new Date(startedAt).toISOString(),
-      completed_at: null,
-      duration_ms: 0,
-    }).select("id,mode,status,workflow_version,started_at").single();
-    if (runInsertError) throw runInsertError;
-    runId = run.id;
-
-    const execution = await executeRegisteredWorkflow({
-      steps: executionSteps,
-      context: { ...executionContext(), webhook: { verified: true } },
-      dryRun: false,
+    const eventKey = createHash("sha256").update(eventId).digest("hex").slice(0, 48);
+    const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
+      p_workspace_id: workflow.workspace_id,
+      p_workflow_id: workflow.id,
+      p_workflow_version: workflow.version,
+      p_created_by: null,
+      p_idempotency_key: "webhook:" + endpoint.id + ":" + eventKey,
+      p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
+      p_max_attempts: 1,
+      p_execution_mode: "live",
     });
-    const rows = execution.steps.map((step, index) => ({
-      run_id: run.id,
-      workspace_id: workflow.workspace_id,
-      step_id: step.stepId,
-      position: index + 1,
-      step_type: executionSteps[index]?.kind ?? "action",
-      title: (executionSteps[index]?.nodeId + "." + executionSteps[index]?.operationId).slice(0, 80),
-      status: step.status === "succeeded" ? "executed" : step.status,
-      result: step.status === "failed"
-        ? { error: step.error }
-        : step.status === "succeeded" && executionSteps[index]?.kind === "trigger"
-          ? { eventId, eventType, receivedAt: eventInput.receivedAt, payloadSha256 }
-          : step.status === "succeeded" ? (step.output ?? {}) : { message: step.error ?? "Step skipped." },
-    }));
-    const finalStatus = execution.status === "succeeded" ? "succeeded" : "failed";
-    const { error: stepsError } = await db.from("workflow_run_steps").insert(rows);
-    if (stepsError) throw stepsError;
-    const { data: finalizedRun, error: finalizeError } = await db.from("workflow_runs").update({
-      status: finalStatus,
-      completed_at: new Date().toISOString(),
-      duration_ms: Math.min(600000, Date.now() - startedAt),
-      error_message: finalStatus === "failed" ? "One or more webhook workflow steps failed." : null,
-    }).eq("id", run.id).eq("status", "running")
-      .select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
-    if (finalizeError) throw finalizeError;
+    const queued = dispatch as Record<string, unknown> | null;
+    if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
+      throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
+    }
 
-    const { error: receiptUpdateError } = await db.from("webhook_event_receipts").update({
-      status: finalStatus === "succeeded" ? "dispatched" : "failed",
-      dispatched_at: new Date().toISOString(),
-      failure_code: finalStatus === "failed" ? "WEBHOOK_WORKFLOW_FAILED" : null,
+    const { error: receiptError } = await db.from("webhook_event_receipts").update({
+      status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
     }).eq("id", receipt.id);
-    if (receiptUpdateError) throw receiptUpdateError;
+    if (receiptError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
 
     return NextResponse.json({
-      accepted: true,
-      duplicate: false,
-      run: finalizedRun,
-      steps: rows,
-      sideEffectsPerformed: rows.some((row) => row.step_type === "action" && row.status === "executed"),
+      accepted: true, queued: true, duplicate: !claim.accepted,
+      jobId: queued.job_id, runId: queued.run_id, mode: "live",
     }, { status: 202 });
   } catch (error) {
-    console.error("[webhook-ingress] event dispatch failed", {
+    console.error("[webhook-ingress] event queue failed", {
       receiptId: receipt?.id ?? null,
-      code: error instanceof Error ? error.message : "WEBHOOK_DISPATCH_FAILED",
+      code: error instanceof Error ? error.message : "WEBHOOK_QUEUE_DISPATCH_FAILED",
     });
-    if (db && runId) {
-      await db.from("workflow_runs").update({
-        status: "failed",
-        completed_at: new Date().toISOString(),
-        duration_ms: Math.min(600000, Date.now() - startedAt),
-        error_message: "Webhook dispatch or history persistence failed; an external side effect may already have occurred.",
-      }).eq("id", runId).eq("status", "running");
-    }
     if (db && receipt) {
       await db.from("webhook_event_receipts").update({
-        status: "failed",
-        failure_code: "WEBHOOK_DISPATCH_FAILED",
+        status: "failed", failure_code: "WEBHOOK_QUEUE_DISPATCH_FAILED",
       }).eq("id", receipt.id);
     }
-    return jsonError("Webhook could not be dispatched. Check workflow run history before retrying.", 500);
+    return jsonError("Webhook could not be queued. Check workflow run history before retrying.", 500);
   }
 }
