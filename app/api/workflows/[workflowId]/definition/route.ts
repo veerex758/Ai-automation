@@ -185,7 +185,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         return NextResponse.json({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
       }
       definitionToSave = {
-        ...validated.definition,
+        ...definitionToSave,
         format: "aivanta-registry-v1",
         steps: validatedRegistry.steps,
       };
