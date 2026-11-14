@@ -44,6 +44,12 @@ export async function getWorkspacePermissions(
     const raw = customRole?.permissions && typeof customRole.permissions === "object" ? customRole.permissions as Record<string, unknown> : {};
     const permissions: WorkspacePermissionMap = {};
     for (const key of WORKSPACE_PERMISSIONS) permissions[key] = raw[key] === true;
+    if (permissions["workflows.create"] || permissions["workflows.edit"] || permissions["workflows.delete"] || permissions["workflows.execute"]) permissions["workflows.view"] = true;
+    if (permissions["integrations.manage"]) permissions["integrations.view"] = true;
+    if (permissions["dashboards.manage"]) permissions["dashboards.view"] = true;
+    if (permissions["members.manage"]) permissions["members.view"] = true;
+    if (permissions["billing.manage"]) permissions["billing.view"] = true;
+    if (permissions["operations.manage"]) permissions["operations.view"] = true;
     return { role, customRoleId: member.custom_role_id, permissions };
   }
   return { role, customRoleId: null, permissions: DEFAULT_MEMBER_PERMISSIONS };
