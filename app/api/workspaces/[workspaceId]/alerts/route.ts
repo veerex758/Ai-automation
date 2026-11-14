@@ -7,16 +7,16 @@ import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 type Context = { params: Promise<{ workspaceId: string }> };
-async function authorize(workspaceId: string) {
+async function authorize(workspaceId: string, permission: "operations.view" | "operations.manage" = "operations.manage") {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { response: NextResponse.json({ error: "Authentication required." }, { status: 401, headers }) };
-  if (!(await hasWorkspacePermission(supabase, workspaceId, user.id, "operations.manage"))) return { response: NextResponse.json({ error: "Workspace operations.manage permission required." }, { status: 403, headers }) };
+  if (!(await hasWorkspacePermission(supabase, workspaceId, user.id, permission))) return { response: NextResponse.json({ error: "Workspace " + permission + " permission required." }, { status: 403, headers }) };
   return { user };
 }
 export async function GET(_request: Request, context: Context) {
   const { workspaceId } = await context.params;
-  const access = await authorize(workspaceId);
+  const access = await authorize(workspaceId, "operations.view");
   if ("response" in access) return access.response;
   const admin = createAdminClient();
   const [{ data: preferences, error: prefError }, { data: destinations, error: destError }, { data: deliveries, error: deliveryError }] = await Promise.all([
