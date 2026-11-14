@@ -16,6 +16,8 @@ test("AI generation validates edge endpoints, branch sources, reachability, cycl
   assert.match(route, /Only IF and Switch nodes can create true\/false connections/);
   assert.match(route, /Every generated step must be connected to the workflow trigger/);
   assert.match(route, /Every conditional node with downstream work must include true and false paths/);
+  assert.match(route, /getExecutableNodeCatalog\(\)/);
+  assert.doesNotMatch(route, /getPublicNodeCatalog/);
   assert.match(route, /buildRegistrySteps\(/);
   assert.match(route, /validateRegisteredSteps\(/);
 });
