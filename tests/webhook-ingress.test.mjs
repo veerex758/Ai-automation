@@ -46,6 +46,8 @@ test("verified webhook dispatch is workspace-bound and always uses the durable l
   assert.match(source, /webhookVerified: true/);
   assert.match(source, /payloadSha256/);
   assert.match(source, /queued: true/);
+  assert.match(source, /after\(async \(\) =>/);
+  assert.match(source, /runDurableWorker\(\)/);
   assert.doesNotMatch(source, /executeRegisteredWorkflow/);
   assert.doesNotMatch(source, /RESEND_API_KEY|GEMINI_API_KEY/);
   assert.match(worker, /source === "webhook"/);
