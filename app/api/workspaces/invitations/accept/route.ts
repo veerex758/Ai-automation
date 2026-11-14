@@ -7,7 +7,7 @@ export async function POST(request:Request){
  try{
   const supabase=await createClient(),{data:{user},error:authError}=await supabase.auth.getUser();
   if(authError||!user)return NextResponse.json({error:"Sign in before accepting this invitation."},{status:401});
-  if(!user.email)return NextResponse.json({error:"Your account needs a verified email address."},{status:400});
+  if(!user.email||!user.email_confirmed_at)return NextResponse.json({error:"Verify your account email before accepting a workspace invitation."},{status:400});
   const body=await request.json() as {token?:unknown};
   const token=typeof body.token==="string"?body.token:"";
   if(!/^[a-f0-9]{64}$/.test(token))return NextResponse.json({error:"Invitation link is invalid."},{status:400});
