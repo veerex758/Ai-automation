@@ -3,7 +3,6 @@ import {getOrCreateDefaultWorkspace,getWorkspaceRole,canManageWorkspaceBilling} 
 import {NextResponse} from "next/server";
 import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
-import {getOrCreateDefaultWorkspace,} from "@/lib/supabase/workspace";
 import {createPaymentReference,getPaidPlan} from "@/lib/billing/paystack";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
