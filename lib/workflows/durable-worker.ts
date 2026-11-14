@@ -629,7 +629,9 @@ export async function runDurableWorker() {
       const { data: finished, error: finishError } = await db.rpc("finish_execution_job", {
         p_job_id: job.id, p_lease_token: job.lease_token, p_succeeded: true, p_error_code: null,
       });
-      if (finishError || finished !== "succeeded") { leaseLost++; continue; }
+      if (finishError) { leaseLost++; continue; }
+      if (finished === "cancelled") { cancelled++; continue; }
+      if (finished !== "succeeded") { leaseLost++; continue; }
       succeeded++;
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
