@@ -2,7 +2,7 @@ import {NextResponse} from "next/server";
 import {createClient} from "@/lib/supabase/server";
 import {getOrCreateDefaultWorkspace} from "@/lib/supabase/workspace";
 export const dynamic="force-dynamic";
-function escapeHtml(value:unknown){return String(value??"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]??c));}
+function escapeHtml(value:unknown){return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 export async function GET(_request:Request,ctx:{params:Promise<{paymentId:string}>}){
  try{
   const supabase=await createClient(),{data:{user},error:authError}=await supabase.auth.getUser();
