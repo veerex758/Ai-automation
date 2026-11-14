@@ -267,7 +267,7 @@ export default function DashboardPage() {
   return (
     <main className="app-shell dashboard-overview-page">
       <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark">a</span><span>Rexnora<span className="brand-period">.</span></span></Link>
+        <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark"><img className="brand-logo" src="/rexnora-mark.svg" alt="" aria-hidden="true" /></span><span>Rexnora<span className="brand-period">.</span></span></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
