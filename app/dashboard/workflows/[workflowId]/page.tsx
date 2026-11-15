@@ -426,7 +426,7 @@ export default function WorkflowBuilderPage() {
   if (error && !workflow) return <main className="builder-error"><span>!</span><h1>Couldn’t open this workflow</h1><p>{error}</p><Link href="/dashboard">Back to dashboard</Link></main>;
 
   return (
-    <main className="builder-shell">
+    <main className="builder-shell" onClick={(event) => { const link = (event.target as HTMLElement).closest("a.side-link"); if (isDirty && link && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>
       <DashboardSidebar activePage="builder" />
       <section className="workflow-builder-main">
       <header className="builder-topbar">
