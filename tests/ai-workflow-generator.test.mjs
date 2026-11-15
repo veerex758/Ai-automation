@@ -111,7 +111,7 @@ test("explicit OpenAI provider uses OpenAI key and endpoint", async () => {
 });
 
 test("registry mode returns only a bounded node plan and never executes it", async () => {
-  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], edges: [] };
   const result = await generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) });
   assert.deepEqual(result.registrySteps, plan.registrySteps);
   assert.equal(result.saved, false);
@@ -142,3 +142,5 @@ test("registry mode preserves an explicit conditional graph for server-side vali
   assert.equal(result.saved, false);
   assert.equal(result.executed, false);
 });
+
+test("registry mode rejects a plan that omits its explicit edge list", async () => {\n  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };\n  await assert.rejects(generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);\n});\n
