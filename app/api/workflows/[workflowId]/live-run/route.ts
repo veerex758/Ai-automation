@@ -38,7 +38,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!isRecord(payload)) return jsonResponse({ error: "Request must be a JSON object." }, { status: 400 });
     if ((payload.mode !== undefined && payload.mode !== "live" && payload.mode !== "dry_run") ||
         (payload.dryRun !== undefined && typeof payload.dryRun !== "boolean") ||
-        (payload.mode === "live" && payload.dryRun === true)) {
+        (payload.mode === "live" && payload.dryRun === true) ||
+        (payload.mode === "dry_run" && payload.dryRun === false)) {
       return jsonResponse({ error: "Mode must be live or dry_run, without conflicting flags." }, { status: 400 });
     }
     const mode = payload.mode === "dry_run" || payload.dryRun === true ? "dry_run" : "live";
