@@ -10,7 +10,9 @@ const fakeFetch = (payload, status = 200) => async (_url, options) => {
 test("extracts JSON and optional markdown fences safely", () => {
   const fence = String.fromCharCode(96).repeat(3);
   assert.deepEqual(extractJson(JSON.stringify(validDefinition)), validDefinition);
-  assert.deepEqual(extractJson(fence + "json\n" + JSON.stringify(validDefinition) + "\n" + fence), validDefinition);
+  assert.deepEqual(extractJson(fence + "json
+" + JSON.stringify(validDefinition) + "
+" + fence), validDefinition);
   assert.throws(() => extractJson("not json"), /AI_INVALID_JSON/);
 });
 test("rejects empty and oversized prompts before calling provider", async () => {
@@ -143,4 +145,7 @@ test("registry mode preserves an explicit conditional graph for server-side vali
   assert.equal(result.executed, false);
 });
 
-test("registry mode rejects a plan that omits its explicit edge list", async () => {\n  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };\n  await assert.rejects(generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);\n});\n
+test("registry mode rejects a plan that omits its explicit edge list", async () => {
+  const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };
+  await assert.rejects(generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);
+});
