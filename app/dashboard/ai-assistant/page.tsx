@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import "./assistant.css";
+import DashboardSidebar from "../dashboard-sidebar";
 
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
 type Draft = { version: 1; nodes: GeneratedNode[] };
@@ -100,13 +101,7 @@ export default function AIAssistantPage() {
   }
 
   return <main className="app-shell ai-assistant-shell">
-    <aside className="sidebar">
-      <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
-      <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></div>
-      <div className="sidebar-label">WORKSPACE</div>
-      <nav className="side-nav" aria-label="Workspace navigation">{[["Dashboard", "/dashboard", "▦"], ["Workflows", "/dashboard#workflows", "↗"], ["Integrations", "/dashboard/integrations", "⌘"], ["AI Agents", "/dashboard/ai-assistant", "✺"], ["Templates", "/dashboard/templates", "▧"], ["Analytics", "/dashboard/analytics", "▥"], ["Activity logs", "/dashboard/activity", "◷"], ["Billing", "/dashboard/billing", "◇"], ["Settings", "/dashboard/settings", "⚙"]].map(([label, href, icon]) => <Link key={label} href={href} className={label === "AI Agents" ? "side-link selected" : "side-link"}><span className="side-icon">{icon}</span>{label}</Link>)}</nav>
-      <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✺</span><strong>AI drafts, human control</strong><p>Review every generated step before saving or using a workflow.</p><Link href="/dashboard/builder">Open builder ↗</Link></div></div>
-    </aside>
+    <DashboardSidebar activePage="assistant" workspaceName={workspaceName} />
     <section className="dashboard-main">
       <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>AI Assistant</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Draft mode</span><span className="top-avatar">AI</span></div></header>
       <div className="dashboard-content ai-assistant-content">
