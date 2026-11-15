@@ -195,6 +195,7 @@ export default function WorkflowBuilderPage() {
       // so the user reviews the actual proposed workflow rather than one empty trigger.
       const steps = Array.isArray(payload.registrySteps) ? payload.registrySteps : [];
       const hasGeneratedGraph = Boolean(payload.definition?.nodes?.some((node) => node.registryNodeId));
+      if (steps.length && !hasGeneratedGraph) throw new Error("AI response did not include a validated workflow graph. Generate the draft again.");
       const generated: Definition = hasGeneratedGraph
         ? payload.definition as Definition
         : steps.length
@@ -209,7 +210,7 @@ export default function WorkflowBuilderPage() {
                 : { provider: step.nodeId, operation: step.operationId };
               return {
                 id: step.id,
-                type: step.kind,
+                type: step.kind === "trigger" ? "trigger" : step.nodeId === "if" && step.operationId === "evaluate" ? "condition" : "action",
                 title: operation?.name || provider?.name || step.operationId,
                 description: operation?.description || provider?.name || "Registered workflow operation.",
                 settings,
