@@ -70,7 +70,7 @@ test("all dashboard routes share the same complete workspace navigation", () => 
 test("customer-facing integration and billing pages use Rexnora naming", () => {
   assert.doesNotMatch(connections, /Aivanta|AIVANTA/);
   assert.doesNotMatch(billing, /Aivanta|AIVANTA/);
-  assert.match(connections, /REXNORA \/ INTEGRATIONS/);
+  assert.match(connections, /<strong>Connected accounts<\/strong>/);
   assert.match(billing, /REXNORA \/ WORKSPACE/);
 });
 
