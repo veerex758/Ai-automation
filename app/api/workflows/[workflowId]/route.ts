@@ -133,12 +133,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
       }
 
-      const { data: tested, error: testError } = await auth.supabase.from("workflow_runs").select("id")
+      const { data: testedRuns, error: testError } = await auth.supabase.from("workflow_runs").select("id")
         .eq("workflow_id", workflowId).eq("workflow_version", candidate.version)
-        .eq("mode", "dry_run").eq("status", "succeeded").limit(1);
+        .eq("mode", "dry_run").eq("status", "succeeded").limit(10);
       if (testError) throw testError;
-      if (!tested?.length) {
+      if (!testedRuns?.length) {
         return NextResponse.json({ error: "Run a successful test of this exact saved workflow version before activating it." }, { status: 409 });
+      }
+      const { data: testedSteps, error: testedStepsError } = await auth.supabase.from("workflow_run_steps")
+        .select("run_id,step_id,title,status").in("run_id", testedRuns.map((run) => run.id));
+      if (testedStepsError) throw testedStepsError;
+      const hasRegistryTest = testedRuns.some((run) => steps.every((step) => (testedSteps ?? []).some((row) =>
+        row.run_id === run.id && row.step_id === step.id && row.title === step.nodeId + "." + step.operationId &&
+        (row.status === "simulated" || row.status === "skipped")
+      )));
+      if (!hasRegistryTest) {
+        return NextResponse.json({ error: "Run a successful safe test of every registered step in this exact workflow version before activating it." }, { status: 409 });
       }
 
       const providers = [...new Set(steps.map((step) => getWorkerProvider(step)).filter((provider): provider is string => Boolean(provider)))];
