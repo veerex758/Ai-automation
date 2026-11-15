@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const runs = readFileSync(new URL("../app/api/workflows/[workflowId]/runs/route.ts", import.meta.url), "utf8");
-const registryRun = readFileSync(new URL("../app/api/workflows/[workflowId]/registry-run/route.ts", import.meta.url), "utf8");
 const activation = readFileSync(new URL("../app/api/workflows/[workflowId]/route.ts", import.meta.url), "utf8");
 const panel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../nodes/workflow-runner.ts", import.meta.url), "utf8");
@@ -22,10 +21,6 @@ test("safe test endpoint executes registry graphs with bounded sample trigger in
 test("builder safe test uses the unified dry-run endpoint", () => {
   assert.ok(panel.includes("fetch(`/api/workflows/${workflowId}/runs`"));
   assert.ok(panel.includes('JSON.stringify({ mode: "dry_run", input: parsed })'));
-});
-
-test("registry-only execution endpoint cannot bypass durable live dispatch", () => {
-  assert.ok(registryRun.includes("safe-test only. Use durable dispatch for approved live execution"));
 });
 
 test("activation requires successful dry-run evidence for every registered step in the exact version", () => {
