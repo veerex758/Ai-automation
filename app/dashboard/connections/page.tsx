@@ -329,10 +329,10 @@ export default function ConnectionsPage() {
   }, []);
 
   return (
-    <main className="app-shell connections-shell"><DashboardSidebar activePage="connections" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Integrations</strong></div></header><div className="dashboard-content"><div className="connections-page">
+    <main className="app-shell connections-shell"><DashboardSidebar activePage="connections" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Connected accounts</strong></div></header><div className="dashboard-content"><div className="connections-page">
       <section className="connections-hero">
         <div className="connections-eyebrow">YOUR WORKSPACE, CONNECTED</div>
-        <h1>Connect your tools.</h1>
+        <h1>Connected accounts.</h1>
         {workflowId && <Link className="connections-return" href={`/dashboard/workflows/${workflowId}`}>Return to your workflow <span aria-hidden="true">→</span></Link>}
         <p>Authorize services using their official sign-in screens. Rexnora never asks for your provider password.</p>
       </section>
