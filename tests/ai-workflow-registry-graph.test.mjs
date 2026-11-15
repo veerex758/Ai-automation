@@ -13,7 +13,8 @@ test("Gemini registry planning is instructed to return explicit graph edges and 
 });
 
 test("AI generation validates edge endpoints, branch sources, reachability, cycles, and registered inputs", () => {
-  assert.match(route, /generated graph must include an explicit connection list/);\n  assert.match(route, /Only IF nodes can create true\/false connections/);
+  assert.match(route, /generated graph must include an explicit connection list/);
+  assert.match(route, /Only IF nodes can create true\/false connections/);
   assert.match(route, /Every generated step must be connected to the workflow trigger/);
   assert.match(route, /Every conditional node with downstream work must include true and false paths/);
   assert.match(route, /"registrySteps" in result/);
