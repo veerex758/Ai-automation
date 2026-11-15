@@ -61,7 +61,6 @@ export default function WorkflowBuilderPage() {
   const emailActionNode = definition.nodes.find((node) => node.type === "action" && node.registryNodeId === "email" && node.registryOperationId === "send_email");
   const liveEmailRecipient = typeof emailActionNode?.registryInput?.to === "string" ? emailActionNode.registryInput.to : emailActionNode?.settings.recipient ?? "";
   const isWebhookTrigger = definition.nodes.some((node) => node.type === "trigger" && (node.registryNodeId === "webhooks" || node.settings.provider === "webhooks"));
-  const isRegistryWorkflow = definition.nodes.some((node) => Boolean(node.registryNodeId)) || definition.nodes.some((node) => node.type === "condition");
 
   useEffect(() => {
     if (!isDirty) return;
@@ -196,7 +195,6 @@ export default function WorkflowBuilderPage() {
       // so the user reviews the actual proposed workflow rather than one empty trigger.
       const steps = Array.isArray(payload.registrySteps) ? payload.registrySteps : [];
       const hasGeneratedGraph = Boolean(payload.definition?.nodes?.some((node) => node.registryNodeId));
-      if (steps.length && !hasGeneratedGraph) throw new Error("AI response did not include a validated workflow graph. Generate the draft again.");
       const generated: Definition = hasGeneratedGraph
         ? payload.definition as Definition
         : steps.length
@@ -211,7 +209,7 @@ export default function WorkflowBuilderPage() {
                 : { provider: step.nodeId, operation: step.operationId };
               return {
                 id: step.id,
-                type: step.kind === "trigger" ? "trigger" : step.nodeId === "if" && step.operationId === "evaluate" ? "condition" : "action",
+                type: step.kind,
                 title: operation?.name || provider?.name || step.operationId,
                 description: operation?.description || provider?.name || "Registered workflow operation.",
                 settings,
@@ -503,7 +501,6 @@ export default function WorkflowBuilderPage() {
             hasUnsavedChanges={isDirty}
             workflowStatus={workflow?.status ?? "draft"}
             isWebhookTrigger={isWebhookTrigger}
-            isRegistryWorkflow={isRegistryWorkflow}
           />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
@@ -555,7 +552,7 @@ export default function WorkflowBuilderPage() {
               {selectedNode.settings.operator !== "is_set" && <>
                 <label htmlFor="condition-value">{isCommentToDm ? "Keyword to match" : isLeadFollowUp ? "Status to match" : isSupportTriage ? "Urgency to match" : isContentApproval ? "Approval status to match" : "Expected value"}</label><input id="condition-value" maxLength={240} value={selectedNode.settings.value ?? ""} onChange={(event) => updateSetting("value", event.target.value)} placeholder={isCommentToDm ? "guide" : isLeadFollowUp ? "pending" : isSupportTriage ? "urgent" : isContentApproval ? "pending" : "Value to compare against"} />
               </>}
-              <p className="config-note">Dry-runs evaluate this condition and show the selected branch. External actions remain simulated.</p>
+              <p className="config-note">Rules are stored in your draft. They will not be evaluated until execution is implemented.</p>
             </div>}
             <div className="panel-divider" />
             <section className="graph-connection-editor" aria-label="Node connections">
