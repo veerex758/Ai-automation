@@ -44,7 +44,7 @@ test("AI assistant, agents, integrations, billing and run details use dark Rexno
   const sources = await Promise.all(paths.map(path => readFile(fileURLToPath(new URL(path, import.meta.url)), "utf8")));
   assert.match(sources[0], /\.ai-assistant-shell\{background:#0B0F14!important/);
   assert.match(sources[1], /\.agents-shell \.agent-editor input[^}]*background:#111722!important/s);
-  assert.match(sources[2], /\.connections-shell \.connection-card[^}]*background:#1A1F29!important/s);
+  assert.match(sources[2], /\.app-shell \.connection-card\{[^}]*background:#1A1F29/s);
   assert.match(sources[3], /\.billing-app-shell \.billing-panel[^}]*background:#1A1F29!important/s);
   assert.match(sources[4], /\.run-detail-app-shell \.run-summary-card[^}]*background:#1A1F29!important/s);
 });
