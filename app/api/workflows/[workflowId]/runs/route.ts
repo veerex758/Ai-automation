@@ -85,12 +85,27 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     }
 
     const storedDefinition = workflow.definition as Record<string, unknown> | null;
-    let result: DryRunResult;
-    let persistedSteps: Array<{ step_id: string; step_type: string; title: string; status: string; result: Record<string, unknown> }>;
+    let registrySteps: RegisteredWorkflowStep[] | null = null;
     if (storedDefinition?.format === "aivanta-registry-v1") {
       const checked = validateRegisteredSteps(storedDefinition.steps);
       if (!checked.steps) return privateJson({ error: checked.error || "This registry workflow is invalid. Save a valid graph before testing." }, { status: 422 });
-      const steps: RegisteredWorkflowStep[] = checked.steps;
+      registrySteps = checked.steps;
+    }
+
+    // One workflow run is one execution, including a safe dry-run.
+    const { data: executionUsage, error: executionUsageError } = await supabase.rpc("consume_workspace_usage", {
+      p_workspace_id: workflow.workspace_id,
+      p_metric: "workflow_execution",
+      p_quantity: 1,
+      p_metadata: { workflow_id: workflow.id, mode: "dry_run" },
+    });
+    if (executionUsageError) return privateJson({ error: "Execution billing meter unavailable. Apply the subscription migration." }, { status: 503 });
+    if (!executionUsage?.allowed) return privateJson({ error: "Monthly workflow execution allowance reached. Upgrade your plan.", entitlement: executionUsage }, { status: 402 });
+
+    let result: DryRunResult;
+    let persistedSteps: Array<{ step_id: string; step_type: string; title: string; status: string; result: Record<string, unknown> }>;
+    if (registrySteps) {
+      const steps = registrySteps;
       const trigger = steps[0];
       const triggerOutput = trigger.nodeId === "webhooks"
         ? { eventId: "dry-run-event", eventType: "test", receivedAt: new Date().toISOString(), payload: input }
