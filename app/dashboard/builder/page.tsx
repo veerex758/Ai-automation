@@ -7,6 +7,7 @@ import actionFieldValidation from "@/lib/workflows/action-field-validation.cjs";
 
 const { isValidEmail, isHttpsUrl } = actionFieldValidation;
 import "./builder.css";
+import DashboardSidebar from "../dashboard-sidebar";
 
 type StepKind = "Trigger" | "Action" | "Condition";
 type ActionField = { name: string; label: string; type: "text" | "email" | "url"; required: boolean; maxLength: number };
@@ -278,19 +279,7 @@ export default function WorkflowBuilderPage() {
 
   return (
     <main className="builder-shell">
-      <aside className="builder-sidebar">
-        <Link className="builder-brand" href="/"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
-        <div className="builder-workspace"><span>A</span><div><strong>{workspaceName}</strong><small>Free workspace</small></div><b>⌄</b></div>
-        <div className="builder-nav-label">WORKSPACE</div>
-        <Link className="builder-nav-link" href="/dashboard"><span>▦</span>Dashboard</Link>
-        <Link className="builder-nav-link active" href="/dashboard/builder"><span>↗</span>Workflows</Link>
-        <Link className="builder-nav-link" href="/dashboard/integrations"><span>⌘</span>Integrations</Link>
-        <Link className="builder-nav-link" href="/dashboard/ai-assistant"><span>✺</span>AI Agents</Link>
-        <Link className="builder-nav-link" href="/dashboard/templates"><span>▧</span>Templates</Link>
-        <Link className="builder-nav-link" href="/dashboard/analytics"><span>▥</span>Analytics</Link>
-        <Link className="builder-nav-link" href="/dashboard/settings"><span>⚙</span>Settings</Link>
-        <div className="builder-sidebar-bottom"><div className="builder-help-mark">✳</div><strong>Build with confidence</strong><p>Start with a trigger, add steps, and review your logic before you connect live services.</p><Link href="/dashboard">Back to workspace ↗</Link></div>
-      </aside>
+      <DashboardSidebar activePage="builder" workspaceName={workspaceName} />
 
       <section className="builder-main">
         <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft} disabled={savingDraft}>{savingDraft ? "Saving…" : "Save draft"}</button><button className="builder-secondary-button" onClick={reviewWorkflow}>Test</button><button className="builder-primary-button" disabled title="Activation remains disabled until integrations and execution safeguards are configured">Activate</button></div></header>
