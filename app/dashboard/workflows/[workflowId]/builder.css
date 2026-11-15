@@ -219,3 +219,36 @@
 .workflow-builder-main .builder-save,.workflow-builder-main .builder-primary-button{background:#F8FAFC!important;color:#0B0F14!important;border-color:#F8FAFC!important}
 .workflow-builder-main .builder-back,.workflow-builder-main a{color:#8BB8FF}
 .workflow-builder-main .canvas-grid{background-color:#0F141D!important;background-image:radial-gradient(#303a4a 1px,transparent 1px)!important}
+
+
+/* Rexnora final brand correction — saved workflow graph and inspector. */
+.workflow-builder-main,.workflow-builder-main .builder-layout,.workflow-builder-main .builder-workspace{background:#0B0F14!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-topbar,.workflow-builder-main .builder-heading{background:#0B0F14!important;color:#F8FAFC!important;border-color:#2A2F3A!important}
+.workflow-builder-main .builder-heading h1,.workflow-builder-main .builder-panel h2,.workflow-builder-main .builder-inspector h2{color:#F8FAFC!important}
+.workflow-builder-main .builder-heading p,.workflow-builder-main .builder-eyebrow,.workflow-builder-main .panel-kicker,.workflow-builder-main .builder-panel p,.workflow-builder-main .builder-inspector p{color:#94A3B8!important}
+.workflow-builder-main .builder-canvas,.workflow-builder-main .graph-canvas{background:#0F141D!important;border-color:#2A2F3A!important;box-shadow:none!important}
+.workflow-builder-main .graph-grid{background-image:radial-gradient(#303A4A 1px,transparent 1px)!important;opacity:.8!important}
+.workflow-builder-main .graph-node{background:#151C27!important;border-color:#354052!important;color:#F8FAFC!important;box-shadow:none!important}
+.workflow-builder-main .graph-node strong{color:#F8FAFC!important}
+.workflow-builder-main .graph-node small,.workflow-builder-main .graph-node-kind{color:#94A3B8!important}
+.workflow-builder-main .graph-node-icon{background:#172846!important;color:#8BB8FF!important}
+.workflow-builder-main .graph-node-selected,.workflow-builder-main .graph-node:hover{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.workflow-builder-main .graph-node-condition .graph-node-icon{background:#241A3D!important;color:#C4A8FF!important}
+.workflow-builder-main .graph-edge path,.workflow-builder-main .graph-edge-true path,.workflow-builder-main .graph-edge-false path{stroke:#8BB8FF!important}
+.workflow-builder-main .graph-edge text{fill:#CBD5E1!important;stroke:#0F141D!important}
+.workflow-builder-main .graph-node-port{border-color:#0F141D!important;background:#3B82F6!important;box-shadow:0 0 0 1px #8BB8FF!important}
+.workflow-builder-main .graph-connection-editor>label{color:#CBD5E1!important}
+.workflow-builder-main .graph-connection-editor>select,.workflow-builder-main .graph-edge-row{background:#111722!important;border-color:#354052!important;color:#E2E8F0!important}
+.workflow-builder-main .graph-edge-row b{color:#8BB8FF!important}
+.workflow-builder-main .graph-edge-row button{background:#2A1A22!important;color:#FCA5A5!important}
+.workflow-builder-main .builder-panel,.workflow-builder-main .builder-inspector,.workflow-builder-main .builder-side-panel,.workflow-builder-main .run-test-panel{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.workflow-builder-main .builder-node,.workflow-builder-main .builder-step,.workflow-builder-main .builder-card{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main input,.workflow-builder-main textarea,.workflow-builder-main select{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-save,.workflow-builder-main .builder-primary-button{background:#F8FAFC!important;color:#0B0F14!important;border-color:#F8FAFC!important}
+.workflow-builder-main .builder-back,.workflow-builder-main a{color:#8BB8FF}
+@media(max-width:720px){
+ .builder-shell>.sidebar .side-nav{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;width:100%!important;max-height:none!important;height:auto!important;overflow-x:auto!important;overflow-y:hidden!important;padding:2px 1px 7px!important;scrollbar-width:thin!important}
+ .builder-shell>.sidebar .dashboard-nav-group{display:contents!important}
+ .builder-shell>.sidebar .side-link{display:inline-flex!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;min-height:34px!important;padding:7px 10px!important;background:#111722!important;border:1px solid #2A2F3A!important;color:#CBD5E1!important;font-size:10px!important;white-space:nowrap!important}
+ .builder-shell>.sidebar .side-link.selected{background:#172846!important;border-color:#3B82F6!important;color:#F8FAFC!important}
+}
