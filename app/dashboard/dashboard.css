@@ -414,3 +414,13 @@
 .create-modal form>input{background:#111722!important;border-color:#2A2F3A!important;color:#F8FAFC!important}
 .cancel-button,.modal-close{background:#111722!important;border-color:#2A2F3A!important;color:#E2E8F0!important}
 @media(max-width:720px){.sidebar{background:#080B10!important}.dashboard-content{padding:23px 13px 35px!important}.dashboard-topbar{padding:0 13px!important}.dash-brand{padding-left:7px!important}.dash-brand .brand-mark{width:35px;height:32px}.welcome-row{align-items:flex-start}.welcome-row h1{font-size:25px}.stats-grid{gap:8px}.stat-card{padding:12px}.stat-number{font-size:24px}.quick-start-grid{grid-template-columns:1fr!important}}
+
+
+/* Grouped workspace navigation: every visible item is a real route. */
+.dashboard-nav{gap:15px}
+.dashboard-nav-group{display:flex;flex-direction:column;gap:4px}
+.dashboard-nav-group .sidebar-label{padding-top:0;padding-bottom:6px}
+.dashboard-nav-group+.dashboard-nav-group{margin-top:1px}
+.dashboard-nav .side-link{min-height:38px;text-decoration:none}
+.dashboard-nav .side-link:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}
+@media(max-height:760px){.dashboard-nav{gap:9px}.dashboard-nav .side-link{min-height:34px;padding-top:8px;padding-bottom:8px}.dashboard-nav-group .sidebar-label{padding-bottom:4px}}
