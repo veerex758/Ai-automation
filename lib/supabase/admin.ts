@@ -4,7 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 /**
  * Create a server-only Supabase client with the service-role key.
  *
- * Preview uses the Aivanta staging variables; Production can continue using
+ * Preview uses the Rexnora staging variables; Production can continue using
  * the existing CODED_* environment names until its configuration is migrated.
  */
 export function createAdminClient() {
