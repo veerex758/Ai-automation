@@ -7,11 +7,11 @@ type RunStep = {
   position: number;
   type: "trigger" | "action" | "condition";
   title: string;
-  status: "simulated" | "skipped";
+  status: "simulated" | "skipped" | "failed";
   message: string;
   conditionMatched?: boolean;
 };
-type RunResult = { mode: "dry_run"; status: "succeeded"; sideEffectsPerformed: false; steps: RunStep[] };
+type RunResult = { mode: "dry_run"; status: "succeeded" | "failed"; sideEffectsPerformed: false; steps: RunStep[] };
 type LiveRunResult = { jobId: string; runId: string; status: string; attempts: number; errorCode?: string; checkpoints: Array<{ step_id: string; step_position: number; status: string }> };
 type RunHistoryItem = {
   id: string;
@@ -23,7 +23,7 @@ type RunHistoryItem = {
   steps: Array<{ id: string; status: string; title: string; position: number }>;
 };
 
-export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, isWebhookTrigger = false }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; isWebhookTrigger?: boolean }) {
+export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, isWebhookTrigger = false, isRegistryWorkflow = false }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; isWebhookTrigger?: boolean; isRegistryWorkflow?: boolean }) {
   const [input, setInput] = useState(`{
   "status": "ready",
   "order": { "total": 125 }
@@ -74,10 +74,10 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
     setError("");
     setResult(null);
     try {
-      const response = await fetch(`/api/workflows/${workflowId}/runs`, {
+      const response = await fetch(isRegistryWorkflow ? `/api/workflows/${workflowId}/registry-run` : `/api/workflows/${workflowId}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "dry_run", input: parsed }),
+        body: JSON.stringify(isRegistryWorkflow ? { dryRun: true, input: parsed } : { mode: "dry_run", input: parsed }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not test this workflow.");
@@ -205,12 +205,12 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
       </div>}
       {isWebhookTrigger && <p className="dry-run-hint">This workflow is webhook-triggered. Live runs start only from a correctly signed inbound event; the manual live-run button is disabled.</p>}
       {result && <div className="dry-run-results" role="status">
-        <div className="dry-run-results-heading"><strong>Run passed</strong><span>{version ? `Version ${version} · ` : ""}{result.steps.length} steps</span></div>
+        <div className="dry-run-results-heading"><strong>{result.status === "succeeded" ? "Run passed" : "Run failed"}</strong><span>{version ? `Version ${version} · ` : ""}{result.steps.length} steps</span></div>
         <ol>{result.steps.map((step) => <li key={step.stepId} className={`run-step-${step.status}`}>
-          <span className="run-step-mark">{step.status === "skipped" ? "–" : "✓"}</span>
+          <span className="run-step-mark">{step.status === "skipped" ? "–" : step.status === "failed" ? "!" : "✓"}</span>
           <span><strong>{step.title}</strong><small>{step.type} · {step.status}{step.conditionMatched === undefined ? "" : step.conditionMatched ? " · condition matched" : " · condition did not match"}</small><small>{step.message}</small></span>
         </li>)}</ol>
-        <p className="dry-run-hint">No external side effects were performed.</p>
+        <p className="dry-run-hint">{result.sideEffectsPerformed ? "External side effects were performed." : "No external side effects were performed."}</p>
       </div>}
       <div className="run-history">
         <div className="panel-add-heading"><strong>Run history</strong><span>Dry-runs and durable live runs</span></div>
