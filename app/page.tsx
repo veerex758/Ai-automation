@@ -57,7 +57,7 @@ function AutomationShowcase() {
 }
 
 export default function Home() {
- return <main className="rx-home">
+ return <main className="rx-home" style={{ fontFamily: "'Geist', 'Inter', sans-serif" }}>
   <section className="rx-top">
    <div className="rx-hero">
     <div className="rx-hero-art rx-hero-art-one"/><div className="rx-hero-art rx-hero-art-two"/>
