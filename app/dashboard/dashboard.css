@@ -582,3 +582,18 @@
 .app-shell .registry-connect-link{background:#172846;border-color:#2A4772;color:#8BB8FF}
 .app-shell .registry-directory-tabs button:focus-visible{outline:2px solid #3B82F6;outline-offset:2px}
 @media(max-width:720px){.registry-directory-tabs{width:100%;display:grid;grid-template-columns:1fr 1fr}.registry-directory-tabs button{justify-content:center;padding:9px 6px;font-size:10px}}
+
+
+/* Shared section-page navigation: full-width, two-column and never height-clipped on mobile. */
+@media(max-width:720px){
+  .app-shell:not(.dashboard-overview-page){display:flex!important;flex-direction:column!important;width:100%!important;min-width:0!important;overflow-x:clip!important}
+  .app-shell:not(.dashboard-overview-page) .sidebar{box-sizing:border-box!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;gap:10px!important;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;padding:10px 14px!important;border-right:0!important;border-bottom:1px solid #2A2F3A!important;overflow:visible!important}
+  .app-shell:not(.dashboard-overview-page) .dash-brand{display:flex!important;flex:0 0 auto!important;padding:0 4px 8px!important}
+  .app-shell:not(.dashboard-overview-page) .workspace-switch,.app-shell:not(.dashboard-overview-page) .sidebar-label,.app-shell:not(.dashboard-overview-page) .sidebar-bottom{display:none!important}
+  .app-shell .side-nav,.app-shell .side-nav.dashboard-nav{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px 8px!important;width:100%!important;min-width:0!important;max-height:none!important;overflow:visible!important}
+  .app-shell:not(.dashboard-overview-page) .dashboard-nav-group{display:contents!important}
+  .app-shell:not(.dashboard-overview-page) .side-link{box-sizing:border-box!important;display:flex!important;width:100%!important;min-width:0!important;min-height:36px!important;justify-content:flex-start!important;gap:8px!important;padding:7px 9px!important;font-size:10px!important;white-space:nowrap!important;overflow:hidden!important}
+  .app-shell:not(.dashboard-overview-page) .dashboard-main{width:100%!important;min-width:0!important;flex:1 1 auto!important}
+  .app-shell:not(.dashboard-overview-page) .dashboard-topbar{box-sizing:border-box!important;width:100%!important;min-height:54px!important;height:auto!important;padding:9px 14px!important;flex-wrap:wrap!important;gap:8px!important}
+  .app-shell:not(.dashboard-overview-page) .dashboard-content{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important;padding:22px 14px 40px!important}
+}
