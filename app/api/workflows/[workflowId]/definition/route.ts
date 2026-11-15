@@ -32,6 +32,32 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!validated.definition) return NextResponse.json({ valid: false, error: validated.error }, { status: 422 });
 
     const nodes = validated.definition.nodes;
+    const rawDefinition = body.definition as Record<string, unknown>;
+    const rawNodes = Array.isArray(rawDefinition.nodes) ? rawDefinition.nodes as Array<Record<string, unknown>> : [];
+    const hasRegistryGraph = rawNodes.some((node) => typeof node.registryNodeId === "string" || node.type === "condition");
+    if (hasRegistryGraph) {
+      if (rawNodes.length !== nodes.length) return NextResponse.json({ valid: false, error: "Every executable step must have a matching canvas node." }, { status: 422 });
+      const graphNodes = nodes.map((node, index) => {
+        const raw = rawNodes[index];
+        return {
+          ...node,
+          registryNodeId: typeof raw.registryNodeId === "string" ? raw.registryNodeId : undefined,
+          registryOperationId: typeof raw.registryOperationId === "string" ? raw.registryOperationId : undefined,
+          registryInput: raw.registryInput && typeof raw.registryInput === "object" && !Array.isArray(raw.registryInput) ? raw.registryInput as Record<string, unknown> : undefined,
+        };
+      });
+      const edges = Array.isArray(rawDefinition.edges)
+        ? rawDefinition.edges as Array<{ id: string; source: string; target: string; label: "true" | "false" | "next" }>
+        : nodes.slice(1).map((node, index) => ({ id: "validation-next-" + (index + 1), source: nodes[index].id, target: node.id, label: "next" as const }));
+      try {
+        const steps = buildRegistrySteps({ nodes: graphNodes, edges });
+        const checked = validateRegisteredSteps(steps);
+        if (!checked.steps) return NextResponse.json({ valid: false, error: checked.error || "A registered operation failed validation." }, { status: 422 });
+      } catch (cause) {
+        return NextResponse.json({ valid: false, error: cause instanceof Error ? cause.message : "The workflow graph is invalid." }, { status: 422 });
+      }
+    }
+
     return NextResponse.json({
       valid: true,
       counts: {
@@ -39,7 +65,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         actions: nodes.filter((node) => node.type === "action").length,
         conditions: nodes.filter((node) => node.type === "condition").length,
       },
-      checks: ["definition schema", "step IDs and types", "trigger placement", "step limits", "step configuration"],
+      checks: ["definition schema", "step IDs and types", "trigger placement", "step limits", "step configuration", ...(hasRegistryGraph ? ["registered operation schemas", "graph connectivity", "conditional branch paths"] : [])],
       executed: false,
       saved: false,
     });
