@@ -10,6 +10,7 @@ const migration = readFileSync(new URL("../supabase/migrations/20261031100000_ai
 test("legacy registry live-run alias delegates to safe tests or durable dispatch", () => {
   assert.match(legacyRoute, /safeRun\(forwarded, context\)/);
   assert.match(legacyRoute, /dispatch\(forwarded, context\)/);
+  assert.match(legacyRoute, /Mode must be live or dry_run/);
 });
 
 test("durable dispatch requires a UUID idempotency key before queueing", () => {
