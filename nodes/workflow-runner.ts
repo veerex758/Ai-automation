@@ -89,7 +89,7 @@ export async function executeRegisteredWorkflow(args: {
     seen.add(step.id);
     if (completedStepIds.has(step.id)) {
       if (Array.isArray(outputs[step.id])) loopOutputs.set(step.id, outputs[step.id] as unknown[]);
-      results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
+      results.push({ stepId: step.id, status: args.dryRun ? "simulated" : "succeeded", output: outputs[step.id] });
       continue;
     }
     const branchPaths = step.branchPaths ?? (step.branch ? [[step.branch]] : undefined);
