@@ -24,7 +24,8 @@ test("public homepage presents the Rexnora brand and real platform entry points"
   assert.ok(page.includes('id="platform"'));
   assert.ok(page.includes('href="/dashboard/templates"'));
   assert.ok(page.includes("Workflows"));
-  assert.ok(page.includes("AI-Powered"));
+  assert.ok(page.includes("Let your workflow do the busywork."));
+  assert.ok(page.includes("You stay in control."));
   assert.ok(styles.includes(".rx-home"));
   assert.ok(styles.includes("@media(max-width:700px)"));
 });
