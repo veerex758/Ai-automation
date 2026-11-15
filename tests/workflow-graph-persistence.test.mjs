@@ -16,6 +16,14 @@ test("registry save preserves the validated canvas graph, including positions an
   assert.match(activation, /legacy-next-/);
 });
 
+test("draft validation checks registry operation schemas and graph paths before reporting success", () => {
+  assert.match(route, /const hasRegistryGraph = rawNodes\.some/);
+  assert.match(route, /buildRegistrySteps\(\{ nodes: graphNodes, edges \}\)/);
+  assert.match(route, /validateRegisteredSteps\(steps\)/);
+  assert.match(route, /registered operation schemas/);
+  assert.match(route, /conditional branch paths/);
+});
+
 test("saved graph GET round-trips positions, registry node metadata, and conditional edges", () => {
   assert.match(route, /stored\?\.format === "aivanta-registry-v1"/);
   assert.match(route, /registryNodeId: step\.nodeId/);
