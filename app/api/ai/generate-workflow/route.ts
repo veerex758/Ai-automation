@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     let definition: { version: 1; nodes: Array<Record<string, unknown>>; edges?: Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }> };
     let executableSteps = registrySteps;
     const rawEdges = (result as { edges?: unknown }).edges;
+    if (!Array.isArray(rawEdges)) return jsonResponse({ error: "The generated graph must include an explicit connection list." }, { status: 422 });
     if (rawEdges !== undefined) {
       if (!Array.isArray(rawEdges) || rawEdges.length > 90) return jsonResponse({ error: "The generated graph has an invalid edge list." }, { status: 422 });
       const ids = new Set(registrySteps.map((step) => String((step as { id: string }).id)));
