@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateWorkflow, extractJson } from "../lib/workflows/ai-workflow-generator.cjs";
 const validDefinition = { version: 1, edges: [], nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
-const env = { GEMINI_API_KEY: "test-secret", AIVANTA_AI_BASE_URL: "https://ai.example.test/v1", AIVANTA_AI_MODEL: "gemini-test-model", NODE_ENV: "test" };
+const env = { GEMINI_API_KEY: "test-secret", GEMINI_API_BASE_URL: "https://ai.example.test/v1", GEMINI_AI_MODEL: "gemini-test-model", NODE_ENV: "test" };
 const fakeFetch = (payload, status = 200) => async (_url, options) => {
   assert.equal(options.headers.Authorization, "Bearer test-secret");
   return { ok: status >= 200 && status < 300, status, json: async () => payload };
@@ -56,8 +56,8 @@ test("classifies provider transport failures and timeouts", async () => {
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => { const error = new Error("timeout"); error.name = "AbortError"; throw error; } }), /AI_TIMEOUT/);
 });
 test("rejects invalid model names and non-HTTPS provider endpoints in production", async () => {
-  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_MODEL: "invalid model!" } }), /AI_CONFIGURATION_ERROR/);
-  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, AIVANTA_AI_BASE_URL: "http://ai.example.test", NODE_ENV: "production" } }), /AI_CONFIGURATION_ERROR/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, GEMINI_AI_MODEL: "invalid model!" } }), /AI_CONFIGURATION_ERROR/);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env: { ...env, GEMINI_API_BASE_URL: "http://ai.example.test", NODE_ENV: "production" } }), /AI_CONFIGURATION_ERROR/);
 });
 
 test("validates explicit directed edges and true/false condition branches", async () => {
