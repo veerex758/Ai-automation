@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { POST as registryRun } from "../registry-run/route";
+import { POST as dispatch } from "../dispatch/route";
+import { POST as safeRun } from "../runs/route";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
@@ -28,8 +29,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       durationMs: Math.min(600000, Math.max(0, Date.now() - requestStartedAt)), errorCode,
     }, console.error);
   };
-  // Explicit opt-in keeps existing legacy email behavior unchanged while routing registry-format workflows through the same run-history-backed execution API.
-  if (request.headers.get("x-aivanta-runner") === "registry") return registryRun(request, context);
+  // Registry-format runs use the same safe-test and durable-dispatch paths as the builder.
+  if (request.headers.get("x-aivanta-runner") === "registry") {
+    let payload: unknown;
+    try { payload = await request.json(); } catch {
+      return jsonResponse({ error: "Request body must be valid JSON." }, { status: 400 });
+    }
+    if (!isRecord(payload)) return jsonResponse({ error: "Request must be a JSON object." }, { status: 400 });
+    const mode = payload.mode === "dry_run" || payload.dryRun === true ? "dry_run" : "live";
+    const headers = new Headers(request.headers);
+    headers.delete("content-length");
+    headers.set("content-type", "application/json");
+    const forwarded = new NextRequest(request.url, {
+      method: "POST", headers,
+      body: JSON.stringify({ mode, input: isRecord(payload.input) ? payload.input : {} }),
+    });
+    return mode === "dry_run" ? safeRun(forwarded, context) : dispatch(forwarded, context);
+  }
   const startedAt = Date.now();
   try {
     const { workflowId } = await context.params;
