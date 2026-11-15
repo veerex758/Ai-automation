@@ -126,7 +126,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
           step_type: definitionStep.nodeId === "if" || definitionStep.nodeId === "switch" ? "condition" : definitionStep.kind,
           title: definitionStep.nodeId + "." + definitionStep.operationId,
           status,
-          result: step.status === "failed" ? { error: step.error || "STEP_FAILED" } : {
+          result: step.status === "failed" ? { engine: "registry-v1", error: step.error || "STEP_FAILED" } : {
+            engine: "registry-v1",
             message: step.status === "skipped" ? "This branch was not selected." : "No provider action was executed.",
             ...(typeof output.route === "string" ? { route: output.route } : {}),
             ...(typeof output.matched === "boolean" ? { conditionMatched: output.matched } : {}),
