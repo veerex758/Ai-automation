@@ -14,5 +14,5 @@ test("legacy registry-run URL remains a dry-run-compatible alias", () => {
 
 test("Marketplace installation dry-run keeps its existing endpoint contract", () => {
   assert.match(marketplace, /\/api\/workflows\/["']\s*\+\s*i\.workflow_id\s*\+\s*["']\/registry-run/);
-  assert.match(marketplace, /result\?\.run\?\.status !== "succeeded"/);
+  assert.match(marketplace, /result\?\.run\?\.status\s*!==\s*"succeeded"/);
 });
