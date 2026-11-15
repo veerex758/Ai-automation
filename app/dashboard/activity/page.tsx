@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import "./activity.css";
+import DashboardSidebar from "../dashboard-sidebar";
 
 type ActivityRun = {
   id: string;
@@ -65,17 +66,7 @@ export default function ActivityPage() {
 
   return (
     <main className="app-shell activity-shell">
-      <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
-        <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Private workspace activity</small></span></div>
-        <div className="sidebar-label">WORKSPACE</div>
-        <nav className="side-nav" aria-label="Workspace navigation">
-          <Link className="side-link" href="/dashboard"><span className="side-icon">⌂</span>Overview</Link>
-          <Link className="side-link" href="/dashboard"><span className="side-icon">↗</span>Workflows</Link>
-          <Link className="side-link selected" href="/dashboard/activity" aria-current="page"><span className="side-icon">◷</span>Activity logs</Link>
-        </nav>
-        <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✳</div><strong>Need a hand?</strong><p>Review each run&apos;s mode, status, and workflow version to understand what happened.</p><Link href="/dashboard">Back to dashboard ↗</Link></div></div>
-      </aside>
+      <DashboardSidebar activePage="activity" workspaceName={workspaceName} />
       <section className="dashboard-main">
         <header className="dashboard-topbar"><div className="breadcrumbs"><Link href="/dashboard">Workspace</Link><span>›</span><strong>Activity logs</strong></div><div className="topbar-right"><span className="environment-badge"><i />Workspace scoped</span><button type="button" className="subtle-button" onClick={() => void loadActivity()} disabled={loading}>{loading ? "Refreshing…" : "Refresh ↻"}</button></div></header>
         <div className="dashboard-content activity-content">
