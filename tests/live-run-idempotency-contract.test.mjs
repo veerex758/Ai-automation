@@ -11,6 +11,7 @@ test("legacy registry live-run alias delegates to safe tests or durable dispatch
   assert.match(legacyRoute, /safeRun\(forwarded, context\)/);
   assert.match(legacyRoute, /dispatch\(forwarded, context\)/);
   assert.match(legacyRoute, /Mode must be live or dry_run/);
+  assert.match(legacyRoute, /payload\.mode === "dry_run" && payload\.dryRun === false/);
 });
 
 test("durable dispatch requires a UUID idempotency key before queueing", () => {
