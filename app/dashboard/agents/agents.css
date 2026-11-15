@@ -7,3 +7,16 @@
 .agents-heading p,.agent-list-panel p,.agent-editor p{color:#94A3B8!important}
 .agents-heading button,.agent-actions button{background:#F8FAFC!important;color:#0B0F14!important}
 .agent-row{background:#111722!important;border-color:#2A2F3A!important}
+
+
+/* Complete dark form states for Rexnora AI agents. */
+.agents-shell .agent-metrics article,.agents-shell .agent-list-tools input,.agents-shell .agent-list-tools select,
+.agents-shell .agent-editor input,.agents-shell .agent-editor textarea,.agents-shell .agent-editor select,
+.agents-shell .agent-boundary,.agents-shell .agent-row.active{background:#111722!important;border-color:#2A2F3A!important;color:#F8FAFC!important}
+.agents-shell .agent-editor label,.agents-shell .agent-list-panel h2,.agents-shell .agent-editor h2,.agents-shell .agent-activity h2{color:#F8FAFC!important}
+.agents-shell .agent-editor input::placeholder,.agents-shell .agent-editor textarea::placeholder{color:#94A3B8!important}
+.agents-shell .agent-editor textarea:focus,.agents-shell .agent-editor input:focus,.agents-shell .agent-editor select:focus{outline:2px solid #3B82F6!important;outline-offset:1px}
+.agents-shell .agent-boundary p,.agents-shell .agent-runtime-note,.agents-shell .activity-row small{color:#94A3B8!important}
+.agents-shell .activity-row{border-color:#2A2F3A!important}
+.agents-shell .agent-alert{background:#172846!important;border-color:#2A4772!important;color:#DCEBFF!important}
+.agents-shell .agent-alert.error{background:#321D22!important;border-color:#6B303B!important;color:#FECACA!important}
