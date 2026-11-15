@@ -18,6 +18,7 @@ test("registry save preserves the validated canvas graph, including positions an
 
 test("draft validation checks registry operation schemas and graph paths before reporting success", () => {
   assert.match(route, /const hasRegistryGraph = rawNodes\.some/);
+  assert.match(route, /Registry workflows must include an explicit connection list/);
   assert.match(route, /buildRegistrySteps\(\{ nodes: graphNodes, edges \}\)/);
   assert.match(route, /validateRegisteredSteps\(steps\)/);
   assert.match(route, /registered operation schemas/);
