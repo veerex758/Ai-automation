@@ -111,3 +111,31 @@ input,textarea,select,.search-input,.builder-name-input{background:#111722!impor
 .rx-brand-compact>.rx-lockup{width:168px;height:34px}
 .brand img[src="/rexnora-lockup.svg"],.dash-brand img[src="/rexnora-lockup.svg"],.builder-brand img[src="/rexnora-lockup.svg"],.workflow-side-brand img[src="/rexnora-lockup.svg"],.auth-brand img[src="/rexnora-lockup.svg"],.marketplace-brand img[src="/rexnora-lockup.svg"],.creator-brand img[src="/rexnora-lockup.svg"],.mp-logo img[src="/rexnora-lockup.svg"]{display:block;max-width:100%;height:auto;object-fit:contain;flex:0 1 auto}
 @media(max-width:700px){.rx-brand>.rx-lockup{width:min(68vw,220px);height:auto}.rx-brand-compact>.rx-lockup{width:32px;height:30px;object-fit:cover;object-position:left center}}
+
+
+/* Customer-facing automation story replaces internal brand-guideline content. */
+.rx-automation-panel{display:flex;flex-direction:column;justify-content:center;gap:22px;padding:42px 7.5%;background:radial-gradient(ellipse at 90% 5%,rgba(59,130,246,.16),transparent 42%),linear-gradient(145deg,#0b1019,#0b0f14)}
+.rx-automation-eyebrow{display:block;margin:0 0 12px;color:#8fb6ff;font-size:10px;font-weight:750;letter-spacing:1.5px}
+.rx-panel-heading h2{max-width:520px;font-size:clamp(25px,3vw,37px);line-height:1.12;letter-spacing:-1.2px;margin:0 0 12px}
+.rx-panel-heading p{max-width:510px;font-size:14px;line-height:1.75;color:#aeb8c8;margin:0}
+.rx-automation-flow{display:grid;gap:9px}
+.rx-automation-flow article{display:flex;align-items:center;gap:13px;min-width:0;padding:13px 14px;border:1px solid rgba(148,163,184,.16);border-radius:12px;background:linear-gradient(110deg,rgba(26,31,41,.92),rgba(16,22,32,.82))}
+.rx-flow-number{display:grid;place-items:center;width:31px;height:31px;flex:0 0 31px;border-radius:9px;background:rgba(59,130,246,.14);color:#91b9ff;font-size:10px;font-weight:800}
+.rx-automation-flow article>div{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.rx-automation-flow strong{font-size:12px;color:#f4f7fb}
+.rx-automation-flow small{font-size:10px;line-height:1.45;color:#98a5b8}
+.rx-flow-symbol{color:#9b83ff;font-size:19px}
+.rx-automation-note{display:flex;align-items:flex-start;gap:10px;padding-top:16px;border-top:1px solid rgba(148,163,184,.16)}
+.rx-automation-note>span{color:#8b5cf6;font-size:18px}
+.rx-automation-note p{font-size:11px;line-height:1.65;color:#aeb8c8;margin:0}
+.rx-automation-note strong{color:#f4f7fb}
+.rx-platform-copy .rx-automation-eyebrow{margin-bottom:14px}
+.rx-platform-copy>p{max-width:520px;font-size:15px;line-height:1.75}
+.rx-feature-grid article{align-items:flex-start;text-align:left;padding:15px 12px;min-height:116px}
+.rx-feature-grid article>span{color:#8fb6ff}
+.rx-feature-grid article>b{font-size:11px}
+.rx-feature-grid article>small{font-size:9px;line-height:1.5;color:#9daabd}
+.rx-platform-cta{display:inline-flex;align-items:center;gap:16px;margin-top:22px;color:#f8fafc;font-size:12px;font-weight:700}
+.rx-platform-cta span{color:#8fb6ff}
+@media(max-width:1180px){.rx-automation-panel{padding:34px 6%}.rx-automation-flow{grid-template-columns:1fr 1fr}.rx-automation-flow article{align-items:flex-start}.rx-flow-symbol{margin-left:auto}}
+@media(max-width:700px){.rx-automation-panel{padding:29px 18px;gap:19px}.rx-panel-heading h2{font-size:27px}.rx-panel-heading p{font-size:12px}.rx-automation-flow{grid-template-columns:1fr;gap:8px}.rx-automation-flow article{padding:11px}.rx-automation-flow strong{font-size:11px}.rx-automation-flow small{font-size:9px}.rx-automation-note p{font-size:10px}.rx-platform-copy>p{font-size:13px}.rx-feature-grid article{min-height:105px;padding:12px 9px}.rx-feature-grid article>b{font-size:10px}.rx-feature-grid article>small{font-size:8px}}
