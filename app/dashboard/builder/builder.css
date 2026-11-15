@@ -285,3 +285,10 @@
 .builder-shell .remove-step-button{background:#2A1A22!important;border-color:#6B3038!important;color:#FCA5A5!important}
 .builder-shell .builder-error-banner{background:#381F20!important;border-color:#6B3939!important;color:#FECACA!important}
 .builder-shell .builder-loading{background:#0B0F14!important;color:#94A3B8!important}
+
+
+.builder-shell .builder-draft-tag{background:#172846!important;border:1px solid #2A4772!important;color:#8BB8FF!important}
+.builder-shell .builder-draft-tag i{background:#3B82F6!important}
+.builder-shell .settings-heading>div>span{color:#94A3B8!important}
+.builder-shell .settings-icon{background:#172846!important;color:#8BB8FF!important;border:1px solid #2A4772!important}
+.builder-shell .settings-empty,.builder-shell .action-catalog-status{color:#94A3B8!important}
