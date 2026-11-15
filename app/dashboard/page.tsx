@@ -86,7 +86,8 @@ const navGroups = [
     { label: "Templates", icon: "▧", href: "/dashboard/templates" },
   ] },
   { label: "CONNECT", items: [
-    { label: "Integrations", icon: "⌘", href: "/dashboard/connections" },
+    { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
+    { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
   ] },
   { label: "MANAGE", items: [
     { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
