@@ -7,7 +7,7 @@ const read = (path) => readFile(new URL("../" + path, import.meta.url), "utf8");
 test("visual builder uses only dark Rexnora surfaces and approved accents", async () => {
   const css = await read("app/dashboard/builder/builder.css");
   for (const selector of [
-    ".builder-content{background:#0B0F14!important",
+    ".builder-shell,.builder-main,.builder-content{background:#0B0F14!important",
     ".ai-workflow-panel{background:#1A1F29!important",
     ".flow-canvas{background:#0F141D!important",
     ".canvas-grid{background-color:#0F141D!important",
