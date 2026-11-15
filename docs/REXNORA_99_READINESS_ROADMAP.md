@@ -41,22 +41,7 @@ The first release must prove this one customer outcome end to end before we broa
 
 ## 3. Staged delivery plan
 
-### Stage 0 — Re-baseline, PR triage and release control
-
-**Objective:** Establish the exact state before changing or merging anything.
-
-**Work**
-- Re-check current main SHA, open PR heads, dependencies, mergeability and exact-head CI for PRs #207–#212.
-- Inspect #207 product-core diff and tests first; confirm it is still the right base for subsequent work.
-- Inspect #211 branding independently; confirm the approved Rexnora logo, palette, favicon, metadata and every page reference.
-- Treat #208 SaaS, #209 marketplace and #210 recurring billing as separate scopes with their stated dependencies. Do not merge merely because a PR exists.
-- Reconcile documentation and source-of-truth counts for executable nodes and provider catalogue entries.
-- Create a release evidence log: SHA, checks, preview URL, staging test results, blockers and decisions.
-
-**Exit gate**
-- A current, reproducible main/PR status table exists.
-- Every PR has a clear disposition: merge after gates, revise, split, or defer.
-- No stale CI result is used to authorize a merge.
+Completed-stage evidence is maintained in [REXNORA_ENGINEERING_BASELINE_2026-11-15.md](./REXNORA_ENGINEERING_BASELINE_2026-11-15.md). The detailed Stage 0 section is removed; only active stages remain below.
 
 ### Stage 1 — AI-generated workflows must be real graphs
 
@@ -276,20 +261,20 @@ This is the expected order based on the 2026-11-14 audit snapshot; re-check curr
 3. **#208 — SaaS foundations:** review after confirming compatibility with the accepted core and migrations. Keep staging/provider acceptance as release gates.
 4. **#210 — Recurring billing/tax invoices:** depends on #208. Defer real recurring payment and invoice claims until provider and legal configuration acceptance.
 5. **#209 — Marketplace:** defer until core customer workflow and SaaS foundation are proven.
-6. **#212 — Delivery ledger:** documentation-only snapshot; update it as work progresses, and do not mistake it for implementation.
+6. **#212 — Delivery ledger:** revise before merge; its duplicate stage plan conflicts with this authoritative roadmap. Preserve only useful, non-conflicting evidence.
 
 PR numbers and status may change. This ordering is not authorization to merge; current checks and dependencies decide.
 
 ## 6. First execution sequence
 
-The first engineering cycle should be:
+The current active sequence is:
 
-1. Re-check main and all open PRs, including exact-head CI and merge dependencies.
-2. Review #207 against the Stage 1–3 exit gates; fix blockers on its branch.
-3. Obtain a usable preview and complete authenticated staging tests for graph generation, save/reload, dry-run, activation, manual run, signed webhook, cancellation and failure recovery.
-4. Verify Gemini selection and the real-estate Gemini → Resend → persisted outcome path.
-5. Review and ship #211 branding with mobile/desktop regression coverage.
-6. Move to #208 only after the core path is stable; defer marketplace and recurring billing until their prerequisites are met.
+1. Finish exact-head CI for PR #207 and fix every remaining test, lint, type-check or build failure on that branch.
+2. Review and verify the graph-generation path: Gemini output, explicit graph edges, branch validation, editable canvas, save/reload and version identity.
+3. Obtain a usable preview from the accepted candidate SHA and complete authenticated staging acceptance for graph generation, dry-run and safe activation.
+4. Continue Stage 2 execution-lifecycle verification and Stage 3 integration/provider verification in order; keep their evidence separate from Stage 1.
+5. Verify the real-estate Gemini → Resend → persisted outcome path and obtain agency acceptance.
+6. Continue independent branding work in #211 with mobile/desktop regression; move to #208 only after core and pilot prerequisites are stable. Defer #209 and #210 until their dependencies and stages are reached.
 
 ## 7. Engineering status log
 
