@@ -73,17 +73,31 @@ const workflowTemplates: WorkflowTemplate[] = [
   },
 ];
 
-const navItems = [
-  { label: "Overview", icon: "⌂" },
-  { label: "Workflows", icon: "↗" },
-  { label: "Integrations", icon: "⌘" },
-  { label: "Activity logs", icon: "◷" },
+const navGroups = [
+  { label: "WORKSPACE", items: [
+    { label: "Overview", icon: "⌂", href: "/dashboard" },
+    { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
+    { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
+  ] },
+  { label: "BUILD", items: [
+    { label: "Workflow builder", icon: "＋", href: "/dashboard/builder" },
+    { label: "AI assistant", icon: "✧", href: "/dashboard/ai-assistant" },
+    { label: "AI agents", icon: "✺", href: "/dashboard/agents" },
+    { label: "Templates", icon: "▧", href: "/dashboard/templates" },
+  ] },
+  { label: "CONNECT", items: [
+    { label: "Integrations", icon: "⌘", href: "/dashboard/connections" },
+  ] },
+  { label: "MANAGE", items: [
+    { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
+    { label: "Billing", icon: "◇", href: "/dashboard/billing" },
+    { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
+  ] },
 ];
 
 export default function DashboardPage() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [activeNav, setActiveNav] = useState("Overview");
   const [filter, setFilter] = useState("All workflows");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -269,12 +283,16 @@ export default function DashboardPage() {
       <aside className="sidebar">
         <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
-        <div className="sidebar-label">WORKSPACE</div>
-        <nav className="side-nav" aria-label="Workspace navigation">
-          {navItems.map((item) => item.label === "Integrations" ? <Link key={item.label} href="/dashboard/connections" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}<span className="soon-tag">NEW</span></Link> : <button key={item.label} className={activeNav === item.label ? "side-link selected" : "side-link"} onClick={() => { setActiveNav(item.label); if (item.label !== "Overview" && item.label !== "Workflows") setNotice(item.label + " is part of the upcoming workspace release."); }}><span className="side-icon">{item.icon}</span>{item.label}</button>)}
+        <nav className="side-nav dashboard-nav" aria-label="Workspace navigation">
+          {navGroups.map((group) => <section className="dashboard-nav-group" key={group.label} aria-label={group.label}>
+            <div className="sidebar-label">{group.label}</div>
+            {group.items.map((item) => <Link key={item.label} href={item.href} aria-current={item.label === "Overview" ? "page" : undefined} className={item.label === "Overview" ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
+          </section>)}
+          <section className="dashboard-nav-group" aria-label="Quick actions">
+            <div className="sidebar-label">QUICK ACTION</div>
+            <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
+          </section>
         </nav>
-        <div className="sidebar-label tools-label">BUILD</div>
-        <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
         <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
       </aside>
 
@@ -305,7 +323,7 @@ export default function DashboardPage() {
             <article className="stat-card"><div className="stat-heading">Time returned <span className="stat-symbol">◷</span></div><div className="stat-number">48.5<span className="stat-unit">h</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />Estimated sample data</div></article>
           </div>
 
-          <div className="section-title-row"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
+          <div className="section-title-row" id="workflows"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
           <div className="workflow-toolbar"><div className="filter-tabs">{["All workflows", "Active", "Draft", "Paused"].map((item) => <button key={item} className={filter === item ? "filter-tab active-filter" : "filter-tab"} onClick={() => setFilter(item)}>{item}{item === "All workflows" && <span>{workflows.length}</span>}</button>)}</div><label className="search-box"><span>⌕</span><input aria-label="Search workflows" placeholder="Search workflows..." value={search} onChange={(e) => setSearch(e.target.value)} /><kbd>⌘ K</kbd></label></div>
 
           <div className="workflow-table"><div className="table-header"><span>WORKFLOW</span><span>STATUS</span><span>RUNS</span><span>LAST UPDATED</span><span /></div>
