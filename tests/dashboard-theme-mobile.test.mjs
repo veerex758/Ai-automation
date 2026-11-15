@@ -13,10 +13,10 @@ test("dashboard uses the Rexnora dark palette on overview and section routes", (
   assert.match(css, /\.app-shell:not\(\.dashboard-overview-page\) \.dashboard-topbar[^}]*background:#0B0F14!important/s);
 });
 
-test("mobile dashboard navigation stacks brand and provides a non-overlapping two-column menu", () => {
+test("mobile dashboard navigation uses a compact horizontal destination rail", () => {
   assert.match(css, /@media\(max-width:720px\)[\s\S]*?\.app-shell \.sidebar\{[^}]*flex-direction:column!important/s);
-  assert.match(css, /\.app-shell \.side-nav,[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)!important/s);
-  assert.match(css, /\.app-shell \.side-link[^}]*white-space:nowrap!important/s);
+  assert.match(css, /\.app-shell \.side-nav,[\s\S]*?flex-direction:row!important;[\s\S]*?overflow-x:auto!important/s);
+  assert.match(css, /\.app-shell \.side-link[^}]*min-width:max-content!important;[\s\S]*?white-space:nowrap!important/s);
 });
 
 
