@@ -19,6 +19,7 @@ test("overview navigation exposes implemented workspace destinations as real lin
     "/dashboard/ai-assistant",
     "/dashboard/agents",
     "/dashboard/templates",
+    "/dashboard/integrations",
     "/dashboard/connections",
     "/dashboard/analytics",
     "/dashboard/billing",
@@ -33,7 +34,7 @@ test("overview navigation exposes implemented workspace destinations as real lin
 
 test("section pages retain consistent access to builder and AI assistant", () => {
   assert.match(sections, /import DashboardSidebar from "\.\/dashboard-sidebar"/);
-  assert.match(sections, /activePage=\{section === "integrations" \? "connections" : section\}/);
+  assert.match(sections, /activePage=\{section\}/);
 });
 
 
@@ -53,7 +54,7 @@ test("all dashboard routes share the same complete workspace navigation", () => 
   for (const href of [
     "/dashboard", "/dashboard#workflows", "/dashboard/activity",
     "/dashboard/builder", "/dashboard/ai-assistant", "/dashboard/agents",
-    "/dashboard/templates", "/dashboard/connections", "/dashboard/analytics",
+    "/dashboard/templates", "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
     "/dashboard/billing", "/dashboard/settings",
   ]) assert.ok(sidebar.includes(href), `shared navigation missing ${href}`);
   for (const [name, source] of [["agents", agents], ["assistant", assistant], ["connections", connections], ["billing", billing]]) {
