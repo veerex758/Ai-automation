@@ -38,3 +38,9 @@
 .app-shell .workspace-integration-saved-row{border-color:#2A2F3A}
 .app-shell .workspace-integration-form input,.app-shell .workspace-integration-form select,.app-shell .workspace-integration-form textarea{background:#111722;border-color:#354052;color:#F8FAFC}
 .app-shell .connections-return{color:#8BB8FF}
+
+
+/* Keep connected-account cards on the same Rexnora dark surface as the dashboard. */
+.app-shell .connection-card{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.app-shell .connections-list{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important}
+.app-shell .workspace-integration-manager{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important}
