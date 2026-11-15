@@ -46,5 +46,6 @@ test("durable worker uses lease tokens and records retry-safe failures", () => {
   assert.match(worker, /lease_token/);
   assert.match(worker, /record_execution_error_event/);
   assert.match(worker, /retry_wait/);
-  assert.match(migration, /create table if not exists public\.execution_dead_letters/);\n  assert.match(migration, /insert into public\.execution_dead_letters/);
+  assert.match(migration, /create table if not exists public\.execution_dead_letters/);
+  assert.match(migration, /insert into public\.execution_dead_letters/);
 });
