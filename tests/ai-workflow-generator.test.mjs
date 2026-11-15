@@ -102,7 +102,7 @@ test("explicit Gemini provider selects Gemini key even when OpenAI key is also p
 test("legacy OpenAI provider override cannot redirect workflow generation away from Gemini", async () => {
   let requestedUrl = "";
   let authorization = "";
-  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async (url, options) => {
+  await generateWorkflow({ prompt: "Make a manual workflow", mode: "registry", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async (url, options) => {
     requestedUrl = url; authorization = options.headers.Authorization;
     return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify({ registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], edges: [] }) } }] }) };
   }});
