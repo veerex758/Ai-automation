@@ -74,3 +74,15 @@
 .ai-assistant-shell .assistant-side-panel>div:not(.assistant-tip){border-color:#2A2F3A!important}
 .ai-assistant-shell .assistant-side-panel>div>span,.ai-assistant-shell .assistant-tip{background:#111722!important;border-color:#2A2F3A!important;color:#8BB8FF!important}
 .ai-assistant-shell .assistant-tip p{color:#CBD5E1!important}
+
+
+/* Rexnora accent cleanup — remove remaining green assistant accents. */
+.ai-assistant-shell .assistant-message-icon{background:#172846!important;color:#8BB8FF!important}
+.ai-assistant-shell .assistant-chat-user{background:#172846!important;border-color:#2A4772!important}
+.ai-assistant-shell .assistant-chat-user strong,.ai-assistant-shell .assistant-chat-reply strong{color:#8BB8FF!important}
+.ai-assistant-shell .assistant-chat-reply{background:#111722!important;border-color:#2A2F3A!important}
+.ai-assistant-shell .generated-node-icon{background:#172846!important;color:#8BB8FF!important}
+.ai-assistant-shell .generated-node-icon.node-condition{background:#241A3D!important;color:#C4A8FF!important}
+.ai-assistant-shell .generated-node-icon.node-action{background:#172846!important;color:#8BB8FF!important}
+.ai-assistant-shell .generated-operation{color:#94A3B8!important}
+.ai-assistant-shell .assistant-side-panel>div>span{background:#172846!important;color:#8BB8FF!important}
