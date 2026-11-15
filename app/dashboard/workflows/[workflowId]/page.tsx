@@ -61,6 +61,7 @@ export default function WorkflowBuilderPage() {
   const emailActionNode = definition.nodes.find((node) => node.type === "action" && node.registryNodeId === "email" && node.registryOperationId === "send_email");
   const liveEmailRecipient = typeof emailActionNode?.registryInput?.to === "string" ? emailActionNode.registryInput.to : emailActionNode?.settings.recipient ?? "";
   const isWebhookTrigger = definition.nodes.some((node) => node.type === "trigger" && (node.registryNodeId === "webhooks" || node.settings.provider === "webhooks"));
+  const isRegistryWorkflow = definition.nodes.some((node) => Boolean(node.registryNodeId)) || definition.nodes.some((node) => node.type === "condition");
 
   useEffect(() => {
     if (!isDirty) return;
@@ -502,6 +503,7 @@ export default function WorkflowBuilderPage() {
             hasUnsavedChanges={isDirty}
             workflowStatus={workflow?.status ?? "draft"}
             isWebhookTrigger={isWebhookTrigger}
+            isRegistryWorkflow={isRegistryWorkflow}
           />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
