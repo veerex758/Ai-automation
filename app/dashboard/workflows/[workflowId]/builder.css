@@ -204,3 +204,18 @@
  .builder-shell>.sidebar .side-link{width:100%!important;min-width:0!important;min-height:36px!important;white-space:nowrap!important;overflow:hidden!important}
  .workflow-builder-main{width:100%!important;min-width:0!important}
 }
+
+
+/* Dark surfaces for the saved workflow editor. */
+.workflow-builder-main,.builder-layout,.builder-workspace{background:#0B0F14!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-heading h1,.workflow-builder-main .builder-panel h2,.workflow-builder-main .builder-inspector h2{color:#F8FAFC!important}
+.workflow-builder-main .builder-heading p,.workflow-builder-main .builder-eyebrow,.workflow-builder-main .panel-kicker{color:#94A3B8!important}
+.workflow-builder-main .builder-canvas,.workflow-builder-main .builder-panel,.workflow-builder-main .builder-inspector,.workflow-builder-main .builder-side-panel,.workflow-builder-main .run-test-panel{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.workflow-builder-main .builder-node,.workflow-builder-main .builder-step,.workflow-builder-main .builder-card{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-node:hover,.workflow-builder-main .builder-node.node-selected{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.workflow-builder-main .builder-node p,.workflow-builder-main .builder-node small,.workflow-builder-main .builder-step p{color:#94A3B8!important}
+.workflow-builder-main input,.workflow-builder-main textarea,.workflow-builder-main select{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main button{color:inherit}
+.workflow-builder-main .builder-save,.workflow-builder-main .builder-primary-button{background:#F8FAFC!important;color:#0B0F14!important;border-color:#F8FAFC!important}
+.workflow-builder-main .builder-back,.workflow-builder-main a{color:#8BB8FF}
+.workflow-builder-main .canvas-grid{background-color:#0F141D!important;background-image:radial-gradient(#303a4a 1px,transparent 1px)!important}
