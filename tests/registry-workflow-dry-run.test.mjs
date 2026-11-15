@@ -10,7 +10,8 @@ const runner = readFileSync(new URL("../nodes/workflow-runner.ts", import.meta.u
 test("registry dry-run validates saved steps and evaluates them with bounded sample trigger input", () => {
   assert.match(registryRun, /validateRegisteredSteps\(definition\.steps\)/);
   assert.match(registryRun, /Dry-run input must be a JSON object/);
-  assert.match(registryRun, /initialOutputs: \{ \[triggerStep\.id\]: \{ started: true, payload: input \} \}/);
+  assert.match(registryRun, /initialOutputs: \\{ \\[triggerStep\\.id\\]: triggerOutput \\}/);
+  assert.match(registryRun, /triggerStep\.nodeId === "webhooks"/);
   assert.match(registryRun, /completedStepIds: \[triggerStep\.id\]/);
   assert.match(registryRun, /conditionMatched: output\.matched/);
   assert.match(runner, /args\.dryRun \? "simulated" : "succeeded"/);
