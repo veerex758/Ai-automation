@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateWorkflow, extractJson } from "../lib/workflows/ai-workflow-generator.cjs";
 const validDefinition = { version: 1, edges: [], nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
-const env = { AIVANTA_AI_API_KEY: "test-secret", AIVANTA_AI_BASE_URL: "https://ai.example.test/v1", AIVANTA_AI_MODEL: "test-model", NODE_ENV: "test" };
+const env = { GEMINI_API_KEY: "test-secret", AIVANTA_AI_BASE_URL: "https://ai.example.test/v1", AIVANTA_AI_MODEL: "gemini-test-model", NODE_ENV: "test" };
 const fakeFetch = (payload, status = 200) => async (_url, options) => {
   assert.equal(options.headers.Authorization, "Bearer test-secret");
   return { ok: status >= 200 && status < 300, status, json: async () => payload };
@@ -99,15 +99,14 @@ test("explicit Gemini provider selects Gemini key even when OpenAI key is also p
   assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
   assert.equal(auth, "Bearer gemini-key");
 });
-test("explicit OpenAI provider uses OpenAI key and endpoint", async () => {
-  let url = "";
-  let auth = "";
-  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async (requested, options) => {
-    url = requested; auth = options.headers.Authorization;
-    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
-  }});
-  assert.equal(url, "https://api.openai.com/v1/chat/completions");
-  assert.equal(auth, "Bearer openai-key");
+test("workflow generation rejects OpenAI selection instead of silently switching providers", async () => {
+  let called = false;
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async () => { called = true; throw new Error("must not call OpenAI"); } }), /AI_CONFIGURATION_ERROR/);
+  assert.equal(called, false);
+});
+
+test("workflow generation does not fall back to OpenAI when only its key is configured", async () => {
+  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env: { OPENAI_API_KEY: "openai-key", NODE_ENV: "test" } }), /AI_NOT_CONFIGURED/);
 });
 
 test("registry mode returns only a bounded node plan and never executes it", async () => {
