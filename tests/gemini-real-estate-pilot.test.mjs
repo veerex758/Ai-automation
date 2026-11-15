@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 
 const node = readFileSync("nodes/gemini.ts", "utf8");
 const activation = readFileSync("app/api/workflows/[workflowId]/route.ts", "utf8");
-const registryRun = readFileSync("app/api/workflows/[workflowId]/registry-run/route.ts", "utf8");
+const runs = readFileSync("app/api/workflows/[workflowId]/runs/route.ts", "utf8");
+const durableWorker = readFileSync("lib/workflows/durable-worker.ts", "utf8");
+const dispatch = readFileSync("app/api/workflows/[workflowId]/dispatch/route.ts", "utf8");
 const webhook = readFileSync("app/api/webhooks/[endpointKey]/route.ts", "utf8");
 const provision = readFileSync("app/api/workflows/[workflowId]/webhook/route.ts", "utf8");
 const builder = readFileSync("app/dashboard/workflows/[workflowId]/page.tsx", "utf8");
@@ -33,10 +35,13 @@ test("activation validates any saved registry graph and gates live execution by 
   assert.doesNotMatch(activation, /qualify_real_estate_lead/);
 });
 
-test("legacy synchronous registry pilot remains constrained while signed webhooks use durable execution", () => {
-  assert.match(registryRun, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
-  assert.match(registryRun, /GEMINI_API_KEY/);
-  assert.match(registryRun, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+test("Gemini lead qualification uses the registered durable execution path while signed webhooks remain gated", () => {
+  assert.match(runs, /validateRegisteredSteps\(storedDefinition\.steps\)/);
+  assert.match(runs, /executeRegisteredWorkflow\([\s\S]*dryRun: true/);
+  assert.match(durableWorker, /getWorkerProvider\(step\)/);
+  assert.match(durableWorker, /WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED/);
+  assert.match(dispatch, /validateDurableLiveSteps\(registrySteps\)/);
+  assert.match(dispatch, /p_execution_mode: executionMode/);
   assert.match(webhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true"/);
   assert.match(webhook, /validateDurableLiveSteps\(steps\)/);
   assert.match(webhook, /p_execution_mode: "live"/);
