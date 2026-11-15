@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     let executableSteps = registrySteps;
     const rawEdges = (result as { edges?: unknown }).edges;
     if (!Array.isArray(rawEdges)) return jsonResponse({ error: "The generated graph must include an explicit connection list." }, { status: 422 });
-    if (rawEdges !== undefined) {
+    {
       if (!Array.isArray(rawEdges) || rawEdges.length > 90) return jsonResponse({ error: "The generated graph has an invalid edge list." }, { status: 422 });
       const ids = new Set(registrySteps.map((step) => String((step as { id: string }).id)));
       const edgeIds = new Set<string>();
@@ -145,8 +145,6 @@ export async function POST(request: NextRequest) {
       const checked = validateRegisteredSteps(rebuilt);
       if (!checked.steps) return jsonResponse({ error: checked.error || "The generated graph did not pass registry validation." }, { status: 422 });
       executableSteps = checked.steps;
-    } else {
-      definition = { version: 1, nodes: [{ id: "trigger-1", type: "trigger", title: "Manual start", description: "Registered workflow trigger.", settings: { event: "manual" } }] };
     }
     return jsonResponse({ ...result, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
