@@ -314,6 +314,7 @@ export async function runDurableWorker() {
   }
 
   const workerId = process.env.AIVANTA_WORKER_ID?.slice(0, 100) || "vercel-worker";
+  await db.rpc("record_execution_worker_heartbeat", { p_worker_id: workerId, p_status: "polling", p_job_id: null, p_error_code: null });
   const { error: pendingDispatchError } = await db.rpc("dispatch_pending_execution_error_events", { p_limit: 25 });
   if (pendingDispatchError) {
     console.warn("Aivanta worker could not dispatch pending workflow error events.");
@@ -322,12 +323,14 @@ export async function runDurableWorker() {
     p_worker_id: workerId, p_limit: 1, p_lease_seconds: 120,
   });
   if (error || !Array.isArray(data)) {
+    await db.rpc("record_execution_worker_heartbeat", { p_worker_id: workerId, p_status: "error", p_job_id: null, p_error_code: "WORKER_CLAIM_FAILED" });
     console.error("Aivanta worker could not claim jobs.");
     throw new Error("WORKER_CLAIM_FAILED");
   }
 
   let succeeded = 0, retried = 0, deadLettered = 0, leaseLost = 0;
   for (const job of data as Job[]) {
+    await db.rpc("record_execution_worker_heartbeat", { p_worker_id: workerId, p_status: "processing", p_job_id: job.id, p_error_code: null });
     let outcome = "EXECUTION_FAILED";
     const workflowErrorEvent: { current: { code: string; message: string; stepId: string } | null } = { current: null };
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -613,6 +616,8 @@ export async function runDurableWorker() {
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
+    await db.rpc("record_execution_worker_heartbeat", { p_worker_id: workerId, p_status: "idle", p_job_id: null, p_error_code: outcome === "EXECUTION_FAILED" ? null : outcome });
   }
+  if (data.length === 0) await db.rpc("record_execution_worker_heartbeat", { p_worker_id: workerId, p_status: "idle", p_job_id: null, p_error_code: null });
   return { claimed: data.length, succeeded, retried, deadLettered, leaseLost };
 }

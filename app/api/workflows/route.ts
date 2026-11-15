@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { findOperation } from "@/nodes/registry";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
@@ -51,6 +52,7 @@ export async function GET() {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.view"))) return NextResponse.json({ error: "Workspace workflows.view permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
     const { data, error } = await supabase
       .from("workflows")
       .select("id, name, description, status, updated_at")
@@ -158,6 +160,7 @@ export async function POST(request: NextRequest) {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.create"))) return NextResponse.json({ error: "Workspace workflows.create permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
     const { data, error } = await supabase
       .from("workflows")
       .insert({

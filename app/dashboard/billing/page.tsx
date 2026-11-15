@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./billing.css";
 import BillingCheckout from "./billing-checkout";
+import BillingStripeCheckout from "./billing-stripe-checkout";
 
 type CheckoutOption = { slug: string; amount_minor: number; currency: string };
 type Plan = {
@@ -13,6 +14,7 @@ type Plan = {
 };
 type Payment = {
   id: string;
+  provider: string;
   plan_slug: string;
   amount_minor: number;
   currency: string;
@@ -27,13 +29,16 @@ type BillingData = {
     billing_provider?: string | null;
     current_period_end?: string | null;
     cancel_at_period_end?: boolean;
+    pending_plan_key?: string | null;
+    pending_plan_effective_at?: string | null;
+    grace_until?: string | null;
   };
   entitlements: {
     plan: string;
     status: string;
     usage: Record<string, number>;
     limits: Record<string, number | null>;
-    billing: { checkout_enabled: boolean };
+    billing: { checkout_enabled: boolean; stripe_checkout_enabled?: boolean };
   };
   payments?: Payment[];
   plans: Plan[];
@@ -43,6 +48,8 @@ const metrics = [
   { key: "workflow_created", label: "Active workflows" },
   { key: "workflow_execution", label: "Workflow executions" },
   { key: "ai_credit", label: "AI credits" },
+  { key: "agent_run", label: "Agent runs" },
+  { key: "ai_generation", label: "AI generations" },
 ];
 
 function money(amountMinor: number, currency: string) {
@@ -63,6 +70,8 @@ export default function BillingPage() {
   const [data, setData] = useState<BillingData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [canceling, setCanceling] = useState(false);
+  const [billingMessage, setBillingMessage] = useState("");
 
   const loadBilling = useCallback(async () => {
     setLoading(true);
@@ -83,6 +92,26 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => { void loadBilling(); }, [loadBilling]);
+
+  const cancelSubscription = async () => {
+    if (!window.confirm("Schedule this workspace subscription to end after the current paid period?")) return;
+    setCanceling(true);
+    setBillingMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/billing/cancel", { method: "POST" });
+      const payload = await response.json() as { error?: string; cancellation?: { access_until?: string; already_scheduled?: boolean } };
+      if (!response.ok) throw new Error(payload.error || "Could not schedule cancellation.");
+      setBillingMessage(payload.cancellation?.already_scheduled
+        ? "Cancellation is already scheduled."
+        : `Automatic renewal is stopped. Your paid access remains available until ${date(payload.cancellation?.access_until)}.`);
+      await loadBilling();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not schedule cancellation.");
+    } finally {
+      setCanceling(false);
+    }
+  };
 
   if (loading) {
     return <main className="billing-shell" aria-busy="true">
@@ -116,14 +145,23 @@ export default function BillingPage() {
           {" · "}{data.subscription.billing_provider ?? "No payment provider"}
           {data.subscription.current_period_end ? ` · Period ends ${date(data.subscription.current_period_end)}` : ""}
           {data.subscription.cancel_at_period_end ? " · Cancellation scheduled" : ""}
+          {data.subscription.pending_plan_key ? " · Downgrade to " + data.subscription.pending_plan_key + " on " + date(data.subscription.pending_plan_effective_at) : ""}
+          {data.subscription.grace_until ? " · Payment grace ends " + date(data.subscription.grace_until) : ""}
         </p>
       </div>
-      <span className="billing-chip">{active ? "Access active" : "Access restricted"}</span>
+      <div className="billing-current-actions">
+        <span className="billing-chip">{active ? "Access active" : "Access restricted"}</span>
+        {data.subscription.plan_key !== "free" && data.subscription.status !== "canceled" && !data.subscription.cancel_at_period_end && (
+          <button type="button" disabled={canceling} onClick={() => void cancelSubscription()}>{canceling ? "Scheduling…" : "Cancel at period end"}</button>
+        )}
+      </div>
     </section>
+    {billingMessage && <p role="status" className="billing-note">{billingMessage}</p>}
+    {error && <p role="alert" className="billing-error">{error}</p>}
 
     <section className="billing-panel">
       <h2>Usage this month</h2>
-      <p>Usage is measured against your workspace entitlements.</p>\n      <p>{data.entitlements.limits.workflow_execution==null?"Custom executions":`${data.entitlements.limits.workflow_execution.toLocaleString()} executions included`} · {data.entitlements.limits.ai_credit==null?"Custom AI credits":`${data.entitlements.limits.ai_credit.toLocaleString()} AI credits included`}</p>
+      <p>Usage is measured against your workspace entitlements and resets on the first day of each calendar month.</p>\n      <p>{data.entitlements.limits.workflow_execution==null?"Custom executions":`${data.entitlements.limits.workflow_execution.toLocaleString()} executions included`} · {data.entitlements.limits.ai_credit==null?"Custom AI credits":`${data.entitlements.limits.ai_credit.toLocaleString()} AI credits included`}</p>
       {metrics.map(metric => {
         const used = Math.max(0, data.entitlements.usage[metric.key] ?? 0);
         const limit = data.entitlements.limits[metric.key];
@@ -134,11 +172,12 @@ export default function BillingPage() {
           <div className="usage-track" aria-label={`${metric.label}: ${used} of ${unlimited ? "unlimited" : limit}`}>
             <span style={{ width: `${percent}%` }} />
           </div>
+          {!unlimited && percent >= 80 && <p className="billing-usage-warning" role="status">{metric.label} has reached {percent}% of the plan allowance. <a href="#billing-plans">Review upgrade options</a>.</p>}
         </div>;
       })}
     </section>
 
-    <section className="billing-panel">
+    <section className="billing-panel" id="billing-plans">
       <h2>Choose a plan</h2>
       <p>Checkout is available only for prices configured and verified by Aivanta.</p>
       <div className="billing-plans">
@@ -157,6 +196,7 @@ export default function BillingPage() {
                 ? plan.checkout.map(option => <div key={option.slug}>
                     <small className="billing-configured-price">{money(option.amount_minor, option.currency)} · {option.slug.endsWith("annual") ? "annual" : "monthly"}</small>
                     <BillingCheckout plan={option.slug} enabled={data.entitlements.billing.checkout_enabled} />
+                    <BillingStripeCheckout plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} />
                   </div>)
                 : <span className="billing-current-label">Checkout not configured</span>}
         </article>)}
@@ -169,8 +209,10 @@ export default function BillingPage() {
       {data.payments?.length
         ? <div className="billing-payment-list">{data.payments.map(payment => <div className="billing-payment-row" key={payment.id}>
             <div><strong>{payment.plan_slug.replaceAll("-", " ")}</strong><small>{date(payment.created_at)}</small></div>
-            <span>{money(payment.amount_minor, payment.currency)}</span>
+            <span>{money(payment.amount_minor, payment.currency)} · {payment.provider}</span>
             <span className={`billing-payment-status ${payment.status}`}>{payment.status.replaceAll("_", " ")}</span>
+            {payment.status === "success" && <a className="billing-receipt-link" href={"/api/billing/invoices/" + payment.id} target="_blank" rel="noreferrer">View receipt ↗</a>}
+            {(payment.status === "failed" || payment.status === "abandoned") && <div className="billing-payment-retry"><BillingCheckout plan={payment.plan_slug} enabled={data.entitlements.billing.checkout_enabled} /><BillingStripeCheckout plan={payment.plan_slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} /></div>}
           </div>)}</div>
         : <p>No payments have been recorded for this workspace yet.</p>}
     </section>

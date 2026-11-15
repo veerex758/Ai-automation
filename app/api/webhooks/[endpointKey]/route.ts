@@ -125,7 +125,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     const endpointHash = createHash("sha256").update(endpointKey, "utf8").digest("hex");
     db = serviceClient();
     const { data: endpoint, error: endpointError } = await db.from("webhook_endpoints")
-      .select("id,workspace_id,workflow_id,secret_ciphertext,secret_key_version,status")
+      .select("id,workspace_id,workflow_id,created_by,secret_ciphertext,secret_key_version,status")
       .eq("endpoint_key_hash", endpointHash).maybeSingle();
     if (endpointError) throw endpointError;
     if (!endpoint || endpoint.status !== "active") return jsonError("Webhook endpoint not found or disabled.", 404);
@@ -161,6 +161,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       .eq("id", endpoint.workflow_id).eq("workspace_id", endpoint.workspace_id).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow || workflow.status !== "active") return jsonError("The linked workflow is not active.", 409);
+    const { data: workspaceOwner, error: workspaceOwnerError } = await db.from("workspaces").select("owner_id").eq("id", endpoint.workspace_id).maybeSingle();
+    if (workspaceOwnerError) throw workspaceOwnerError;
+    const { data: creatorMembership, error: creatorMembershipError } = endpoint.created_by
+      ? await db.from("workspace_members").select("user_id").eq("workspace_id", endpoint.workspace_id).eq("user_id", endpoint.created_by).maybeSingle()
+      : { data: null, error: null };
+    if (creatorMembershipError) throw creatorMembershipError;
+    const dispatchActor = endpoint.created_by && (endpoint.created_by === workspaceOwner?.owner_id || creatorMembership)
+      ? endpoint.created_by : workspaceOwner?.owner_id;
+    if (typeof dispatchActor !== "string") return jsonError("Webhook workspace has no valid execution owner.", 503);
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
     if (!definition || definition.format !== "aivanta-registry-v1" ||
@@ -229,7 +238,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     }
     if (!claim.accepted) {
       const { data: prior, error: priorError } = await db.from("webhook_event_receipts")
-        .select("payload_sha256,status").eq("id", claim.receipt_id).maybeSingle();
+        .select("payload_sha256,status,failure_code").eq("id", claim.receipt_id).maybeSingle();
       if (priorError) throw priorError;
       if (prior && prior.payload_sha256 !== payloadSha256) {
         return jsonError("This event ID was already used for a different payload.", 409);
@@ -240,12 +249,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         // have been lost after queue commit.
         const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
           p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
-          p_workflow_version: workflow.version, p_created_by: null,
+          p_workflow_version: workflow.version, p_created_by: dispatchActor,
           p_idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
           p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
           p_max_attempts: 5,
         });
         const queued = dispatch as Record<string, unknown> | null;
+        if (dispatchError && String(dispatchError.message).includes("AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED")) {
+          await db.from("webhook_event_receipts").update({ status: "failed", failure_code: "AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED" }).eq("id", claim.receipt_id);
+          return jsonError("Workspace execution quota reached. Upgrade the plan before retrying this webhook.", 402);
+        }
         if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
           throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
         }
@@ -255,7 +268,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         if (receiptError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
         return NextResponse.json({ accepted: true, queued: true, duplicate: true, jobId: queued.job_id, runId: queued.run_id, mode: "dry_run" }, { status: 202 });
       }
-      return NextResponse.json({ accepted: true, duplicate: true, receiptStatus: prior?.status ?? "accepted" }, { status: 200 });
+      if (prior?.failure_code !== "AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED") {
+        return NextResponse.json({ accepted: true, duplicate: true, receiptStatus: prior?.status ?? "accepted" }, { status: 200 });
+      }
     }
     receipt = { id: claim.receipt_id, endpoint_id: endpoint.id };
 
@@ -268,6 +283,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         p_max_attempts: 5,
       });
       const queued = dispatch as Record<string, unknown> | null;
+      if (dispatchError && String(dispatchError.message).includes("AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED")) {
+        await db.from("webhook_event_receipts").update({ status: "failed", failure_code: "AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED" }).eq("id", receipt.id);
+        return jsonError("Workspace execution quota reached. Upgrade the plan before retrying this webhook.", 402);
+      }
       if (dispatchError || !queued || typeof queued.job_id !== "string" || typeof queued.run_id !== "string") {
         throw new Error("WEBHOOK_QUEUE_DISPATCH_FAILED");
       }
@@ -279,6 +298,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         accepted: true, queued: true, duplicate: false,
         jobId: queued.job_id, runId: queued.run_id, mode: "dry_run",
       }, { status: 202 });
+    }
+
+    const executionKey = "webhook:" + endpoint.id + ":" + eventId;
+    const { data: executionReservation, error: executionReservationError } = await db.rpc("reserve_workspace_execution_service", {
+      p_workspace_id: workflow.workspace_id, p_actor_id: dispatchActor,
+      p_idempotency_key: executionKey, p_source: "webhook",
+    });
+    if (executionReservationError) throw executionReservationError;
+    if (!executionReservation?.allowed) {
+      await db.from("webhook_event_receipts").update({ status: "failed", failure_code: "AIVANTA_WORKFLOW_EXECUTION_LIMIT_REACHED" }).eq("id", receipt.id);
+      return jsonError("Workspace execution quota reached. Upgrade the plan before retrying this webhook.", 402);
     }
 
     const executionSteps = steps.map((step, index) => index === 0 ? { ...step, input: eventInput } : step);

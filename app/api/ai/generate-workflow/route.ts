@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     const { getOrCreateDefaultWorkspace } = await import("@/lib/supabase/workspace");
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data: usage, error: usageError } = await supabase.rpc("consume_workspace_usage", { p_workspace_id: workspace.id, p_metric: "ai_credit", p_quantity: 1, p_metadata: { feature: "workflow_draft_generation" } });
+    const { data: usage, error: usageError } = await supabase.rpc("consume_ai_generation_usage", { p_workspace_id: workspace.id, p_idempotency_key: randomUUID() });
     if (usageError) return jsonResponse({ error: "Usage metering unavailable. Apply Phase 5 billing migration." }, { status: 503 });
     if (!usage?.allowed) return jsonResponse({ error: "Monthly AI generation limit reached. Upgrade your plan.", entitlement: usage }, { status: 402 });
 
