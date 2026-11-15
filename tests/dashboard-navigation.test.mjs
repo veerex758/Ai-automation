@@ -32,9 +32,8 @@ test("overview navigation exposes implemented workspace destinations as real lin
 });
 
 test("section pages retain consistent access to builder and AI assistant", () => {
-  assert.match(sections, /\["Workflow builder","\/dashboard\/builder"/);
-  assert.match(sections, /\["AI Assistant","\/dashboard\/ai-assistant"/);
-  assert.match(sections, /\["Integrations","\/dashboard\/connections"/);
+  assert.match(sections, /import DashboardSidebar from "\.\/dashboard-sidebar"/);
+  assert.match(sections, /activePage=\{section === "integrations" \? "connections" : section\}/);
 });
 
 
