@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { POST as dispatch } from "../dispatch/route";
 import { POST as safeRun } from "../runs/route";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
