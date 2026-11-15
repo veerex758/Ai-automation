@@ -132,10 +132,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     // and only then permits their simulated/skipped step rows. Live runs use the running
     // -> finalized lifecycle so step inserts remain auditable before completion.
     const triggerStep = steps[0];
+    const triggerOutput = triggerStep.nodeId === "webhooks"
+      ? { eventId: "dry-run-event", eventType: "test", receivedAt: new Date().toISOString(), payload: input }
+      : triggerStep.nodeId === "schedule"
+        ? triggerStep.input
+        : { started: true, payload: input };
     const dryRunExecution = dryRun
       ? await executeRegisteredWorkflow({
           steps, context: serverContext(), dryRun: true,
-          initialOutputs: { [triggerStep.id]: { started: true, payload: input } },
+          initialOutputs: { [triggerStep.id]: triggerOutput },
           completedStepIds: [triggerStep.id],
         })
       : null;
