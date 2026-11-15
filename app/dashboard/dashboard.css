@@ -557,3 +557,28 @@
   border-color:#2A4772!important;
   color:#8BB8FF!important;
 }
+
+
+/* Rexnora integrations inventory: distinct 122-node registry and 100-provider catalogue views. */
+.registry-directory-tabs{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding:4px;border:1px solid #2A2F3A;border-radius:10px;background:#111722;width:max-content;max-width:100%}
+.registry-directory-tabs button{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid transparent;border-radius:7px;background:transparent;color:#94A3B8;font:600 11px 'Geist','Inter',sans-serif;cursor:pointer}
+.registry-directory-tabs button span{display:inline-grid;place-items:center;min-width:22px;height:19px;padding:0 5px;border-radius:5px;background:#252D3A;color:#CBD5E1;font-size:9px}
+.registry-directory-tabs button.selected{background:#1A1F29;border-color:#354052;color:#F8FAFC}
+.registry-directory-tabs button.selected span{background:#172846;color:#8BB8FF}
+.app-shell .registry-directory-toolbar>div strong{color:#F8FAFC}
+.app-shell .registry-directory-toolbar>div span{color:#94A3B8}
+.app-shell .registry-search{background:#111722;border-color:#354052;color:#94A3B8}
+.app-shell .registry-search input{color:#F8FAFC}
+.app-shell .registry-node-card{background:#1A1F29;border-color:#2A2F3A;color:#F8FAFC;box-shadow:0 14px 32px rgba(0,0,0,.2)}
+.app-shell .registry-node-name h3{color:#F8FAFC}
+.app-shell .registry-node-name>span,.app-shell .registry-node-summary,.app-shell .registry-directory-note{color:#94A3B8}
+.app-shell .registry-operation-preview span{background:#111722;border-color:#354052;color:#CBD5E1}
+.app-shell .registry-operation-list{border-color:#2A2F3A}
+.app-shell .registry-operation{border-color:#2A2F3A;background:#111722;color:#E2E8F0}
+.app-shell .registry-operation>div>strong,.app-shell .registry-operation p{color:#CBD5E1}
+.app-shell .registry-operation-schema{border-color:#354052}
+.app-shell .registry-operation-schema summary{color:#8BB8FF}
+.app-shell .registry-operation-schema pre{background:#0B0F14;border-color:#354052;color:#CBD5E1}
+.app-shell .registry-connect-link{background:#172846;border-color:#2A4772;color:#8BB8FF}
+.app-shell .registry-directory-tabs button:focus-visible{outline:2px solid #3B82F6;outline-offset:2px}
+@media(max-width:720px){.registry-directory-tabs{width:100%;display:grid;grid-template-columns:1fr 1fr}.registry-directory-tabs button{justify-content:center;padding:9px 6px;font-size:10px}}
