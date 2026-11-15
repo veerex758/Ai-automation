@@ -82,3 +82,22 @@ test("Supabase secret fallback ignores empty placeholder variables", async () =>
   assert.match(adminClient, /SUPABASE_SERVICE_ROLE_KEY\s*\|\| process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(workspaceIntegrations, /SUPABASE_SECRET_KEY \|\| process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
 });
+
+
+test("builder, workflow editor, activity list and run detail use shared navigation", async () => {
+  const paths = [
+    "../app/dashboard/builder/page.tsx",
+    "../app/dashboard/workflows/[workflowId]/page.tsx",
+    "../app/dashboard/activity/page.tsx",
+    "../app/dashboard/activity/[runId]/page.tsx",
+  ];
+  const sources = await Promise.all(paths.map(path => readFile(fileURLToPath(new URL(path, import.meta.url)), "utf8")));
+  for (const [index, source] of sources.entries()) {
+    assert.match(source, /<DashboardSidebar activePage=/, `${paths[index]} is missing shared navigation`);
+  }
+  assert.doesNotMatch(sources[3], /Aivanta workspace/);
+});
+
+test("mobile navigation is not height-clipped on the shared sidebar", () => {
+  assert.match(css, /\.app-shell \.side-nav,[\s\S]*?max-height:none!important;[\s\S]*?overflow:visible!important/s);
+});
