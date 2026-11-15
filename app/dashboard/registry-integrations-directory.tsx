@@ -46,6 +46,10 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
     "slug": "googlesheets",
     "label": "Google Sheets"
   },
+  "sheets": {
+    "slug": "googlesheets",
+    "label": "Google Sheets"
+  },
   "google_drive": {
     "slug": "googledrive",
     "label": "Google Drive"
@@ -375,7 +379,7 @@ const nativeNodeMarks: Record<string, string> = {
 };
 
 const googleProductForNode: Record<string, string> = {
-  gmail: "gmail", google_sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
+  gmail: "gmail", sheets: "sheets", google_sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
   google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
 };
 const providerDisplayName = (node: RegistryNode) => officialBrandAssets[node.id]?.label ?? node.name;
@@ -592,7 +596,7 @@ export default function RegistryIntegrationsDirectory() {
       </div>
       <label className="registry-search">
         <span aria-hidden="true">⌕</span>
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search providers or operations" aria-label="Search providers or operations" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search nodes, providers or operations" aria-label="Search nodes, providers or operations" />
       </label>
     </div>
     <div className="registry-directory-tabs" role="tablist" aria-label="Integration inventory">
