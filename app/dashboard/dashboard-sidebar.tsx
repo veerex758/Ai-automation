@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type ActivePage = "overview" | "workflows" | "builder" | "assistant" | "agents" | "templates" | "connections" | "analytics" | "activity" | "billing" | "settings";
+type ActivePage = "overview" | "workflows" | "builder" | "assistant" | "agents" | "templates" | "integrations" | "connections" | "analytics" | "activity" | "billing" | "settings";
 
 const groups = [
   { label: "WORKSPACE", items: [
@@ -15,7 +15,8 @@ const groups = [
     { label: "Templates", icon: "▧", href: "/dashboard/templates", key: "templates" },
   ] },
   { label: "CONNECT", items: [
-    { label: "Integrations", icon: "⌘", href: "/dashboard/connections", key: "connections" },
+    { label: "Integrations", icon: "⌘", href: "/dashboard/integrations", key: "integrations" },
+    { label: "Connected accounts", icon: "↗", href: "/dashboard/connections", key: "connections" },
   ] },
   { label: "MANAGE", items: [
     { label: "Analytics", icon: "▥", href: "/dashboard/analytics", key: "analytics" },
