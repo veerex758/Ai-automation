@@ -82,7 +82,7 @@ export default async function DashboardSectionPage({section}:{section:Section}) 
   // Keep the generic label if workspace metadata is temporarily unavailable.
  }
  return <main className="app-shell">
-  <DashboardSidebar activePage={section} workspaceName={workspaceName} />
+  <DashboardSidebar activePage={section === "integrations" ? "connections" : section} workspaceName={workspaceName} />
   <section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>{meta.title}</strong></div><div className="topbar-right"><span className="environment-badge"><i/> Staging / Preview</span><Link className="subtle-button" href="/dashboard">Dashboard ↗</Link></div></header>
    <div className="dashboard-content section-page-content"><div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse"/> REXNORA WORKSPACE</div><h1>{meta.title}</h1><p>{meta.description}</p></div>{section==="templates"?<Link className="create-button" href="/dashboard#quick-start-title">Browse templates ↗</Link>:section==="integrations"?<Link className="create-button" href="/dashboard/settings">Connection settings ↗</Link>:null}</div>
    {section==="integrations"&&<><div className="section-title-row"><div><h2>Available integrations</h2><p>The full provider inventory is listed below. Only providers with registered, validated operations are selectable in workflow drafts; live runs remain gated.</p></div></div><RegistryIntegrationsDirectory /></>}
