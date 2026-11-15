@@ -37,6 +37,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const hasRegistryGraph = rawNodes.some((node) => typeof node.registryNodeId === "string" || node.type === "condition");
     if (hasRegistryGraph) {
       if (rawNodes.length !== nodes.length) return NextResponse.json({ valid: false, error: "Every executable step must have a matching canvas node." }, { status: 422 });
+      if (!Array.isArray(rawDefinition.edges)) return NextResponse.json({ valid: false, error: "Registry workflows must include an explicit connection list." }, { status: 422 });
       const graphNodes = nodes.map((node, index) => {
         const raw = rawNodes[index];
         return {
@@ -46,9 +47,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
           registryInput: raw.registryInput && typeof raw.registryInput === "object" && !Array.isArray(raw.registryInput) ? raw.registryInput as Record<string, unknown> : undefined,
         };
       });
-      const edges = Array.isArray(rawDefinition.edges)
-        ? rawDefinition.edges as Array<{ id: string; source: string; target: string; label: "true" | "false" | "next" }>
-        : nodes.slice(1).map((node, index) => ({ id: "validation-next-" + (index + 1), source: nodes[index].id, target: node.id, label: "next" as const }));
+      const edges = rawDefinition.edges as Array<{ id: string; source: string; target: string; label: "true" | "false" | "next" }>;
       try {
         const steps = buildRegistrySteps({ nodes: graphNodes, edges });
         const checked = validateRegisteredSteps(steps);
