@@ -607,3 +607,15 @@
   .app-shell .side-nav,.app-shell .side-nav.dashboard-nav{max-height:none!important;overflow:visible!important;overflow-y:visible!important}
   .app-shell .dashboard-nav-group{display:contents!important}
 }
+
+
+/* Rexnora mobile navigation: compact horizontal destination rail, not a tall menu grid. */
+@media(max-width:720px){
+ .app-shell .sidebar{gap:7px!important;padding:9px 12px!important}
+ .app-shell .dash-brand{padding:0 4px 3px!important;min-height:30px!important}
+ .app-shell .side-nav,.app-shell .side-nav.dashboard-nav{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;width:100%!important;min-width:0!important;max-height:none!important;height:auto!important;overflow-x:auto!important;overflow-y:hidden!important;padding:2px 1px 7px!important;scrollbar-width:thin!important;scrollbar-color:#394150 #080B10!important}
+ .app-shell .dashboard-nav-group{display:contents!important}
+ .app-shell .side-link,.app-shell .side-link.selected,.app-shell .side-link:not(.selected){display:inline-flex!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;min-height:34px!important;gap:7px!important;padding:7px 10px!important;border:1px solid #2A2F3A!important;border-radius:8px!important;background:#111722!important;color:#CBD5E1!important;font-size:10px!important;white-space:nowrap!important;overflow:visible!important}
+ .app-shell .side-link.selected{background:#172846!important;border-color:#3B82F6!important;color:#F8FAFC!important}
+ .app-shell .side-link .side-icon{flex:0 0 auto!important;width:auto!important;font-size:12px!important}
+}
