@@ -7,7 +7,7 @@ const hardeningMigration = await readFile(new URL("../supabase/migrations/202611
 const workflowRoute = await readFile(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
 const agentRunRoute = await readFile(new URL("../app/api/agents/[agentId]/runs/route.ts", import.meta.url), "utf8");
 const aiRoute = await readFile(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
-const registryRunRoute = await readFile(new URL("../app/api/workflows/[workflowId]/registry-run/route.ts", import.meta.url), "utf8");
+const workflowRunRoute = await readFile(new URL("../app/api/workflows/[workflowId]/runs/route.ts", import.meta.url), "utf8");
 const billingRoute = await readFile(new URL("../app/api/billing/route.ts", import.meta.url), "utf8");
 
 test("subscription and usage tables are workspace scoped and RLS protected", () => {
@@ -34,8 +34,8 @@ test("active workflow caps are enforced transactionally and AI usage consumes AI
   assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(agentRunRoute, /p_metric: "ai_credit".*feature: "agent_run"/);
   assert.match(aiRoute, /p_metric: "ai_credit".*workflow_draft_generation/);
-  assert.match(registryRunRoute, /p_metric: "workflow_execution"/);
-  assert.match(registryRunRoute, /The blueprint defines one workflow run as one execution/);
+  assert.match(workflowRunRoute, /p_metric: "workflow_execution"/);
+  assert.match(workflowRunRoute, /One workflow run is one execution, including a safe dry-run/);
   assert.ok(hardeningMigration.includes("enterprise"));
   assert.ok(hardeningMigration.includes("custom_execution_limit"));
 });
