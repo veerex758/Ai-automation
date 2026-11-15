@@ -269,3 +269,19 @@
  .builder-shell>.sidebar .side-link.selected{background:#172846!important;border-color:#3B82F6!important;color:#F8FAFC!important}
  .builder-shell>.sidebar .side-icon{font-size:12px!important}
 }
+
+
+/* Complete dark treatment for builder helper panels, registry pickers and safety states. */
+.builder-shell .settings-kind,.builder-shell .settings-info,.builder-shell .builder-safety-note,
+.builder-shell .action-config-panel,.builder-shell .action-capability>span,
+.builder-shell .registry-picker-heading,.builder-shell .registry-picker-node{background:#111722!important;border-color:#2A2F3A!important;color:#CBD5E1!important}
+.builder-shell .settings-kind>span,.builder-shell .settings-info>span,.builder-shell .builder-safety-note>span{background:#172846!important;color:#8BB8FF!important}
+.builder-shell .settings-kind strong,.builder-shell .settings-info strong,.builder-shell .builder-safety-note strong,
+.builder-shell .action-config-panel>label,.builder-shell .action-field{color:#E2E8F0!important}
+.builder-shell .settings-kind small,.builder-shell .settings-info p,.builder-shell .builder-safety-note p,
+.builder-shell .action-catalog-status,.builder-shell .action-capability p{color:#94A3B8!important}
+.builder-shell .action-field input,.builder-shell .action-field textarea{background:#0B0F14!important;border-color:#354052!important;color:#F8FAFC!important}
+.builder-shell .action-capability>span.action-capability-live{background:#241A3D!important;color:#C4A8FF!important}
+.builder-shell .remove-step-button{background:#2A1A22!important;border-color:#6B3038!important;color:#FCA5A5!important}
+.builder-shell .builder-error-banner{background:#381F20!important;border-color:#6B3939!important;color:#FECACA!important}
+.builder-shell .builder-loading{background:#0B0F14!important;color:#94A3B8!important}
