@@ -161,7 +161,7 @@ test("registry workflow dry-run evaluates IF and simulates only the selected bra
   const { validateRegisteredSteps } = await import("../nodes/validate-steps");
   const raw = [
     { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
-    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "approved", operator: "equals", compareTo: "approved" } },
+    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "{{manual.payload.status}}", operator: "equals", compareTo: "approved" } },
     { id: "yes", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "approved" } }, branch: { fromStepId: "condition", route: "true" } },
     { id: "no", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "rejected" } }, branch: { fromStepId: "condition", route: "false" } },
   ];
