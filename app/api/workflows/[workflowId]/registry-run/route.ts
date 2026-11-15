@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { NodeContext } from "@/nodes/types";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -59,6 +60,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "Provide dryRun as a boolean." }, { status: 400 });
     }
     const dryRun = body.dryRun;
+    const input = body.input === undefined ? {} : body.input;
+    if (!isRecord(input)) return NextResponse.json({ error: "Dry-run input must be a JSON object." }, { status: 400 });
+    if (Buffer.byteLength(JSON.stringify(input), "utf8") > 10 * 1024) return NextResponse.json({ error: "Dry-run input must be 10 KB or smaller." }, { status: 413 });
     const idempotencyKey = request.headers.get("idempotency-key") ?? "";
     if (!dryRun && !uuid.test(idempotencyKey)) {
       return NextResponse.json({ error: "A UUID Idempotency-Key header is required for live execution." }, { status: 400 });
@@ -78,11 +82,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length < 1 || definition.steps.length > 30) {
       return NextResponse.json({ error: "This endpoint requires a saved aivanta-registry-v1 workflow definition." }, { status: 422 });
     }
-    const steps = definition.steps as RegisteredWorkflowStep[];
-    if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
-      typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
-      return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
-    }
+    const checkedSteps = validateRegisteredSteps(definition.steps);
+    if (!checkedSteps.steps) return NextResponse.json({ error: checkedSteps.error || "Registry workflow steps are malformed." }, { status: 422 });
+    const steps: RegisteredWorkflowStep[] = checkedSteps.steps;
     if (!dryRun) {
       // Until each provider has its own workspace-scoped connection and explicit live-action gate,
       // keep production execution restricted to the existing guarded Resend email action.
@@ -129,8 +131,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     // Current staging RLS requires dry-run parent rows to be inserted already finalized,
     // and only then permits their simulated/skipped step rows. Live runs use the running
     // -> finalized lifecycle so step inserts remain auditable before completion.
+    const triggerStep = steps[0];
     const dryRunExecution = dryRun
-      ? await executeRegisteredWorkflow({ steps, context: serverContext(), dryRun: true })
+      ? await executeRegisteredWorkflow({
+          steps, context: serverContext(), dryRun: true,
+          initialOutputs: { [triggerStep.id]: { started: true, payload: input } },
+          completedStepIds: [triggerStep.id],
+        })
       : null;
     const initialStatus = dryRunExecution
       ? (dryRunExecution.status === "succeeded" ? "succeeded" : "failed")
@@ -157,7 +164,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       run_id: run.id, workspace_id: workflow.workspace_id, step_id: step.stepId, position: index + 1,
       step_type: steps[index]?.kind ?? "action", title: steps[index]?.nodeId + "." + steps[index]?.operationId,
       status: step.status === "succeeded" ? "executed" : step.status,
-      result: step.status === "failed" ? { error: step.error } : step.status === "succeeded" ? step.output : { message: step.status === "simulated" ? "No provider action was executed." : step.error },
+      result: step.status === "failed" ? { error: step.error } : isRecord(step.output) && typeof step.output.route === "string" ? { route: step.output.route, ...(typeof step.output.matched === "boolean" ? { conditionMatched: step.output.matched } : {}) } : { message: step.status === "simulated" ? "No provider action was executed." : step.error },
     }));
     const finalStatus = execution.status === "succeeded" ? "succeeded" : "failed";
     try {
@@ -175,7 +182,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         if (error) throw error;
         finalized = data;
       }
-      return NextResponse.json({ run: finalized, steps: rows, sideEffectsPerformed: !dryRun && rows.some((row) => row.step_type === "action" && row.status === "executed") }, { status: 201 });
+      const testResult = dryRun ? {
+        mode: "dry_run" as const,
+        status: execution.status === "succeeded" ? "succeeded" as const : "failed" as const,
+        sideEffectsPerformed: false as const,
+        steps: execution.steps.map((step, index) => {
+          const definitionStep = steps[index];
+          const output = isRecord(step.output) ? step.output : {};
+          return {
+            stepId: step.stepId,
+            position: index + 1,
+            type: definitionStep.nodeId === "if" || definitionStep.nodeId === "switch" ? "condition" as const : definitionStep.kind,
+            title: definitionStep.nodeId + "." + definitionStep.operationId,
+            status: step.status === "succeeded" ? "simulated" as const : step.status,
+            message: step.status === "skipped" ? "This branch was not selected." : step.status === "failed" ? (step.error || "This step failed.") : "No external action was executed.",
+            ...(typeof output.matched === "boolean" ? { conditionMatched: output.matched } : {}),
+          };
+        }),
+      } : undefined;
+      return NextResponse.json({ run: finalized, steps: rows, ...(testResult ? { result: testResult } : {}), sideEffectsPerformed: !dryRun && rows.some((row) => row.step_type === "action" && row.status === "executed") }, { status: 201 });
     } catch (error) {
       console.error("Failed to persist registry workflow history", error);
       if (!dryRun) {
