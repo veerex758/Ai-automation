@@ -99,10 +99,15 @@ test("explicit Gemini provider selects Gemini key even when OpenAI key is also p
   assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
   assert.equal(auth, "Bearer gemini-key");
 });
-test("workflow generation rejects OpenAI selection instead of silently switching providers", async () => {
-  let called = false;
-  await assert.rejects(generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async () => { called = true; throw new Error("must not call OpenAI"); } }), /AI_CONFIGURATION_ERROR/);
-  assert.equal(called, false);
+test("legacy OpenAI provider override cannot redirect workflow generation away from Gemini", async () => {
+  let requestedUrl = "";
+  let authorization = "";
+  await generateWorkflow({ prompt: "Make a manual workflow", env: { AIVANTA_AI_PROVIDER: "openai", OPENAI_API_KEY: "openai-key", GEMINI_API_KEY: "gemini-key", NODE_ENV: "test" }, fetchImpl: async (url, options) => {
+    requestedUrl = url; authorization = options.headers.Authorization;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify({ registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], edges: [] }) } }] }) };
+  }});
+  assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  assert.equal(authorization, "Bearer gemini-key");
 });
 
 test("workflow generation does not fall back to OpenAI when only its key is configured", async () => {
