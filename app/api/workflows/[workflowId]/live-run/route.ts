@@ -1,13 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { POST as dispatch } from "../dispatch/route";
-import { POST as safeRun } from "../runs/route";\nimport { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
+import { POST as safeRun } from "../runs/route";
+import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 
 const maxInputBytes = 10 * 1024;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 /** Compatibility alias. All live execution is queued through durable dispatch. */
-export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {\n  const startedAt = Date.now();\n  const requestId = getRequestId(request.headers.get("x-request-id"));\n  const jsonResponse = (body: unknown, status: number) => {\n    const response = NextResponse.json(body, { status });\n    response.headers.set("x-request-id", requestId);\n    response.headers.set("Cache-Control", "private, no-store");\n    return response;\n  };
+export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
+  const startedAt = Date.now();
+  const requestId = getRequestId(request.headers.get("x-request-id"));
+  const jsonResponse = (body: unknown, status: number) => {
+    const response = NextResponse.json(body, { status });
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  };
   let payload: unknown;
   try { payload = await request.json(); } catch {
     return jsonResponse({ error: "Request body must be valid JSON." }, 400);
@@ -28,11 +37,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
   const headers = new Headers(request.headers);
   headers.delete("content-length");
   headers.delete("x-aivanta-runner");
-  headers.set("content-type", "application/json");\n  headers.set("x-request-id", requestId);
+  headers.set("content-type", "application/json");
+  headers.set("x-request-id", requestId);
   const forwarded = new NextRequest(request.url, {
     method: "POST",
     headers,
     body: JSON.stringify({ mode, input }),
   });
-  const response = mode === "dry_run" ? await safeRun(forwarded, context) : await dispatch(forwarded, context);\n  response.headers.set("x-request-id", requestId);\n  logOperationalEvent({\n    event: "live_workflow_run", requestId, route: "/api/workflows/live-run",\n    outcome: response.ok ? "success" : response.status < 500 ? "rejected" : "failure",\n    statusCode: response.status, durationMs: Math.max(0, Date.now() - startedAt),\n    ...(!response.ok && response.status >= 500 ? { errorCode: "LIVE_RUN_FAILED" } : {}),\n  }, response.ok ? console.info : console.warn);\n  return response;
+  const response = mode === "dry_run" ? await safeRun(forwarded, context) : await dispatch(forwarded, context);
+  response.headers.set("x-request-id", requestId);
+  logOperationalEvent({
+    event: "live_workflow_run", requestId, route: "/api/workflows/live-run",
+    outcome: response.ok ? "success" : response.status < 500 ? "rejected" : "failure",
+    statusCode: response.status, durationMs: Math.max(0, Date.now() - startedAt),
+    ...(!response.ok && response.status >= 500 ? { errorCode: "LIVE_RUN_FAILED" } : {}),
+  }, response.ok ? console.info : console.warn);
+  return response;
 }
