@@ -41,3 +41,18 @@ test("application pages do not reference the retired Aivanta logo asset", async 
   }
   assert.deepEqual(matches, [], "Replace retired Aivanta logo references with the Rexnora brand assets.");
 });
+
+
+test("public homepage sells the automation outcome, not internal brand guidelines", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.ok(page.includes("Let your workflow do the busywork."));
+  assert.ok(page.includes("New enquiry arrives"));
+  assert.ok(page.includes("AI organizes the details"));
+  assert.ok(page.includes("Your team gets the next step"));
+  assert.ok(page.includes("The outcome is recorded"));
+  assert.ok(page.includes("You stay in control."));
+  assert.ok(!page.includes("Brand Colour System"));
+  assert.ok(!page.includes("Typography"));
+  assert.ok(!page.includes("Brand Values"));
+  assert.ok(!page.includes("Obsidian"));
+});
