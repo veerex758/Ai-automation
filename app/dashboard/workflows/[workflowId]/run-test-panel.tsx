@@ -23,7 +23,7 @@ type RunHistoryItem = {
   steps: Array<{ id: string; status: string; title: string; position: number }>;
 };
 
-export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, isWebhookTrigger = false, isRegistryWorkflow = false }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; isWebhookTrigger?: boolean; isRegistryWorkflow?: boolean }) {
+export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowStatus, isWebhookTrigger = false }: { workflowId: string; hasUnsavedChanges: boolean; workflowStatus: string; isWebhookTrigger?: boolean }) {
   const [input, setInput] = useState(`{
   "status": "ready",
   "order": { "total": 125 }
@@ -74,10 +74,10 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
     setError("");
     setResult(null);
     try {
-      const response = await fetch(isRegistryWorkflow ? `/api/workflows/${workflowId}/registry-run` : `/api/workflows/${workflowId}/runs`, {
+      const response = await fetch(`/api/workflows/${workflowId}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isRegistryWorkflow ? { dryRun: true, input: parsed } : { mode: "dry_run", input: parsed }),
+        body: JSON.stringify({ mode: "dry_run", input: parsed }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not test this workflow.");
