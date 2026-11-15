@@ -553,7 +553,7 @@ export default function WorkflowBuilderPage() {
               {selectedNode.settings.operator !== "is_set" && <>
                 <label htmlFor="condition-value">{isCommentToDm ? "Keyword to match" : isLeadFollowUp ? "Status to match" : isSupportTriage ? "Urgency to match" : isContentApproval ? "Approval status to match" : "Expected value"}</label><input id="condition-value" maxLength={240} value={selectedNode.settings.value ?? ""} onChange={(event) => updateSetting("value", event.target.value)} placeholder={isCommentToDm ? "guide" : isLeadFollowUp ? "pending" : isSupportTriage ? "urgent" : isContentApproval ? "pending" : "Value to compare against"} />
               </>}
-              <p className="config-note">Rules are stored in your draft. They will not be evaluated until execution is implemented.</p>
+              <p className="config-note">Dry-runs evaluate this condition and show the selected branch. External actions remain simulated.</p>
             </div>}
             <div className="panel-divider" />
             <section className="graph-connection-editor" aria-label="Node connections">
