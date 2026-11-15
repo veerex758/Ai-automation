@@ -55,3 +55,22 @@
 .assistant-chat-reply{margin-right:auto;background:#0a3c2f;border:1px solid rgba(194,255,211,.12)}
 .assistant-chat-user strong{color:#caff88}.assistant-chat-reply strong{color:#b8ff6c}
 .generated-node .generated-operation{font-size:8px;color:#8fb7a0;font-family:monospace}
+
+
+/* Rexnora dark-system override: replace the former green assistant palette. */
+.ai-assistant-shell{background:#0B0F14!important;color:#F8FAFC!important}
+.ai-assistant-shell .dashboard-main,.ai-assistant-shell .dashboard-content{background:#0B0F14!important;color:#F8FAFC!important}
+.ai-assistant-shell .ai-assistant-intro h1,.ai-assistant-shell .assistant-side-panel h2,.ai-assistant-shell .assistant-chat-header strong,.ai-assistant-shell .assistant-message strong,.ai-assistant-shell .generated-node strong{color:#F8FAFC!important}
+.ai-assistant-shell .ai-assistant-intro p,.ai-assistant-shell .assistant-side-panel small,.ai-assistant-shell .assistant-safety-note{color:#94A3B8!important}
+.ai-assistant-shell .assistant-symbol,.ai-assistant-shell .assistant-avatar{background:#1A1F29!important;color:#8BB8FF!important;border:1px solid #2A2F3A!important}
+.ai-assistant-shell .assistant-beta,.ai-assistant-shell .assistant-status,.ai-assistant-shell .draft-pill{background:#172846!important;color:#8BB8FF!important;border-color:#2A4772!important}
+.ai-assistant-shell .assistant-chat-panel,.ai-assistant-shell .assistant-generated,.ai-assistant-shell .assistant-side-panel{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.ai-assistant-shell .assistant-message-info,.ai-assistant-shell .assistant-chat-reply,.ai-assistant-shell .generated-node{background:#111722!important;border-color:#2A2F3A!important}
+.ai-assistant-shell .assistant-message p,.ai-assistant-shell .generated-node p,.ai-assistant-shell .generated-summary{color:#CBD5E1!important}
+.ai-assistant-shell .assistant-prompt-form,.ai-assistant-shell .assistant-prompt-form textarea{background:#0B0F14!important;border-color:#354052!important;color:#F8FAFC!important}
+.ai-assistant-shell .assistant-prompt-form label{color:#E2E8F0!important}
+.ai-assistant-shell .assistant-form-footer>span,.ai-assistant-shell .generated-title small,.ai-assistant-shell .generated-node small{color:#94A3B8!important}
+.ai-assistant-shell .assistant-form-footer button,.ai-assistant-shell .assistant-apply-button{background:#F8FAFC!important;color:#0B0F14!important}
+.ai-assistant-shell .assistant-side-panel>div:not(.assistant-tip){border-color:#2A2F3A!important}
+.ai-assistant-shell .assistant-side-panel>div>span,.ai-assistant-shell .assistant-tip{background:#111722!important;border-color:#2A2F3A!important;color:#8BB8FF!important}
+.ai-assistant-shell .assistant-tip p{color:#CBD5E1!important}
