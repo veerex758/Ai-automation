@@ -60,6 +60,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "Provide dryRun as a boolean." }, { status: 400 });
     }
     const dryRun = body.dryRun;
+    if (!dryRun) return NextResponse.json({ error: "This endpoint is safe-test only. Use durable dispatch for approved live execution." }, { status: 400 });
     const input = body.input === undefined ? {} : body.input;
     if (!isRecord(input)) return NextResponse.json({ error: "Dry-run input must be a JSON object." }, { status: 400 });
     if (Buffer.byteLength(JSON.stringify(input), "utf8") > 10 * 1024) return NextResponse.json({ error: "Dry-run input must be 10 KB or smaller." }, { status: 413 });
