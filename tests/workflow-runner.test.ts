@@ -167,7 +167,7 @@ test("registry workflow dry-run evaluates IF and simulates only the selected bra
   ];
   const validated = validateRegisteredSteps(raw);
   assert.ok(validated.steps);
-  const result = await executeRegisteredWorkflow({ steps: validated.steps, context, dryRun: true });
+  const result = await executeRegisteredWorkflow({\n    steps: validated.steps, context, dryRun: true,\n    initialOutputs: { manual: { started: true, payload: { status: "approved" } } },\n    completedStepIds: ["manual"],\n  });
   assert.equal(result.status, "succeeded");
   assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated", "simulated", "skipped"]);
   assert.deepEqual(result.outputs.condition, { matched: true, route: "true" });
