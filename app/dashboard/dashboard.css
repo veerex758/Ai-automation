@@ -492,3 +492,52 @@
   .app-shell .side-nav,.app-shell .side-nav.dashboard-nav{gap:4px!important}
   .app-shell .side-link,.app-shell .side-link.selected,.app-shell .side-link:not(.selected){min-height:34px!important;padding:6px 7px!important;font-size:10px!important}
 }
+
+
+/* Final overview contrast pass: template chooser must use the same dark surface as the workspace. */
+.dashboard-overview-page .quick-start-section{
+  background:#111722!important;
+  border-color:#2A2F3A!important;
+  color:#F8FAFC!important;
+  box-shadow:0 18px 48px rgba(0,0,0,.22)!important;
+}
+.dashboard-overview-page .quick-start-heading h2{color:#F8FAFC!important}
+.dashboard-overview-page .quick-start-heading p,
+.dashboard-overview-page .quick-start-heading .dash-eyebrow{color:#94A3B8!important}
+.dashboard-overview-page .template-count{
+  background:#1A1F29!important;
+  border-color:#2A2F3A!important;
+  color:#CBD5E1!important;
+}
+.dashboard-overview-page .quick-template-card{
+  background:#1A1F29!important;
+  border-color:#2A2F3A!important;
+  color:#F8FAFC!important;
+}
+.dashboard-overview-page .quick-template-card h3{color:#F8FAFC!important}
+.dashboard-overview-page .quick-template-card p,
+.dashboard-overview-page .quick-template-meta{color:#94A3B8!important}
+.dashboard-overview-page .quick-template-card>button{
+  background:#111722!important;
+  border-color:#354052!important;
+  color:#F8FAFC!important;
+}
+.dashboard-overview-page .quick-template-card>button:hover{
+  background:#172846!important;
+  border-color:#3B82F6!important;
+}
+.dashboard-overview-page .template-note{
+  background:#0B0F14!important;
+  border-color:#2A2F3A!important;
+  color:#94A3B8!important;
+}
+
+/* Mobile navigation grows with its contents so Settings is visible without a nested scroll area. */
+@media(max-width:720px){
+  .app-shell .side-nav,.app-shell .side-nav.dashboard-nav{
+    max-height:none!important;
+    height:auto!important;
+    overflow:visible!important;
+    grid-auto-rows:min-content!important;
+  }
+}
