@@ -141,10 +141,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         return NextResponse.json({ error: "Run a successful test of this exact saved workflow version before activating it." }, { status: 409 });
       }
       const { data: testedSteps, error: testedStepsError } = await auth.supabase.from("workflow_run_steps")
-        .select("run_id,step_id,title,status").in("run_id", testedRuns.map((run) => run.id));
+        .select("run_id,step_id,title,status,result").in("run_id", testedRuns.map((run) => run.id));
       if (testedStepsError) throw testedStepsError;
       const hasRegistryTest = testedRuns.some((run) => steps.every((step) => (testedSteps ?? []).some((row) =>
         row.run_id === run.id && row.step_id === step.id && row.title === step.nodeId + "." + step.operationId &&
+        row.result && typeof row.result === "object" && !Array.isArray(row.result) && (row.result as Record<string, unknown>).engine === "registry-v1" &&
         (row.status === "simulated" || row.status === "skipped")
       )));
       if (!hasRegistryTest) {
