@@ -619,3 +619,15 @@
  .app-shell .side-link.selected{background:#172846!important;border-color:#3B82F6!important;color:#F8FAFC!important}
  .app-shell .side-link .side-icon{flex:0 0 auto!important;width:auto!important;font-size:12px!important}
 }
+
+
+/* Remove the last legacy lime indicators from Rexnora dashboard navigation and status accents. */
+.app-shell .side-link.selected{background:rgba(59,130,246,.16)!important;border-left:3px solid #3B82F6!important;color:#F8FAFC!important;box-shadow:none!important}
+.app-shell .side-link:focus-visible{outline:2px solid #3B82F6!important}
+.app-shell .dash-eyebrow .pulse,.app-shell .pulse{background:#3B82F6!important;box-shadow:0 0 0 4px rgba(59,130,246,.16)!important}
+.app-shell .welcome-row h1 span,.app-shell .insight-heading>span{color:#8BB8FF!important}
+.app-shell .workspace-avatar{background:#172846!important;color:#8BB8FF!important}
+.app-shell .help-card,.app-shell .help-icon{background:#111722!important;border-color:#2A2F3A!important;color:#8BB8FF!important}
+.app-shell .help-card p,.app-shell .help-card a{color:#94A3B8!important}
+.app-shell .stat-symbol,.app-shell .quick-template-icon.lime{background:#172846!important;color:#8BB8FF!important}
+.app-shell .dot-lime,.app-shell .dot-green{background:#3B82F6!important}
