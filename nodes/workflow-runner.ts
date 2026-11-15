@@ -124,9 +124,10 @@ export async function executeRegisteredWorkflow(args: {
         const position = ++checkpointPosition;
         await args.onStepStart?.(checkpointStep, position, validatedInput);
         if (args.dryRun) {
-          // Switch / Route is deterministic and side-effect-free, so evaluate it
-          // during validation to predict branch selection without running providers.
-          if (step.nodeId === "switch" && step.operationId === "select_route") {
+          // IF and Switch are deterministic, side-effect-free operations. Evaluate
+          // them during validation so dry-runs prove the selected branch without
+          // invoking external providers.
+          if ((step.nodeId === "if" && step.operationId === "evaluate") || (step.nodeId === "switch" && step.operationId === "select_route")) {
             const output = operation.outputSchema.parse(await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput));
             await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated", output });
             return { simulated: true as const, output };
