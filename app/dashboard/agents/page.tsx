@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import "./agents.css";
 import DashboardSidebar from "../dashboard-sidebar";
 
