@@ -29,3 +29,10 @@ test("Graph Builder uses generated graph nodes and edges instead of replacing th
   assert.match(builder, /payload\.definition as Definition/);
   assert.match(builder, /edges: steps\.slice\(1\)\.map/);
 });
+
+
+test("condition guidance accurately describes evaluation during test and live runs", () => {
+  assert.doesNotMatch(builder, /Rules are stored in your draft\. They will not be evaluated until execution is implemented\./);
+  assert.match(builder, /Conditions evaluate against previous-step outputs during tests and runs/);
+  assert.match(builder, /Test both true and false paths before activation/);
+});
