@@ -30,7 +30,8 @@ test("Rexnora homepage implements every approved reference section", async () =>
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const theme = await readFile(new URL("../app/aivanta-theme.css", import.meta.url), "utf8");
   const logo = await readFile(new URL("../public/rexnora-mark.svg", import.meta.url), "utf8");
-  for (const text of ["Intelligence in", "motion.", "Describe it. Build it. Run it.", "Brand Colour System", "Typography", "Brand Values", "Build. Automate.", "Scale.", "Workflows", "AI-Powered", "Marketplace", "Developer", "Enterprise Ready"]) assert.ok(page.includes(text), "homepage missing " + text);
+  for (const text of ["Intelligence in", "motion.", "Describe it. Build it. Run it.", "Build. Automate.", "Scale.", "Workflows", "Marketplace", "Developer", "Enterprise Ready", "Let your workflow do the busywork."]) assert.ok(page.includes(text), "homepage missing " + text);
+  for (const internalGuideline of ["Brand Colour System", "Typography", "Brand Values", "Obsidian"]) assert.ok(!page.includes(internalGuideline), "homepage should not expose internal brand guidelines: " + internalGuideline);
   for (const hex of ["#0B0F14", "#1A1F29", "#2A2F3A", "#3B82F6", "#8B5CF6", "#F8FAFC", "#94A3B8"]) assert.ok(page.includes(hex) || theme.includes(hex), "palette missing " + hex);
   assert.match(page, /Inter/);
   assert.match(page, /Geist/);
