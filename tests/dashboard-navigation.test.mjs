@@ -36,3 +36,49 @@ test("section pages retain consistent access to builder and AI assistant", () =>
   assert.match(sections, /\["AI Assistant","\/dashboard\/ai-assistant"/);
   assert.match(sections, /\["Integrations","\/dashboard\/connections"/);
 });
+
+
+const sidebarPath = fileURLToPath(new URL("../app/dashboard/dashboard-sidebar.tsx", import.meta.url));
+const agentsPath = fileURLToPath(new URL("../app/dashboard/agents/page.tsx", import.meta.url));
+const assistantPath = fileURLToPath(new URL("../app/dashboard/ai-assistant/page.tsx", import.meta.url));
+const connectionsPath = fileURLToPath(new URL("../app/dashboard/connections/page.tsx", import.meta.url));
+const billingPath = fileURLToPath(new URL("../app/dashboard/billing/page.tsx", import.meta.url));
+const layoutPath = fileURLToPath(new URL("../app/dashboard/layout.tsx", import.meta.url));
+const [sidebar, agents, assistant, connections, billing, layout] = await Promise.all([
+  readFile(sidebarPath, "utf8"), readFile(agentsPath, "utf8"),
+  readFile(assistantPath, "utf8"), readFile(connectionsPath, "utf8"),
+  readFile(billingPath, "utf8"), readFile(layoutPath, "utf8"),
+]);
+
+test("all dashboard routes share the same complete workspace navigation", () => {
+  for (const href of [
+    "/dashboard", "/dashboard#workflows", "/dashboard/activity",
+    "/dashboard/builder", "/dashboard/ai-assistant", "/dashboard/agents",
+    "/dashboard/templates", "/dashboard/connections", "/dashboard/analytics",
+    "/dashboard/billing", "/dashboard/settings",
+  ]) assert.ok(sidebar.includes(href), `shared navigation missing ${href}`);
+  for (const [name, source] of [["agents", agents], ["assistant", assistant], ["connections", connections], ["billing", billing]]) {
+    assert.match(source, /<DashboardSidebar activePage=/, `${name} does not use shared navigation`);
+  }
+  assert.match(layout, /import "\.\/dashboard\.css"/);
+  assert.match(assistant, /activePage="assistant"/);
+  assert.match(agents, /activePage="agents"/);
+  assert.match(connections, /activePage="connections"/);
+  assert.match(billing, /activePage="billing"/);
+});
+
+test("customer-facing integration and billing pages use Rexnora naming", () => {
+  assert.doesNotMatch(connections, /Aivanta|AIVANTA/);
+  assert.doesNotMatch(billing, /Aivanta|AIVANTA/);
+  assert.match(connections, /REXNORA \/ INTEGRATIONS/);
+  assert.match(billing, /REXNORA \/ WORKSPACE/);
+});
+
+test("Supabase secret fallback ignores empty placeholder variables", async () => {
+  const googleConnections = await readFile(fileURLToPath(new URL("../app/api/integrations/google/connections/route.ts", import.meta.url)), "utf8");
+  const adminClient = await readFile(fileURLToPath(new URL("../lib/supabase/admin.ts", import.meta.url)), "utf8");
+  const workspaceIntegrations = await readFile(fileURLToPath(new URL("../app/api/integrations/workspace/route.ts", import.meta.url)), "utf8");
+  assert.match(googleConnections, /SUPABASE_SERVICE_ROLE_KEY \|\| process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(adminClient, /SUPABASE_SERVICE_ROLE_KEY\s*\|\| process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(workspaceIntegrations, /SUPABASE_SECRET_KEY \|\| process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
+});
