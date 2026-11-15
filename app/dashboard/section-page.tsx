@@ -5,9 +5,6 @@ import RegistryIntegrationsDirectory from "./registry-integrations-directory";
 import DashboardSidebar from "./dashboard-sidebar";
 
 type Section = "integrations" | "templates" | "analytics" | "activity" | "billing" | "settings";
-const navigation = [
-  ["Dashboard","/dashboard","▦"],["Workflows","/dashboard#workflows","↗"],["Workflow builder","/dashboard/builder","＋"],["AI Assistant","/dashboard/ai-assistant","✧"],["AI Agents","/dashboard/agents","✺"],["Integrations","/dashboard/connections","⌘"],["Templates","/dashboard/templates","▧"],["Analytics","/dashboard/analytics","▥"],["Activity logs","/dashboard/activity","◷"],["Billing","/dashboard/billing","◇"],["Settings","/dashboard/settings","⚙"],
-] as const;
 const templates = [
   {name:"Lead Capture & Welcome Email",category:"Lead capture",description:"Start from a website form, record lead details, and prepare a welcome message."},
   {name:"Support Ticket Triage",category:"Customer support",description:"Check incoming requests and prepare a support follow-up task."},
