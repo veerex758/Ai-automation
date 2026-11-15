@@ -330,7 +330,6 @@ export default function ConnectionsPage() {
 
   return (
     <main className="app-shell connections-shell"><DashboardSidebar activePage="connections" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Integrations</strong></div></header><div className="dashboard-content"><div className="connections-page">
-      <div className="connections-top"><Link href="/dashboard">← Dashboard</Link><span>REXNORA / INTEGRATIONS</span></div>
       <section className="connections-hero">
         <div className="connections-eyebrow">YOUR WORKSPACE, CONNECTED</div>
         <h1>Connect your tools.</h1>
