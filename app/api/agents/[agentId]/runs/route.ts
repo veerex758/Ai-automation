@@ -128,8 +128,8 @@ export async function POST(request: NextRequest, context: Context) {
       const model = /^[a-zA-Z0-9._-]{1,120}$/.test(agent.model_name) ? agent.model_name : "gemini-2.5-flash";
       const contents: Array<Record<string, unknown>> = [{ role: "user", parts: [{ text: input }] }];
       for (let round = 0; round < 4; round++) {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+          method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] }, contents,
             ...(toolDefinitions.length ? { tools: [{ functionDeclarations: toolDefinitions.map((tool) => ({ name: tool.name, description: tool.description, parameters: geminiSchema(tool.parameters) })) }] } : {}),
