@@ -29,3 +29,20 @@ test("mobile navigation does not trap lower links such as Settings in a nested s
   assert.match(css, /\.app-shell \.side-nav,[\s\S]*?max-height:none!important;[\s\S]*?overflow:visible!important/s);
   assert.match(css, /\{ label: "Settings", icon: "⚙", href: "\/dashboard\/settings" \}/);
 });
+
+
+test("AI assistant, agents, integrations, billing and run details use dark Rexnora surfaces", async () => {
+  const paths = [
+    "../app/dashboard/ai-assistant/assistant.css",
+    "../app/dashboard/agents/agents.css",
+    "../app/dashboard/connections/connections.css",
+    "../app/dashboard/billing/billing.css",
+    "../app/dashboard/activity/[runId]/run-detail.css",
+  ];
+  const sources = await Promise.all(paths.map(path => readFile(fileURLToPath(new URL(path, import.meta.url)), "utf8")));
+  assert.match(sources[0], /\.ai-assistant-shell\{background:#0B0F14!important/);
+  assert.match(sources[1], /\.agents-shell \.agent-editor input[^}]*background:#111722!important/s);
+  assert.match(sources[2], /\.connections-shell \.connection-card[^}]*background:#1A1F29!important/s);
+  assert.match(sources[3], /\.billing-app-shell \.billing-panel[^}]*background:#1A1F29!important/s);
+  assert.match(sources[4], /\.run-detail-app-shell \.run-summary-card[^}]*background:#1A1F29!important/s);
+});
