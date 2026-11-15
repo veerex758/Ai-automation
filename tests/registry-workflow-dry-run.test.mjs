@@ -8,24 +8,24 @@ const panel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-
 const runner = readFileSync(new URL("../nodes/workflow-runner.ts", import.meta.url), "utf8");
 
 test("registry dry-run validates saved steps and evaluates them with bounded sample trigger input", () => {
-  assert.match(registryRun, /validateRegisteredSteps\(definition\.steps\)/);
-  assert.match(registryRun, /Dry-run input must be a JSON object/);
-  assert.match(registryRun, /safe-test only\. Use durable dispatch for approved live execution/);
-  assert.match(registryRun, /initialOutputs: \\{ \\[triggerStep\\.id\\]: triggerOutput \\}/);
-  assert.match(registryRun, /triggerStep\.nodeId === "webhooks"/);
-  assert.match(registryRun, /completedStepIds: \[triggerStep\.id\]/);
-  assert.match(registryRun, /conditionMatched: output\.matched/);
-  assert.match(runner, /args\.dryRun \? "simulated" : "succeeded"/);
+  assert.ok(registryRun.includes("validateRegisteredSteps(definition.steps)"));
+  assert.ok(registryRun.includes("Dry-run input must be a JSON object"));
+  assert.ok(registryRun.includes("safe-test only. Use durable dispatch for approved live execution"));
+  assert.ok(registryRun.includes("initialOutputs: { [triggerStep.id]: triggerOutput }"));
+  assert.ok(registryRun.includes('triggerStep.nodeId === "webhooks"'));
+  assert.ok(registryRun.includes("completedStepIds: [triggerStep.id]"));
+  assert.ok(registryRun.includes("conditionMatched: output.matched"));
+  assert.ok(runner.includes('args.dryRun ? "simulated" : "succeeded"'));
 });
 
 test("builder safe test uses the registry runner for registry-backed graphs", () => {
-  assert.match(panel, /isRegistryWorkflow \? `\/api\/workflows\/\$\{workflowId\}\/registry-run`/);
-  assert.match(panel, /JSON\.stringify\(isRegistryWorkflow \? \{ dryRun: true, input: parsed \}/);
+  assert.ok(panel.includes("isRegistryWorkflow ? `/api/workflows/${workflowId}/registry-run`"));
+  assert.ok(panel.includes("JSON.stringify(isRegistryWorkflow ? { dryRun: true, input: parsed }"));
 });
 
 test("activation requires successful dry-run evidence for every registered step in the exact version", () => {
-  assert.match(activation, /hasRegistryTest/);
-  assert.match(activation, /workflow_run_steps/);
-  assert.match(activation, /row\.title === step\.nodeId \+ "\." \+ step\.operationId/);
-  assert.match(activation, /row\.status === "simulated" \|\| row\.status === "skipped"/);
+  assert.ok(activation.includes("hasRegistryTest"));
+  assert.ok(activation.includes("workflow_run_steps"));
+  assert.ok(activation.includes('row.title === step.nodeId + "." + step.operationId'));
+  assert.ok(activation.includes('row.status === "simulated" || row.status === "skipped"'));
 });
