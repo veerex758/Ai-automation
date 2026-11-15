@@ -98,6 +98,7 @@ test("builder, workflow editor, activity list and run detail use shared navigati
   assert.doesNotMatch(sources[3], /Aivanta workspace/);
 });
 
-test("mobile navigation is not height-clipped on the shared sidebar", () => {
-  assert.match(css, /\.app-shell \.side-nav,[\s\S]*?max-height:none!important;[\s\S]*?overflow:visible!important/s);
+test("mobile navigation is not height-clipped on the shared sidebar", async () => {
+  const dashboardCss = await readFile(fileURLToPath(new URL("../app/dashboard/dashboard.css", import.meta.url)), "utf8");
+  assert.match(dashboardCss, /\\.app-shell \\.side-nav,[\\s\\S]*?max-height:none!important;[\\s\\S]*?overflow:visible!important/s);
 });
