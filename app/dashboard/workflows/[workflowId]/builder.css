@@ -252,3 +252,19 @@
  .builder-shell>.sidebar .side-link{display:inline-flex!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;min-height:34px!important;padding:7px 10px!important;background:#111722!important;border:1px solid #2A2F3A!important;color:#CBD5E1!important;font-size:10px!important;white-space:nowrap!important}
  .builder-shell>.sidebar .side-link.selected{background:#172846!important;border-color:#3B82F6!important;color:#F8FAFC!important}
 }
+
+
+/* Saved workflow editor: finish dark treatment for empty states, footers and step types. */
+.workflow-builder-main .canvas-footnote,.workflow-builder-main .builder-empty{background:#111722!important;border-color:#354052!important;color:#CBD5E1!important}
+.workflow-builder-main .builder-empty strong,.workflow-builder-main .builder-empty h2{color:#F8FAFC!important}
+.workflow-builder-main .builder-empty p,.workflow-builder-main .canvas-footnote{color:#94A3B8!important}
+.workflow-builder-main .node-icon{background:#172846!important;color:#8BB8FF!important}
+.workflow-builder-main .node-condition .node-icon{background:#241A3D!important;color:#C4A8FF!important}
+.workflow-builder-main .node-copy strong,.workflow-builder-main .panel-add>button strong{color:#F8FAFC!important}
+.workflow-builder-main .node-copy small,.workflow-builder-main .node-copy>span,.workflow-builder-main .panel-add>button small{color:#94A3B8!important}
+.workflow-builder-main .selected-type,.workflow-builder-main .panel-add>button{background:#111722!important;border-color:#354052!important;color:#E2E8F0!important}
+.workflow-builder-main .selected-type>span,.workflow-builder-main .add-icon{background:#172846!important;color:#8BB8FF!important}
+.workflow-builder-main .type-condition>span,.workflow-builder-main .condition-add{background:#241A3D!important;color:#C4A8FF!important}
+.workflow-builder-main .remove-step{background:#2A1A22!important;border-color:#6B3038!important;color:#FCA5A5!important}
+.workflow-builder-main .builder-notice,.workflow-builder-main .config-note{background:#172846!important;border-color:#2A4772!important;color:#CBD5E1!important}
+.workflow-builder-main .builder-error-banner{background:#381F20!important;border-color:#6B3939!important;color:#FECACA!important}
