@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import RegistryIntegrationsDirectory from "./registry-integrations-directory";
-import "./dashboard.css";
+import DashboardSidebar from "./dashboard-sidebar";
 
 type Section = "integrations" | "templates" | "analytics" | "activity" | "billing" | "settings";
 const navigation = [
@@ -82,12 +82,7 @@ export default async function DashboardSectionPage({section}:{section:Section}) 
   // Keep the generic label if workspace metadata is temporarily unavailable.
  }
  return <main className="app-shell">
-  <aside className="sidebar">
-   <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
-   <div className="workspace-switch"><span className="workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></div>
-   <div className="sidebar-label">WORKSPACE</div><nav className="side-nav" aria-label="Workspace navigation">{navigation.map(([label,href,icon])=><Link key={label} href={href} className={(label==="Integrations"&&section==="integrations")||(label==="Templates"&&section==="templates")||(label==="Analytics"&&section==="analytics")||(label==="Activity logs"&&section==="activity")||(label==="Billing"&&section==="billing")||(label==="Settings"&&section==="settings")?"side-link selected":"side-link"}><span className="side-icon">{icon}</span>{label}</Link>)}</nav>
-   <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✺</span><strong>Build with confidence</strong><p>Review every step before connecting live services.</p><Link href="/dashboard/builder">Open builder ↗</Link></div></div>
-  </aside>
+  <DashboardSidebar activePage={section} workspaceName={workspaceName} />
   <section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>{meta.title}</strong></div><div className="topbar-right"><span className="environment-badge"><i/> Staging / Preview</span><Link className="subtle-button" href="/dashboard">Dashboard ↗</Link></div></header>
    <div className="dashboard-content section-page-content"><div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse"/> REXNORA WORKSPACE</div><h1>{meta.title}</h1><p>{meta.description}</p></div>{section==="templates"?<Link className="create-button" href="/dashboard#quick-start-title">Browse templates ↗</Link>:section==="integrations"?<Link className="create-button" href="/dashboard/settings">Connection settings ↗</Link>:null}</div>
    {section==="integrations"&&<><div className="section-title-row"><div><h2>Available integrations</h2><p>The full provider inventory is listed below. Only providers with registered, validated operations are selectable in workflow drafts; live runs remain gated.</p></div></div><RegistryIntegrationsDirectory /></>}
