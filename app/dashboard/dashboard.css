@@ -429,48 +429,48 @@
 /* Unified Rexnora dark workspace across overview and every dashboard section. */
 .app-shell{background:#0B0F14!important;color:#F8FAFC!important}
 .app-shell .dashboard-main,.app-shell .dashboard-content,.app-shell .section-page-content{background:#0B0F14!important;color:#F8FAFC!important}
-.app-shell:not(.dashboard-overview-page) .sidebar{background:#080B10!important;border-color:#2A2F3A!important}
-.app-shell:not(.dashboard-overview-page) .dashboard-topbar{background:#0B0F14!important;border-color:#2A2F3A!important}
-.app-shell:not(.dashboard-overview-page) .breadcrumbs{color:#94A3B8!important}
-.app-shell:not(.dashboard-overview-page) .breadcrumbs strong{color:#F8FAFC!important}
-.app-shell:not(.dashboard-overview-page) .workspace-switch,
-.app-shell:not(.dashboard-overview-page) .environment-badge,
-.app-shell:not(.dashboard-overview-page) .icon-button{background:#111722!important;border-color:#2A2F3A!important;color:#CBD5E1!important}
-.app-shell:not(.dashboard-overview-page) .workspace-copy strong,
-.app-shell:not(.dashboard-overview-page) .welcome-row h1,
-.app-shell:not(.dashboard-overview-page) .section-title-row h2,
-.app-shell:not(.dashboard-overview-page) .section-info-card h3,
-.app-shell:not(.dashboard-overview-page) .section-empty-panel h2{color:#F8FAFC!important}
-.app-shell:not(.dashboard-overview-page) .workspace-copy small,
-.app-shell:not(.dashboard-overview-page) .welcome-row p,
-.app-shell:not(.dashboard-overview-page) .section-title-row p,
-.app-shell:not(.dashboard-overview-page) .section-info-card p,
-.app-shell:not(.dashboard-overview-page) .section-empty-panel p{color:#94A3B8!important}
-.app-shell:not(.dashboard-overview-page) .side-link{color:#CBD5E1!important}
-.app-shell:not(.dashboard-overview-page) .side-link:hover,
-.app-shell:not(.dashboard-overview-page) .side-link.selected{background:rgba(59,130,246,.16)!important;color:#F8FAFC!important}
-.app-shell:not(.dashboard-overview-page) .help-card,
-.app-shell:not(.dashboard-overview-page) .section-info-card,
-.app-shell:not(.dashboard-overview-page) .section-empty-panel,
-.app-shell:not(.dashboard-overview-page) .analytics-run-card,
-.app-shell:not(.dashboard-overview-page) .registry-node-card,
-.app-shell:not(.dashboard-overview-page) .registry-state-panel{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:0 14px 38px rgba(0,0,0,.22)!important}
-.app-shell:not(.dashboard-overview-page) .section-card-link,
-.app-shell:not(.dashboard-overview-page) .analytics-run-meta a{color:#8BB8FF!important}
-.app-shell:not(.dashboard-overview-page) .registry-node-name h3,
-.app-shell:not(.dashboard-overview-page) .registry-operation strong{color:#F8FAFC!important}
-.app-shell:not(.dashboard-overview-page) .registry-node-summary,
-.app-shell:not(.dashboard-overview-page) .registry-node-name>span,
-.app-shell:not(.dashboard-overview-page) .registry-directory-note,
-.app-shell:not(.dashboard-overview-page) .registry-operation p{color:#94A3B8!important}
-.app-shell:not(.dashboard-overview-page) .registry-operation,
-.app-shell:not(.dashboard-overview-page) .registry-operation-schema pre,
-.app-shell:not(.dashboard-overview-page) .registry-operation-preview span{background:#111722!important;border-color:#2A2F3A!important;color:#CBD5E1!important}
-.app-shell:not(.dashboard-overview-page) .registry-expand-button,
-.app-shell:not(.dashboard-overview-page) .registry-operation-schema{border-color:#2A2F3A!important;color:#8BB8FF!important}
-.app-shell:not(.dashboard-overview-page) .create-button{background:#F8FAFC!important;border-color:#F8FAFC!important;color:#0B0F14!important}
-.app-shell:not(.dashboard-overview-page) .subtle-button{background:#111722!important;border-color:#2A2F3A!important;color:#E2E8F0!important}
-.app-shell:not(.dashboard-overview-page) .session-signout{background:#111722!important;color:#F8FAFC!important}
+.app-shell .sidebar{background:#080B10!important;border-color:#2A2F3A!important}
+.app-shell .dashboard-topbar{background:#0B0F14!important;border-color:#2A2F3A!important}
+.app-shell .breadcrumbs{color:#94A3B8!important}
+.app-shell .breadcrumbs strong{color:#F8FAFC!important}
+.app-shell .workspace-switch,
+.app-shell .environment-badge,
+.app-shell .icon-button{background:#111722!important;border-color:#2A2F3A!important;color:#CBD5E1!important}
+.app-shell .workspace-copy strong,
+.app-shell .welcome-row h1,
+.app-shell .section-title-row h2,
+.app-shell .section-info-card h3,
+.app-shell .section-empty-panel h2{color:#F8FAFC!important}
+.app-shell .workspace-copy small,
+.app-shell .welcome-row p,
+.app-shell .section-title-row p,
+.app-shell .section-info-card p,
+.app-shell .section-empty-panel p{color:#94A3B8!important}
+.app-shell .side-link{color:#CBD5E1!important}
+.app-shell .side-link:hover,
+.app-shell .side-link.selected{background:rgba(59,130,246,.16)!important;color:#F8FAFC!important}
+.app-shell .help-card,
+.app-shell .section-info-card,
+.app-shell .section-empty-panel,
+.app-shell .analytics-run-card,
+.app-shell .registry-node-card,
+.app-shell .registry-state-panel{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:0 14px 38px rgba(0,0,0,.22)!important}
+.app-shell .section-card-link,
+.app-shell .analytics-run-meta a{color:#8BB8FF!important}
+.app-shell .registry-node-name h3,
+.app-shell .registry-operation strong{color:#F8FAFC!important}
+.app-shell .registry-node-summary,
+.app-shell .registry-node-name>span,
+.app-shell .registry-directory-note,
+.app-shell .registry-operation p{color:#94A3B8!important}
+.app-shell .registry-operation,
+.app-shell .registry-operation-schema pre,
+.app-shell .registry-operation-preview span{background:#111722!important;border-color:#2A2F3A!important;color:#CBD5E1!important}
+.app-shell .registry-expand-button,
+.app-shell .registry-operation-schema{border-color:#2A2F3A!important;color:#8BB8FF!important}
+.app-shell .create-button{background:#F8FAFC!important;border-color:#F8FAFC!important;color:#0B0F14!important}
+.app-shell .subtle-button{background:#111722!important;border-color:#2A2F3A!important;color:#E2E8F0!important}
+.app-shell .session-signout{background:#111722!important;color:#F8FAFC!important}
 
 /* Mobile: brand sits on its own row; every destination gets a clean, non-overlapping grid. */
 @media(max-width:720px){
@@ -544,15 +544,15 @@
 
 
 /* Settings cards were a separate component family and need the same dark surfaces. */
-.app-shell:not(.dashboard-overview-page) .settings-section-card{
+.app-shell .settings-section-card{
   background:#1A1F29!important;
   border-color:#2A2F3A!important;
   color:#F8FAFC!important;
   box-shadow:0 14px 38px rgba(0,0,0,.2)!important;
 }
-.app-shell:not(.dashboard-overview-page) .settings-section-card h3{color:#F8FAFC!important}
-.app-shell:not(.dashboard-overview-page) .settings-section-card p{color:#94A3B8!important}
-.app-shell:not(.dashboard-overview-page) .settings-section-icon{
+.app-shell .settings-section-card h3{color:#F8FAFC!important}
+.app-shell .settings-section-card p{color:#94A3B8!important}
+.app-shell .settings-section-icon{
   background:#172846!important;
   border-color:#2A4772!important;
   color:#8BB8FF!important;
@@ -586,14 +586,14 @@
 
 /* Shared section-page navigation: full-width, two-column and never height-clipped on mobile. */
 @media(max-width:720px){
-  .app-shell:not(.dashboard-overview-page){display:flex!important;flex-direction:column!important;width:100%!important;min-width:0!important;overflow-x:clip!important}
-  .app-shell:not(.dashboard-overview-page) .sidebar{box-sizing:border-box!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;gap:10px!important;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;padding:10px 14px!important;border-right:0!important;border-bottom:1px solid #2A2F3A!important;overflow:visible!important}
-  .app-shell:not(.dashboard-overview-page) .dash-brand{display:flex!important;flex:0 0 auto!important;padding:0 4px 8px!important}
-  .app-shell:not(.dashboard-overview-page) .workspace-switch,.app-shell:not(.dashboard-overview-page) .sidebar-label,.app-shell:not(.dashboard-overview-page) .sidebar-bottom{display:none!important}
+  .app-shell{display:flex!important;flex-direction:column!important;width:100%!important;min-width:0!important;overflow-x:clip!important}
+  .app-shell .sidebar{box-sizing:border-box!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;gap:10px!important;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;padding:10px 14px!important;border-right:0!important;border-bottom:1px solid #2A2F3A!important;overflow:visible!important}
+  .app-shell .dash-brand{display:flex!important;flex:0 0 auto!important;padding:0 4px 8px!important}
+  .app-shell .workspace-switch,.app-shell .sidebar-label,.app-shell .sidebar-bottom{display:none!important}
   .app-shell .side-nav,.app-shell .side-nav.dashboard-nav{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px 8px!important;width:100%!important;min-width:0!important;max-height:none!important;overflow:visible!important}
-  .app-shell:not(.dashboard-overview-page) .dashboard-nav-group{display:contents!important}
-  .app-shell:not(.dashboard-overview-page) .side-link{box-sizing:border-box!important;display:flex!important;width:100%!important;min-width:0!important;min-height:36px!important;justify-content:flex-start!important;gap:8px!important;padding:7px 9px!important;font-size:10px!important;white-space:nowrap!important;overflow:hidden!important}
-  .app-shell:not(.dashboard-overview-page) .dashboard-main{width:100%!important;min-width:0!important;flex:1 1 auto!important}
-  .app-shell:not(.dashboard-overview-page) .dashboard-topbar{box-sizing:border-box!important;width:100%!important;min-height:54px!important;height:auto!important;padding:9px 14px!important;flex-wrap:wrap!important;gap:8px!important}
-  .app-shell:not(.dashboard-overview-page) .dashboard-content{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important;padding:22px 14px 40px!important}
+  .app-shell .dashboard-nav-group{display:contents!important}
+  .app-shell .side-link{box-sizing:border-box!important;display:flex!important;width:100%!important;min-width:0!important;min-height:36px!important;justify-content:flex-start!important;gap:8px!important;padding:7px 9px!important;font-size:10px!important;white-space:nowrap!important;overflow:hidden!important}
+  .app-shell .dashboard-main{width:100%!important;min-width:0!important;flex:1 1 auto!important}
+  .app-shell .dashboard-topbar{box-sizing:border-box!important;width:100%!important;min-height:54px!important;height:auto!important;padding:9px 14px!important;flex-wrap:wrap!important;gap:8px!important}
+  .app-shell .dashboard-content{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important;padding:22px 14px 40px!important}
 }
