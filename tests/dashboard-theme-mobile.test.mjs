@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const css = await readFile(fileURLToPath(new URL("../app/dashboard/dashboard.css", import.meta.url)), "utf8");
+const sidebarSource = await readFile(fileURLToPath(new URL("../app/dashboard/dashboard-sidebar.tsx", import.meta.url)), "utf8");
 
 test("dashboard uses the Rexnora dark palette on overview and section routes", () => {
   assert.match(css, /\.app-shell\{[^}]*background:#0B0F14!important/s);
@@ -28,7 +29,7 @@ test("overview template chooser and its actions use dark surfaces with light tex
 
 test("mobile navigation does not trap lower links such as Settings in a nested scroll box", () => {
   assert.match(css, /\.app-shell \.side-nav,[\s\S]*?max-height:none!important;[\s\S]*?overflow:visible!important/s);
-  assert.match(css, /\{ label: "Settings", icon: "⚙", href: "\/dashboard\/settings" \}/);
+  assert.match(sidebarSource, /\{ label: "Settings", icon: "⚙", href: "\/dashboard\/settings", key: "settings" \}/);
 });
 
 
