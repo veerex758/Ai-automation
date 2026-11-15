@@ -16,3 +16,16 @@ test("mobile dashboard navigation stacks brand and provides a non-overlapping tw
   assert.match(css, /\.app-shell \.side-nav,[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)!important/s);
   assert.match(css, /\.app-shell \.side-link[^}]*white-space:nowrap!important/s);
 });
+
+
+test("overview template chooser and its actions use dark surfaces with light text", () => {
+  assert.match(css, /\.dashboard-overview-page \.quick-start-section\{[^}]*background:#111722!important/s);
+  assert.match(css, /\.dashboard-overview-page \.quick-template-card\{[^}]*background:#1A1F29!important/s);
+  assert.match(css, /\.dashboard-overview-page \.quick-template-card>button\{[^}]*background:#111722!important/s);
+  assert.match(css, /\.dashboard-overview-page \.quick-template-card h3\{color:#F8FAFC!important\}/);
+});
+
+test("mobile navigation does not trap lower links such as Settings in a nested scroll box", () => {
+  assert.match(css, /\.app-shell \.side-nav,[\s\S]*?max-height:none!important;[\s\S]*?overflow:visible!important/s);
+  assert.match(css, /\{ label: "Settings", icon: "⚙", href: "\/dashboard\/settings" \}/);
+});
