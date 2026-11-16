@@ -11,6 +11,12 @@ const secretPatterns=[
  /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/,
  /\bgh[pousr]_[A-Za-z0-9]{30,}\b/,
 ];
+const unsafeBehaviorPatterns=[
+ {id:"dynamic_code_execution",label:"No dynamic code execution or privileged runtime access",pattern:new RegExp(String.raw`\b(?:eval\s*\(|new\s+Function\s*\(|Function\s*\(|require\s*\(\s*["'](?:node:)?(?:child_process|worker_threads|vm|fs|net|tls)["'])`,"i"),detail:"Dynamic code execution or privileged runtime module access is not permitted in marketplace artifacts"},
+ {id:"credential_exfiltration",label:"No credential harvesting or exfiltration behavior",pattern:new RegExp(String.raw`(?:process\.env|document\.cookie|access[_-]?token|refresh[_-]?token)[\s\S]{0,240}(?:fetch|https?\.request|webhook|send)\s*\(`,"i"),detail:"Potential credential-to-network exfiltration pattern detected"},
+ {id:"obfuscated_payload",label:"No encoded executable payloads",pattern:new RegExp(String.raw`(?:atob\s*\(|Buffer\.from\([^)]*,\s*["']base64["']\))[\s\S]{0,160}(?:eval|Function|fetch|https?\.request)`,"i"),detail:"Encoded payload combined with execution or network behavior requires manual security investigation"},
+ {id:"destructive_operations",label:"No destructive infrastructure operations",pattern:new RegExp(String.raw`(?:rm\s+-rf|mkfs(?:\.|\s)|DROP\s+DATABASE|TRUNCATE\s+TABLE|delete\s+from\s+auth\.users)`,"i"),detail:"Potential destructive operation detected"},
+];
 function canonicalize(value:unknown):unknown{
  if(Array.isArray(value))return value.map(canonicalize);
  if(value&&typeof value==="object"){
@@ -38,6 +44,8 @@ export function verifyMarketplaceArtifact(input:unknown):MarketplaceVerification
  const definition=record?.definition,validation=validateDefinition(definition);
  checks.push({id:"workflow_schema",label:"Workflow schema and registered operations",passed:!!validation.definition,detail:validation.definition?"Workflow definition passed validation":validation.error??"Invalid workflow"});
  const secretHit=secretPatterns.some(pattern=>pattern.test(serialized));
+ const unsafeHits=unsafeBehaviorPatterns.filter(item=>item.pattern.test(serialized));
+ for(const item of unsafeBehaviorPatterns){const hit=unsafeHits.some(found=>found.id===item.id);checks.push({id:item.id,label:item.label,passed:!hit,detail:hit?item.detail:"No matching prohibited behavior pattern detected"});}
  checks.push({id:"secret_scan",label:"No embedded credentials or secret patterns",passed:!secretHit,detail:secretHit?"Potential secret detected; remove credentials before submission":"No configured secret patterns detected"});
  const workflow=definition&&typeof definition==="object"&&!Array.isArray(definition)?definition as {nodes?:unknown}:null;
  const nodes=Array.isArray(workflow?.nodes)?workflow.nodes.filter((n):n is Record<string,unknown>=>!!n&&typeof n==="object"&&!Array.isArray(n)):[];

@@ -81,6 +81,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return jsonResponse({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    const { data: marketplaceInstallation, error: marketplaceLookupError } = await supabase
+      .from("marketplace_installations").select("id").eq("workflow_id", workflowId).maybeSingle();
+    if (marketplaceLookupError) throw marketplaceLookupError;
+    if (marketplaceInstallation) return jsonResponse({
+      error: "Marketplace-installed workflows must execute through the durable worker so version approval, connection mapping and emergency revocation are enforced."
+    }, { status: 403 });
     if (workflow.status !== "active") return jsonResponse({ error: "Activate this workflow before running live actions." }, { status: 409 });
 
     const validated = validateDefinition(workflow.definition);

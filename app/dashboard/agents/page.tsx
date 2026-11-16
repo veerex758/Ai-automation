@@ -120,7 +120,7 @@ export default function AgentsPage() {
 
   return <main className="app-shell agents-shell">
     <aside className="sidebar">
-      <Link className="dash-brand" href="/"><span className="brand-mark">✳</span><span>Aivanta</span></Link>
+      <Link className="dash-brand" href="/"><span className="brand-mark">✳</span><span>REXNORA</span></Link>
       <div className="sidebar-label">WORKSPACE</div>
       <nav className="side-nav" aria-label="Workspace navigation">
         {[["Dashboard","/dashboard"],["Workflows","/dashboard/builder"],["Integrations","/dashboard/integrations"],["AI Agents","/dashboard/agents"],["AI Assistant","/dashboard/ai-assistant"]].map(([label,href]) => <Link key={label} href={href} className={label === "AI Agents" ? "side-link selected" : "side-link"}>{label}</Link>)}

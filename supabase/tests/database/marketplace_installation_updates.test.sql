@@ -1,0 +1,20 @@
+begin;
+select plan(14);
+select has_table('public','marketplace_installation_history','version history table exists');
+select has_function('public','marketplace_transition_installation_version','update and rollback transition exists');
+select has_function('public','marketplace_assert_installation_runtime','runtime guard exists');
+select has_table('public','marketplace_installation_workflow_bindings','immutable workflow binding table exists');
+select has_function('public','marketplace_installation_lifecycle','lifecycle RPC remains available');
+select ok(not has_table_privilege('anon','public.marketplace_installation_history','SELECT'),'anonymous cannot read installation history');
+select ok(not has_table_privilege('authenticated','public.marketplace_installation_history','SELECT'),'authenticated users cannot bypass installation ownership through history table');
+select ok(not has_table_privilege('authenticated','public.marketplace_installation_workflow_bindings','SELECT'),'authenticated users cannot inspect internal runtime bindings');
+select ok(has_table_privilege('service_role','public.marketplace_installation_history','SELECT'),'service role can read installation history');
+select ok(has_function_privilege('service_role','public.marketplace_transition_installation_version(uuid,uuid,text,uuid,text)','EXECUTE'),'service role can transition installed versions');
+select ok(not has_function_privilege('authenticated','public.marketplace_transition_installation_version(uuid,uuid,text,uuid,text)','EXECUTE'),'authenticated users cannot bypass version transition RPC');
+select ok(has_function_privilege('service_role','public.marketplace_assert_installation_runtime(uuid)','EXECUTE'),'worker can evaluate runtime installation guard');
+select ok(public.marketplace_assert_installation_runtime('a1000000-0000-4000-8000-000000000001'::uuid),'unbound non-Marketplace workflows remain eligible for normal runtime');
+insert into public.marketplace_installation_workflow_bindings(workflow_id,installation_id,product_version_id)
+values('a1000000-0000-4000-8000-000000000002','a1000000-0000-4000-8000-000000000003','a1000000-0000-4000-8000-000000000004');
+select ok(not public.marketplace_assert_installation_runtime('a1000000-0000-4000-8000-000000000002'::uuid),'orphaned Marketplace workflow bindings fail closed');
+select * from finish();
+rollback;

@@ -161,6 +161,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       .eq("id", endpoint.workflow_id).eq("workspace_id", endpoint.workspace_id).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow || workflow.status !== "active") return jsonError("The linked workflow is not active.", 409);
+    // Marketplace webhook ingress shares the durable worker installation/version guard.
+    // This route has a direct live-execution path when dry-run queuing is disabled.
+    const { data: marketplaceRuntimeAllowed, error: marketplaceRuntimeError } = await db.rpc(
+      "marketplace_assert_installation_runtime", { p_workflow_id: workflow.id },
+    );
+    if (marketplaceRuntimeError || marketplaceRuntimeAllowed !== true) {
+      return jsonError("Marketplace installation is revoked, inactive, or superseded.", 409);
+    }
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
     if (!definition || definition.format !== "aivanta-registry-v1" ||

@@ -58,7 +58,7 @@ export default function AIAssistantPage() {
       });
       const payload = await response.json() as { definition?: Draft; registrySteps?: RegistryDraftStep[]; summary?: string; error?: string };
       if (!response.ok || !payload.definition || !Array.isArray(payload.registrySteps)) {
-        throw new Error(payload.error || "Aivanta couldn't create a registry-validated draft. Please try again.");
+        throw new Error(payload.error || "REXNORA couldn't create a registry-validated draft. Please try again.");
       }
       setDraft(payload.definition);
       setRegistrySteps(payload.registrySteps);
@@ -101,7 +101,7 @@ export default function AIAssistantPage() {
 
   return <main className="app-shell ai-assistant-shell">
     <aside className="sidebar">
-      <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta</span></Link>
+      <Link className="dash-brand" href="/" aria-label="REXNORA home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>REXNORA</span></Link>
       <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></div>
       <div className="sidebar-label">WORKSPACE</div>
       <nav className="side-nav" aria-label="Workspace navigation">{[["Dashboard", "/dashboard", "▦"], ["Workflows", "/dashboard#workflows", "↗"], ["Integrations", "/dashboard/integrations", "⌘"], ["AI Agents", "/dashboard/ai-assistant", "✺"], ["Templates", "/dashboard/templates", "▧"], ["Analytics", "/dashboard/analytics", "▥"], ["Activity logs", "/dashboard/activity", "◷"], ["Billing", "/dashboard/billing", "◇"], ["Settings", "/dashboard/settings", "⚙"]].map(([label, href, icon]) => <Link key={label} href={href} className={label === "AI Agents" ? "side-link selected" : "side-link"}><span className="side-icon">{icon}</span>{label}</Link>)}</nav>
@@ -110,13 +110,13 @@ export default function AIAssistantPage() {
     <section className="dashboard-main">
       <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>AI Assistant</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Draft mode</span><span className="top-avatar">AI</span></div></header>
       <div className="dashboard-content ai-assistant-content">
-        <div className="ai-assistant-intro"><div className="assistant-symbol">✺</div><div><div className="dash-eyebrow">AIVANTA AI ASSISTANT <span className="assistant-beta">BETA</span></div><h1>Describe it. We&apos;ll build the draft.</h1><p>Describe an outcome, ask follow-up questions, and refine the workflow in conversation. Aivanta validates every operation against its live node registry.</p></div></div>
+        <div className="ai-assistant-intro"><div className="assistant-symbol">✺</div><div><div className="dash-eyebrow">AIVANTA AI ASSISTANT <span className="assistant-beta">BETA</span></div><h1>Describe it. We&apos;ll build the draft.</h1><p>Describe an outcome, ask follow-up questions, and refine the workflow in conversation. REXNORA validates every operation against its live node registry.</p></div></div>
         <div className="assistant-layout">
           <section className="assistant-chat-panel">
-            <div className="assistant-chat-header"><div className="assistant-avatar">✺</div><div><strong>Aivanta Assistant</strong><small>Conversational workflow drafting · no actions executed</small></div><span className="assistant-status">Ready</span></div>
+            <div className="assistant-chat-header"><div className="assistant-avatar">✺</div><div><strong>REXNORA Assistant</strong><small>Conversational workflow drafting · no actions executed</small></div><span className="assistant-status">Ready</span></div>
             {messages.length === 0 && <div className="assistant-message assistant-message-info"><span className="assistant-message-icon">✺</span><div><strong>What would you like to automate?</strong><p>Example: “When a new website lead arrives, qualify it with AI, add it to Google Sheets and notify Slack.” You can refine the draft after the first response.</p></div></div>}
-            {messages.map((message, index) => <div className={message.role === "user" ? "assistant-chat-turn assistant-chat-user" : "assistant-chat-turn assistant-chat-reply"} key={index}><strong>{message.role === "user" ? "You" : "Aivanta"}</strong><p>{message.content}</p></div>)}
-            {loading && <div className="assistant-chat-turn assistant-chat-reply" role="status"><strong>Aivanta</strong><p>Building and validating your draft…</p></div>}
+            {messages.map((message, index) => <div className={message.role === "user" ? "assistant-chat-turn assistant-chat-user" : "assistant-chat-turn assistant-chat-reply"} key={index}><strong>{message.role === "user" ? "You" : "REXNORA"}</strong><p>{message.content}</p></div>)}
+            {loading && <div className="assistant-chat-turn assistant-chat-reply" role="status"><strong>REXNORA</strong><p>Building and validating your draft…</p></div>}
             {draft && <div className="assistant-generated">
               <div className="generated-title"><div><strong>Current workflow draft</strong><small>{registrySteps?.length || draft.nodes.length} registered steps · not saved · not executed</small></div><span className="draft-pill">Draft</span></div>
               {draft.nodes.map((node, index) => {
@@ -128,13 +128,13 @@ export default function AIAssistantPage() {
             </div>}
             {error && <div className="assistant-error" role="alert"><strong>Couldn&apos;t update the draft</strong><p>{error}</p></div>}
             <form className="assistant-prompt-form" onSubmit={generate}>
-              <label htmlFor="assistant-prompt">{draft ? "Ask Aivanta to refine this workflow" : "Describe the automation you want"}</label>
+              <label htmlFor="assistant-prompt">{draft ? "Ask REXNORA to refine this workflow" : "Describe the automation you want"}</label>
               <textarea id="assistant-prompt" value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={2000} rows={4} placeholder={draft ? "Add a condition, change the notification, or use a different app…" : "When a new lead fills out my website form, qualify it and prepare a welcome email…"} required />
               <div className="assistant-form-footer"><span>{prompt.length}/2000 · {draft ? "Refinement creates a new draft version" : "Draft only"}</span><button type="submit" disabled={loading || !prompt.trim()}>{loading ? "Generating…" : draft ? "Refine workflow" : "Generate workflow"} <span>↗</span></button></div>
             </form>
             <p className="assistant-safety-note">Every refinement replaces the current unsaved proposal. Saving stores a draft only. It does not activate the workflow or execute external actions.</p>
           </section>
-          <aside className="assistant-side-panel"><h2>How it works</h2><div><span>1</span><p><strong>Describe the outcome</strong><small>Explain the trigger, apps and result in plain language.</small></p></div><div><span>2</span><p><strong>Refine conversationally</strong><small>Ask Aivanta to add steps, change logic or clarify the draft.</small></p></div><div><span>3</span><p><strong>Review in Builder</strong><small>Only validated registry operations can be saved. Activation stays separate.</small></p></div><div className="assistant-tip"><strong>Safe by default</strong><p>Provider credentials are never requested in chat. Missing connections are handled during setup; generated drafts are never executed here.</p></div></aside>
+          <aside className="assistant-side-panel"><h2>How it works</h2><div><span>1</span><p><strong>Describe the outcome</strong><small>Explain the trigger, apps and result in plain language.</small></p></div><div><span>2</span><p><strong>Refine conversationally</strong><small>Ask REXNORA to add steps, change logic or clarify the draft.</small></p></div><div><span>3</span><p><strong>Review in Builder</strong><small>Only validated registry operations can be saved. Activation stays separate.</small></p></div><div className="assistant-tip"><strong>Safe by default</strong><p>Provider credentials are never requested in chat. Missing connections are handled during setup; generated drafts are never executed here.</p></div></aside>
         </div>
       </div>
     </section>

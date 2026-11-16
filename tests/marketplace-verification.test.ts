@@ -36,3 +36,20 @@ test("marketplace review integrity binds uploaded bytes, stored manifest, and re
  const mismatchedManifest=verifyMarketplaceStoredArtifact(content,{...valid,extra:"different"},expected);
  assert.equal(mismatchedManifest.integrityPassed,false);
 });
+
+test("marketplace verification rejects dynamic code execution",()=>{
+ const result=verifyMarketplaceArtifact({...valid,notes:"eval(userInput)"});
+ assert.equal(result.checks.find(x=>x.id==="dynamic_code_execution")?.passed,false);
+});
+test("marketplace verification flags credential-to-network exfiltration patterns",()=>{
+ const result=verifyMarketplaceArtifact({...valid,notes:"process.env.API_KEY; fetch("});
+ assert.equal(result.checks.find(x=>x.id==="credential_exfiltration")?.passed,false);
+});
+test("marketplace verification rejects encoded executable payload patterns",()=>{
+ const result=verifyMarketplaceArtifact({...valid,notes:"atob(payload); eval("});
+ assert.equal(result.checks.find(x=>x.id==="obfuscated_payload")?.passed,false);
+});
+test("marketplace verification flags destructive infrastructure commands",()=>{
+ const result=verifyMarketplaceArtifact({...valid,notes:"DROP DATABASE production"});
+ assert.equal(result.checks.find(x=>x.id==="destructive_operations")?.passed,false);
+});

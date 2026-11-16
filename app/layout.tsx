@@ -3,7 +3,7 @@ import "./globals.css";
 import "./aivanta-theme.css";
 
 export const metadata: Metadata = {
-  title: "Aivanta — Business automation, orchestrated intelligently",
+  title: "REXNORA — Intelligent business automation",
   description: "Design, connect, and manage business workflows with AI-assisted automation built for real teams.",
 };
 

@@ -247,12 +247,12 @@ export default function WorkflowBuilderPage() {
         const raw = window.localStorage.getItem("aivanta-workflows");
         const existing = raw ? JSON.parse(raw) as Array<{ id: string | number; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused"; runs: string; updated: string; icon: string; tone: string }> : [];
         const next = existing.filter(item => item.name !== name.trim());
-        next.unshift({ id: workflowId, name: name.trim(), description: `${steps.length} steps · Saved to Aivanta`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
+        next.unshift({ id: workflowId, name: name.trim(), description: `${steps.length} steps · Saved to REXNORA`, category: "Operations", status: "Draft", runs: "—", updated: "Just now", icon: "✳", tone: "lime" });
         window.localStorage.setItem("aivanta-workflows", JSON.stringify(next));
       } catch {
         // The server save succeeded; local dashboard cache is only a convenience.
       }
-      setNotice("Workflow draft saved to your Aivanta workspace. It has not been activated or executed.");
+      setNotice("Workflow draft saved to your REXNORA workspace. It has not been activated or executed.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to save the workflow. Try again.");
     } finally {
@@ -279,7 +279,7 @@ export default function WorkflowBuilderPage() {
   return (
     <main className="builder-shell">
       <aside className="builder-sidebar">
-        <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>Aivanta</Link>
+        <Link className="builder-brand" href="/"><span className="builder-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span>REXNORA</Link>
         <div className="builder-workspace"><span>A</span><div><strong>{workspaceName}</strong><small>Free workspace</small></div><b>⌄</b></div>
         <div className="builder-nav-label">WORKSPACE</div>
         <Link className="builder-nav-link" href="/dashboard"><span>▦</span>Dashboard</Link>
@@ -354,7 +354,7 @@ export default function WorkflowBuilderPage() {
                 </div>
                 <div className="canvas-zoom"><button aria-label="Zoom out" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>−</button><span>100%</span><button aria-label="Zoom in" onClick={() => setNotice("Canvas zoom controls are a visual preview in this release.")}>＋</button></div>
               </div>
-              <div className="canvas-foot"><span><i /> Save draft stores your workflow in your Aivanta workspace</span><span>Connected steps · select a node to edit</span></div>
+              <div className="canvas-foot"><span><i /> Save draft stores your workflow in your REXNORA workspace</span><span>Connected steps · select a node to edit</span></div>
             </section>
             <aside className="step-settings">
               <div className="settings-heading"><div><span>STEP CONFIGURATION</span><h2>Step settings</h2></div><span className="settings-icon">⌘</span></div>
@@ -461,7 +461,7 @@ export default function WorkflowBuilderPage() {
               <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setAiRegistrySteps(current => current ? current.filter(step => step.id !== String(currentStep.id)) : null); setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></>) : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
             </aside>
           </div>
-          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> AI-generated workflows are saved as validated registry drafts in your Aivanta workspace. Saving never activates or executes them; live execution remains separately gated.</p></div>
+          <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> AI-generated workflows are saved as validated registry drafts in your REXNORA workspace. Saving never activates or executes them; live execution remains separately gated.</p></div>
         </div>
       </section>
     </main>

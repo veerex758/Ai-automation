@@ -7,7 +7,7 @@ const headers={"Cache-Control":"private, no-store"};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Context={params:Promise<{productId:string}>};
 function adminClient(){
- const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+ const url=process.env.NEXT_PUBLIC_SUPABASE_URL??process.env.NEXT_PUBLIC_CODED_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY??process.env.CODED_SUPABASE_SERVICE_ROLE_KEY;
  if(!url||!key)throw new Error("Marketplace installation service is not configured.");
  return createSupabaseClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}});
 }
