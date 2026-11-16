@@ -24,7 +24,7 @@ export default function MarketplaceInstallationManager({installationId,productNa
    {detail?.installation.status==="ready"?<button disabled={busy} onClick={()=>act("activate")}>Activate</button>:null}
    {detail?.updateAvailable&&!detail.stagedVersion?<button disabled={busy} onClick={()=>act("update",detail.latestVersion?.id)}>Stage update to {detail.latestVersion?.version}</button>:null}
    {detail?.rollbackVersions?.length&&!detail.stagedVersion?<><select value={rollbackId} onChange={e=>setRollbackId(e.target.value)}><option value="">Choose rollback version</option>{detail.rollbackVersions.map(v=><option key={v.id} value={v.id}>{v.version}</option>)}</select><button disabled={busy||!rollbackId} onClick={()=>act("rollback",rollbackId)}>Stage rollback</button></>:null}
-   {detail?.installation.status!=="removed"?<button disabled={busy||detail.installation.status==="active"} onClick={()=>act("uninstall")}>Uninstall</button>:null}
+   {detail && detail.installation.status!=="removed"?<button disabled={busy||detail.installation.status==="active"} onClick={()=>act("uninstall")}>Uninstall</button>:null}
   </div>
   {detail?.stagedVersion?<p role="status">Candidate {detail.stagedVersion.transition_action} is {detail.stagedVersion.status}. The currently active workflow remains live until you apply the successfully tested candidate.</p>:null}
   {notice&&<p role="status">{notice}</p>}{error&&<p role="alert" style={{color:"crimson"}}>{error}</p>}
