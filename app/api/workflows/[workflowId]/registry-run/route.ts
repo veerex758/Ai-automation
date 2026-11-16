@@ -156,7 +156,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         mode: "dry_run", status: legacyDryRun.status, created_by: user.id,
         idempotency_key: null, started_at: new Date(startedAt).toISOString(), completed_at: completedAt,
         duration_ms: Math.min(600000, Date.now() - startedAt),
-        error_message: legacyDryRun.status === "failed" ? "One or more workflow steps failed during safe preview." : null,
+        error_message: null,
       }).select("id,mode,status,workflow_version,started_at,completed_at,duration_ms,error_message").single();
       if (runError) throw runError;
       const rows = legacyDryRun.steps.map((step) => ({
