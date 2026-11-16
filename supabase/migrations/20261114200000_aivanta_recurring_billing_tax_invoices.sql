@@ -44,6 +44,9 @@ create table if not exists public.billing_invoices (
  unique(workspace_id,invoice_number),
  check(total_minor=subtotal_minor+tax_minor)
 );
+create unique index if not exists billing_invoices_payment_uidx
+  on public.billing_invoices(payment_id)
+  where payment_id is not null;
 create table if not exists public.billing_tax_rules (
  id uuid primary key default gen_random_uuid(),
  jurisdiction text not null,
