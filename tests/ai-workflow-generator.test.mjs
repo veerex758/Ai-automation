@@ -163,3 +163,108 @@ test("registry mode rejects a plan that omits its explicit edge list", async () 
   const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }] };
   await assert.rejects(generateWorkflow({ prompt: "Start manually", nodeCatalog: [], mode: "registry", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(plan) } }] }) }), /AI_UNSAFE_WORKFLOW/);
 });
+
+
+test("provider retries 503 responses with bounded exponential backoff", async () => {
+  const models = [];
+  const delays = [];
+  let calls = 0;
+  const result = await generateWorkflow({
+    prompt: "Make a manual workflow",
+    env,
+    randomImpl: () => 0,
+    sleepImpl: async (milliseconds) => { delays.push(milliseconds); },
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      models.push(JSON.parse(options.body).model);
+      if (calls < 3) {
+        return {
+          ok: false, status: 503,
+          headers: { get: () => null },
+          json: async () => ({ error: { status: "UNAVAILABLE" } }),
+        };
+      }
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }),
+      };
+    },
+  });
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash"]);
+  assert.deepEqual(delays, [200, 400]);
+  assert.equal(result.providerModelUsed, "gemini-3.8-flash");
+  assert.equal(result.providerFallbackUsed, false);
+});
+
+test("Gemini 3.5 Flash-Lite is used only after the primary model exhausts its 503 retries", async () => {
+  const models = [];
+  const delays = [];
+  const result = await generateWorkflow({
+    prompt: "Make a manual workflow",
+    env,
+    randomImpl: () => 0,
+    sleepImpl: async (milliseconds) => { delays.push(milliseconds); },
+    fetchImpl: async (_url, options) => {
+      const model = JSON.parse(options.body).model;
+      models.push(model);
+      if (model === "gemini-3.8-flash") {
+        return {
+          ok: false, status: 503,
+          headers: { get: () => null },
+          json: async () => ({ error: { status: "UNAVAILABLE" } }),
+        };
+      }
+      assert.equal(model, "gemini-3.5-flash-lite");
+      assert.equal(JSON.parse(options.body).reasoning_effort, undefined);
+      return {
+        ok: true, status: 200,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }),
+      };
+    },
+  });
+  assert.deepEqual(models, [
+    "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite",
+  ]);
+  assert.deepEqual(delays, [200, 400]);
+  assert.equal(result.providerModelUsed, "gemini-3.5-flash-lite");
+  assert.equal(result.providerFallbackUsed, true);
+});
+
+test("fallback is not attempted for authentication, quota, or non-overload provider errors", async () => {
+  let calls = 0;
+  await assert.rejects(generateWorkflow({
+    prompt: "Make a manual workflow",
+    env,
+    fetchImpl: async () => {
+      calls += 1;
+      return {
+        ok: false, status: 429,
+        headers: { get: () => null },
+        json: async () => ({ error: { status: "RESOURCE_EXHAUSTED" } }),
+      };
+    },
+  }), /AI_RATE_LIMITED/);
+  assert.equal(calls, 1);
+});
+
+test("reports an exhausted primary and fallback 503 as a distinct temporary overload", async () => {
+  const models = [];
+  await assert.rejects(generateWorkflow({
+    prompt: "Make a manual workflow",
+    env,
+    randomImpl: () => 0,
+    sleepImpl: async () => {},
+    fetchImpl: async (_url, options) => {
+      const model = JSON.parse(options.body).model;
+      models.push(model);
+      return {
+        ok: false, status: 503,
+        headers: { get: () => null },
+        json: async () => ({ error: { status: "UNAVAILABLE" } }),
+      };
+    },
+  }), error => error.message === "AI_PROVIDER_OVERLOADED" &&
+    error.providerStatus === 503 && error.providerModel === "gemini-3.5-flash-lite");
+  assert.equal(models.length, 4);
+  assert.equal(models[3], "gemini-3.5-flash-lite");
+});
