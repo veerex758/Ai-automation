@@ -177,6 +177,9 @@ export async function POST(request: NextRequest) {
         outcome: "failure", statusCode: mapped.status,
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
+        provider: "gemini",
+        model: (process.env.GEMINI_AI_MODEL || "gemini-2.5-flash").trim(),
+        providerStatus: error && typeof error === "object" && "providerStatus" in error ? Number((error as { providerStatus?: unknown }).providerStatus) : undefined,
       }, console.error);
     }
     return jsonResponse({ error: mapped.message }, { status: mapped.status });
