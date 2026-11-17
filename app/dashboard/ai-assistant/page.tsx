@@ -20,6 +20,7 @@ function titleForGenerationError(code?: string): string {
     AI_PROVIDER_ERROR: "Gemini provider error",
     AI_NOT_CONFIGURED: "Gemini is not configured",
     AI_CREDIT_LIMIT_REACHED: "Monthly AI allowance reached",
+    AI_SUBSCRIPTION_INACTIVE: "Workspace subscription inactive",
     AI_USAGE_METERING_UNAVAILABLE: "Usage metering unavailable",
     AI_UNSAFE_WORKFLOW: "Generated workflow failed validation",
     AI_INVALID_JSON: "Gemini returned an invalid workflow format",
