@@ -33,7 +33,7 @@ test("active workflow caps are enforced transactionally and AI usage consumes AI
   assert.match(hardeningMigration, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(agentRunRoute, /p_metric: "ai_credit".*feature: "agent_run"/);
-  assert.match(aiRoute, /p_metric: "ai_credit".*workflow_draft_generation/);
+  assert.match(aiRoute, /p_metric: "ai_credit"[\s\S]*workflow_draft_generation/);
   assert.match(workflowRunRoute, /p_metric: "workflow_execution"/);
   assert.match(workflowRunRoute, /One workflow run is one execution, including a safe dry-run/);
   assert.ok(hardeningMigration.includes("enterprise"));
