@@ -64,3 +64,18 @@ test("AI, live-run, and scheduler routes use request IDs and safe operational lo
   assert.doesNotMatch(sources[1], /console\.error\([^)]*persistenceError/);
   assert.doesNotMatch(sources[1], /console\.error\([^)]*recoveryError/);
 });
+
+test("successful workflow generation logs Gemini provider and model without prompt or credentials", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+    outcome: "success", statusCode: 200, durationMs: 18,
+    provider: "gemini", model: "gemini-2.5-flash",
+    prompt: "private customer data", apiKey: "secret-key",
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.provider, "gemini");
+  assert.equal(record.model, "gemini-2.5-flash");
+  assert.equal("prompt" in record, false);
+  assert.equal("apiKey" in record, false);
+});
