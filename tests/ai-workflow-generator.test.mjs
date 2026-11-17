@@ -236,7 +236,7 @@ test("fallback is not attempted for authentication, quota, or non-overload provi
   let calls = 0;
   await assert.rejects(generateWorkflow({
     prompt: "Make a manual workflow",
-    env: retryEnv,
+    env,
     fetchImpl: async () => {
       calls += 1;
       return {
