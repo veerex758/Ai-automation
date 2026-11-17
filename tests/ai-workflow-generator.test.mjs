@@ -167,11 +167,12 @@ test("registry mode rejects a plan that omits its explicit edge list", async () 
 
 test("provider retries 503 responses with bounded exponential backoff", async () => {
   const models = [];
+  const retryEnv = { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" };
   const delays = [];
   let calls = 0;
   const result = await generateWorkflow({
     prompt: "Make a manual workflow",
-    env,
+    env: retryEnv,
     randomImpl: () => 0,
     sleepImpl: async (milliseconds) => { delays.push(milliseconds); },
     fetchImpl: async (_url, options) => {
@@ -198,10 +199,11 @@ test("provider retries 503 responses with bounded exponential backoff", async ()
 
 test("Gemini 3.5 Flash-Lite is used only after the primary model exhausts its 503 retries", async () => {
   const models = [];
+  const retryEnv = { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" };
   const delays = [];
   const result = await generateWorkflow({
     prompt: "Make a manual workflow",
-    env,
+    env: retryEnv,
     randomImpl: () => 0,
     sleepImpl: async (milliseconds) => { delays.push(milliseconds); },
     fetchImpl: async (_url, options) => {
@@ -234,7 +236,7 @@ test("fallback is not attempted for authentication, quota, or non-overload provi
   let calls = 0;
   await assert.rejects(generateWorkflow({
     prompt: "Make a manual workflow",
-    env,
+    env: retryEnv,
     fetchImpl: async () => {
       calls += 1;
       return {
@@ -249,9 +251,10 @@ test("fallback is not attempted for authentication, quota, or non-overload provi
 
 test("reports an exhausted primary and fallback 503 as a distinct temporary overload", async () => {
   const models = [];
+  const retryEnv = { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" };
   await assert.rejects(generateWorkflow({
     prompt: "Make a manual workflow",
-    env,
+    env: retryEnv,
     randomImpl: () => 0,
     sleepImpl: async () => {},
     fetchImpl: async (_url, options) => {
