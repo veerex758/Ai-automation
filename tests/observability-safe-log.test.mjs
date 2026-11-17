@@ -95,3 +95,25 @@ test("successful workflow generation logs Gemini provider and model without prom
   assert.equal("prompt" in record, false);
   assert.equal("apiKey" in record, false);
 });
+
+
+test("workflow generation logs the selected Gemini fallback without sensitive data", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation",
+    requestId,
+    route: "/api/ai/generate-workflow",
+    outcome: "success",
+    statusCode: 200,
+    provider: "gemini",
+    model: "gemini-3.5-flash-lite",
+    fallbackUsed: true,
+    errorCode: "AI_PROVIDER_OVERLOADED",
+    prompt: "private prompt",
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.model, "gemini-3.5-flash-lite");
+  assert.equal(record.fallbackUsed, true);
+  assert.equal(record.errorCode, "AI_PROVIDER_OVERLOADED");
+  assert.equal("prompt" in record, false);
+});
