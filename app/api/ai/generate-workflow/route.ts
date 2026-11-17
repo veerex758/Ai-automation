@@ -180,6 +180,9 @@ export async function POST(request: NextRequest) {
         provider: "gemini",
         model: (process.env.GEMINI_AI_MODEL || "gemini-2.5-flash").trim(),
         providerStatus: error && typeof error === "object" && "providerStatus" in error ? Number((error as { providerStatus?: unknown }).providerStatus) : undefined,
+        providerReason: error && typeof error === "object" && "providerReason" in error ? (error as { providerReason?: unknown }).providerReason : undefined,
+        providerType: error && typeof error === "object" && "providerType" in error ? (error as { providerType?: unknown }).providerType : undefined,
+        providerRequestId: error && typeof error === "object" && "providerRequestId" in error ? (error as { providerRequestId?: unknown }).providerRequestId : undefined,
       }, console.error);
     }
     return jsonResponse({ error: mapped.message }, { status: mapped.status });
