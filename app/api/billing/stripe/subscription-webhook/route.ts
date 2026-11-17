@@ -2,6 +2,22 @@ import Stripe from "stripe";
 import {NextResponse} from "next/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 export const runtime="nodejs";
+
+function getSubscriptionPeriod(subscription: Stripe.Subscription) {
+ const item=subscription.items.data[0];
+ if(!item)throw new Error("Stripe subscription has no billing item.");
+ return {
+  currentPeriodStart:new Date(item.current_period_start*1000).toISOString(),
+  currentPeriodEnd:new Date(item.current_period_end*1000).toISOString()
+ };
+}
+
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+ const parent=invoice.parent;
+ if(!parent||parent.type!=="subscription_details"||!parent.subscription_details)return null;
+ const subscription=parent.subscription_details.subscription;
+ return typeof subscription==="string"?subscription:subscription.id;
+}
 export async function POST(request:Request){
  const secret=process.env.STRIPE_SECRET_KEY,signing=process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET;
  if(!secret||!signing)return NextResponse.json({error:"Recurring Stripe webhook is not configured."},{status:503});
@@ -21,13 +37,13 @@ export async function POST(request:Request){
    if(session.mode==="subscription"&&typeof session.subscription==="string"&&session.metadata?.workspace_id&&session.metadata.plan_key){
     const subscription=await stripe.subscriptions.retrieve(session.subscription);
     const workspaceId=session.metadata.workspace_id,planKey=session.metadata.plan_key;
-    const start=new Date(subscription.current_period_start*1000).toISOString(),end=new Date(subscription.current_period_end*1000).toISOString();
-    const {error}=await admin.from("workspace_subscriptions").upsert({workspace_id:workspaceId,plan_key:planKey,status:subscription.status==="active"?"active":subscription.status,billing_provider:"stripe",provider_subscription_id:subscription.id,provider_customer_id:String(subscription.customer),current_period_start:start,current_period_end:end,cancel_at_period_end:subscription.cancel_at_period_end,auto_renew:!subscription.cancel_at_period_end,recurring_interval:subscription.items.data[0]?.price.recurring?.interval==="year"?"year":"month",updated_at:new Date().toISOString()},{onConflict:"workspace_id"});
+    const period=getSubscriptionPeriod(subscription);
+    const {error}=await admin.from("workspace_subscriptions").upsert({workspace_id:workspaceId,plan_key:planKey,status:subscription.status==="active"?"active":subscription.status,billing_provider:"stripe",provider_subscription_id:subscription.id,provider_customer_id:String(subscription.customer),current_period_start:period.currentPeriodStart,current_period_end:period.currentPeriodEnd,cancel_at_period_end:subscription.cancel_at_period_end,auto_renew:!subscription.cancel_at_period_end,recurring_interval:subscription.items.data[0]?.price.recurring?.interval==="year"?"year":"month",updated_at:new Date().toISOString()},{onConflict:"workspace_id"});
     if(error)throw error;
    }
   }else if(event.type==="invoice.paid"){
    const invoice=event.data.object as Stripe.Invoice;
-   const subscriptionId=typeof invoice.subscription==="string"?invoice.subscription:null;
+   const subscriptionId=getInvoiceSubscriptionId(invoice);
    if(subscriptionId){
     const subscription=await stripe.subscriptions.retrieve(subscriptionId),workspaceId=subscription.metadata.workspace_id,planKey=subscription.metadata.plan_key;
     if(workspaceId&&planKey&&invoice.amount_paid>0){
@@ -39,11 +55,11 @@ export async function POST(request:Request){
     }
    }
   }else if(event.type==="invoice.payment_failed"){
-   const invoice=event.data.object as Stripe.Invoice,subscriptionId=typeof invoice.subscription==="string"?invoice.subscription:null;
+   const invoice=event.data.object as Stripe.Invoice,subscriptionId=getInvoiceSubscriptionId(invoice);
    if(subscriptionId){const subscription=await stripe.subscriptions.retrieve(subscriptionId);const workspaceId=subscription.metadata.workspace_id;if(workspaceId){const {error}=await admin.from("workspace_subscriptions").update({status:"past_due",grace_until:new Date(Date.now()+7*86400000).toISOString(),updated_at:new Date().toISOString()}).eq("workspace_id",workspaceId).eq("provider_subscription_id",subscriptionId);if(error)throw error;}}
   }else{
    const subscription=event.data.object as Stripe.Subscription,workspaceId=subscription.metadata.workspace_id;
-   if(workspaceId){const patch={status:event.type==="customer.subscription.deleted"?"canceled":subscription.status,cancel_at_period_end:subscription.cancel_at_period_end,auto_renew:!subscription.cancel_at_period_end,current_period_start:new Date(subscription.current_period_start*1000).toISOString(),current_period_end:new Date(subscription.current_period_end*1000).toISOString(),updated_at:new Date().toISOString()};const {error}=await admin.from("workspace_subscriptions").update(patch).eq("workspace_id",workspaceId).eq("provider_subscription_id",subscription.id);if(error)throw error;}
+   if(workspaceId){const period=getSubscriptionPeriod(subscription);const patch={status:event.type==="customer.subscription.deleted"?"canceled":subscription.status,cancel_at_period_end:subscription.cancel_at_period_end,auto_renew:!subscription.cancel_at_period_end,current_period_start:period.currentPeriodStart,current_period_end:period.currentPeriodEnd,updated_at:new Date().toISOString()};const {error}=await admin.from("workspace_subscriptions").update(patch).eq("workspace_id",workspaceId).eq("provider_subscription_id",subscription.id);if(error)throw error;}
   }
   const {error:markError}=await admin.from("billing_recurring_events").update({processed_at:new Date().toISOString(),processing_error:null}).eq("event_key",event.id);if(markError)throw markError;
   return NextResponse.json({received:true});
