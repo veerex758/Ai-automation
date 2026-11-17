@@ -108,12 +108,17 @@ test("workflow generation logs the selected Gemini fallback without sensitive da
     provider: "gemini",
     model: "gemini-3.5-flash-lite",
     fallbackUsed: true,
-    errorCode: "AI_PROVIDER_OVERLOADED",
     prompt: "private prompt",
   }, value => { output = value; });
   const record = JSON.parse(output);
   assert.equal(record.model, "gemini-3.5-flash-lite");
   assert.equal(record.fallbackUsed, true);
-  assert.equal(record.errorCode, "AI_PROVIDER_OVERLOADED");
   assert.equal("prompt" in record, false);
+  logOperationalEvent({
+    event: "workflow_generation",
+    outcome: "failure",
+    errorCode: "AI_PROVIDER_OVERLOADED",
+    providerStatus: 503,
+  }, value => { output = value; });
+  assert.equal(JSON.parse(output).errorCode, "AI_PROVIDER_OVERLOADED");
 });
