@@ -23,5 +23,5 @@ test("provider and invalid-graph failures occur before customer credit metering"
   const catchBlock = route.indexOf("} catch (error)");
   assert.ok(generation >= 0 && metering > generation && catchBlock > metering);
   assert.match(route, /AI_PROVIDER_OVERLOADED/);
-  assert.match(route, /errorCode: Object\\.hasOwn\\(responses, code\\) \\? code : "AI_PROVIDER_ERROR"/);
+  assert.ok(route.includes('errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR"'));
 });
