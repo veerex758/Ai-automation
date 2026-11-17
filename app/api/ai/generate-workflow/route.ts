@@ -178,20 +178,20 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
-      AI_NOT_CONFIGURED: { status: 503, message: "Gemini workflow generation is not configured. Add the server-side GEMINI_API_KEY." },
-      AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid." },
+      AI_NOT_CONFIGURED: { status: 503, message: "Gemini workflow generation is not configured. Add the server-side GEMINI_API_KEY. No Rexnora AI credit was charged." },
+      AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid. No Rexnora AI credit was charged." },
       AI_PROMPT_REQUIRED: { status: 400, message: "Describe the workflow you want to create." },
       AI_PROMPT_TOO_LONG: { status: 400, message: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` },
       AI_TIMEOUT: { status: 504, message: "Gemini did not respond within the request time limit. No Rexnora AI credit was charged. Please try again." },
-      AI_PROVIDER_UNAVAILABLE: { status: 502, message: "The AI provider could not be reached. Please try again." },
-      AI_PROVIDER_OVERLOADED: { status: 503, message: "Gemini is temporarily overloaded. Rexnora retried the primary model and attempted its fallback. No Rexnora AI credit was charged. Please try again shortly." },
+      AI_PROVIDER_UNAVAILABLE: { status: 502, message: "Gemini could not be reached. No Rexnora AI credit was charged. Please try again." },
+      AI_PROVIDER_OVERLOADED: { status: 503, message: "Gemini is temporarily overloaded after bounded retries. No Rexnora AI credit was charged. Please try again shortly." },
       AI_PROVIDER_AUTH_ERROR: { status: 502, message: "Gemini rejected its server credentials. This is a server configuration issue; no Rexnora AI credit was charged." },
-      AI_RATE_LIMITED: { status: 429, message: "The AI provider is busy. Wait a moment and try again." },
-      AI_PROVIDER_ERROR: { status: 502, message: "The AI provider could not complete this request." },
-      AI_INVALID_RESPONSE: { status: 502, message: "The AI provider returned an unreadable response. Please try again." },
-      AI_EMPTY_RESPONSE: { status: 502, message: "The AI provider returned no workflow. Please try again." },
-      AI_INVALID_JSON: { status: 502, message: "The AI provider returned an invalid workflow format. Please try again." },
-      AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Aivanta's safety and validation rules. Try describing a simpler workflow." },
+      AI_RATE_LIMITED: { status: 429, message: "Gemini's rate limit was reached. No Rexnora AI credit was charged. Wait a moment and try again." },
+      AI_PROVIDER_ERROR: { status: 502, message: "Gemini could not complete this request. No Rexnora AI credit was charged." },
+      AI_INVALID_RESPONSE: { status: 502, message: "Gemini returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
+      AI_EMPTY_RESPONSE: { status: 502, message: "Gemini returned no workflow. No Rexnora AI credit was charged. Please try again." },
+      AI_INVALID_JSON: { status: 502, message: "Gemini returned an invalid workflow format. No Rexnora AI credit was charged. Please try again." },
+      AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Aivanta's safety and validation rules. No Rexnora AI credit was charged. Try describing a simpler workflow." },
     };
     const mapped = responses[code] || { status: 502, message: "Workflow generation failed safely. Please try again." };
     if (mapped.status >= 500 || (error && typeof error === "object" && "providerStatus" in error)) {
