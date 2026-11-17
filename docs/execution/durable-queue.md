@@ -59,3 +59,12 @@ The CI workflow provisions an isolated PostgreSQL 16 service named `aivanta_test
 - Verified webhook ingress can opt into durable queueing with the server-only `AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED=true` flag. This path persists a dry-run job and returns a queued receipt; it does **not** perform provider side effects. Duplicate delivery retries the same idempotent queue RPC so a receipt cannot permanently strand an event after a transient dispatch failure.
 - Keep the webhook queue flag disabled until the additive queue migration is applied and authenticated staging acceptance passes. The existing synchronous live webhook path remains separate; it is not claimed to be durably recoverable after uncertain provider acceptance.
 - Scheduled and webhook queue registry definitions are validated and simulated without provider calls. Manual registry dispatch may execute the explicitly allowed live operations described above.
+
+## Dead-letter operator recovery
+
+- Owners and workspace admins can inspect recent dead-letter metadata at `/dashboard/operations/recovery`. The endpoint returns workflow name, failure code, attempt count and recovery history, but never exposes the original job payload or credentials.
+- Recovery creates a **new** workflow run and queue job from the original immutable snapshot. It does not reset or mutate the original failed job.
+- The recovery RPC accepts only an original job whose status is `dead_letter` and whose execution mode is `dry_run`. The new job is always `dry_run`.
+- Every recovery request is recorded in `execution_dead_letter_recoveries`; retries of the same Idempotency-Key return the same new job/run.
+- A live job is never automatically replayed because a provider may have accepted a request before the worker lost its lease. Reconcile the outcome with the provider first, then create a separate new live execution only through the normal activation and approval flow.
+- The migration and PostgreSQL integration test verify that browser roles cannot read the recovery audit table or execute the privileged recovery RPC.
