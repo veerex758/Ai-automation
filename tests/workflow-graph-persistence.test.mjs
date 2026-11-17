@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const route = readFileSync(new URL("../app/api/workflows/[workflowId]/definition/route.ts", import.meta.url), "utf8");
+const createRoute = readFileSync(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
+const assistant = readFileSync(new URL("../app/dashboard/ai-assistant/page.tsx", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/page.tsx", import.meta.url), "utf8");
 const activation = readFileSync(new URL("../app/api/workflows/[workflowId]/route.ts", import.meta.url), "utf8");
 
@@ -46,4 +48,14 @@ test("workflow reload exposes the exact saved version and the builder updates it
   assert.match(builder, /type Workflow = \{[^}]*version: number/);
   assert.match(builder, /setWorkflow\(\(current\) => current \? \{ \.\.\.current, version: result\.version \} : current\)/);
   assert.match(builder, /workflow\?\.version/);
+});
+
+test("AI Assistant draft creation preserves the editable graph and validated registry plan", () => {
+  assert.match(createRoute, /buildRegistrySteps\\(/);
+  assert.match(createRoute, /validateRegisteredSteps\\(rebuilt\\)/);
+  assert.match(createRoute, /Canvas connections and registered execution steps do not match/);
+  assert.match(createRoute, /edges: rawDefinition\\.edges/);
+  assert.match(createRoute, /format: "aivanta-registry-v1", steps: checked\\.steps/);
+  assert.match(assistant, /dashboard\\/workflows\\/\\$\\{encodeURIComponent\\(workflowId\\)\\}/);
+  assert.doesNotMatch(assistant, /dashboard\\/connections\\?workflowId=/);
 });
