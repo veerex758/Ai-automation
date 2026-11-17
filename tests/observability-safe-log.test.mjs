@@ -76,6 +76,8 @@ test("successful workflow generation logs Gemini provider and model without prom
   const record = JSON.parse(output);
   assert.equal(record.provider, "gemini");
   assert.equal(record.model, "gemini-2.5-flash");
+  logOperationalEvent({ event: "workflow_generation", requestId, providerStatus: 400 }, value => { output = value; });
+  assert.equal(JSON.parse(output).providerStatus, 400);
   assert.equal("prompt" in record, false);
   assert.equal("apiKey" in record, false);
 });
