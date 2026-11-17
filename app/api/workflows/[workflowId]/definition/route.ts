@@ -84,7 +84,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
     const { data, error } = await supabase.from("workflows")
-      .select("id, name, description, status, definition")
+      .select("id, name, description, status, version, definition")
       .eq("id", workflowId)
       .maybeSingle();
     if (error) throw error;
@@ -114,7 +114,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
       registryPlan = { format: "aivanta-registry-v1", steps: checkedRegistry.steps };
     }
     return NextResponse.json({
-      workflow: { id: data.id, name: data.name, description: data.description, status: data.status },
+      workflow: { id: data.id, name: data.name, description: data.description, status: data.status, version: data.version },
       definition: {
         ...(valid.definition ?? starterDefinition),
         nodes: (valid.definition ?? starterDefinition).nodes.map((node, index) => {
