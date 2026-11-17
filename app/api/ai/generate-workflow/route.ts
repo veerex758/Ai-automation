@@ -8,6 +8,7 @@ import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request.headers.get("x-request-id"));
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
       event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
       outcome: "success", statusCode: 200,
       durationMs: Math.max(0, Date.now() - startedAt),
-      provider: "gemini", model: (process.env.GEMINI_AI_MODEL || "gemini-2.5-flash").trim(),
+      provider: "gemini", model: (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
     });
     return jsonResponse({ ...result, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
