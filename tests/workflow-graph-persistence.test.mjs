@@ -39,3 +39,11 @@ test("Graph Builder derives registry execution steps from the saved graph before
   assert.match(builder, /registrySteps/);
   assert.match(builder, /registrySteps: buildRegistrySteps\(definition\)/);
 });
+
+test("workflow reload exposes the exact saved version and the builder updates it after save", () => {
+  assert.match(route, /select\("id, name, description, status, version, definition"\)/);
+  assert.match(route, /workflow: \{[^}]*version: data\.version/);
+  assert.match(builder, /type Workflow = \{[^}]*version: number/);
+  assert.match(builder, /setWorkflow\(\(current\) => current \? \{ \.\.\.current, version: result\.version \} : current\)/);
+  assert.match(builder, /workflow\?\.version/);
+});
