@@ -1,81 +1,78 @@
 # Rexnora Release Evidence Log
 
-Updated: 2026-11-15
+Updated: 2026-11-17
 Owner: Lead Engineering
 Authoritative plan: `docs/REXNORA_99_READINESS_ROADMAP.md`
 
 ## Current release baseline
 
-- Current main SHA: `44ed4824f7422dacf443ca12f3abfb7bd5b1613a`.
-- Roadmap audit merge base: `b2ed613bd9e2f3762fd485e1dbe688af015c412a`.
+- Current `main` SHA: `6a5173410adaad3991a32e92a858a4ce164b98e6`.
+- PR #216 (baseline reconciliation) was reviewed and squash-merged as `6a5173410adaad3991a32e92a858a4ce164b98e6`; it changed documentation only.
 - Product-core branch: `fix/product-core-ai-draft-canvas`.
 - Product-core PR: #207.
-- Current PR #207 head at this evidence update: `10efb8a44501a72d60df87e783a75880dbb605c1`.
-- PR #207 is two commits behind current main. The two commits on main add the authoritative roadmap file; comparison shows no product-code file overlap. Reconcile branch ancestry before merge; do not treat branch drift as resolved.
-- No PR has been merged as part of this work session.
+- Current PR #207 head: `9a03b7283d085bde07a5264220b3290d418285b9`.
+- PR #207 is 196 commits ahead and zero behind current `main`; merge base is the current main SHA above. Its branch was reconciled by a two-parent merge commit preserving the PR tree and taking the current authoritative roadmap and baseline documents from main.
+- PR #207 remains open. No implementation PR has been merged and no production deployment or production migration was performed.
 
 ## Stage 0 — Re-baseline and PR triage
 
-Status: Passed for repository inventory and PR disposition on 2026-11-15. The detailed current-main/PR table is recorded in PR #214: https://github.com/veerex758/Ai-automation/pull/214. Stage 0 does not authorize merging any PR.
-
-Current dispositions:
-- #207 Product core: active first priority; exact-head CI, Supabase replay and database-service integration pass. Its exact-head Vercel preview is still building; Supabase Preview is skipped.
-- #211 Rexnora branding: independent parallel workstream; latest observed CI and database-service integration passed. Keep branding changes separate from #207.
-- #208 SaaS foundations: CI, Supabase replay and database-service integration passed; defer until core and pilot prerequisites are accepted.
-- #209 Marketplace: CI failed two tests; defer and fix after prerequisites.
-- #210 Recurring billing: CI failed three tests; stacked on #208; defer until #208 is accepted and this branch is reconciled.
-- #212 Readiness docs: CI and database-service integration passed, but its duplicate delivery plan conflicts with the authoritative roadmap; revise before merge.
+Status: Passed as repository inventory and release-control work. The reconciled baseline is recorded in the main-branch `docs/REXNORA_ENGINEERING_BASELINE_2026-11-15.md`. Stage 0 does not certify implementation readiness or authorize production release.
 
 ## Stage 1 — AI-generated workflows are real graphs
 
-Status: In progress. Code-level changes and exact-head automated checks pass. Authenticated staging acceptance and runtime Gemini evidence remain outstanding.
+Status: **In progress; exit gate not yet passed.**
 
-### Changes made on the #207 branch
+### Implementation and corrections on #207
 
-- Registry-mode generation requires explicit graph edges; missing connection lists are rejected rather than converted into a placeholder trigger-only graph.
-- Server generation validates registered operation IDs, operation input schemas, graph connectivity, branch sources and conditional branch paths.
-- Workflow generation is locked to Gemini and requires `GEMINI_API_KEY`. Legacy provider overrides cannot redirect workflow generation to OpenAI; there is no OpenAI fallback.
-- Draft validation checks registry graph structure and operation schemas before reporting success.
-- The unified safe-test endpoint executes saved `aivanta-registry-v1` steps with bounded sample trigger input; it does not call external providers.
-- IF conditions are evaluated during dry-runs; sample trigger payload is passed to downstream references.
-- Corrected stale builder guidance that claimed conditions would not execute; added a regression test confirming the UI describes condition evaluation during tests and runs.
-- Activation requires a successful dry-run of the exact saved version with explicit `registry-v1` evidence for every registered step.
-- The duplicate registry-run implementation was removed; the legacy endpoint remains a compatibility alias to the unified safe-test route.
+- Registry-mode Gemini generation returns explicit registered steps and graph edges; missing edge lists, unknown operations, invalid inputs, invalid branch sources, disconnected nodes and cycles are rejected.
+- Generated nodes are constructed from the validated registered operation plan and shown on the editable graph canvas; the generated draft is not saved or executed automatically.
+- The canvas supports node selection, drag positioning, node configuration, edge editing and conditional true/false connections.
+- Conditional graphs are rebuilt into registered execution steps and checked against operation schemas before validation or save.
+- Saved registry workflows preserve graph edges, node positions, registered operation IDs, input payloads and conditional branch metadata. The GET path validates the stored registry plan before returning it.
+- The workflow GET response now includes the database's current `workflows.version`; the builder displays that exact version and updates it from the save response. The version history endpoint lists immutable snapshots, and restore creates a new version rather than overwriting history.
+- Gemini is the deterministic workflow-generation provider. It requires server-side `GEMINI_API_KEY`; legacy OpenAI overrides and an OpenAI-only configuration cannot redirect or silently fall back.
+- Successful, validated Gemini generation now emits a safe operational event with request ID, provider and model. Prompt content and credentials are excluded from that log record.
+- Safe test runs use saved registry steps and bounded sample input; they are distinct from live provider execution. Generation alone never activates or executes a workflow.
+- Activation is still gated by a successful dry-run of the exact saved version and explicit registry execution evidence. Activation/live-execution acceptance belongs to the relevant later execution stage; it is not inferred from Stage 1 source tests.
 
-### Exact-head automated checks
+### Exact current-head automated checks
 
-Current PR #207 head: `10efb8a44501a72d60df87e783a75880dbb605c1`.
+Current PR #207 head: `9a03b7283d085bde07a5264220b3290d418285b9`.
 
-| Check | Run | Result |
+| Check | Run | Current result |
 |---|---:|---|
-| GitHub CI (workflow tests, lint, type-check, production build) | [43736655963](https://github.com/veerex758/Ai-automation/actions/runs/43736655963) | **Passed** |
-| Supabase clean migration replay and pgTAP transaction tests | [43736655968](https://github.com/veerex758/Ai-automation/actions/runs/43736655968) | **Passed** |
-| MySQL/MongoDB authenticated TLS adapter integration | [43736655956](https://github.com/veerex758/Ai-automation/actions/runs/43736655956) | **Passed** |
+| GitHub CI — workflow tests, lint, type-check, production build | [44169537018](https://github.com/veerex758/Ai-automation/actions/runs/44169537018) | In progress at this evidence update |
+| Supabase clean migration replay and pgTAP tests | [44169537072](https://github.com/veerex758/Ai-automation/actions/runs/44169537072) | In progress at this evidence update |
+| MySQL/MongoDB authenticated TLS adapter integration | [44169537047](https://github.com/veerex758/Ai-automation/actions/runs/44169537047) | In progress at this evidence update |
 
-Vercel deployment:
-- Deployment: `dpl_65w92rJofcNqKfncSWkpDq61NYvZ`
-- Exact commit: `10efb8a44501a72d60df87e783a75880dbb605c1`
-- State at 2026-11-15 16:42 UTC: **BUILDING** (Next.js compilation and route generation had completed in the latest build events; Vercel had not yet reported READY)
-- Preview: https://ai-automation-a3oq7hdte-veerex-org.vercel.app
-- Supabase Preview check: **SKIPPED** (`https://github.com/veerex758/Ai-automation/runs/132880648107`); no connected Supabase preview deployment was verified.
+Earlier runs on the reconciled pre-fix commit `cec0098f68843e7b416e7681ddfe9e6584795c06` are not promoted to this latest SHA: migration replay and DB integration passed there, while CI was still building. The original `8301554` checks are older still.
 
-### Preview environment and staging evidence
+### Supabase environment inspection
+
+- Connected project: `uthqrszdtzmicspryxbw` (`supabase-apricot-paddle`), status `ACTIVE_HEALTHY`.
+- Read-only inspection confirms `consume_workspace_usage(uuid, text, integer, jsonb) returns jsonb` exists with execute grants for `authenticated` and `service_role`.
+- Read-only inspection confirms `save_workflow_definition(uuid, jsonb)` is an invoker function with authenticated/service-role execute grants. Its private save helper verifies authentication and workspace membership, increments `workflows.version`, and inserts the matching `workflow_versions` snapshot in the same transaction.
+- These database facts do not replace an authenticated request against the preview environment. The known usage-metering runtime error still needs to be tested from the signed-in UI; do not blindly reapply an existing migration.
+
+### Preview and staging evidence
 
 - Vercel project: `ai-automation` (`prj_zsRiRDLRTS22u3ygmuF1hdu7IMmm`).
-- Preview environment entries exist for `GEMINI_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, Supabase service credentials and live-execution controls. Secret values were not retrieved or recorded; variable presence alone does not prove valid credentials.
-- The preview deployment is building from the exact PR #207 head; do not treat it as ready until Vercel reports READY.
-- Authenticated staging checks for prompt → Gemini → graph → edit → save → reload → safe test → activation have not yet been completed.
-- Runtime provider evidence confirming Gemini was used has not yet been captured.
-- No real external provider side effect was initiated during this verification.
+- Latest observed preview deployment for head `9a03b7283d085bde07a5264220b3290d418285b9`: `dpl_EHvwpvcWs1CbGbivsDbvCe5zNB6z`, state **QUEUED**. It is not a usable preview yet.
+- Older deployment states do not count as evidence for the current head.
+- Preview environment entries for Gemini and Supabase were previously observed, but secret values were not retrieved. Presence does not prove the Gemini key is valid or that the preview is connected to the intended database.
+- No authenticated staging test has yet captured prompt → Gemini → valid graph → canvas edit → save → reload of the same version.
+- No runtime success log from the new Gemini provider/model evidence path has yet been captured.
+- Conditional branch execution has not yet been demonstrated in authenticated staging.
+- No external provider side effect or production change was initiated during this verification.
 
 ### Stage 1 exit decision
 
-**Not passed.** Automated checks and exact-SHA preview are ready, but authenticated staging must prove graph generation, edit/save/reload, conditional branch execution, safe test and activation. Capture runtime evidence that Gemini handled the generation request. Do not merge #207 or mark Stage 1 complete before these gates pass.
+**Not passed.** The code-level graph, canvas, persistence and exact-version reporting changes are implemented, and exact-head checks are running. The required preview is still queued, so authenticated staging cannot yet prove Gemini generation, branch save/reload and controlled branch execution. Do not merge #207 or mark Stage 1 complete until the current SHA has passing required checks and the authenticated staging evidence above is captured.
 
 ## Stage 2 and later
 
-Implementation work exists in #207 for durable execution, cancellation, webhook queueing and provider registry behavior, but these stages are **not accepted**. Follow the stage order in `docs/REXNORA_99_READINESS_ROADMAP.md`. Do not treat Stage 1 CI as proof of Stage 2 execution reliability or Stage 3 provider acceptance. Do not start SaaS, marketplace or broad integration expansion ahead of the core and pilot gates.
+Durable execution, cancellation, webhook queueing, agent boundaries, provider integrations and activation foundations exist in #207 but are not certified by Stage 1. Continue in the roadmap's order. Do not treat Stage 1 checks as proof of Stage 2 execution reliability, Stage 3 provider acceptance or Stage 4 real-estate pilot value.
 
 ## Update protocol
 
-For every update, record the exact branch SHA, workflow run IDs and conclusions, preview URL, authenticated staging evidence, provider sandbox evidence, blockers and the explicit stage exit decision. Never promote an older SHA's result to a newer commit.
+For every update, record the exact branch SHA, workflow run IDs and conclusions, preview URL/state, authenticated staging evidence, provider evidence, blockers and explicit stage exit decision. Never promote an older SHA's result to a newer commit.
