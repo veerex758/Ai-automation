@@ -146,6 +146,12 @@ export async function POST(request: NextRequest) {
       if (!checked.steps) return jsonResponse({ error: checked.error || "The generated graph did not pass registry validation." }, { status: 422 });
       executableSteps = checked.steps;
     }
+    logOperationalEvent({
+      event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+      outcome: "success", statusCode: 200,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      provider: "gemini", model: (process.env.GEMINI_AI_MODEL || "gemini-2.5-flash").trim(),
+    });
     return jsonResponse({ ...result, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
