@@ -19,7 +19,7 @@ test("Stripe recurring checkout only uses approved server recurring prices",()=>
  assert.match(stripeCheckout,/mode:"subscription"/);assert.match(stripeCheckout,/price\.type!=="recurring"/);assert.match(stripeCheckout,/price\.unit_amount!==plan\.amountMinor/);assert.match(stripeCheckout,/subscription_data:\{metadata/);assert.match(stripeCheckout,/canManageWorkspaceBilling/);
 });
 test("Stripe recurring webhook verifies signature and processes invoice paid, failure and cancellation",()=>{
- assert.match(stripeWebhook,/constructEvent/);assert.match(stripeWebhook,/invoice\.paid/);assert.match(stripeWebhook,/invoice\.payment_failed/);assert.match(stripeWebhook,/customer\.subscription\.deleted/);assert.match(stripeWebhook,/billing_recurring_events/);assert.match(stripeWebhook,/settle_workspace_payment/);
+ assert.match(stripeWebhook,/constructEvent/);assert.match(stripeWebhook,/invoice\.paid/);assert.match(stripeWebhook,/invoice\.payment_failed/);assert.match(stripeWebhook,/customer\.subscription\.deleted/);assert.match(stripeWebhook,/billing_recurring_events/);assert.match(stripeWebhook,/settle_workspace_payment/);assert.match(stripeWebhook,/invoice\.parent/);assert.match(stripeWebhook,/parent\.type!=="subscription_details"/);assert.match(stripeWebhook,/items\.data\[0\]\.current_period_start/);assert.match(stripeWebhook,/items\.data\[0\]\.current_period_end/);assert.doesNotMatch(stripeWebhook,/invoice\.subscription===/);assert.doesNotMatch(stripeWebhook,/subscription\.current_period_(?:start|end)/);
 });
 test("Paystack recurring setup requires authenticated billing manager and reusable auth captured encrypted",()=>{
  assert.match(paystackAuthorize,/canManageWorkspaceBilling/);assert.match(paystackAuthorize,/recurring_setup:true/);assert.match(paystackWebhook,/authorization\.reusable!==true/);assert.match(paystackWebhook,/encryptWebhookSecret/);assert.match(paystackWebhook,/paystack_authorization_code_enc/);
@@ -27,6 +27,7 @@ test("Paystack recurring setup requires authenticated billing manager and reusab
 test("Paystack renewal scheduler is cron protected, decrypts auth, charges and idempotently claims cycles",()=>{
  assert.match(paystackCron,/headers\.get\("authorization"\)!=="Bearer "\+cron/);assert.match(paystackCron,/charge_authorization/);assert.match(paystackCron,/billing_recurring_events/);assert.match(paystackCron,/current_period_end/);assert.ok(cron.crons.some(c=>c.path==="/api/internal/billing/paystack-renewals"));
 });
+test("invoice document uses the shared workspace permission implementation",()=>{assert.match(invoice,/hasWorkspacePermission\} from "@\/lib\/supabase\/permissions"/);assert.doesNotMatch(invoice,/hasWorkspacePermission\} from "@\/lib\/supabase\/workspace"/);});
 test("tax invoice issuance requires legal seller settings and paid transaction; snapshots tax and customer",()=>{
  assert.match(invoice,/payment\.status!==\"success\"/);assert.match(invoice,/AIVANTA_LEGAL_ENTITY_NAME/);assert.match(invoice,/AIVANTA_TAX_JURISDICTION/);assert.match(invoice,/rate_basis_points/);assert.match(invoice,/tax_rule_snapshot/);assert.match(invoice,/next_workspace_invoice_number/);assert.match(invoice,/billing_invoices/);assert.match(lifecycle,/next_workspace_invoice_number/);
 });
