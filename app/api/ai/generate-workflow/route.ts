@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Aivanta's safety and validation rules. Try describing a simpler workflow." },
     };
     const mapped = responses[code] || { status: 502, message: "Workflow generation failed safely. Please try again." };
-    if (mapped.status >= 500) {
+    if (mapped.status >= 500 || (error && typeof error === "object" && "providerStatus" in error)) {
       logOperationalEvent({
         event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
         outcome: "failure", statusCode: mapped.status,
