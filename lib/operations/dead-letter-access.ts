@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import type { NextResponse } from "next/server";
 
 export type DeadLetterOperatorContext = {
   supabase: Awaited<ReturnType<typeof createClient>>;
@@ -15,7 +15,6 @@ export type DeadLetterOperatorResolution =
 export async function resolveDeadLetterOperator(): Promise<DeadLetterOperatorResolution> {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  const { NextResponse } = await import("next/server");
   const headers = { "Cache-Control": "private, no-store" };
 
   if (authError || !user) {
