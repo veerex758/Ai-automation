@@ -46,6 +46,16 @@ test("classifies provider authorization, throttling, and generic errors safely",
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 429) }), /AI_RATE_LIMITED/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 500) }), /AI_PROVIDER_ERROR/);
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: fakeFetch({}, 400) }), error => error.message === "AI_PROVIDER_ERROR" && error.providerStatus === 400);
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => ({
+    ok: false, status: 400,
+    headers: { get: name => name === "x-goog-request-id" ? "gemini-req-123" : null },
+    json: async () => ({ error: { code: 400, status: "INVALID_ARGUMENT", type: "invalid_request" , message: "must never be logged" } }),
+  }) }), error => error.message === "AI_PROVIDER_ERROR" && error.providerStatus === 400 &&
+    error.providerReason === "INVALID_ARGUMENT" && error.providerType === "invalid_request" &&
+    error.providerRequestId === "gemini-req-123");
+  await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => ({
+    ok: false, status: 400, json: async () => ({ error: { status: "INVALID_ARGUMENT;token=secret" } }),
+  }) }), error => error.providerReason === undefined);
 });
 test("rejects malformed provider payloads and empty model output", async () => {
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env, fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new Error("invalid JSON"); } }) }), /AI_INVALID_RESPONSE/);
