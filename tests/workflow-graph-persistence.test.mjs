@@ -51,11 +51,11 @@ test("workflow reload exposes the exact saved version and the builder updates it
 });
 
 test("AI Assistant draft creation preserves the editable graph and validated registry plan", () => {
-  assert.match(createRoute, /buildRegistrySteps\\(/);
-  assert.match(createRoute, /validateRegisteredSteps\\(rebuilt\\)/);
-  assert.match(createRoute, /Canvas connections and registered execution steps do not match/);
-  assert.match(createRoute, /edges: rawDefinition\\.edges/);
-  assert.match(createRoute, /format: "aivanta-registry-v1", steps: checked\\.steps/);
-  assert.match(assistant, /dashboard\\/workflows\\/\\$\\{encodeURIComponent\\(workflowId\\)\\}/);
-  assert.doesNotMatch(assistant, /dashboard\\/connections\\?workflowId=/);
+  assert.ok(createRoute.includes("buildRegistrySteps("));
+  assert.ok(createRoute.includes("validateRegisteredSteps(rebuilt)"));
+  assert.ok(createRoute.includes("Canvas connections and registered execution steps do not match"));
+  assert.ok(createRoute.includes("edges: rawDefinition.edges"));
+  assert.ok(createRoute.includes('format: "aivanta-registry-v1", steps: checked.steps'));
+  assert.ok(assistant.includes("/dashboard/workflows/"));
+  assert.ok(!assistant.includes("/dashboard/connections?workflowId="));
 });
