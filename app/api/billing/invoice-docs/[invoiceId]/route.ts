@@ -1,6 +1,7 @@
 import {NextResponse} from "next/server";
 import {createClient} from "@/lib/supabase/server";
-import {getOrCreateDefaultWorkspace,hasWorkspacePermission} from "@/lib/supabase/workspace";
+import {getOrCreateDefaultWorkspace} from "@/lib/supabase/workspace";
+import {hasWorkspacePermission} from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 function esc(v:unknown){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 export async function GET(_request:Request,ctx:{params:Promise<{invoiceId:string}>}){
