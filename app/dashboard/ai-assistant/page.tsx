@@ -10,6 +10,24 @@ type Draft = { version: 1; nodes: GeneratedNode[] };
 type RegistryDraftStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
+function titleForGenerationError(code?: string): string {
+  const titles: Record<string, string> = {
+    AI_PROVIDER_OVERLOADED: "Gemini is temporarily overloaded",
+    AI_RATE_LIMITED: "Gemini rate limit reached",
+    AI_PROVIDER_AUTH_ERROR: "Gemini server configuration issue",
+    AI_TIMEOUT: "Gemini request timed out",
+    AI_PROVIDER_UNAVAILABLE: "Gemini could not be reached",
+    AI_PROVIDER_ERROR: "Gemini provider error",
+    AI_NOT_CONFIGURED: "Gemini is not configured",
+    AI_CREDIT_LIMIT_REACHED: "Monthly AI allowance reached",
+    AI_USAGE_METERING_UNAVAILABLE: "Usage metering unavailable",
+    AI_UNSAFE_WORKFLOW: "Generated workflow failed validation",
+    AI_INVALID_JSON: "Gemini returned an invalid workflow format",
+    AI_INVALID_RESPONSE: "Gemini returned an unreadable response",
+  };
+  return code && titles[code] ? titles[code] : "Couldn't update the draft";
+}
+
 export default function AIAssistantPage() {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
@@ -18,6 +36,7 @@ export default function AIAssistantPage() {
   const [summary, setSummary] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState("");
+  const [errorTitle, setErrorTitle] = useState("Couldn't update the draft");
   const [loading, setLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("Your workspace");
@@ -50,15 +69,21 @@ export default function AIAssistantPage() {
     }
     setLoading(true);
     setError("");
+    setErrorTitle("Couldn't update the draft");
     try {
       const response = await fetch("/api/ai/generate-workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify({ prompt: providerPrompt }),
       });
-      const payload = await response.json() as { definition?: Draft; registrySteps?: RegistryDraftStep[]; summary?: string; error?: string };
-      if (!response.ok || !payload.definition || !Array.isArray(payload.registrySteps)) {
-        throw new Error(payload.error || "Aivanta couldn't create a registry-validated draft. Please try again.");
+      const payload = await response.json() as { definition?: Draft; registrySteps?: RegistryDraftStep[]; summary?: string; error?: string; errorCode?: string };
+      if (!response.ok) {
+        setErrorTitle(titleForGenerationError(payload.errorCode));
+        throw new Error(payload.error || "Gemini could not create the workflow draft. Please try again.");
+      }
+      if (!payload.definition || !Array.isArray(payload.registrySteps)) {
+        setErrorTitle("Generated workflow failed validation");
+        throw new Error("Aivanta did not receive a complete registry-validated draft. No credit was charged.");
       }
       setDraft(payload.definition);
       setRegistrySteps(payload.registrySteps);
@@ -76,6 +101,7 @@ export default function AIAssistantPage() {
     if (!draft || !registrySteps || savingDraft) return;
     setSavingDraft(true);
     setError("");
+    setErrorTitle("Couldn't save the draft");
     try {
       const createResponse = await fetch("/api/workflows", {
         method: "POST",
@@ -126,7 +152,7 @@ export default function AIAssistantPage() {
               <p className="generated-summary">{summary}</p>
               <button type="button" className="assistant-apply-button" onClick={applyDraft} disabled={savingDraft}>{savingDraft ? "Saving draft…" : "Review validated draft in Builder"} <span>→</span></button>
             </div>}
-            {error && <div className="assistant-error" role="alert"><strong>Couldn&apos;t update the draft</strong><p>{error}</p></div>}
+            {error && <div className="assistant-error" role="alert"><strong>{errorTitle}</strong><p>{error}</p></div>}
             <form className="assistant-prompt-form" onSubmit={generate}>
               <label htmlFor="assistant-prompt">{draft ? "Ask Aivanta to refine this workflow" : "Describe the automation you want"}</label>
               <textarea id="assistant-prompt" value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={2000} rows={4} placeholder={draft ? "Add a condition, change the notification, or use a different app…" : "When a new lead fills out my website form, qualify it and prepare a welcome email…"} required />
