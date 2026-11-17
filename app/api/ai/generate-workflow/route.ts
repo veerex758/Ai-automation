@@ -45,10 +45,6 @@ export async function POST(request: NextRequest) {
 
     const { getOrCreateDefaultWorkspace } = await import("@/lib/supabase/workspace");
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data: usage, error: usageError } = await supabase.rpc("consume_workspace_usage", { p_workspace_id: workspace.id, p_metric: "ai_credit", p_quantity: 1, p_metadata: { feature: "workflow_draft_generation" } });
-    if (usageError) return jsonResponse({ error: "Usage metering unavailable. Apply Phase 5 billing migration." }, { status: 503 });
-    if (!usage?.allowed) return jsonResponse({ error: "Monthly AI generation limit reached. Upgrade your plan.", entitlement: usage }, { status: 402 });
-
     const nodeCatalog = getExecutableNodeCatalog();
     const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog, mode: "registry" });
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
@@ -147,13 +143,37 @@ export async function POST(request: NextRequest) {
       if (!checked.steps) return jsonResponse({ error: checked.error || "The generated graph did not pass registry validation." }, { status: 422 });
       executableSteps = checked.steps;
     }
+    // Only bill a completed, registry-validated generation. Provider errors and
+    // malformed graphs return above this point without consuming a customer credit.
+    const { data: usage, error: usageError } = await supabase.rpc("consume_workspace_usage", {
+      p_workspace_id: workspace.id,
+      p_metric: "ai_credit",
+      p_quantity: 1,
+      p_metadata: {
+        feature: "workflow_draft_generation",
+        provider: "gemini",
+        model: result.providerModelUsed || (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
+      },
+    });
+    if (usageError) {
+      return jsonResponse({ error: "Usage metering is unavailable. Your AI credit was not charged.", errorCode: "AI_USAGE_METERING_UNAVAILABLE" }, { status: 503 });
+    }
+    if (!usage?.allowed) {
+      return jsonResponse({
+        error: "Monthly AI generation limit reached. No AI credit was charged for this request.",
+        errorCode: "AI_CREDIT_LIMIT_REACHED",
+        entitlement: usage,
+      }, { status: 402 });
+    }
+
+    const { providerModelUsed, providerFallbackUsed: _providerFallbackUsed, ...publicResult } = result;
     logOperationalEvent({
       event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
       outcome: "success", statusCode: 200,
       durationMs: Math.max(0, Date.now() - startedAt),
-      provider: "gemini", model: (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
+      provider: "gemini", model: providerModelUsed || (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
     });
-    return jsonResponse({ ...result, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
+    return jsonResponse({ ...publicResult, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
@@ -161,9 +181,10 @@ export async function POST(request: NextRequest) {
       AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid." },
       AI_PROMPT_REQUIRED: { status: 400, message: "Describe the workflow you want to create." },
       AI_PROMPT_TOO_LONG: { status: 400, message: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` },
-      AI_TIMEOUT: { status: 504, message: "The AI provider took too long. Please try again." },
+      AI_TIMEOUT: { status: 504, message: "Gemini did not respond within the request time limit. No Rexnora AI credit was charged. Please try again." },
       AI_PROVIDER_UNAVAILABLE: { status: 502, message: "The AI provider could not be reached. Please try again." },
-      AI_PROVIDER_AUTH_ERROR: { status: 502, message: "The AI provider rejected its server credentials. Check the server configuration." },
+      AI_PROVIDER_OVERLOADED: { status: 503, message: "Gemini is temporarily overloaded. Rexnora retried the primary model and attempted its fallback. No Rexnora AI credit was charged. Please try again shortly." },
+      AI_PROVIDER_AUTH_ERROR: { status: 502, message: "Gemini rejected its server credentials. This is a server configuration issue; no Rexnora AI credit was charged." },
       AI_RATE_LIMITED: { status: 429, message: "The AI provider is busy. Wait a moment and try again." },
       AI_PROVIDER_ERROR: { status: 502, message: "The AI provider could not complete this request." },
       AI_INVALID_RESPONSE: { status: 502, message: "The AI provider returned an unreadable response. Please try again." },
@@ -179,13 +200,18 @@ export async function POST(request: NextRequest) {
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
         provider: "gemini",
-        model: (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
+        model: error && typeof error === "object" && "providerModel" in error && typeof (error as { providerModel?: unknown }).providerModel === "string"
+          ? (error as { providerModel: string }).providerModel
+          : (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
         providerStatus: error && typeof error === "object" && "providerStatus" in error ? Number((error as { providerStatus?: unknown }).providerStatus) : undefined,
         providerReason: error && typeof error === "object" && "providerReason" in error ? (error as { providerReason?: unknown }).providerReason : undefined,
         providerType: error && typeof error === "object" && "providerType" in error ? (error as { providerType?: unknown }).providerType : undefined,
         providerRequestId: error && typeof error === "object" && "providerRequestId" in error ? (error as { providerRequestId?: unknown }).providerRequestId : undefined,
       }, console.error);
     }
-    return jsonResponse({ error: mapped.message }, { status: mapped.status });
+    return jsonResponse({
+      error: mapped.message,
+      errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
+    }, { status: mapped.status });
   }
 }
