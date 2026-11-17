@@ -38,7 +38,7 @@ test("operator history and mutation are authenticated, workspace-scoped and owne
   assert.match(listRoute, /execution_dead_letter_recoveries/);
   assert.match(listRoute, /execution_mode/);
   assert.doesNotMatch(listRoute, /select\([^\n]*payload/);
-  assert.match(replayRoute, /Idempotency-Key/);
+  assert.match(replayRoute, /idempotency-key/i);
   assert.match(replayRoute, /create_dead_letter_dry_run_recovery/);
   assert.match(replayRoute, /Only permanently failed dry-run jobs can be recovered here/);
 });
