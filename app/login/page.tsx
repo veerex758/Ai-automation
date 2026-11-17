@@ -73,7 +73,7 @@ export default function LoginPage() {
       <div className="auth-orb auth-orb-one" aria-hidden="true" />
       <div className="auth-orb auth-orb-two" aria-hidden="true" />
       <header className="auth-header">
-        <Link className="auth-brand" href="/" aria-label="Aivanta home"><span className="auth-brand-mark"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta<span>.</span></span></Link>
+        <Link className="auth-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"172px",height:"36px",objectFit:"contain"}} /></Link>
         <Link className="auth-back" href="/">Back to home <span>↗</span></Link>
       </header>
 
@@ -90,7 +90,7 @@ export default function LoginPage() {
         </div>
 
         <div className="auth-card">
-          <div className="auth-card-top"><span className="auth-card-symbol"><img src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span className="auth-secure"><i /> SECURE WORKSPACE ACCESS</span></div>
+          <div className="auth-card-top"><span className="auth-card-symbol"><img src="/rexnora-mark.svg" alt="" aria-hidden="true" /></span><span className="auth-secure"><i /> SECURE WORKSPACE ACCESS</span></div>
           <div className="auth-heading"><h2>{mode === "signin" ? "Welcome back" : "Create your account"}</h2><p>{mode === "signin" ? "Sign in to continue to your workspace." : "Start building a more thoughtful way to work."}</p></div>
           <div className="auth-tabs" role="tablist" aria-label="Account access">
             <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "auth-tab active" : "auth-tab"} onClick={() => { setMode("signin"); setError(""); setNotice(""); }}>Sign in</button>
@@ -109,7 +109,7 @@ export default function LoginPage() {
           <div className="auth-card-foot"><span>⌑</span> Your session is protected by Supabase Auth.</div>
         </div>
       </section>
-      <footer className="auth-footer"><span>© {new Date().getFullYear()} Aivanta</span><span>Clarity in every step <i /> Control by design</span></footer>
+      <footer className="auth-footer"><span>© {new Date().getFullYear()} Rexnora</span><span>Clarity in every step <i /> Control by design</span></footer>
     </main>
   );
 }

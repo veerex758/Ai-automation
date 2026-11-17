@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import "./run-detail.css";
+import DashboardSidebar from "../../dashboard-sidebar";
 
 type RunDetail = {
   id: string;
@@ -73,8 +74,8 @@ export default function RunDetailPage() {
   }, [runId, reloadKey]);
 
   return (
-    <main className="run-detail-shell">
-      <header className="run-detail-top"><Link href="/dashboard/activity">← Activity logs</Link><Link href="/dashboard">Aivanta workspace ↗</Link></header>
+    <main className="app-shell run-detail-app-shell"><DashboardSidebar activePage="activity" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs"><Link href="/dashboard/activity">Activity logs</Link><span>/</span><strong>Run details</strong></div></header><div className="dashboard-content"><div className="run-detail-shell">
+      
       <section className="run-detail-content">
         <div className="run-detail-eyebrow">WORKFLOW EXECUTION RECORD</div>
         <h1>Run <span>details.</span></h1>
@@ -101,6 +102,6 @@ export default function RunDetailPage() {
           <div className="run-detail-actions"><Link href="/dashboard/workflows">Open workflows</Link><Link href="/dashboard/activity">Back to all activity</Link></div>
         </>}
       </section>
-    </main>
+    </div></div></section></main>
   );
 }

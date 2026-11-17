@@ -6,11 +6,13 @@ import { fileURLToPath } from "node:url";
 const endpointPath = fileURLToPath(new URL("../app/api/activity/route.ts", import.meta.url));
 const pagePath = fileURLToPath(new URL("../app/dashboard/activity/page.tsx", import.meta.url));
 const builderPath = fileURLToPath(new URL("../app/dashboard/workflows/[workflowId]/page.tsx", import.meta.url));
+const sidebarPath = fileURLToPath(new URL("../app/dashboard/dashboard-sidebar.tsx", import.meta.url));
 
-const [endpoint, page, builder] = await Promise.all([
+const [endpoint, page, builder, sidebar] = await Promise.all([
   readFile(endpointPath, "utf8"),
   readFile(pagePath, "utf8"),
   readFile(builderPath, "utf8"),
+  readFile(sidebarPath, "utf8"),
 ]);
 
 test("activity endpoint requires an authenticated user", () => {
@@ -52,8 +54,9 @@ test("activity UI searches workflow names and run identifiers", () => {
 });
 
 test("workflow builder links to activity without silently discarding unsaved edits", () => {
-  assert.match(builder, /href="\/dashboard\/activity"/);
+  assert.match(sidebar, /href: "\/dashboard\/activity"/);
   assert.match(builder, /unsaved workflow changes\. Leave this page and discard them\?/);
+  assert.match(builder, /closest\("a\.side-link"\)/);
 });
 
 test("activity duration rendering tolerates missing or invalid values", () => {

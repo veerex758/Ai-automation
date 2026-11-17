@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
+import DashboardSectionPage from "../section-page";
 
 export default function IntegrationsPage() {
-  // The current workspace-wide manager and provider directory live on Connections.
-  // Keep the historical Integrations navigation route as a stable entry point.
-  redirect("/dashboard/connections");
+  return <DashboardSectionPage section="integrations" />;
 }

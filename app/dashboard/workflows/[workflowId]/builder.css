@@ -190,3 +190,89 @@
 .workflow-builder-main .graph-port-out{right:-8px;top:calc(50% - 5px)}
 .workflow-builder-main .graph-layout{min-width:1000px}
 .workflow-builder-main .graph-node-connecting .graph-port-out{background:#5a9d48}
+
+
+/* Shared Rexnora workspace shell for the saved workflow editor. */
+.builder-shell{display:flex!important;background:#0B0F14!important;color:#F8FAFC!important}
+.builder-shell>.sidebar{width:248px;flex:0 0 248px;background:#080B10!important;border-right:1px solid #2A2F3A!important}
+.workflow-builder-main{flex:1;min-width:0;background:#0B0F14!important}
+@media(max-width:720px){
+ .builder-shell{display:flex!important;flex-direction:column!important;width:100%!important;min-width:0!important;overflow-x:clip!important}
+ .builder-shell>.sidebar{box-sizing:border-box!important;display:flex!important;flex-direction:column!important;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;padding:12px 14px!important;border-right:0!important;border-bottom:1px solid #2A2F3A!important;gap:10px!important}
+ .builder-shell>.sidebar .workspace-switch,.builder-shell>.sidebar .sidebar-bottom,.builder-shell>.sidebar .sidebar-label{display:none!important}
+ .builder-shell>.sidebar .side-nav{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px 8px!important;width:100%!important;max-height:none!important;overflow:visible!important}
+ .builder-shell>.sidebar .side-link{width:100%!important;min-width:0!important;min-height:36px!important;white-space:nowrap!important;overflow:hidden!important}
+ .workflow-builder-main{width:100%!important;min-width:0!important}
+}
+
+
+/* Dark surfaces for the saved workflow editor. */
+.workflow-builder-main,.builder-layout,.builder-workspace{background:#0B0F14!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-heading h1,.workflow-builder-main .builder-panel h2,.workflow-builder-main .builder-inspector h2{color:#F8FAFC!important}
+.workflow-builder-main .builder-heading p,.workflow-builder-main .builder-eyebrow,.workflow-builder-main .panel-kicker{color:#94A3B8!important}
+.workflow-builder-main .builder-canvas,.workflow-builder-main .builder-panel,.workflow-builder-main .builder-inspector,.workflow-builder-main .builder-side-panel,.workflow-builder-main .run-test-panel{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.workflow-builder-main .builder-node,.workflow-builder-main .builder-step,.workflow-builder-main .builder-card{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-node:hover,.workflow-builder-main .builder-node.node-selected{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.workflow-builder-main .builder-node p,.workflow-builder-main .builder-node small,.workflow-builder-main .builder-step p{color:#94A3B8!important}
+.workflow-builder-main input,.workflow-builder-main textarea,.workflow-builder-main select{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main button{color:inherit}
+.workflow-builder-main .builder-save,.workflow-builder-main .builder-primary-button{background:#F8FAFC!important;color:#0B0F14!important;border-color:#F8FAFC!important}
+.workflow-builder-main .builder-back,.workflow-builder-main a{color:#8BB8FF}
+.workflow-builder-main .canvas-grid{background-color:#0F141D!important;background-image:radial-gradient(#303a4a 1px,transparent 1px)!important}
+
+
+/* Rexnora final brand correction — saved workflow graph and inspector. */
+.workflow-builder-main,.workflow-builder-main .builder-layout,.workflow-builder-main .builder-workspace{background:#0B0F14!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-topbar,.workflow-builder-main .builder-heading{background:#0B0F14!important;color:#F8FAFC!important;border-color:#2A2F3A!important}
+.workflow-builder-main .builder-heading h1,.workflow-builder-main .builder-panel h2,.workflow-builder-main .builder-inspector h2{color:#F8FAFC!important}
+.workflow-builder-main .builder-heading p,.workflow-builder-main .builder-eyebrow,.workflow-builder-main .panel-kicker,.workflow-builder-main .builder-panel p,.workflow-builder-main .builder-inspector p{color:#94A3B8!important}
+.workflow-builder-main .builder-canvas,.workflow-builder-main .graph-canvas{background:#0F141D!important;border-color:#2A2F3A!important;box-shadow:none!important}
+.workflow-builder-main .graph-grid{background-image:radial-gradient(#303A4A 1px,transparent 1px)!important;opacity:.8!important}
+.workflow-builder-main .graph-node{background:#151C27!important;border-color:#354052!important;color:#F8FAFC!important;box-shadow:none!important}
+.workflow-builder-main .graph-node strong{color:#F8FAFC!important}
+.workflow-builder-main .graph-node small,.workflow-builder-main .graph-node-kind{color:#94A3B8!important}
+.workflow-builder-main .graph-node-icon{background:#172846!important;color:#8BB8FF!important}
+.workflow-builder-main .graph-node-selected,.workflow-builder-main .graph-node:hover{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.workflow-builder-main .graph-node-condition .graph-node-icon{background:#241A3D!important;color:#C4A8FF!important}
+.workflow-builder-main .graph-edge path,.workflow-builder-main .graph-edge-true path,.workflow-builder-main .graph-edge-false path{stroke:#8BB8FF!important}
+.workflow-builder-main .graph-edge text{fill:#CBD5E1!important;stroke:#0F141D!important}
+.workflow-builder-main .graph-node-port{border-color:#0F141D!important;background:#3B82F6!important;box-shadow:0 0 0 1px #8BB8FF!important}
+.workflow-builder-main .graph-connection-editor>label{color:#CBD5E1!important}
+.workflow-builder-main .graph-connection-editor>select,.workflow-builder-main .graph-edge-row{background:#111722!important;border-color:#354052!important;color:#E2E8F0!important}
+.workflow-builder-main .graph-edge-row b{color:#8BB8FF!important}
+.workflow-builder-main .graph-edge-row button{background:#2A1A22!important;color:#FCA5A5!important}
+.workflow-builder-main .builder-panel,.workflow-builder-main .builder-inspector,.workflow-builder-main .builder-side-panel,.workflow-builder-main .run-test-panel{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.workflow-builder-main .builder-node,.workflow-builder-main .builder-step,.workflow-builder-main .builder-card{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main input,.workflow-builder-main textarea,.workflow-builder-main select{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.workflow-builder-main .builder-save,.workflow-builder-main .builder-primary-button{background:#F8FAFC!important;color:#0B0F14!important;border-color:#F8FAFC!important}
+.workflow-builder-main .builder-back,.workflow-builder-main a{color:#8BB8FF}
+@media(max-width:720px){
+ .builder-shell>.sidebar .side-nav{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;width:100%!important;max-height:none!important;height:auto!important;overflow-x:auto!important;overflow-y:hidden!important;padding:2px 1px 7px!important;scrollbar-width:thin!important}
+ .builder-shell>.sidebar .dashboard-nav-group{display:contents!important}
+ .builder-shell>.sidebar .side-link{display:inline-flex!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;min-height:34px!important;padding:7px 10px!important;background:#111722!important;border:1px solid #2A2F3A!important;color:#CBD5E1!important;font-size:10px!important;white-space:nowrap!important}
+ .builder-shell>.sidebar .side-link.selected{background:#172846!important;border-color:#3B82F6!important;color:#F8FAFC!important}
+}
+
+
+/* Saved workflow editor: finish dark treatment for empty states, footers and step types. */
+.workflow-builder-main .canvas-footnote,.workflow-builder-main .builder-empty{background:#111722!important;border-color:#354052!important;color:#CBD5E1!important}
+.workflow-builder-main .builder-empty strong,.workflow-builder-main .builder-empty h2{color:#F8FAFC!important}
+.workflow-builder-main .builder-empty p,.workflow-builder-main .canvas-footnote{color:#94A3B8!important}
+.workflow-builder-main .node-icon{background:#172846!important;color:#8BB8FF!important}
+.workflow-builder-main .node-condition .node-icon{background:#241A3D!important;color:#C4A8FF!important}
+.workflow-builder-main .node-copy strong,.workflow-builder-main .panel-add>button strong{color:#F8FAFC!important}
+.workflow-builder-main .node-copy small,.workflow-builder-main .node-copy>span,.workflow-builder-main .panel-add>button small{color:#94A3B8!important}
+.workflow-builder-main .selected-type,.workflow-builder-main .panel-add>button{background:#111722!important;border-color:#354052!important;color:#E2E8F0!important}
+.workflow-builder-main .selected-type>span,.workflow-builder-main .add-icon{background:#172846!important;color:#8BB8FF!important}
+.workflow-builder-main .type-condition>span,.workflow-builder-main .condition-add{background:#241A3D!important;color:#C4A8FF!important}
+.workflow-builder-main .remove-step{background:#2A1A22!important;border-color:#6B3038!important;color:#FCA5A5!important}
+.workflow-builder-main .builder-notice,.workflow-builder-main .config-note{background:#172846!important;border-color:#2A4772!important;color:#CBD5E1!important}
+.workflow-builder-main .builder-error-banner{background:#381F20!important;border-color:#6B3939!important;color:#FECACA!important}
+
+
+.workflow-builder-main .builder-draft,.workflow-builder-main .builder-mode{background:#111722!important;border-color:#354052!important;color:#CBD5E1!important}
+.workflow-builder-main .builder-draft i,.workflow-builder-main .builder-mode i{background:#3B82F6!important}
+.workflow-builder-main .canvas-label{color:#94A3B8!important}
+.workflow-builder-main .node-connector,.workflow-builder-main .node-endpoint{color:#8BB8FF!important}
+.workflow-builder-main .node-connector{background:#354052!important}
+.workflow-builder-main .node-connector span{background:#0F141D!important}

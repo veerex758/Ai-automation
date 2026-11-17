@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 
 const catalogSource = readFileSync("nodes/provider-catalog.ts", "utf8");
 const directorySource = readFileSync("app/dashboard/registry-integrations-directory.tsx", "utf8");
+const catalogRouteSource = readFileSync("app/api/integrations/catalog/route.ts", "utf8");
+const registrySource = readFileSync("nodes/registry.ts", "utf8");
 const credentialsSource = readFileSync("lib/integrations/workspace-credentials.ts", "utf8");
 const connectionsSource = readFileSync("app/dashboard/connections/page.tsx", "utf8");
 const connectionTestSource = readFileSync("app/api/integrations/workspace/test/route.ts", "utf8");
@@ -66,4 +68,15 @@ test("saving or re-testing credentials invalidates any previous success before t
   assert.match(saveRouteSource, /last_test_status: null/);
   assert.match(connectionTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
   assert.match(resendTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
+});
+
+
+test("the Integrations directory exposes all 122 executable nodes separately from 100 provider entries", () => {
+  assert.match(catalogRouteSource, /getExecutableNodeCatalog/);
+  assert.match(catalogRouteSource, /getPublicNodeCatalog/);
+  assert.match(directorySource, /catalogData\.executableNodes/);
+  assert.match(directorySource, /setProviders\(catalogData\.nodes\)/);
+  assert.match(directorySource, /Node registry/);
+  assert.match(directorySource, /Provider catalogue/);
+  assert.match(registrySource, /export function getExecutableNodeCatalog\(\)/);
 });

@@ -165,3 +165,130 @@
   .flow-node-wrap>.node-connector{width:32px;flex-basis:32px}
   .flow-nodes>.canvas-add-node{margin-left:12px}
 }
+
+/* Rexnora visual workflow builder */
+.builder-shell{background:#0B0F14!important;color:#F8FAFC!important;font-family:'Geist','Inter',sans-serif!important}
+.builder-sidebar{background:#080B10!important;border-color:#2A2F3A!important}
+.builder-brand{color:#F8FAFC!important;font-family:'Inter',sans-serif!important;letter-spacing:0!important}
+.builder-brand-mark{background:transparent!important;border:0!important;transform:none!important;width:36px!important;height:34px!important}
+.builder-brand-mark img{width:100%;height:100%;object-fit:contain}
+.builder-period{color:#3B82F6!important}.builder-workspace{background:#111722!important;border-color:#2A2F3A!important}
+.builder-nav-label,.builder-sidebar-bottom{color:#94A3B8!important}.builder-nav-link{color:#CBD5E1!important}
+.builder-nav-link.active,.builder-nav-link:hover{background:rgba(59,130,246,.16)!important;color:#F8FAFC!important}
+.builder-topbar{background:#0B0F14!important;border-color:#2A2F3A!important;color:#F8FAFC!important}
+.canvas-panel,.step-settings,.builder-panel,.builder-card,.node-picker,.builder-modal{background:#1A1F29!important;color:#F8FAFC!important;border-color:#2A2F3A!important}
+.canvas-grid{background-color:#0F141D!important;background-image:radial-gradient(#303a4a 1px,transparent 1px)!important}
+.builder-node{background:#151C27!important;color:#F8FAFC!important;border-color:#354052!important}
+.builder-node:hover,.builder-node.selected-node{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.15)!important}
+.node-trigger,.settings-icon,.capability-icon,.security-mark{background:#172846!important;color:#8BB8FF!important}
+.node-action{background:#17253A!important;color:#9CC4FF!important}.node-condition{background:#241A3D!important;color:#C4A8FF!important}
+.canvas-add-node{background:#111722!important;border-color:#3B82F6!important;color:#9CC4FF!important}
+.settings-input,.settings-textarea,.builder-name-input,.builder-shell input,.builder-shell textarea,.builder-shell select{background:#111722!important;color:#F8FAFC!important;border-color:#2A2F3A!important}
+.settings-input:focus,.settings-textarea:focus{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.builder-primary-button{background:#F8FAFC!important;color:#0B0F14!important;border-color:#F8FAFC!important}
+.builder-secondary-button,.icon-button{background:#111722!important;color:#E2E8F0!important;border-color:#2A2F3A!important}
+.builder-eyebrow,.builder-breadcrumb{color:#94A3B8!important}.builder-breadcrumb a{color:#8BB8FF!important}
+.builder-notice{background:#111722!important;color:#CBD5E1!important;border-color:#2A2F3A!important}
+@media(max-width:700px){.builder-sidebar{background:#080B10!important}.builder-shell{min-width:0}}
+
+
+/* Shared Rexnora sidebar inside both builder shells. */
+.builder-shell>.sidebar{background:#080B10!important;border-color:#2A2F3A!important;color:#F8FAFC!important}
+@media(max-width:720px){
+ .builder-shell{display:flex!important;flex-direction:column!important;width:100%!important;min-width:0!important;overflow-x:clip!important}
+ .builder-shell>.sidebar{box-sizing:border-box!important;display:flex!important;flex-direction:column!important;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;padding:12px 14px!important;border-right:0!important;border-bottom:1px solid #2A2F3A!important;gap:10px!important}
+ .builder-shell>.sidebar .workspace-switch,.builder-shell>.sidebar .sidebar-bottom,.builder-shell>.sidebar .sidebar-label{display:none!important}
+ .builder-shell>.sidebar .side-nav{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px 8px!important;width:100%!important;max-height:none!important;overflow:visible!important}
+ .builder-shell>.sidebar .side-link{width:100%!important;min-width:0!important;min-height:36px!important;white-space:nowrap!important;overflow:hidden!important}
+ .builder-shell>.builder-main,.builder-shell>.workflow-builder-main{width:100%!important;min-width:0!important}
+}
+
+
+/* Rexnora final brand correction — visual builder (all states and nested surfaces). */
+.builder-shell,.builder-main,.builder-content{background:#0B0F14!important;color:#F8FAFC!important}
+.builder-content{color:#F8FAFC!important}
+.builder-title-row h1,.builder-title-row h2,.builder-title-row strong,.ai-workflow-copy h2,.canvas-toolbar strong,.step-settings h2,.step-settings h3{color:#F8FAFC!important}
+.builder-title-row p,.builder-eyebrow,.builder-progress span,.canvas-toolbar small,.canvas-foot,.builder-node-copy>span,.builder-node-copy small,.step-settings p,.step-settings label,.step-settings small{color:#94A3B8!important}
+.builder-eyebrow span{background:#3B82F6!important;box-shadow:0 0 0 4px rgba(59,130,246,.16)!important}
+.builder-name-input{color:#F8FAFC!important;background:transparent!important;border-color:#2A2F3A!important}
+.builder-progress span{background:#1A1F29!important;border-color:#2A2F3A!important}
+.ai-workflow-panel{background:#1A1F29!important;border-color:#2A2F3A!important;box-shadow:none!important}
+.ai-workflow-copy h2{color:#F8FAFC!important}
+.ai-workflow-copy p{color:#94A3B8!important}
+.builder-ai-badge{background:#172846!important;color:#8BB8FF!important;border:1px solid #2A4772!important}
+.ai-workflow-form label{color:#E2E8F0!important}
+.ai-workflow-form textarea,.builder-shell input,.builder-shell textarea,.builder-shell select{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.ai-workflow-form textarea::placeholder,.builder-shell input::placeholder,.builder-shell textarea::placeholder{color:#64748B!important}
+.ai-workflow-form textarea:focus{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.ai-workflow-form-footer small{color:#94A3B8!important}
+.ai-workflow-form button,.ai-workflow-form button[type="submit"]{background:#F8FAFC!important;border:1px solid #F8FAFC!important;color:#0B0F14!important}
+.canvas-panel,.step-settings,.builder-panel,.builder-card,.node-picker,.builder-modal{background:#1A1F29!important;color:#F8FAFC!important;border-color:#2A2F3A!important;box-shadow:none!important}
+.canvas-toolbar{background:#1A1F29!important;border-color:#2A2F3A!important}
+.canvas-toolbar button{background:#111722!important;border-color:#354052!important;color:#8BB8FF!important}
+.flow-canvas{background:#0F141D!important}
+.canvas-grid{background-color:#0F141D!important;background-image:radial-gradient(#303A4A 1px,transparent 1px)!important;opacity:.8!important}
+.builder-node{background:#151C27!important;border-color:#354052!important;color:#F8FAFC!important;box-shadow:none!important}
+.builder-node:hover,.builder-node.selected-node{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.builder-node-copy strong{color:#F8FAFC!important}
+.builder-node-copy small,.builder-node-copy>span{color:#94A3B8!important}
+.node-trigger,.node-action{background:#172846!important;color:#8BB8FF!important}
+.node-condition{background:#241A3D!important;color:#C4A8FF!important}
+.node-connector{color:#8BB8FF!important}
+.node-connector:before{background:#354052!important}
+.node-connector span{background:#0F141D!important;color:#8BB8FF!important}
+.canvas-add-node,.add-step-menu,.registry-picker-node,.registry-picker-operations{background:#111722!important;border-color:#354052!important;color:#E2E8F0!important}
+.add-step-menu button,.registry-picker-operations button{background:#1A1F29!important;color:#F8FAFC!important;border-color:#2A2F3A!important}
+.add-step-menu button:hover,.registry-picker-operations button:hover{background:#172846!important;border-color:#3B82F6!important}
+.canvas-zoom{background:#111722!important;border-color:#354052!important;color:#CBD5E1!important}
+.canvas-zoom button{color:#8BB8FF!important}
+.canvas-foot{background:#1A1F29!important;border-color:#2A2F3A!important}
+.canvas-foot i{background:#3B82F6!important}
+.settings-input,.settings-textarea,.settings-select,.step-settings input,.step-settings textarea,.step-settings select{background:#111722!important;border-color:#354052!important;color:#F8FAFC!important}
+.settings-input:focus,.settings-textarea:focus,.step-settings input:focus,.step-settings textarea:focus,.step-settings select:focus{border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.16)!important}
+.builder-notice{background:#172846!important;border-color:#2A4772!important;color:#CBD5E1!important}
+.builder-notice strong,.builder-notice b{color:#F8FAFC!important}
+.builder-secondary-button,.icon-button{background:#111722!important;color:#E2E8F0!important;border-color:#354052!important}
+.builder-primary-button{background:#F8FAFC!important;color:#0B0F14!important;border-color:#F8FAFC!important}
+.builder-primary-button:disabled{background:#2A2F3A!important;color:#94A3B8!important;border-color:#2A2F3A!important}
+.builder-shell .success,.builder-shell .status-success{color:#8BB8FF!important}
+.builder-shell .error,.builder-shell .status-error{color:#FCA5A5!important}
+.builder-shell .ai-node-canvas{background-color:#0F141D!important;background-image:radial-gradient(#303A4A .8px,transparent .8px)!important;border-color:#2A2F3A!important}
+.builder-shell .ai-generated-node{background:#1A1F29!important;border-color:#354052!important;box-shadow:none!important}
+.builder-shell .ai-generated-node>strong{color:#F8FAFC!important}
+.builder-shell .ai-generated-node>p,.builder-shell .ai-node-type,.builder-shell .ai-node-number{color:#94A3B8!important}
+.builder-shell .ai-node-review{background:#111722!important;border-color:#354052!important;color:#CBD5E1!important}
+.builder-shell .ai-generated-node-trigger,.builder-shell .flow-node-wrap>.builder-node.node-kind-trigger{border-top-color:#3B82F6!important}
+.builder-shell .ai-generated-node-action,.builder-shell .flow-node-wrap>.builder-node.node-kind-action{border-top-color:#8BB8FF!important}
+.builder-shell .ai-generated-node-condition,.builder-shell .flow-node-wrap>.builder-node.node-kind-condition{border-top-color:#8B5CF6!important}
+@media(max-width:720px){
+ .builder-shell>.sidebar{padding:10px 12px!important;gap:8px!important}
+ .builder-shell>.sidebar .dash-brand{padding:0 4px 4px!important}
+ .builder-shell>.sidebar .side-nav{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;width:100%!important;min-width:0!important;max-height:none!important;height:auto!important;overflow-x:auto!important;overflow-y:hidden!important;padding:2px 1px 7px!important;scrollbar-width:thin!important;scrollbar-color:#394150 #080B10!important}
+ .builder-shell>.sidebar .dashboard-nav-group{display:contents!important}
+ .builder-shell>.sidebar .side-link{display:inline-flex!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;min-height:34px!important;padding:7px 10px!important;border:1px solid #2A2F3A!important;border-radius:8px!important;background:#111722!important;color:#CBD5E1!important;font-size:10px!important;white-space:nowrap!important}
+ .builder-shell>.sidebar .side-link.selected{background:#172846!important;border-color:#3B82F6!important;color:#F8FAFC!important}
+ .builder-shell>.sidebar .side-icon{font-size:12px!important}
+}
+
+
+/* Complete dark treatment for builder helper panels, registry pickers and safety states. */
+.builder-shell .settings-kind,.builder-shell .settings-info,.builder-shell .builder-safety-note,
+.builder-shell .action-config-panel,.builder-shell .action-capability>span,
+.builder-shell .registry-picker-heading,.builder-shell .registry-picker-node{background:#111722!important;border-color:#2A2F3A!important;color:#CBD5E1!important}
+.builder-shell .settings-kind>span,.builder-shell .settings-info>span,.builder-shell .builder-safety-note>span{background:#172846!important;color:#8BB8FF!important}
+.builder-shell .settings-kind strong,.builder-shell .settings-info strong,.builder-shell .builder-safety-note strong,
+.builder-shell .action-config-panel>label,.builder-shell .action-field{color:#E2E8F0!important}
+.builder-shell .settings-kind small,.builder-shell .settings-info p,.builder-shell .builder-safety-note p,
+.builder-shell .action-catalog-status,.builder-shell .action-capability p{color:#94A3B8!important}
+.builder-shell .action-field input,.builder-shell .action-field textarea{background:#0B0F14!important;border-color:#354052!important;color:#F8FAFC!important}
+.builder-shell .action-capability>span.action-capability-live{background:#241A3D!important;color:#C4A8FF!important}
+.builder-shell .remove-step-button{background:#2A1A22!important;border-color:#6B3038!important;color:#FCA5A5!important}
+.builder-shell .builder-error-banner{background:#381F20!important;border-color:#6B3939!important;color:#FECACA!important}
+.builder-shell .builder-loading{background:#0B0F14!important;color:#94A3B8!important}
+
+
+.builder-shell .builder-draft-tag{background:#172846!important;border:1px solid #2A4772!important;color:#8BB8FF!important}
+.builder-shell .builder-draft-tag i{background:#3B82F6!important}
+.builder-shell .settings-heading>div>span{color:#94A3B8!important}
+.builder-shell .settings-icon{background:#172846!important;color:#8BB8FF!important;border:1px solid #2A4772!important}
+.builder-shell .settings-empty,.builder-shell .action-catalog-status{color:#94A3B8!important}

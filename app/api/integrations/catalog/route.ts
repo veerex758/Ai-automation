@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getPublicNodeCatalog } from "@/nodes/registry";
+import { getExecutableNodeCatalog, getPublicNodeCatalog } from "@/nodes/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,12 @@ export async function GET() {
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-    return NextResponse.json({ nodes: getPublicNodeCatalog() }, {
+    return NextResponse.json({
+      // Keep provider listings and executable workflow nodes distinct: the
+      // first release contains 100 provider entries and 122 native nodes.
+      nodes: getPublicNodeCatalog(),
+      executableNodes: getExecutableNodeCatalog(),
+    }, {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch {
