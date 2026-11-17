@@ -487,12 +487,9 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     const db = await client();
     const requestId = crypto.randomUUID();
     try {
-      const dispatched = await dispatch(db, crypto.randomUUID(), 2);
       const originalDefinition = { version: 1, nodes: [{ id: "saved-snapshot", type: "trigger" }] };
       const originalPayload = { source: "manual", input: { safeFixture: true } };
-      await db.query("update public.workflows set definition=$1::jsonb where id=$2",
-        [JSON.stringify(originalDefinition), ids.workflow]);
-      // Re-dispatch after changing the fixture to capture this exact snapshot.
+      // Start with a clean workspace fixture, then dispatch the exact saved definition.
       await resetFixture();
       await db.query("update public.workflows set definition=$1::jsonb where id=$2",
         [JSON.stringify(originalDefinition), ids.workflow]);
@@ -583,6 +580,12 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       await db.query("reset role");
       await db.query("set role authenticated");
       await assert.rejects(db.query("select * from public.execution_checkpoints"), /permission denied/);
+      await assert.rejects(db.query("select * from public.execution_dead_letter_recoveries"), /permission denied/);
+      await assert.rejects(
+        db.query("select public.create_dead_letter_dry_run_recovery($1,$2,$3,$4)",
+          ["40000000-0000-4000-8000-000000000001", ids.workspace, ids.user, crypto.randomUUID()]),
+        /permission denied/,
+      );
       await assert.rejects(
         db.query("select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,3)",
           [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()]),
