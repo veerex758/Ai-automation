@@ -141,8 +141,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rawDefinition = body.definition && typeof body.definition === "object" && !Array.isArray(body.definition)
-      ? body.definition as Record<string, unknown>
+    const requestBody = body as Record<string, unknown>;
+    const rawDefinition = requestBody.definition && typeof requestBody.definition === "object" && !Array.isArray(requestBody.definition)
+      ? requestBody.definition as Record<string, unknown>
       : {};
     const rawNodes = Array.isArray(rawDefinition.nodes) ? rawDefinition.nodes as Array<Record<string, unknown>> : [];
     const definitionToSave: Record<string, unknown> = {
