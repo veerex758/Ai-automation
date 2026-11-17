@@ -28,7 +28,7 @@ test("Paystack recurring setup requires authenticated billing manager and reusab
 test("Paystack renewal scheduler is cron protected, decrypts auth, charges and idempotently claims cycles",()=>{
  assert.match(paystackCron,/headers\.get\("authorization"\)!=="Bearer "\+cron/);assert.match(paystackCron,/charge_authorization/);assert.match(paystackCron,/billing_recurring_events/);assert.match(paystackCron,/current_period_end/);assert.ok(cron.crons.some(c=>c.path==="/api/internal/billing/paystack-renewals"));
 });
-test("invoice document uses the shared workspace permission implementation",()=>{assert.match(invoiceDocument,/hasWorkspacePermission/);assert.match(invoiceDocument,/@\/lib\/supabase\/permissions/);assert.doesNotMatch(invoiceDocument,/@\/lib\/supabase\/workspace/);});
+test("invoice document uses the shared workspace permission implementation",()=>{assert.match(invoiceDocument,/import\s+\{\s*hasWorkspacePermission\s*\}\s+from\s+"@\/lib\/supabase\/permissions"/);assert.doesNotMatch(invoiceDocument,/import\s+\{[^}]*hasWorkspacePermission[^}]*\}\s+from\s+"@\/lib\/supabase\/workspace"/);});
 test("tax invoice issuance requires legal seller settings and paid transaction; snapshots tax and customer",()=>{
  assert.match(invoice,/payment\.status!==\"success\"/);assert.match(invoice,/AIVANTA_LEGAL_ENTITY_NAME/);assert.match(invoice,/AIVANTA_TAX_JURISDICTION/);assert.match(invoice,/rate_basis_points/);assert.match(invoice,/tax_rule_snapshot/);assert.match(invoice,/next_workspace_invoice_number/);assert.match(invoice,/billing_invoices/);assert.match(lifecycle,/next_workspace_invoice_number/);
 });
