@@ -34,11 +34,12 @@ test("active workflow caps are enforced and AI credit is charged only for valida
   assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(agentRunRoute, /p_metric: "ai_credit".*feature: "agent_run"/);
 
+  const preflight = aiRoute.indexOf('supabase.rpc("get_workspace_entitlements"');
   const generation = aiRoute.indexOf("await generateWorkflow(");
   const graphValidation = aiRoute.indexOf("validateRegisteredSteps(rebuilt)");
   const creditMetering = aiRoute.indexOf('supabase.rpc("consume_workspace_usage"');
   const successLog = aiRoute.indexOf('outcome: "success"');
-  assert.ok(generation >= 0 && graphValidation > generation);
+  assert.ok(preflight >= 0 && generation > preflight && graphValidation > generation);
   assert.ok(creditMetering > graphValidation && successLog > creditMetering);
   assert.match(aiRoute, /p_metric: "ai_credit"/);
   assert.match(aiRoute, /feature: "workflow_draft_generation"/);
