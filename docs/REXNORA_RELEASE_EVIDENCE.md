@@ -10,8 +10,8 @@ Authoritative plan: `docs/REXNORA_99_READINESS_ROADMAP.md`
 - PR #216 (baseline reconciliation) was reviewed and squash-merged as `6a5173410adaad3991a32e92a858a4ce164b98e6`; it changed documentation only.
 - Product-core branch: `fix/product-core-ai-draft-canvas`.
 - Product-core PR: #207.
-- Current PR #207 head: `9a03b7283d085bde07a5264220b3290d418285b9`.
-- PR #207 is 196 commits ahead and zero behind current `main`; merge base is the current main SHA above. Its branch was reconciled by a two-parent merge commit preserving the PR tree and taking the current authoritative roadmap and baseline documents from main.
+- Application-code snapshot reviewed: `9a03b7283d085bde07a5264220b3290d418285b9`; the subsequent `f62c2f0` commit refreshed this evidence document only.
+- PR #207 is reconciled with current `main` at the SHA above. Its branch was reconciled by a two-parent merge commit preserving the PR tree and taking the authoritative roadmap and baseline documents from main. Check the PR for the live ahead/behind count and latest documentation-only commits.
 - PR #207 remains open. No implementation PR has been merged and no production deployment or production migration was performed.
 
 ## Stage 0 — Re-baseline and PR triage
@@ -35,9 +35,9 @@ Status: **In progress; exit gate not yet passed.**
 - Safe test runs use saved registry steps and bounded sample input; they are distinct from live provider execution. Generation alone never activates or executes a workflow.
 - Activation is still gated by a successful dry-run of the exact saved version and explicit registry execution evidence. Activation/live-execution acceptance belongs to the relevant later execution stage; it is not inferred from Stage 1 source tests.
 
-### Exact current-head automated checks
+### Automated checks for the application-code snapshot
 
-Current PR #207 head: `9a03b7283d085bde07a5264220b3290d418285b9`.
+Application-code snapshot: `9a03b7283d085bde07a5264220b3290d418285b9`. The later `f62c2f0` commit changes only this evidence document; it does not change application code.
 
 | Check | Run | Current result |
 |---|---:|---|
@@ -57,8 +57,8 @@ Earlier runs on the reconciled pre-fix commit `cec0098f68843e7b416e7681ddfe9e658
 ### Preview and staging evidence
 
 - Vercel project: `ai-automation` (`prj_zsRiRDLRTS22u3ygmuF1hdu7IMmm`).
-- Latest observed preview deployment for head `9a03b7283d085bde07a5264220b3290d418285b9`: `dpl_EHvwpvcWs1CbGbivsDbvCe5zNB6z`, state **QUEUED**. It is not a usable preview yet.
-- Older deployment states do not count as evidence for the current head.
+- Preview deployment for application-code snapshot `9a03b7283d085bde07a5264220b3290d418285b9`: `dpl_EHvwpvcWs1CbGbivsDbvCe5zNB6z`, state **READY**. URL: https://ai-automation-579i1w8td-veerex-org.vercel.app
+- The later `f62c2f0` evidence-document commit has its own preview queued; it contains no application-code changes. Use the READY application-code preview above for Stage 1 UI checks.
 - Preview environment entries for Gemini and Supabase were previously observed, but secret values were not retrieved. Presence does not prove the Gemini key is valid or that the preview is connected to the intended database.
 - No authenticated staging test has yet captured prompt → Gemini → valid graph → canvas edit → save → reload of the same version.
 - No runtime success log from the new Gemini provider/model evidence path has yet been captured.
