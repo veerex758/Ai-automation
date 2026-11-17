@@ -8,7 +8,7 @@ create table if not exists public.execution_dead_letter_recoveries (
   recovery_run_id uuid not null unique references public.workflow_runs(id) on delete cascade,
   request_id uuid not null,
   recovery_mode text not null default 'dry_run' check (recovery_mode = 'dry_run'),
-  requested_by uuid references auth.users(id) on delete set null,
+  requested_by uuid,
   requested_at timestamptz not null default now(),
   constraint execution_dead_letter_recoveries_request_unique unique (dead_letter_id, request_id)
 );
