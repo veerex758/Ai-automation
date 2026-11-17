@@ -166,12 +166,13 @@ export async function POST(request: NextRequest) {
       }, { status: 402 });
     }
 
-    const { providerModelUsed, providerFallbackUsed: _providerFallbackUsed, ...publicResult } = result;
+    const { providerModelUsed, providerFallbackUsed, ...publicResult } = result;
     logOperationalEvent({
       event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
       outcome: "success", statusCode: 200,
       durationMs: Math.max(0, Date.now() - startedAt),
       provider: "gemini", model: providerModelUsed || (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
+      fallbackUsed: providerFallbackUsed === true,
     });
     return jsonResponse({ ...publicResult, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
