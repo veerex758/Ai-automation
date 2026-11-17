@@ -30,6 +30,7 @@ test("defaults to Gemini endpoint and accepts GEMINI_API_KEY", async () => {
   } });
   assert.equal(requestedUrl, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
   assert.equal(requestBody.model, "gemini-3.8-flash");
+  assert.equal(requestBody.reasoning_effort, "low");
 });
 test("accepts a provider response only after schema validation", async () => {
   const result = await generateWorkflow({ prompt: "Make a manual workflow", env, fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) });
