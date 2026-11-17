@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
         provider: "gemini",
-        model: (process.env.GEMINI_AI_MODEL || "gemini-2.5-flash").trim(),
+        model: (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
         providerStatus: error && typeof error === "object" && "providerStatus" in error ? Number((error as { providerStatus?: unknown }).providerStatus) : undefined,
         providerReason: error && typeof error === "object" && "providerReason" in error ? (error as { providerReason?: unknown }).providerReason : undefined,
         providerType: error && typeof error === "object" && "providerType" in error ? (error as { providerType?: unknown }).providerType : undefined,
