@@ -91,7 +91,7 @@ export default function AIAssistantPage() {
       const created = await createResponse.json() as { workflow?: { id: string }; error?: string };
       if (!createResponse.ok || !created.workflow?.id) throw new Error(created.error || "Could not save the validated workspace draft.");
       const workflowId = created.workflow.id;
-      router.push(`/dashboard/connections?workflowId=${encodeURIComponent(workflowId)}`);
+      router.push(`/dashboard/workflows/${encodeURIComponent(workflowId)}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save this draft. It has not been executed.");
     } finally {
