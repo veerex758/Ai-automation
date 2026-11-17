@@ -93,8 +93,6 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
         if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role nologin bypassrls; end if;
       end $$;
-      create schema if not exists auth;
-      create table if not exists auth.users (id uuid primary key);
       create table public.workspaces (id uuid primary key);
       create table public.workflows (
         id uuid primary key, workspace_id uuid not null references public.workspaces(id),
@@ -112,7 +110,6 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       grant usage on schema public to anon, authenticated, service_role;
     `);
-    await setup.query("insert into auth.users(id) values ($1) on conflict do nothing", [ids.user]);
     await setup.query("insert into public.workspaces values ($1),($2)", [ids.workspace, ids.workspaceOther]);
     await setup.query(
       "insert into public.workflows (id,workspace_id,version,status,definition,created_by) values ($1,$2,1,'active',$3::jsonb,$4),($5,$2,1,'active',$3::jsonb,$4)",
