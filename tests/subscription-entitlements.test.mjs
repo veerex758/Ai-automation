@@ -27,13 +27,22 @@ test("free and paid plan quotas are encoded in server-side metering", () => {
   for (const cap of ["workflow_execution' then 300", "workflow_execution' then 2000", "workflow_execution' then 10000", "workflow_execution' then 50000"]) assert.ok(migration.includes(cap), `missing cap ${cap}`);
 });
 
-test("active workflow caps are enforced transactionally and AI usage consumes AI credits", () => {
+test("active workflow caps are enforced and AI credit is charged only for validated drafts", () => {
   assert.match(hardeningMigration, /pg_advisory_xact_lock/);
   assert.match(hardeningMigration, /workflows_enforce_active_entitlement/);
   assert.match(hardeningMigration, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(agentRunRoute, /p_metric: "ai_credit".*feature: "agent_run"/);
-  assert.match(aiRoute, /p_metric: "ai_credit".*workflow_draft_generation/);
+
+  const generation = aiRoute.indexOf("await generateWorkflow(");
+  const graphValidation = aiRoute.indexOf("validateRegisteredSteps(rebuilt)");
+  const creditMetering = aiRoute.indexOf('supabase.rpc("consume_workspace_usage"');
+  const successLog = aiRoute.indexOf('outcome: "success"');
+  assert.ok(generation >= 0 && graphValidation > generation);
+  assert.ok(creditMetering > graphValidation && successLog > creditMetering);
+  assert.match(aiRoute, /p_metric: "ai_credit"/);
+  assert.match(aiRoute, /feature: "workflow_draft_generation"/);
+  assert.doesNotMatch(aiRoute.slice(0, generation), /consume_workspace_usage/);
   assert.match(workflowRunRoute, /p_metric: "workflow_execution"/);
   assert.match(workflowRunRoute, /One workflow run is one execution, including a safe dry-run/);
   assert.ok(hardeningMigration.includes("enterprise"));
