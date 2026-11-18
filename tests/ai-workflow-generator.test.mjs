@@ -271,3 +271,34 @@ test("reports an exhausted primary and fallback 503 as a distinct temporary over
   assert.equal(models.length, 4);
   assert.equal(models[3], "gemini-3.5-flash-lite");
 });
+
+
+test("provider honors a three-second Retry-After header within the bounded retry window", async () => {
+  const delays = [];
+  let calls = 0;
+  const result = await generateWorkflow({
+    prompt: "Make a manual workflow",
+    env,
+    randomImpl: () => 0,
+    sleepImpl: async (milliseconds) => { delays.push(milliseconds); },
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: name => name.toLowerCase() === "retry-after" ? "3" : null },
+          json: async () => ({ error: { status: "UNAVAILABLE" } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }),
+      };
+    },
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [3000]);
+  assert.equal(result.providerFallbackUsed, false);
+});
