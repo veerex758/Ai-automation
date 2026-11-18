@@ -197,7 +197,7 @@ test("provider retries 503 responses with bounded exponential backoff", async ()
   assert.equal(result.providerFallbackUsed, false);
 });
 
-test("Gemini 3.5 Flash-Lite is used only after the primary model exhausts its 503 retries", async () => {
+test("Gemini 3.5 Flash-Lite is used only after the primary model exhausts its bounded 503 retry", async () => {
   const models = [];
   const retryEnv = { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" };
   const delays = [];
@@ -224,10 +224,35 @@ test("Gemini 3.5 Flash-Lite is used only after the primary model exhausts its 50
       };
     },
   });
-  assert.deepEqual(models, [
-    "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite",
-  ]);
-  assert.deepEqual(delays, [200, 400]);
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"]);
+  assert.deepEqual(delays, [200]);
+  assert.equal(result.providerModelUsed, "gemini-3.5-flash-lite");
+  assert.equal(result.providerFallbackUsed, true);
+});
+
+
+test("a primary-model timeout switches to the configured fallback without repeating the slow model", async () => {
+  const models = [];
+  const result = await generateWorkflow({
+    prompt: "Make a manual workflow",
+    env: { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" },
+    fetchImpl: async (_url, options) => {
+      const model = JSON.parse(options.body).model;
+      models.push(model);
+      if (model === "gemini-3.8-flash") {
+        const error = new Error("provider timeout");
+        error.name = "AbortError";
+        throw error;
+      }
+      assert.equal(model, "gemini-3.5-flash-lite");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }),
+      };
+    },
+  });
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.5-flash-lite"]);
   assert.equal(result.providerModelUsed, "gemini-3.5-flash-lite");
   assert.equal(result.providerFallbackUsed, true);
 });
@@ -268,8 +293,8 @@ test("reports an exhausted primary and fallback 503 as a distinct temporary over
     },
   }), error => error.message === "AI_PROVIDER_OVERLOADED" &&
     error.providerStatus === 503 && error.providerModel === "gemini-3.5-flash-lite");
-  assert.equal(models.length, 4);
-  assert.equal(models[3], "gemini-3.5-flash-lite");
+  assert.equal(models.length, 3);
+  assert.equal(models[2], "gemini-3.5-flash-lite");
 });
 
 
