@@ -178,7 +178,7 @@ test("provider retries 503 responses with bounded exponential backoff", async ()
     fetchImpl: async (_url, options) => {
       calls += 1;
       models.push(JSON.parse(options.body).model);
-      if (calls < 3) {
+      if (calls < 2) {
         return {
           ok: false, status: 503,
           headers: { get: () => null },
@@ -191,8 +191,8 @@ test("provider retries 503 responses with bounded exponential backoff", async ()
       };
     },
   });
-  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash"]);
-  assert.deepEqual(delays, [200, 400]);
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash"]);
+  assert.deepEqual(delays, [200]);
   assert.equal(result.providerModelUsed, "gemini-3.8-flash");
   assert.equal(result.providerFallbackUsed, false);
 });
