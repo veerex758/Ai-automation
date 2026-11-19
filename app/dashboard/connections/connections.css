@@ -2,3 +2,45 @@
 .workspace-integration-manager{margin-top:28px;border:1px solid #e2e9e3;border-radius:18px;padding:22px;background:#fff;box-shadow:0 5px 20px #203c2608}.workspace-integration-layout{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:20px}.workspace-integration-saved h3,.workspace-integration-form h3{font-size:14px;margin:0 0 12px;letter-spacing:-.01em}.workspace-integration-saved-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-top:1px solid #edf1ed}.workspace-integration-saved-row>div{display:flex;flex-direction:column;gap:5px;min-width:0}.workspace-integration-saved-row strong{font-size:13px}.workspace-integration-saved-row>div span{font-size:11px;color:#718078}.workspace-integration-form{display:flex;flex-direction:column;gap:9px;padding:17px;border:1px solid #e7ede8;border-radius:13px;background:#fbfcfb}.workspace-integration-form label{font-size:12px;font-weight:650;color:#425448}.workspace-integration-form select,.workspace-secret-field input{width:100%;min-height:42px;border:1px solid #dce5dd;border-radius:9px;padding:10px 11px;background:#fff;color:#17211b;font:inherit;font-size:13px}.workspace-secret-field{display:flex;flex-direction:column;gap:7px;margin-top:4px}.workspace-integration-form button{min-height:42px;border:0;border-radius:9px;padding:10px 14px;background:#173d29;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-top:6px}.workspace-integration-form button:disabled{opacity:.6;cursor:wait}.workspace-integration-form>p{font-size:11px;line-height:1.5;color:#718078;margin:2px 0 0}@media(max-width:650px){.workspace-integration-manager{padding:17px}.workspace-integration-layout{grid-template-columns:1fr;gap:18px}}
 
 .connections-return{display:inline-flex;align-items:center;gap:12px;margin-top:18px;padding:11px 15px;border-radius:10px;background:#173d29;color:#fff;text-decoration:none;font-size:13px;font-weight:700}.connections-return:hover{background:#245438}
+
+/* Rexnora integrations page dark theme and shared dashboard shell. */
+.connections-shell .dashboard-main{background:#0B0F14!important}
+.connections-shell .connections-page{max-width:1240px;margin:0 auto;padding:0 0 42px;color:#F8FAFC!important}
+.connections-shell .connections-top span,.connections-shell .connections-eyebrow{color:#94A3B8!important}
+.connections-shell .connections-top a{color:#8BB8FF!important}
+.connections-shell .connections-hero h1,.connections-shell .connections-list-heading h2,.connections-shell .connection-card-copy h2,.connections-shell .workspace-integration-saved h3,.connections-shell .workspace-integration-form h3{color:#F8FAFC!important}
+.connections-shell .connections-hero p,.connections-shell .connection-card-copy p,.connections-shell .connections-list-heading p,.connections-shell .connections-footnote{color:#94A3B8!important}
+.connections-shell .connection-card,.connections-shell .connections-list,.connections-shell .workspace-integration-manager{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.connections-shell .workspace-integration-form{background:#111722!important;border-color:#2A2F3A!important}
+.connections-shell .workspace-integration-form label,.connections-shell .workspace-integration-saved-row strong,.connections-shell .connection-row-copy strong{color:#F8FAFC!important}
+.connections-shell .workspace-integration-form select,.connections-shell .workspace-secret-field input{background:#0B0F14!important;border-color:#354052!important;color:#F8FAFC!important}
+.connections-shell .workspace-integration-form>p,.connections-shell .workspace-integration-saved-row>div span,.connections-shell .connection-row-copy span{color:#94A3B8!important}
+.connections-shell .workspace-integration-form button,.connections-shell .connection-button{background:#F8FAFC!important;color:#0B0F14!important}
+.connections-shell .connection-scope,.connections-shell .connection-status{color:#8BB8FF!important}
+.connections-shell .connection-row,.connections-shell .workspace-integration-saved-row{border-color:#2A2F3A!important}
+.connections-shell .connections-notice{background:#172846!important;color:#DCEBFF!important;border:1px solid #2A4772!important}
+.connections-shell .connections-error{background:#321D22!important;color:#FECACA!important;border:1px solid #6B303B!important}
+@media(max-width:720px){.connections-shell .connections-page{padding:0 0 30px}.connections-shell .connections-top{margin-bottom:24px}}
+
+
+/* Connected-account manager remains separate from the 122-node registry. */
+.app-shell .connections-page{color:#F8FAFC}
+.app-shell .connections-eyebrow{color:#94A3B8}
+.app-shell .connections-hero h1,.app-shell .connection-card-copy h2,.app-shell .connections-list-heading h2,.app-shell .workspace-integration-saved h3,.app-shell .workspace-integration-form h3{color:#F8FAFC}
+.app-shell .connections-hero p,.app-shell .connection-card-copy p,.app-shell .connections-list-heading p,.app-shell .connections-footnote,.app-shell .workspace-integration-saved-row span{color:#94A3B8}
+.app-shell .connection-card,.app-shell .connections-list,.app-shell .workspace-integration-manager{background:#1A1F29;border-color:#2A2F3A;color:#F8FAFC;box-shadow:none}
+.app-shell .connection-row{border-color:#2A2F3A}
+.app-shell .connection-row-copy strong{color:#F8FAFC}
+.app-shell .connections-error{background:#321D22;border:1px solid #6B303B;color:#FECACA}
+.app-shell .connections-notice{background:#172846;border:1px solid #2A4772;color:#BFDBFE}
+.app-shell .connection-button{background:#172846;color:#BFDBFE;border:1px solid #2A4772}
+.app-shell .connection-button:hover{background:#1E3A63}
+.app-shell .workspace-integration-saved-row{border-color:#2A2F3A}
+.app-shell .workspace-integration-form input,.app-shell .workspace-integration-form select,.app-shell .workspace-integration-form textarea{background:#111722;border-color:#354052;color:#F8FAFC}
+.app-shell .connections-return{color:#8BB8FF}
+
+
+/* Keep connected-account cards on the same Rexnora dark surface as the dashboard. */
+.app-shell .connection-card{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important;box-shadow:none!important}
+.app-shell .connections-list{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important}
+.app-shell .workspace-integration-manager{background:#1A1F29!important;border-color:#2A2F3A!important;color:#F8FAFC!important}

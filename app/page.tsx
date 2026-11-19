@@ -1,79 +1,76 @@
 import Link from "next/link";
 
 const features = [
-  { icon: "✺", title: "AI Automation", description: "Turn your ideas into workflows using natural language." },
-  { icon: "▣", title: "Visual Workflow Builder", description: "Build, edit, and validate workflow steps in a clear visual workspace." },
-  { icon: "⌘", title: "Integration Catalog", description: "Review supported services, permissions, and connection requirements before setup." },
-  { icon: "♧", title: "AI Workflow Drafting", description: "Turn a plain-language idea into a workflow draft you can inspect and edit." },
-  { icon: "⬟", title: "Enterprise Security", description: "Protect your data with workspace boundaries and careful access controls." },
+  ["↗", "Capture every enquiry", "Bring leads and requests into one connected workflow."],
+  ["✧", "Let AI handle the first pass", "Organize incoming information and prepare useful summaries for your team."],
+  ["⌁", "Connect the tools you use", "Move information between your apps without repetitive copy and paste."],
+  ["✓", "Keep people in control", "Review, test and approve workflows before they run."],
+  ["◷", "Know what happened", "Follow workflow activity and see where a run needs attention."],
+  ["▣", "Build around your process", "Start with a simple automation and expand as your needs grow."]
 ];
 
-function Brand({ light = false }: { light?: boolean }) {
-  return <Link className={`brand ${light ? "brand-light" : ""}`} href="/" aria-label="Aivanta home"><span className="brand-mark"><img className="brand-logo" src="/aivanta-mark.svg" alt="" aria-hidden="true" /></span><span>Aivanta</span></Link>;
+function Brand() {
+  return <Link className="rx-brand" href="/" aria-label="Rexnora home">
+    <img className="rx-lockup" src="/rexnora-lockup.svg" alt="Rexnora"/>
+  </Link>;
+}
+
+function DashboardPreview() {
+ return <div className="rx-dashboard-preview" aria-label="Illustrative Rexnora dashboard preview">
+  <aside className="rx-preview-sidebar">
+   <Brand/>
+   <div className="rx-preview-nav">
+    {["⌂|Dashboard","♧|Automations","⚙|Integrations","♙|Marketplace","✧|AI Agent","▥|Analytics","▣|Billing","⚙|Settings"].map((item,i)=><div className={i===0?"active":""} key={item}><span>{item.split("|")[0]}</span>{item.split("|")[1]}</div>)}
+   </div>
+   <div className="rx-upgrade"><span>✦ Make work flow</span><p>Less busywork. More momentum.</p><b>Get Started →</b></div>
+  </aside>
+  <div className="rx-preview-main">
+   <div className="rx-preview-top"><div className="rx-search"><span>⌕</span>Search workflows...<kbd>⌘ K</kbd></div><div className="rx-top-actions"><span>♧</span><i>R</i></div></div>
+   <section className="rx-welcome-panel">
+    <div className="rx-welcome-copy"><span className="rx-welcome-chip">✦ Your work, connected</span><h2>Automate smarter,<br/><em>move faster.</em></h2><p>Connect your tools. Build a workflow.<br/>Keep every step in view.</p><div><Link href="/dashboard">Create Workflow →</Link><Link href="/dashboard/templates">Explore Templates</Link></div></div>
+    <div className="rx-orbit-art"><span className="rx-orbit-ring"/><img src="/rexnora-mark.svg" alt="Rexnora mark"/></div>
+   </section>
+   <div className="rx-preview-stats">
+    <article><span className="rx-stat-icon">ϟ</span><div><strong>Workflows</strong><small>Build repeatable processes</small></div></article>
+    <article><span className="rx-stat-icon lavender">▷</span><div><strong>Connected apps</strong><small>Bring your tools together</small></div></article>
+    <article><span className="rx-stat-icon success">✓</span><div><strong>Run history</strong><small>See what happened</small></div></article>
+   </div>
+  </div>
+ </div>
+}
+
+function AutomationShowcase() {
+ return <section className="rx-brand-panel rx-automation-panel" aria-labelledby="automation-heading">
+  <div className="rx-panel-heading">
+   <span className="rx-automation-eyebrow">FROM MANUAL TASKS TO MOMENTUM</span>
+   <h2 id="automation-heading">Let your workflow do the busywork.</h2>
+   <p>Turn the steps your team repeats every day into connected automations you can review and control.</p>
+  </div>
+  <div className="rx-automation-flow" aria-label="Example lead qualification workflow">
+   <article><span className="rx-flow-number">01</span><div><strong>New enquiry arrives</strong><small>A lead comes in from your chosen channel</small></div><span className="rx-flow-symbol">↘</span></article>
+   <article><span className="rx-flow-number">02</span><div><strong>AI organizes the details</strong><small>Key information is summarized for your team</small></div><span className="rx-flow-symbol">✧</span></article>
+   <article><span className="rx-flow-number">03</span><div><strong>Your team gets the next step</strong><small>A clear update is sent to the right place</small></div><span className="rx-flow-symbol">→</span></article>
+   <article><span className="rx-flow-number">04</span><div><strong>The outcome is recorded</strong><small>Track what ran and what needs attention</small></div><span className="rx-flow-symbol">✓</span></article>
+  </div>
+  <div className="rx-automation-note"><span>✦</span><p><strong>You stay in control.</strong> Review the workflow, test it safely and activate it when it is ready.</p></div>
+ </section>
 }
 
 export default function Home() {
-  return (
-    <main className="reference-home">
-      <header className="reference-header">
-        <div className="reference-nav-inner">
-          <Brand light />
-          <nav className="reference-nav-links" aria-label="Main navigation">
-            <Link className="active" href="/">Home</Link><Link href="/features">Features</Link><Link href="/pricing">Pricing</Link><Link href="/resources">Resources <span>⌄</span></Link>
-          </nav>
-          <div className="reference-auth"><Link className="sign-in-link" href="/login">Sign In</Link><Link className="reference-primary small" href="/dashboard">Get Started Free</Link></div>
-        </div>
-      </header>
-
-      <section className="reference-hero" aria-labelledby="hero-title">
-        <div className="reference-hero-inner">
-          <div className="reference-hero-copy">
-            <div className="reference-eyebrow">AI-POWERED AUTOMATION PLATFORM</div>
-            <h1 id="hero-title">Automate More.<br /><span>Achieve More.</span></h1>
-            <p>Aivanta helps teams turn ideas into clear workflow drafts, review every step, and prepare automations with control built in.</p>
-            <div className="reference-hero-actions"><Link className="reference-primary" href="/dashboard">Get Started <span>→</span></Link><a className="reference-secondary" href="#product-preview"><span className="play-icon">▶</span> Watch Demo</a></div>
-            <div className="reference-trust-points"><span>▣ Workspace-scoped access</span><span>♧ Human-reviewed drafts</span><span>⊘ No automatic execution</span></div>
-          </div>
-          <div className="reference-hero-visual" id="product-preview">
-            <div className="hero-orb" />
-            <div className="floating-app-window">
-              <div className="mini-sidebar"><div className="mini-brand"><img src="/aivanta-mark.svg" alt="" /> Aivanta</div><span>▦ Dashboard</span><span className="mini-active">↗ Workflows</span><span>⌘ Integrations</span><span>♧ AI Agents</span><span>▧ Templates</span><span>⚙ Settings</span></div>
-              <div className="mini-workflow"><div className="mini-window-heading"><span>WORKFLOW PREVIEW</span><i>•••</i></div><div className="mini-node"><b className="node-icon form-icon">▤</b><span><strong>New Lead</strong><small>Website Form</small></span><b className="node-check">✓</b></div><div className="mini-connector">↓</div><div className="mini-node"><b className="node-icon sheets-icon">▦</b><span><strong>Prepare lead task</strong><small>Internal task · Draft only</small></span><b className="node-check">✓</b></div><div className="mini-connector">↓</div><div className="mini-node"><b className="node-icon gmail-icon">✓</b><span><strong>Human review</strong><small>Check details before action</small></span><b className="node-check">✓</b></div><Link className="mini-assistant-button" href="/dashboard/ai-assistant">✺ AI Assistant <span>＋</span></Link></div>
-            </div>
-            <div className="reference-chat-card"><span className="chat-spark">✺</span><div><strong>AI assistant</strong><p>Draft a lead follow-up workflow with an internal task and a human review step.</p><Link href="/dashboard/builder">Review workflow ↗</Link></div></div>
-            <div className="reference-live-card"><span>✓</span><div><strong>You&apos;re in control</strong><small>Review and save. Execution stays off.</small></div></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="reference-features" id="features">
-        <div className="reference-section-heading"><h2>A Clearer Way to Design Your Workflows</h2><p>Start with an idea, shape each step, and keep people in control<br className="desktop-break" /> while your workspace grows.</p></div>
-        <div className="reference-feature-grid">{features.map((feature) => <article className="reference-feature-card" key={feature.title}><div className="reference-feature-icon">{feature.icon}</div><h3>{feature.title}</h3><p>{feature.description}</p></article>)}</div>
-      </section>
-
-      <section className="reference-workspace-section">
-        <div className="reference-workspace-copy"><div className="reference-eyebrow">ONE CLEAR VIEW OF YOUR WORK</div><h2>Your automations,<br /><span>all in one place.</span></h2><p>Manage saved drafts, inspect workflow steps, and review available activity from one focused workspace.</p><Link className="reference-primary" href="/dashboard">Explore the dashboard <span>→</span></Link></div>
-        <div className="reference-dashboard-preview">
-          <div className="preview-dashboard-sidebar"><div className="mini-brand"><img src="/aivanta-mark.svg" alt="" /> Aivanta</div>{["Dashboard","Workflows","Integrations","AI Agents","Templates","Analytics","Billing","Settings"].map((item,i)=><span className={i===0?"selected":""} key={item}>{["▦","↗","⌘","✺","▧","▥","◇","⚙"][i]} {item}</span>)}</div>
-          <div className="preview-dashboard-main"><div className="preview-dashboard-top"><span>⌕ Search anything...</span><span>♧　◉</span></div><div className="preview-welcome"><div><strong>Welcome back 👋</strong><small>Here&apos;s what&apos;s happening with your automation platform today.</small></div><Link href="/dashboard">＋ Create Workflow</Link></div><div className="preview-stats"><div><small>Total Workflows</small><strong>—</strong><em>Live workspace data</em></div><div><small>Active Workflows</small><strong>—</strong><em>Live workspace data</em></div><div><small>Successful Runs</small><strong>—</strong><em>Connected run history</em></div><div><small>Failed Runs</small><strong>—</strong><em>Connected run history</em></div></div><div className="preview-chart-row"><div className="preview-chart"><strong>Workflow Performance</strong><div className="chart-art"><svg viewBox="0 0 360 105" role="img" aria-label="Illustrative workflow performance chart"><path d="M0 82 C30 65 38 82 60 61 S94 70 112 40 S155 71 179 44 S210 61 235 33 S274 53 300 20 S334 22 360 8" fill="none" stroke="#b7f65c" strokeWidth="3" strokeLinecap="round"/><path d="M0 82 C30 65 38 82 60 61 S94 70 112 40 S155 71 179 44 S210 61 235 33 S274 53 300 20 S334 22 360 8 L360 105 L0 105Z" fill="url(#chartFill)" opacity=".35"/><defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#9be64b"/><stop offset="1" stopColor="#9be64b" stopOpacity="0"/></linearGradient></defs></svg></div></div><div className="preview-success"><strong>Success Rate</strong><div className="success-ring"><span>—<small>Awaiting data</small></span></div></div></div><div className="preview-recent"><strong>Recent Workflows</strong><p>Connect your workspace to see real workflow status and execution history.</p><Link href="/dashboard">Open workspace ↗</Link></div></div>
-        </div>
-      </section>
-
-      <section className="reference-features pilot-templates" id="templates">
-        <div className="reference-section-heading">
-          <div className="reference-eyebrow">START WITH A PROVEN PATTERN</div>
-          <h2>Useful automations. Clear next steps.</h2>
-          <p>Choose a starter workflow, review its steps, and adapt it to the way your team works.</p>
-        </div>
-        <div className="reference-feature-grid">
-          <article className="reference-feature-card"><div className="reference-feature-icon">↗</div><h3>Lead Capture &amp; Welcome Email</h3><p>Capture a new enquiry, organize lead details, and prepare a welcome message for review.</p><Link href="/dashboard/templates">Explore starter ↗</Link></article>
-          <article className="reference-feature-card"><div className="reference-feature-icon">◷</div><h3>Support Ticket Triage</h3><p>Structure incoming support requests and prepare the right follow-up task.</p><Link href="/dashboard/templates">Explore starter ↗</Link></article>
-          <article className="reference-feature-card"><div className="reference-feature-icon">✓</div><h3>Lead Follow-up</h3><p>Keep prospects organized and create consistent follow-up tasks.</p><Link href="/dashboard/templates">Explore starter ↗</Link></article>
-        </div>
-        <div className="pilot-template-actions"><Link className="reference-primary" href="/dashboard/templates">Browse all templates <span>→</span></Link><Link className="reference-secondary" href="/dashboard">Start a pilot <span>→</span></Link></div>
-      </section>
-
-      <footer className="reference-footer"><Brand light /><span>Describe it. Build it. Trust it.</span><span>© {new Date().getFullYear()} Aivanta</span></footer>
-    </main>
-  );
+ return <main className="rx-home" style={{ fontFamily: "'Geist', 'Inter', sans-serif" }}>
+  <section className="rx-top">
+   <div className="rx-hero">
+    <div className="rx-hero-art rx-hero-art-one"/><div className="rx-hero-art rx-hero-art-two"/>
+    <Brand/>
+    <h1>Intelligence in <span>motion.</span></h1>
+    <p>Describe it. Build it. Run it.</p>
+    <div className="rx-hero-actions"><Link href="/dashboard">Get Started <span>→</span></Link><Link href="#platform">Explore Platform</Link></div>
+   </div>
+   <AutomationShowcase/>
+  </section>
+  <section className="rx-lower" id="platform">
+   <DashboardPreview/>
+   <div className="rx-platform-copy"><span className="rx-automation-eyebrow">ONE PLATFORM. LESS BUSYWORK.</span><h2>Build. Automate. <span>Scale.</span></h2><p>Bring your everyday tools and processes together. Let Rexnora help turn repetitive work into workflows your team can understand and control.</p><div className="rx-accent-rule"/><div className="rx-feature-grid">{features.map(([icon,title,description])=><article key={title}><span>{icon}</span><b>{title}</b><small>{description}</small></article>)}</div><Link className="rx-platform-cta" href="/dashboard">Build your first workflow <span>→</span></Link></div>
+  </section>
+ </main>;
 }

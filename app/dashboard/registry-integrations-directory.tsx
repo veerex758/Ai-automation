@@ -14,7 +14,7 @@ type ConnectionRecord = {
   provider: string; status?: string | null; last_test_status?: string | null;
   last_tested_at?: string | null; account_email?: string | null; product?: string;
 };
-type CatalogPayload = { nodes?: RegistryNode[]; error?: string };
+type CatalogPayload = { nodes?: RegistryNode[]; executableNodes?: RegistryNode[]; error?: string };
 type WorkspacePayload = { integrations?: ConnectionRecord[]; liveExecutionEnabled?: boolean; liveProvidersEnabled?: string[]; error?: string };
 type GooglePayload = { connections?: ConnectionRecord[]; error?: string };
 type ApprovalRecord = { node_id: string; operation_id: string; decision: "approved" | "revoked"; provider: string };
@@ -43,6 +43,10 @@ const officialBrandAssets: Record<string, { slug: string; label: string }> = {
     "label": "gmail"
   },
   "google_sheets": {
+    "slug": "googlesheets",
+    "label": "Google Sheets"
+  },
+  "sheets": {
     "slug": "googlesheets",
     "label": "Google Sheets"
   },
@@ -375,7 +379,7 @@ const nativeNodeMarks: Record<string, string> = {
 };
 
 const googleProductForNode: Record<string, string> = {
-  gmail: "gmail", google_sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
+  gmail: "gmail", sheets: "sheets", google_sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
   google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
 };
 const providerDisplayName = (node: RegistryNode) => officialBrandAssets[node.id]?.label ?? node.name;
@@ -484,6 +488,8 @@ function stateLabel(state: ConnectionState) {
 
 export default function RegistryIntegrationsDirectory() {
   const [nodes, setNodes] = useState<RegistryNode[]>([]);
+  const [providers, setProviders] = useState<RegistryNode[]>([]);
+  const [inventory, setInventory] = useState<"nodes" | "providers">("nodes");
   const [workspace, setWorkspace] = useState<ConnectionRecord[]>([]);
   const [google, setGoogle] = useState<ConnectionRecord[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
@@ -515,8 +521,8 @@ export default function RegistryIntegrationsDirectory() {
         approvalsResponse.json().catch(() => ({})) as Promise<ApprovalPayload>,
       ]);
       if (!active) return;
-      if (!catalogResponse.ok || !Array.isArray(catalogData.nodes)) setCatalogState("error");
-      else { setNodes(catalogData.nodes); setCatalogState("ready"); }
+      if (!catalogResponse.ok || !Array.isArray(catalogData.executableNodes) || !Array.isArray(catalogData.nodes)) setCatalogState("error");
+      else { setNodes(catalogData.executableNodes); setProviders(catalogData.nodes); setCatalogState("ready"); }
       if (!workspaceResponse.ok || !googleResponse.ok) setStatusUnavailable(true);
       setWorkspace(Array.isArray(workspaceData.integrations) ? workspaceData.integrations : []);
       setLiveExecutionEnabled(workspaceData.liveExecutionEnabled === true);
@@ -528,13 +534,14 @@ export default function RegistryIntegrationsDirectory() {
     return () => { active = false; };
   }, []);
 
-  const filtered = useMemo(() => nodes.filter((node) => {
+  const activeNodes = inventory === "nodes" ? nodes : providers;
+  const filtered = useMemo(() => activeNodes.filter((node) => {
     const haystack = [node.name, node.id, node.category, node.group, ...node.actions.map((item) => item.name), ...node.triggers.map((item) => item.name)].join(" ").toLowerCase();
     return haystack.includes(query.trim().toLowerCase());
-  }), [nodes, query]);
+  }), [activeNodes, query]);
 
-  const connectedCount = nodes.filter((node) => connectionState(node, workspace, google, statusUnavailable) === "connected").length;
-  const registeredCount = nodes.filter((node) => node.executionStatus === "registered").length;
+  const connectedCount = activeNodes.filter((node) => connectionState(node, workspace, google, statusUnavailable) === "connected").length;
+  const registeredCount = activeNodes.filter((node) => node.executionStatus === "registered").length;
   const toggle = (id: string) => setExpanded((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
 
   async function changeApproval(node: RegistryNode, operation: Operation, kind: "trigger" | "action", decision: "approved" | "revoked") {
@@ -584,16 +591,20 @@ export default function RegistryIntegrationsDirectory() {
   return <section className="registry-integrations" aria-label="Aivanta provider directory">
     <div className="registry-directory-toolbar">
       <div>
-        <strong>{nodes.length} providers</strong>
-        <span>{registeredCount} registered adapters · {connectedCount} verified connections · {liveExecutionEnabled ? "global live gate on" : "global live gate off"}</span>
+        <strong>{inventory === "nodes" ? `${nodes.length} executable nodes` : `${providers.length} provider entries`}</strong>
+        <span>{registeredCount} registered · {connectedCount} verified connections · {liveExecutionEnabled ? "global live gate on" : "global live gate off"}</span>
       </div>
       <label className="registry-search">
         <span aria-hidden="true">⌕</span>
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search providers or operations" aria-label="Search providers or operations" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search nodes, providers or operations" aria-label="Search nodes, providers or operations" />
       </label>
     </div>
-    {catalogState === "loading" && <div className="registry-state-panel">Loading the provider directory…</div>}
-    {catalogState === "error" && <div className="registry-state-panel" role="alert">The provider directory could not be loaded. Entries are hidden rather than showing an incomplete catalogue.</div>}
+    <div className="registry-directory-tabs" role="tablist" aria-label="Integration inventory">
+      <button type="button" role="tab" aria-selected={inventory === "nodes"} className={inventory === "nodes" ? "selected" : ""} onClick={() => { setInventory("nodes"); setExpanded([]); }}>Node registry <span>{nodes.length}</span></button>
+      <button type="button" role="tab" aria-selected={inventory === "providers"} className={inventory === "providers" ? "selected" : ""} onClick={() => { setInventory("providers"); setExpanded([]); }}>Provider catalogue <span>{providers.length}</span></button>
+    </div>
+    {catalogState === "loading" && <div className="registry-state-panel">Loading the integration inventory…</div>}
+    {catalogState === "error" && <div className="registry-state-panel" role="alert">The integration inventory could not be loaded. Entries are hidden rather than showing an incomplete catalogue.</div>}
     {catalogState === "ready" && <div className="registry-node-grid">
       {filtered.map((node) => {
         const state = connectionState(node, workspace, google, statusUnavailable);
@@ -645,7 +656,7 @@ export default function RegistryIntegrationsDirectory() {
           </div>}
         </article>;
       })}
-      {filtered.length === 0 && <div className="registry-state-panel">No provider or operation matches “{query}”.</div>}
+      {filtered.length === 0 && <div className="registry-state-panel">No node, provider or operation matches “{query}”.</div>}
     </div>}
     {connecting && <div className="registry-connect-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !connectionBusy) setConnecting(null); }}>
       <section className="registry-connect-dialog" role="dialog" aria-modal="true" aria-labelledby="registry-connect-title">
@@ -660,7 +671,7 @@ export default function RegistryIntegrationsDirectory() {
 
     {approvalError && <p className="registry-directory-note" role="alert">{approvalError}</p>}
     <p className="registry-directory-note">
-      All 100 requested providers are listed. “Coming soon” means no native execution adapter is registered yet; it is not a working connection. The AI planner can select only registered operations; live execution remains subject to provider credentials, approval, and execution gates. A connected label requires a saved workspace connection and a successful provider test.
+      {inventory === "nodes" ? `All ${nodes.length} native executable nodes are shown from the server registry, including core logic and data utilities. These are the operations the workflow planner and runner can validate.` : `All ${providers.length} requested provider catalogue entries are shown. “Coming soon” means no native execution adapter is registered yet; it is not a working connection.`} Live execution remains subject to provider credentials, approval, and execution gates. A connected label requires a saved workspace connection and a successful provider test.
     </p>
   </section>;
 }

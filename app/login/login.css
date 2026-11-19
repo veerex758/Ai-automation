@@ -93,3 +93,24 @@
 .auth-card-foot span{color:var(--aivanta-petrol)!important}
 .auth-footer{border-top-color:var(--aivanta-line)!important}
 .auth-footer i{background:var(--aivanta-brass)!important}
+
+/* Rexnora authentication identity */
+.auth-page{background:#0B0F14!important;color:#F8FAFC!important;font-family:'Geist','Inter',sans-serif!important}
+.auth-page:before{background-image:radial-gradient(#39465b .55px,transparent .55px)!important;opacity:.13!important}
+.auth-orb-one{background:radial-gradient(circle,rgba(59,130,246,.16),transparent 70%)!important}
+.auth-orb-two{background:radial-gradient(circle,rgba(139,92,246,.14),transparent 70%)!important}
+.auth-header{border-color:#2A2F3A!important}.auth-brand{color:#F8FAFC!important;font-family:'Inter',sans-serif!important;letter-spacing:.2px!important}
+.auth-brand-mark{background:transparent!important;border:0!important;transform:none!important;width:36px!important;height:36px!important}
+.auth-brand-mark img{width:100%;height:100%;object-fit:contain}
+.auth-brand>span:last-child>span{color:#3B82F6!important}.auth-back,.auth-footer{color:#94A3B8!important}
+.auth-story h1,.auth-heading h2{color:#F8FAFC!important}.auth-story h1 em{color:#8B5CF6!important}
+.auth-story>p,.auth-promise span,.auth-heading p{color:#94A3B8!important}
+.auth-kicker{color:#8BB8FF!important}.auth-kicker>span{background:#3B82F6!important}
+.auth-promise{border-color:#2A2F3A!important;background:#111722!important}.promise-icon{background:#172846!important;color:#8BB8FF!important}
+.auth-card{background:#1A1F29!important;border-color:#2A2F3A!important;box-shadow:0 24px 70px rgba(0,0,0,.35)!important}
+.auth-card-symbol{background:#111722!important}.auth-secure{color:#94A3B8!important}.auth-secure i{background:#3B82F6!important}
+.auth-tabs{background:#111722!important}.auth-tab{color:#94A3B8!important}.auth-tab.active{background:#2A2F3A!important;color:#F8FAFC!important}
+.auth-form label{color:#E2E8F0!important}.auth-form input{background:#111722!important;color:#F8FAFC!important;border-color:#2A2F3A!important}
+.auth-submit{background:#F8FAFC!important;color:#0B0F14!important}.auth-submit:hover{background:#DCE5F2!important}
+.auth-card-foot{border-color:#2A2F3A!important;color:#94A3B8!important}
+.auth-message{background:#111722!important;border-color:#2A2F3A!important}

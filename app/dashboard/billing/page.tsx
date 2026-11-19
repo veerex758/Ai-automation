@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./billing.css";
 import BillingCheckout from "./billing-checkout";
+import DashboardSidebar from "../dashboard-sidebar";
 
 type CheckoutOption = { slug: string; amount_minor: number; currency: string };
 type Plan = {
@@ -85,27 +86,27 @@ export default function BillingPage() {
   useEffect(() => { void loadBilling(); }, [loadBilling]);
 
   if (loading) {
-    return <main className="billing-shell" aria-busy="true">
+    return <main className="app-shell billing-app-shell"><DashboardSidebar activePage="billing" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Billing</strong></div></header><div className="dashboard-content"><div className="billing-shell" aria-busy="true">
       <BillingHeader />
       <section className="billing-panel" role="status">Loading your workspace plan and usage…</section>
-    </main>;
+    </div></div></section></main>;
   }
 
   if (error || !data) {
-    return <main className="billing-shell">
+    return <main className="app-shell billing-app-shell"><DashboardSidebar activePage="billing" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Billing</strong></div></header><div className="dashboard-content"><div className="billing-shell">
       <BillingHeader />
       <section className="billing-panel billing-error" role="alert">
         <h2>Billing could not be loaded</h2>
         <p>{error || "No billing response was received."}</p>
         <button type="button" onClick={() => void loadBilling()}>Try again</button>
       </section>
-    </main>;
+    </div></div></section></main>;
   }
 
   const currentPlan = data.plans.find(plan => plan.key === data.subscription.plan_key);
   const active = data.entitlements.status === "active";
 
-  return <main className="billing-shell">
+  return <main className="app-shell billing-app-shell"><DashboardSidebar activePage="billing" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Billing</strong></div></header><div className="dashboard-content"><div className="billing-shell">
     <BillingHeader />
     <section className="billing-current" aria-label="Current subscription">
       <div>
@@ -140,7 +141,7 @@ export default function BillingPage() {
 
     <section className="billing-panel">
       <h2>Choose a plan</h2>
-      <p>Checkout is available only for prices configured and verified by Aivanta.</p>
+      <p>Checkout is available only for prices configured and verified by Rexnora.</p>
       <div className="billing-plans">
         {data.plans.map(plan => <article className={plan.key === data.subscription.plan_key ? "billing-plan selected" : "billing-plan"} key={plan.key}>
           <h3>{plan.name}</h3>
@@ -174,12 +175,12 @@ export default function BillingPage() {
           </div>)}</div>
         : <p>No payments have been recorded for this workspace yet.</p>}
     </section>
-  </main>;
+  </div></div></section></main>;
 }
 
 function BillingHeader() {
   return <header>
-    <span className="billing-eyebrow">AIVANTA / WORKSPACE</span>
+    <span className="billing-eyebrow">REXNORA / WORKSPACE</span>
     <h1>Plan &amp; usage</h1>
     <p>Understand your usage, manage your subscription, and upgrade securely.</p>
   </header>;

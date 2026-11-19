@@ -30,6 +30,6 @@ test("builder sends a new workflow definition with creation and only patches exi
   assert.match(builder, /const isNewWorkflow = !workflowId;/);
   assert.match(builder, /status: "draft",\s*definition,/);
   assert.match(builder, /if \(!isNewWorkflow\)\s*\{\s*const saveResponse = await fetch\(\`\/api\/workflows\/\$\{workflowId\}\/definition\`/);
-  assert.match(builder, /Workflow draft saved to your Aivanta workspace/);
+  assert.match(builder, /Workflow draft saved to your Rexnora workspace/);
   assert.match(builder, /It has not been activated or executed/);
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import DashboardSidebar from "../dashboard-sidebar";
 import "./agents.css";
 
 type Agent = { id: string; name: string; description: string; instructions: string; model_provider: string; model_name: string; tool_ids: string[]; status: string; updated_at: string };
@@ -119,13 +119,7 @@ export default function AgentsPage() {
   const filteredAgents = agents.filter(agent => (agent.name + " " + agent.description).toLowerCase().includes(search.toLowerCase()) && (statusFilter === "all" || agent.status === statusFilter));
 
   return <main className="app-shell agents-shell">
-    <aside className="sidebar">
-      <Link className="dash-brand" href="/"><span className="brand-mark">✳</span><span>Aivanta</span></Link>
-      <div className="sidebar-label">WORKSPACE</div>
-      <nav className="side-nav" aria-label="Workspace navigation">
-        {[["Dashboard","/dashboard"],["Workflows","/dashboard/builder"],["Integrations","/dashboard/integrations"],["AI Agents","/dashboard/agents"],["AI Assistant","/dashboard/ai-assistant"]].map(([label,href]) => <Link key={label} href={href} className={label === "AI Agents" ? "side-link selected" : "side-link"}>{label}</Link>)}
-      </nav>
-    </aside>
+    <DashboardSidebar activePage="agents" />
     <section className="dashboard-main">
       <header className="dashboard-topbar"><div className="breadcrumbs">Workspace / <strong>AI Agents</strong></div><span className="environment-badge">Read-only tool runtime</span></header>
       <div className="dashboard-content agents-content">
