@@ -195,6 +195,14 @@ export default function WorkflowBuilderPage() {
     });
   }
 
+  function getRegistryConnectionIssues(): string[] {
+    return (aiRegistrySteps ?? []).flatMap(step => {
+      const node = registryCatalog.find(item => item.id === step.nodeId);
+      if (!node || node.auth.type === "none" || step.connectionId) return [];
+      return [`Choose a saved, verified workspace connection for "${node.name}" before live activation.`];
+    });
+  }
+
   async function saveDraft() {
     if (savingDraft) return;
     if (!name.trim() || name.trim().length > 80) {
@@ -303,9 +311,9 @@ export default function WorkflowBuilderPage() {
   const validationResult = validateWorkflowDefinition({ name, steps });
 
   function reviewWorkflow() {
-    const actionIssues = [...getActionConfigurationIssues(), ...getRegistryConfigurationIssues()];
+    const actionIssues = [...getActionConfigurationIssues(), ...getRegistryConfigurationIssues(), ...getRegistryConnectionIssues()];
     if (actionIssues.length) {
-      setNotice("Action configuration needs attention: " + actionIssues.join(" "));
+      setNotice("Workflow review needs attention: " + actionIssues.join(" "));
       return;
     }
     if (!validationResult.valid) {
@@ -320,7 +328,7 @@ export default function WorkflowBuilderPage() {
       <DashboardSidebar activePage="builder" workspaceName={workspaceName} />
 
       <section className="builder-main">
-        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft} disabled={savingDraft}>{savingDraft ? "Saving…" : "Save draft"}</button><button className="builder-secondary-button" onClick={reviewWorkflow}>Test</button><button className="builder-primary-button" disabled title="Activation remains disabled until integrations and execution safeguards are configured">Activate</button></div></header>
+        <header className="builder-topbar"><div className="builder-breadcrumb"><Link href="/dashboard">Workflows</Link><span>/</span><strong>Builder</strong></div><div className="builder-top-actions"><span className="builder-draft-tag"><i /> Draft</span><button className="builder-secondary-button" onClick={saveDraft} disabled={savingDraft}>{savingDraft ? "Saving…" : "Save draft"}</button><button className="builder-secondary-button" onClick={reviewWorkflow}>Review</button><button className="builder-primary-button" disabled title="Activation remains disabled until integrations and execution safeguards are configured">Activate</button></div></header>
         <div className="builder-content">
           <div className="builder-title-row"><div><div className="builder-eyebrow"><span /> VISUAL WORKFLOW DESIGNER</div><input className="builder-name-input" aria-label="Workflow name" value={name} maxLength={80} onChange={event => setName(event.target.value)} /><p>Make each step clear. Keep important decisions under your control.</p></div><div className="builder-progress"><span>{steps.length} steps</span><span>{hydrated ? "Draft ready" : "Loading draft…"}</span></div></div>
           {notice && <div className="builder-notice" role="status">ⓘ {notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
