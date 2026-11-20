@@ -218,31 +218,59 @@ export async function POST(request: NextRequest) {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data, error } = await supabase
+    // The database guard intentionally allows workflow creation only with an
+    // empty definition. Persist the validated graph through the audited RPC so
+    // version history and audit events are written atomically with the definition.
+    const { data: createdWorkflow, error: createError } = await supabase
       .from("workflows")
       .insert({
         workspace_id: workspace.id,
         name,
         description,
         status,
-        definition: definitionToSave,
         created_by: user.id,
       })
       .select("id, name, description, status, updated_at")
       .single();
 
-    if (error?.code === "P0001" && error.message === "AIVANTA_WORKFLOW_LIMIT_REACHED") {
+    if (createError?.code === "P0001" && createError.message === "AIVANTA_WORKFLOW_LIMIT_REACHED") {
       return NextResponse.json({ error: "Workspace active-workflow limit reached. Upgrade your plan to activate more workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
     }
-    if (error?.code === "P0001" && error.message === "AIVANTA_ENTERPRISE_LIMITS_NOT_CONFIGURED") {
+    if (createError?.code === "P0001" && createError.message === "AIVANTA_ENTERPRISE_LIMITS_NOT_CONFIGURED") {
       return NextResponse.json({ error: "Enterprise workflow limits must be configured before activating workflows." }, { status: 409, headers: { "Cache-Control": "private, no-store" } });
     }
-    if (error?.code === "P0001" && error.message === "AIVANTA_SUBSCRIPTION_INACTIVE") {
+    if (createError?.code === "P0001" && createError.message === "AIVANTA_SUBSCRIPTION_INACTIVE") {
       return NextResponse.json({ error: "This workspace subscription is inactive. Update billing before activating workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
     }
-    if (error) throw error;
+    if (createError) throw createError;
+
+    const { data: savedRows, error: saveError } = await supabase.rpc("save_workflow_definition", {
+      p_workflow_id: createdWorkflow.id,
+      p_definition: definitionToSave,
+    });
+    if (saveError) {
+      // Do not leave an empty orphan if the validated save fails. Scope cleanup
+      // to the row just created by this authenticated user in this workspace.
+      const { error: cleanupError } = await supabase
+        .from("workflows")
+        .delete()
+        .eq("id", createdWorkflow.id)
+        .eq("workspace_id", workspace.id)
+        .eq("created_by", user.id);
+      if (cleanupError) console.error("Failed to clean up an unsaved workflow draft:", cleanupError);
+      if (saveError.code === "P0002") {
+        return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404, headers: { "Cache-Control": "private, no-store" } });
+      }
+      throw saveError;
+    }
+
+    const saved = Array.isArray(savedRows) ? savedRows[0] : savedRows;
+    if (!saved || saved.saved_workflow_id !== createdWorkflow.id) {
+      throw new Error("The database did not confirm that the workflow definition was saved.");
+    }
+
     return NextResponse.json(
-      { workflow: presentWorkflow(data) },
+      { workflow: presentWorkflow(createdWorkflow), version: saved.saved_version },
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
