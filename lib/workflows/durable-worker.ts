@@ -37,6 +37,7 @@ function client() {
 }
 
 async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct, connectionId?: string): Promise<string> {
+  if (!connectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
   let query = db.from("google_connections").select("id,encrypted_credentials,expires_at,status,scopes,last_test_status")
     .eq("workspace_id", workspaceId).eq("provider", "google").eq("product", product)
     .eq("status", "connected").eq("last_test_status", "passed");
@@ -104,11 +105,12 @@ async function workspaceCredentials(
     if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
-    let integrationQuery = db.from("workspace_integrations")
-      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider)
-      .eq("status", "connected").eq("last_test_status", "passed");
     const selectedConnectionId = selectedConnectionIds.get(provider);
-    if (selectedConnectionId) integrationQuery = integrationQuery.eq("id", selectedConnectionId);
+    if (!selectedConnectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+    const integrationQuery = db.from("workspace_integrations")
+      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider)
+      .eq("id", selectedConnectionId)
+      .eq("status", "connected").eq("last_test_status", "passed");
     const { data: integrations, error: integrationError } = await integrationQuery.order("created_at", { ascending: false }).limit(2);
     if (integrationError) throw new Error("WORKSPACE_INTEGRATION_LOOKUP_FAILED");
     if (!integrations?.length) {
