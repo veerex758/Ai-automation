@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
+import { decryptGoogleCredentials, encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
 import { getGoogleOAuthConfig, GOOGLE_PRODUCTS, hasOnlyApprovedGoogleScopes } from "@/lib/integrations/google-oauth";
 
 export const runtime = "nodejs";
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         .eq("id", connection.id).eq("workspace_id", workspace.id);
       return NextResponse.json({ ok: false, message: "The saved Google consent does not contain the required read-only product scope. Reconnect this account." }, { status: 409, headers });
     }
-    let credentials: { access_token?: string; refresh_token?: string; expiry_date?: number; token_type?: string; scope?: string };
+    let credentials: GoogleCredentials;
     try { credentials = decryptGoogleCredentials(connection.encrypted_credentials); }
     catch {
       return NextResponse.json({ ok: false, message: "The encrypted Google credential could not be opened. Reconnect this account." }, { status: 503, headers });
@@ -116,16 +116,17 @@ export async function POST(request: Request) {
           typeof refreshed.expires_in !== "number" || !Number.isFinite(refreshed.expires_in)) {
         return NextResponse.json({ ok: false, message: "Google could not refresh this account. Reconnect it and test again." }, { status: 409, headers });
       }
+      const refreshedExpiry = Date.now() + refreshed.expires_in * 1000;
       credentials = {
         ...credentials,
         access_token: refreshed.access_token,
-        expiry_date: Date.now() + refreshed.expires_in * 1000,
+        expiry_date: refreshedExpiry,
         ...(typeof refreshed.scope === "string" ? { scope: refreshed.scope } : {}),
         ...(typeof refreshed.token_type === "string" ? { token_type: refreshed.token_type } : {}),
       };
       const { error: refreshSaveError } = await admin.from("google_connections").update({
         encrypted_credentials: encryptGoogleCredentials(credentials),
-        expires_at: new Date(credentials.expiry_date).toISOString(),
+        expires_at: new Date(refreshedExpiry).toISOString(),
         updated_at: new Date().toISOString(),
       }).eq("id", connection.id).eq("workspace_id", workspace.id);
       if (refreshSaveError) throw refreshSaveError;
