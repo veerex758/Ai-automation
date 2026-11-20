@@ -448,3 +448,8 @@
   .workflow-builder-main .graph-node-operation{font-size:10px!important}
 }
 @media(prefers-reduced-motion:reduce){.workflow-builder-main .graph-node-face{transition:none}}
+
+.workflow-builder-main .graph-node-primitive svg{width:39px;height:39px;display:block}
+.workflow-builder-main .graph-node-code-mark{
+  color:#28384D;font:800 23px/1 'DM Sans',sans-serif;letter-spacing:-.08em
+}
