@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
           "User-Agent": "Aivanta/0.1",
-          "Idempotency-Key": `aivanta-resend-setup-test-${workspace.id}-${integration.id}-${user.id}-${crypto.randomUUID()}`,
+          "Idempotency-Key": `aivanta-resend-setup-test-${workspace.id}-${integration.id}-${user.id}-${randomUUID()}`,
         },
         body: JSON.stringify({
           from: TEST_SENDER,
