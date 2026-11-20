@@ -9,6 +9,8 @@ alter table public.real_estate_leads
   add column if not exists agent_notification_status text not null default 'pending'
     check (agent_notification_status in ('pending','accepted','blocked','failed','not_required')),
   add column if not exists agent_notification_error_code varchar(80),
+  add column if not exists agent_notification_accepted_recipient_hashes jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(agent_notification_accepted_recipient_hashes) = 'array'),
   add column if not exists agent_notified_at timestamptz,
   add column if not exists pipeline_status text not null default 'pending'
     check (pipeline_status in ('pending','processing','completed','blocked','failed')),
