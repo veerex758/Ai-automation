@@ -36,6 +36,11 @@ test("saved graph GET round-trips positions, registry node metadata, and conditi
   assert.match(route, /stored && Array\.isArray\(stored\.edges\)/);
 });
 
+test("registry metadata never contaminates the node-type-specific legacy settings schema", () => {
+  assert.doesNotMatch(route, /settings:\s*\{\s*\.\.\.node\.settings,\s*provider:\s*step\.nodeId,\s*operation:\s*step\.operationId\s*\}/);
+  assert.match(route, /registryNodeId: step\.nodeId,[\s\S]*?registryOperationId: step\.operationId,[\s\S]*?registryInput: step\.input/);
+});
+
 test("Graph Builder derives registry execution steps from the saved graph before persistence", () => {
   assert.match(builder, /buildRegistrySteps\(definition\)/);
   assert.match(builder, /registrySteps/);
