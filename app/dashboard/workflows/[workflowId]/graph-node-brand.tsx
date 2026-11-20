@@ -4,7 +4,7 @@ import { useState } from "react";
 import { officialBrandAssets } from "@/lib/integrations/official-brand-assets";
 
 const BRAND_TINTS: Record<string, string> = {
-  openai: "10A37F", gemini: "8E75B2", slack: "611F69", resend: "E8E8E8",
+  openai: "10A37F", gemini: "8E75B2", slack: "611F69", resend: "111827",
   gmail: "EA4335", google_sheets: "34A853", sheets: "34A853", google_drive: "4285F4",
   google_calendar: "4285F4", google_docs: "4285F4", google_forms: "7248B9",
   youtube: "FF0033", google_contacts: "4285F4", notion: "111827", hubspot: "FF7A59",
