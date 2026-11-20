@@ -126,10 +126,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
             ...node,
             ...(savedNode?.position ? { position: savedNode.position } : {}),
             ...(step ? {
+              // Keep registry identity/input separate from the legacy, node-type-specific
+              // settings schema. Injecting provider/operation here makes trigger and
+              // condition settings fail validateDefinition on the next validation/save.
               registryNodeId: step.nodeId,
               registryOperationId: step.operationId,
               registryInput: step.input,
-              settings: { ...node.settings, provider: step.nodeId, operation: step.operationId },
             } : {}),
           };
         }),
