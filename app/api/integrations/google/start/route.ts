@@ -27,10 +27,12 @@ export async function GET(request: NextRequest) {
   };
   const expectedNode = googleNodeByProduct[productValue];
   const requestedNode = request.nextUrl.searchParams.get("node");
-  if (requestedNode && requestedNode !== expectedNode) {
+  const allowedNodeAliases: Record<string, string[]> = { sheets: ["sheets", "google_sheets"] };
+  const allowedNodes = allowedNodeAliases[productValue] ?? [expectedNode];
+  if (requestedNode && !allowedNodes.includes(requestedNode)) {
     return NextResponse.json({ error: "The selected Google node does not match this OAuth product." }, { status: 400 });
   }
-  const nodeId = expectedNode;
+  const nodeId = requestedNode ?? expectedNode;
 
   try {
     const config = getGoogleOAuthConfig();
