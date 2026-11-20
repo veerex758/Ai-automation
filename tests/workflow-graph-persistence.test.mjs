@@ -12,6 +12,17 @@ const assistant = readFileSync(new URL("../app/dashboard/ai-assistant/page.tsx",
 const builder = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/page.tsx", import.meta.url), "utf8");
 const activation = readFileSync(new URL("../app/api/workflows/[workflowId]/route.ts", import.meta.url), "utf8");
 
+
+test("saving the graph persists resolved coordinates for every node and keeps the saved layout clean", () => {
+  assert.match(builder, /nodes: definition\.nodes\.map\(\(node, index\) => \(\{ \.\.\.node, position: nodePosition\(node, index\) \}\)\)/);
+  assert.match(builder, /definition: \{ \.\.\.definitionToSave/);
+  assert.match(builder, /registrySteps: buildRegistrySteps\(definitionToSave\)/);
+  assert.match(builder, /setDefinition\(definitionToSave\)/);
+  assert.match(builder, /setSavedFingerprint\(JSON\.stringify\(definitionToSave\)\)/);
+  assert.match(route, /savedNode\?\.position/);
+  assert.match(route, /stored && Array\.isArray\(stored\.edges\)/);
+});
+
 test("registry save preserves the validated canvas graph, including positions and edges", () => {
   assert.match(route, /edges: \(requestBody\.definition as Record<string, unknown>\)\.edges/);
   assert.match(route, /position: \(\(requestBody\.definition as Record<string, unknown>\)\.nodes/);
