@@ -519,7 +519,12 @@ export async function runDurableWorker() {
         const legacyResult = runDryRun(validated.definition, input);
         if (legacyResult.sideEffectsPerformed !== false) throw new Error("UNSAFE_EXECUTOR_RESULT");
 
-        if (job.execution_mode !== "live") {
+        if (job.execution_mode === "live") {
+          // Older definitions have no per-node connection ID. Do not allow an
+          // already-queued job to use an implicit/default workspace credential.
+          throw new Error("REGISTRY_WORKFLOW_REQUIRED");
+        }
+        {
           result = {
             status: legacyResult.status,
             steps: legacyResult.steps.map((step) => ({
