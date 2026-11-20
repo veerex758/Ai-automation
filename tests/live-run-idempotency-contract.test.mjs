@@ -2,73 +2,50 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const legacyRoute = readFileSync(
-  new URL("../app/api/workflows/[workflowId]/live-run/route.ts", import.meta.url),
-  "utf8",
-);
-const route = readFileSync(
-  new URL("../app/api/workflows/[workflowId]/registry-run/route.ts", import.meta.url),
-  "utf8",
-);
-const migration = readFileSync(
-  new URL("../supabase/migrations/20261010201327_aivanta_live_email_runs.sql", import.meta.url),
-  "utf8",
-);
+const legacyRoute = readFileSync(new URL("../app/api/workflows/[workflowId]/live-run/route.ts", import.meta.url), "utf8");
+const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
+const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../supabase/migrations/20261031100000_aivanta_durable_execution_queue.sql", import.meta.url), "utf8");
 
-test("legacy live-run endpoint delegates to the registry execution contract", () => {
-  assert.match(legacyRoute, /registryRun\(request, context\)/);
+test("legacy registry live-run alias delegates to safe tests or durable dispatch", () => {
+  assert.match(legacyRoute, /safeRun\(forwarded, context\)/);
+  assert.match(legacyRoute, /dispatch\(forwarded, context\)/);
+  assert.match(legacyRoute, /Mode must be live or dry_run/);
+  assert.match(legacyRoute, /payload\.mode === "dry_run" && payload\.dryRun === false/);
 });
 
-test("requires a UUID idempotency key before a live run can be created", () => {
-  assert.match(route, /request\.headers\.get\(["']idempotency-key["']\)/i);
-  assert.match(route, /if\s*\(!dryRun\s*&&\s*!uuid\.test\(idempotencyKey\)\)/i);
-  assert.match(route, /UUID Idempotency-Key header is required/i);
+test("durable dispatch requires a UUID idempotency key before queueing", () => {
+  assert.match(dispatch, /request\.headers\.get\("idempotency-key"\)/);
+  assert.match(dispatch, /if \(!uuidPattern\.test\(idempotencyKey\)\)/);
+  assert.match(dispatch, /A UUID Idempotency-Key header is required/);
 });
 
-test("scopes duplicate lookup to the authenticated actor and workflow", () => {
-  const lookupStart = route.indexOf("const { data: prior }");
-  assert.notEqual(lookupStart, -1);
-  const lookupEnd = route.indexOf("if (prior)", lookupStart);
-  assert.ok(lookupEnd > lookupStart);
-  const lookup = route.slice(lookupStart, lookupEnd);
-
-  assert.match(lookup, /\.eq\(["']idempotency_key["'],\s*idempotencyKey\)/);
-  assert.match(lookup, /\.eq\(["']created_by["'],\s*user\.id\)/);
-  assert.match(lookup, /\.eq\(["']workflow_id["'],\s*workflowId\)/);
+test("dispatch sends workspace, workflow, actor, version and idempotency key to the atomic queue RPC", () => {
+  assert.match(dispatch, /dispatch_workflow_execution/);
+  assert.match(dispatch, /p_workspace_id: workflow\.workspace_id/);
+  assert.match(dispatch, /p_workflow_id: workflow\.id/);
+  assert.match(dispatch, /p_workflow_version: workflow\.version/);
+  assert.match(dispatch, /p_created_by: user\.id/);
+  assert.match(dispatch, /p_idempotency_key: idempotencyKey/);
 });
 
-test("returns an existing run before invoking registered workflow operations", () => {
-  const duplicateCheck = route.indexOf("if (prior) return NextResponse.json");
-  const providerExecution = route.indexOf("const execution = dryRunExecution ?? await executeRegisteredWorkflow");
-  assert.ok(duplicateCheck >= 0, "existing run must be detected");
-  assert.ok(providerExecution > duplicateCheck, "duplicate response must happen before provider execution");
-  assert.match(route.slice(duplicateCheck, providerExecution), /duplicate:\s*true/);
+test("database queue enforces workspace-scoped idempotency and bounded payloads", () => {
+  assert.match(migration, /unique \(workspace_id, idempotency_key\)/);
+  assert.match(migration, /octet_length\(p_payload::text\) > 16384/);
+  assert.match(migration, /Execution job ownership or version mismatch/);
 });
 
-test("handles concurrent unique-key collisions before a second provider execution", () => {
-  const collision = route.indexOf('if (insertError?.code === "23505" && !dryRun)');
-  const providerExecution = route.indexOf("const execution = dryRunExecution ?? await executeRegisteredWorkflow");
-  assert.ok(collision >= 0, "unique-index collision must be handled");
-  assert.ok(providerExecution > collision, "collision handling must precede provider execution");
-
-  const collisionBlock = route.slice(collision, providerExecution);
-  assert.match(collisionBlock, /\.eq\(["']idempotency_key["'],\s*idempotencyKey\)/);
-  assert.match(collisionBlock, /\.eq\(["']created_by["'],\s*user\.id\)/);
-  assert.match(collisionBlock, /\.eq\(["']workflow_id["'],\s*workflow\.id\)/);
-  assert.match(collisionBlock, /duplicate:\s*true/);
+test("queue dispatch is committed before the worker is woken", () => {
+  const rpc = dispatch.indexOf('db.rpc("dispatch_workflow_execution"');
+  const wake = dispatch.indexOf("after(async () =>", rpc);
+  assert.ok(rpc >= 0 && wake > rpc);
+  assert.match(dispatch.slice(rpc, wake), /p_execution_mode: executionMode/);
 });
 
-test("persists a unique idempotency key before any live provider operation", () => {
-  assert.match(migration, /create unique index if not exists workflow_runs_idempotency_key_uidx/i);
-  assert.match(migration, /on public\.workflow_runs\s*\(idempotency_key\)/i);
-  const insertRun = route.indexOf("const { data: run, error: insertError }");
-  const providerExecution = route.indexOf("const execution = dryRunExecution ?? await executeRegisteredWorkflow");
-  assert.ok(insertRun >= 0 && providerExecution > insertRun);
-  assert.match(route.slice(insertRun, providerExecution), /idempotency_key:\s*dryRun\s*\?\s*null\s*:\s*idempotencyKey/);
-});
-
-test("does not recommend retrying after run history fails following a possible side effect", () => {
-  assert.match(route, /external side effect may already have occurred/i);
-  assert.match(route, /retrySafe:\s*dryRun/);
-  assert.match(route, /Check run history before retrying/i);
+test("durable worker uses lease tokens and records retry-safe failures", () => {
+  assert.match(worker, /lease_token/);
+  assert.match(worker, /record_execution_error_event/);
+  assert.match(worker, /retry_wait/);
+  assert.match(migration, /create table if not exists public\.execution_dead_letters/);
+  assert.match(migration, /insert into public\.execution_dead_letters/);
 });

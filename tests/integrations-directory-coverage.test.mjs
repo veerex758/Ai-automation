@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const catalogSource = readFileSync("nodes/provider-catalog.ts", "utf8");
 const directorySource = readFileSync("app/dashboard/registry-integrations-directory.tsx", "utf8");
+const brandAssetsSource = readFileSync("lib/integrations/official-brand-assets.ts", "utf8");
 const catalogRouteSource = readFileSync("app/api/integrations/catalog/route.ts", "utf8");
 const registrySource = readFileSync("nodes/registry.ts", "utf8");
 const credentialsSource = readFileSync("lib/integrations/workspace-credentials.ts", "utf8");
@@ -15,15 +16,16 @@ const saveRouteSource = readFileSync("app/api/integrations/workspace/route.ts", 
 
 test("all 100 directory entries have official brand artwork or an explicit native icon path", () => {
   const ids = [...catalogSource.matchAll(/"id": "([^"]+)"/g)].map((match) => match[1]);
-  const assetsBlock = directorySource.match(/const officialBrandAssets:[\s\S]*?= (\{[\s\S]*?\n\});/);
-  const assets = JSON.parse(assetsBlock[1]);
+  const assets = new Set(
+    [...brandAssetsSource.matchAll(/^  "([^"]+)": \{$/gm)].map((match) => match[1]),
+  );
   const native = new Set([
     "webhook_trigger", "schedule_cron", "manual_trigger", "http_request", "if", "switch", "loop",
     "merge", "wait_delay", "code_js", "set_fields", "json_parse", "filter", "aggregate", "date_time",
   ]);
   assert.equal(ids.length, 100);
   assert.equal(new Set(ids).size, 100);
-  assert.deepEqual(ids.filter((id) => !assets[id] && !native.has(id)), []);
+  assert.deepEqual(ids.filter((id) => !assets.has(id) && !native.has(id)), []);
 });
 
 test("every workspace credential provider has a connection form", () => {

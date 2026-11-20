@@ -157,6 +157,26 @@ test("registry workflow validates and executes explicit branch selection", async
 });
 
 
+test("registry workflow dry-run evaluates IF and simulates only the selected branch", async () => {
+  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
+  const raw = [
+    { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
+    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "{{manual.payload.status}}", operator: "equals", compareTo: "approved" } },
+    { id: "yes", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "approved" } }, branch: { fromStepId: "condition", route: "true" } },
+    { id: "no", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "rejected" } }, branch: { fromStepId: "condition", route: "false" } },
+  ];
+  const validated = validateRegisteredSteps(raw);
+  assert.ok(validated.steps);
+  const result = await executeRegisteredWorkflow({
+    steps: validated.steps, context, dryRun: true,
+    initialOutputs: { manual: { started: true, payload: { status: "approved" } } },
+    completedStepIds: ["manual"],
+  });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated", "simulated", "skipped"]);
+  assert.deepEqual(result.outputs.condition, { matched: true, route: "true" });
+});
+
 test("loop metadata executes a downstream registered operation once per source item", async () => {
   const calls: string[] = [];
   const result = await executeRegisteredWorkflow({

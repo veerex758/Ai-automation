@@ -3,19 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
+import DashboardSidebar from "../../dashboard-sidebar";
 import { useParams } from "next/navigation";
 import "./builder.css";
-import DashboardSidebar from "../../dashboard-sidebar";
 import RunTestPanel from "./run-test-panel";
 import RegistryOperationSettings from "./registry-operation-settings";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
+import GraphNodeBrand from "./graph-node-brand";
 type RegistryCatalog = { id: string; name: string; icon?: string; category?: string; triggers: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[]; actions: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[] };
 
 type NodeType = "trigger" | "action" | "condition";
 type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string>; registryNodeId?: string; registryOperationId?: string; registryInput?: Record<string, unknown>; position?: { x: number; y: number } };
 type WorkflowEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
 type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
-type Workflow = { id: string; name: string; description: string; status: string };
+type Workflow = { id: string; name: string; description: string; status: string; version: number };
 type WorkflowVersion = { version: number; created_at: string };
 
 const starterDefinition: Definition = { version: 1, edges: [], nodes: [
@@ -26,6 +27,8 @@ const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> 
   action: { label: "Action", icon: "↗", help: "A task the workflow should perform." },
   condition: { label: "Condition", icon: "◇", help: "A rule to check before continuing." },
 };
+
+
 
 export default function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
@@ -47,11 +50,18 @@ export default function WorkflowBuilderPage() {
   const [validation, setValidation] = useState<{ valid: boolean; message: string; checkedAt: string; counts?: { triggers: number; actions: number; conditions: number } } | null>(null);
   const draftRevision = useRef(0);
   const graphCanvasRef = useRef<HTMLDivElement>(null);
+  const graphViewportRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ id: string; pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const panState = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const fittedWorkflowId = useRef<string | null>(null);
+  const [camera, setCamera] = useState({ x: 24, y: 24, scale: 1 });
+  const [isPanning, setIsPanning] = useState(false);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [connectionLabel, setConnectionLabel] = useState<"true" | "false" | "next">("next");
 
   const selectedNode = definition.nodes.find((node) => node.id === selectedId) ?? definition.nodes[0] ?? null;
+  const graphWidth = Math.max(1000, ...definition.nodes.map((node, index) => nodePosition(node, index).x + 250));
+  const graphHeight = Math.max(680, ...definition.nodes.map((node, index) => nodePosition(node, index).y + 190));
   const isDirty = JSON.stringify(definition) !== savedFingerprint;
   const isCommentToDm = /comment to dm/i.test(workflow?.name ?? "");
   const isLeadFollowUp = /lead follow-up/i.test(workflow?.name ?? "");
@@ -101,17 +111,126 @@ export default function WorkflowBuilderPage() {
 
   useEffect(() => { void loadWorkflow(); }, [loadWorkflow]);
 
-  function nodePosition(node: WorkflowNode, index: number) {
+  function nodePosition(node: WorkflowNode, index: number, seen = new Set<string>()): { x: number; y: number } {
     if (node.position) return node.position;
-    const incomingBranch = (definition.edges ?? []).find((edge) => edge.target === node.id && edge.label !== "next");
-    const col = incomingBranch?.label === "false" ? 2 : incomingBranch?.label === "true" ? 0 : index % 3;
-    return { x: 170 + col * 300, y: 90 + Math.floor(index / 3) * 210 };
+    if (seen.has(node.id)) return { x: 160 + index * 320, y: 330 };
+    const nextSeen = new Set(seen);
+    nextSeen.add(node.id);
+    const incoming = (definition.edges ?? []).filter((edge) => edge.target === node.id);
+    if (!incoming.length) return { x: 160 + index * 320, y: 330 };
+    const parents = incoming.map((edge) => {
+      const parentIndex = definition.nodes.findIndex((candidate) => candidate.id === edge.source);
+      const parent = definition.nodes[parentIndex];
+      return parent ? nodePosition(parent, Math.max(0, parentIndex), nextSeen) : { x: 160, y: 330 };
+    });
+    const x = Math.max(...parents.map((point) => point.x)) + 320;
+    const branchY = incoming.map((edge, edgeIndex) => parents[edgeIndex].y + (edge.label === "true" ? -220 : edge.label === "false" ? 220 : 0));
+    const y = branchY.reduce((sum, value) => sum + value, 0) / branchY.length;
+    return { x, y };
   }
+
+  const fitGraphToView = useCallback(() => {
+    const viewport = graphViewportRef.current;
+    if (!viewport) return;
+    const bounds = viewport.getBoundingClientRect();
+    function resolvePosition(node: WorkflowNode, index: number, seen = new Set<string>()): { x: number; y: number } {
+      if (node.position) return node.position;
+      if (seen.has(node.id)) return { x: 160 + index * 320, y: 330 };
+      const nextSeen = new Set(seen);
+      nextSeen.add(node.id);
+      const incoming = (definition.edges ?? []).filter((edge) => edge.target === node.id);
+      if (!incoming.length) return { x: 160 + index * 320, y: 330 };
+      const parents = incoming.map((edge) => {
+        const parentIndex = definition.nodes.findIndex((item) => item.id === edge.source);
+        const parent = definition.nodes[parentIndex];
+        return parent ? resolvePosition(parent, Math.max(0, parentIndex), nextSeen) : { x: 160, y: 330 };
+      });
+      const x = Math.max(...parents.map((point) => point.x)) + 320;
+      const ys = incoming.map((edge, edgeIndex) => parents[edgeIndex].y + (edge.label === "true" ? -220 : edge.label === "false" ? 220 : 0));
+      return { x, y: ys.reduce((sum, value) => sum + value, 0) / ys.length };
+    }
+    const points = definition.nodes.map((node, index) => resolvePosition(node, index));
+    const left = points.length ? Math.min(...points.map((point) => point.x - 82)) : 80;
+    const right = points.length ? Math.max(...points.map((point) => point.x + 82)) : Math.min(graphWidth, 700);
+    const top = points.length ? Math.min(...points.map((point) => point.y - 64)) : 80;
+    const bottom = points.length ? Math.max(...points.map((point) => point.y + 82)) : Math.min(graphHeight, 600);
+    const contentWidth = Math.max(180, right - left);
+    const contentHeight = Math.max(150, bottom - top);
+    const availableWidth = Math.max(160, bounds.width - 64);
+    const availableHeight = Math.max(160, bounds.height - 64);
+    const scale = Math.max(0.25, Math.min(1.35, availableWidth / contentWidth, availableHeight / contentHeight));
+    setCamera({
+      x: (bounds.width - contentWidth * scale) / 2 - left * scale,
+      y: (bounds.height - contentHeight * scale) / 2 - top * scale,
+      scale,
+    });
+  }, [graphWidth, graphHeight, definition.nodes, definition.edges]);
+
+  function zoomGraphTo(requestedScale: number, clientX?: number, clientY?: number) {
+    const viewport = graphViewportRef.current;
+    const bounds = viewport?.getBoundingClientRect();
+    if (!bounds) return;
+    const nextScale = Math.max(0.25, Math.min(2, requestedScale));
+    const anchorX = clientX === undefined ? bounds.width / 2 : clientX - bounds.left;
+    const anchorY = clientY === undefined ? bounds.height / 2 : clientY - bounds.top;
+    setCamera((current) => {
+      const ratio = nextScale / current.scale;
+      return {
+        scale: nextScale,
+        x: anchorX - (anchorX - current.x) * ratio,
+        y: anchorY - (anchorY - current.y) * ratio,
+      };
+    });
+  }
+
+  function handleGraphWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    zoomGraphTo(camera.scale * Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
+  }
+
+  function beginGraphPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest(".graph-node, .graph-viewport-controls, button")) return;
+    event.preventDefault();
+    panState.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: camera.x,
+      originY: camera.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsPanning(true);
+  }
+
+  function moveGraphPan(event: ReactPointerEvent<HTMLDivElement>) {
+    const pan = panState.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    setCamera((current) => ({
+      ...current,
+      x: pan.originX + event.clientX - pan.startX,
+      y: pan.originY + event.clientY - pan.startY,
+    }));
+  }
+
+  function endGraphPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!panState.current || panState.current.pointerId !== event.pointerId) return;
+    panState.current = null;
+    setIsPanning(false);
+  }
+
+  useEffect(() => {
+    if (loading || fittedWorkflowId.current === workflowId) return;
+    const frame = window.requestAnimationFrame(() => {
+      fitGraphToView();
+      fittedWorkflowId.current = workflowId;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, workflowId, fitGraphToView]);
 
   function updateNodePosition(id: string, x: number, y: number) {
     draftRevision.current += 1;
     setValidation(null);
-    setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, position: { x: Math.max(120, Math.min(1900, x)), y: Math.max(70, Math.min(1800, y)) } } : node) }));
+    setDefinition((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, position: { x: Math.max(120, Math.min(3000, x)), y: Math.max(70, Math.min(2400, y)) } } : node) }));
   }
 
   function beginNodeDrag(event: ReactPointerEvent<HTMLDivElement>, node: WorkflowNode, index: number) {
@@ -124,8 +243,8 @@ export default function WorkflowBuilderPage() {
   function moveNodeDrag(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragState.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
+    const dx = (event.clientX - drag.startX) / camera.scale;
+    const dy = (event.clientY - drag.startY) / camera.scale;
     if (!drag.moved && Math.hypot(dx, dy) < 4) return;
     drag.moved = true;
     updateNodePosition(drag.id, drag.originX + dx, drag.originY + dy);
@@ -149,10 +268,12 @@ export default function WorkflowBuilderPage() {
     setValidation(null);
     setDefinition((current) => ({
       ...current,
-      nodes: current.nodes.map((node) => node.id !== target || label === "next" ? node : {
-        ...node,
-        position: { x: label === "true" ? 170 : 770, y: Math.min(1800, node.position?.y ?? 90 + Math.floor(current.nodes.findIndex((item) => item.id === node.id) / 3) * 210) },
-      }),
+      // Branch destinations should be positioned from the condition's
+      // output lane. Clearing an old fixed coordinate lets nodePosition
+      // derive the correct upper/lower branch location from the new edge.
+      nodes: current.nodes.map((node) => node.id !== target || label === "next"
+        ? node
+        : { ...node, position: undefined }),
       edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source, target, label }],
     }));
     setConnectingFrom(null);
@@ -184,9 +305,52 @@ export default function WorkflowBuilderPage() {
     setError(""); setNotice("Generating a reviewable draft…");
     try {
       const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
-      const payload = await response.json();
-      if (!response.ok || !payload.definition?.nodes?.length) throw new Error(payload.error || "AI could not create a draft.");
-      const generated = payload.definition as Definition;
+      const payload = await response.json() as {
+        definition?: Definition;
+        registrySteps?: Array<{ id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> }>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || "AI could not create a draft.");
+
+      // Registry generation returns executable, schema-validated steps separately
+      // from its legacy placeholder definition. Build the canvas from those steps
+      // so the user reviews the actual proposed workflow rather than one empty trigger.
+      const steps = Array.isArray(payload.registrySteps) ? payload.registrySteps : [];
+      const hasGeneratedGraph = Boolean(payload.definition?.nodes?.some((node) => node.registryNodeId));
+      const generated: Definition = hasGeneratedGraph
+        ? payload.definition as Definition
+        : steps.length
+        ? {
+            version: 1,
+            nodes: steps.map((step, index) => {
+              const provider = registryCatalog.find((item) => item.id === step.nodeId);
+              const operation = (step.kind === "trigger" ? provider?.triggers : provider?.actions)
+                ?.find((item) => item.id === step.operationId);
+              const settings: Record<string, string> = step.kind === "trigger"
+                ? { event: "manual" }
+                : { provider: step.nodeId, operation: step.operationId };
+              return {
+                id: step.id,
+                type: step.kind,
+                title: operation?.name || provider?.name || step.operationId,
+                description: operation?.description || provider?.name || "Registered workflow operation.",
+                settings,
+                registryNodeId: step.nodeId,
+                registryOperationId: step.operationId,
+                registryInput: step.input,
+                position: { x: 170, y: 90 + index * 210 },
+              };
+            }),
+            edges: steps.slice(1).map((step, index) => ({
+              id: `ai-edge-${index + 1}`,
+              source: steps[index].id,
+              target: step.id,
+              label: "next" as const,
+            })),
+          }
+        : payload.definition as Definition;
+
+      if (!generated?.nodes?.length) throw new Error("AI could not create a reviewable workflow draft.");
       const normalized = { ...generated, edges: generated.edges ?? generated.nodes.slice(1).map((node, index) => ({ id: "ai-edge-" + index, source: generated.nodes[index].id, target: node.id, label: "next" as const })) };
       draftRevision.current += 1; setValidation(null); setDefinition(normalized); setSelectedId(normalized.nodes[0]?.id ?? "");
       setNotice("AI draft loaded onto the canvas. Review and edit it, then Save workflow; it has not been executed.");
@@ -320,17 +484,27 @@ export default function WorkflowBuilderPage() {
     setError("");
     setNotice("");
     try {
+      // Persist explicit coordinates for every node, including nodes that have
+      // never been dragged. The same normalized graph is used for the request
+      // and the clean-state fingerprint so reload preserves the exact layout.
+      const definitionToSave: Definition = {
+        ...definition,
+        nodes: definition.nodes.map((node, index) => ({ ...node, position: nodePosition(node, index) })),
+      };
       const response = await fetch(`/api/workflows/${workflowId}/definition`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          definition: { ...definition, nodes: definition.nodes.map((node) => ({ ...node, settings: node.type === "trigger" ? { event: "manual" } : node.type === "action" && node.registryNodeId ? { provider: "internal", operation: "create_task" } : node.settings })) },
-          registrySteps: buildRegistrySteps(definition),
+          definition: { ...definitionToSave, nodes: definitionToSave.nodes.map((node) => ({ ...node, settings: node.type === "trigger" ? { event: "manual" } : node.type === "action" && node.registryNodeId ? { provider: "internal", operation: "create_task" } : node.settings })) },
+          registrySteps: buildRegistrySteps(definitionToSave),
         }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save workflow steps.");
-      setSavedFingerprint(JSON.stringify(definition));
+      if (!Number.isSafeInteger(result.version) || result.version < 1) throw new Error("The workflow was saved, but the server did not return its saved version number. Reload before continuing.");
+      setWorkflow((current) => current ? { ...current, version: result.version } : current);
+      setDefinition(definitionToSave);
+      setSavedFingerprint(JSON.stringify(definitionToSave));
       setNotice(`Workflow saved as version ${result.version}.`);
       const versionsResponse = await fetch(`/api/workflows/${workflowId}/versions`, { cache: "no-store" });
       if (versionsResponse.ok) {
@@ -427,12 +601,12 @@ export default function WorkflowBuilderPage() {
 
   return (
     <main className="builder-shell" onClick={(event) => { const link = (event.target as HTMLElement).closest("a.side-link"); if (isDirty && link && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>
-      <DashboardSidebar activePage="builder" />
+        <DashboardSidebar activePage="builder" />
       <section className="workflow-builder-main">
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : workflow?.status ?? "Draft"}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button>{workflow?.status === "active" ? <button className="builder-validate" onClick={() => void pauseWorkflow()} disabled={activating || isDirty}>{activating ? "Pausing…" : "Pause workflow"}</button> : <button className="builder-save" onClick={() => void activateWorkflow()} disabled={activating || isDirty || saving || validating || restoringVersion !== null}>{activating ? "Activating…" : "Activate workflow"}</button>}</div>
+        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : `${workflow?.status ?? "Draft"} · v${workflow?.version ?? "—"}`}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button>{workflow?.status === "active" ? <button className="builder-validate" onClick={() => void pauseWorkflow()} disabled={activating || isDirty}>{activating ? "Pausing…" : "Pause workflow"}</button> : <button className="builder-save" onClick={() => void activateWorkflow()} disabled={activating || isDirty || saving || validating || restoringVersion !== null}>{activating ? "Activating…" : "Activate workflow"}</button>}</div>
       </header>
 
       <div className="builder-layout">
@@ -446,33 +620,131 @@ export default function WorkflowBuilderPage() {
             workflowId={workflowId}
             hasUnsavedChanges={isDirty}
             workflowStatus={workflow?.status ?? "draft"}
-            liveEmailRecipient={liveEmailRecipient}
             isWebhookTrigger={isWebhookTrigger}
           />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
-            <div className="canvas-label"><span>CANVAS · DRAG NODES TO REPOSITION</span><span>{definition.nodes.length} / 30 steps</span></div>
-            <div className="graph-canvas" role="region" aria-label="Workflow graph canvas">
+            <div className="canvas-label"><span>VISUAL GRAPH · DRAG NODES · DRAG BACKGROUND TO PAN · SCROLL TO ZOOM</span><span>{definition.nodes.length} / 30 nodes</span></div>
+            <div
+              className={`graph-canvas ${isPanning ? "graph-canvas-panning" : ""}`}
+              ref={graphViewportRef}
+              role="region"
+              aria-label="Workflow graph canvas. Drag the background to pan, use the mouse wheel or controls to zoom, and drag nodes to reposition."
+              onPointerDown={beginGraphPan}
+              onPointerMove={moveGraphPan}
+              onPointerUp={endGraphPan}
+              onPointerCancel={endGraphPan}
+              onWheel={handleGraphWheel}
+            >
               <div className="graph-grid" aria-hidden="true" />
-              <div className="graph-layout" ref={graphCanvasRef} style={{ width: Math.max(1000, ...definition.nodes.map((node, index) => nodePosition(node, index).x + 190)), height: Math.max(680, ...definition.nodes.map((node, index) => nodePosition(node, index).y + 180)) }}>
-                <svg className="graph-edges" aria-hidden="true"><defs><marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#9ab78a" /></marker></defs>
+              <div className="graph-viewport-controls" onPointerDown={(event) => event.stopPropagation()}>
+                <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomGraphTo(camera.scale / 1.2)}>−</button>
+                <span aria-live="polite">{Math.round(camera.scale * 100)}%</span>
+                <button type="button" aria-label="Fit graph to view" title="Fit graph to view" onClick={fitGraphToView}>Fit</button>
+                <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomGraphTo(camera.scale * 1.2)}>＋</button>
+              </div>
+              <div
+                className="graph-layout"
+                ref={graphCanvasRef}
+                style={{
+                  width: graphWidth,
+                  height: graphHeight,
+                  transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+                  transformOrigin: "0 0",
+                }}
+              >
+                <svg className="graph-edges" aria-hidden="true">
+                  <defs>
+                    <marker id="graph-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#8BB8FF" />
+                    </marker>
+                    <marker id="graph-arrow-true" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#67D5A1" />
+                    </marker>
+                    <marker id="graph-arrow-false" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#F0AD79" />
+                    </marker>
+                  </defs>
                   {(definition.edges ?? []).map((edge) => {
                     const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
                     const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target);
                     if (sourceIndex < 0 || targetIndex < 0) return null;
                     const source = nodePosition(definition.nodes[sourceIndex], sourceIndex);
                     const target = nodePosition(definition.nodes[targetIndex], targetIndex);
-                    const sx = source.x + 105, sy = source.y + 62, tx = target.x + 105, ty = target.y + 62;
-                    const curve = Math.max(45, Math.abs(tx - sx) * .45);
-                    return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}><path d={`M ${sx} ${sy} C ${sx + curve} ${sy}, ${tx - curve} ${ty}, ${tx} ${ty}`} /><text x={(sx + tx) / 2} y={(sy + ty) / 2 - 12}>{edge.label === "next" ? "" : edge.label.toUpperCase()}</text></g>;
+                    // Node coordinates represent the centre of the brand tile.
+                    // Ports sit at the tile's horizontal midpoints, not at card corners.
+                    const sx = source.x + 40;
+                    const sy = source.y - 18;
+                    const tx = target.x - 40;
+                    const ty = target.y - 18;
+                    const direction = tx >= sx ? 1 : -1;
+                    const curve = Math.max(54, Math.abs(tx - sx) * 0.42);
+                    const labelX = (sx + tx) / 2;
+                    const labelY = (sy + ty) / 2 - 13;
+                    return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}>
+                      <path d={`M ${sx} ${sy} C ${sx + curve * direction} ${sy}, ${tx - curve * direction} ${ty}, ${tx} ${ty}`} />
+                      {edge.label !== "next" && <text className="graph-edge-branch-label" x={labelX} y={labelY}>{edge.label === "true" ? "TRUE" : "FALSE"}</text>}
+                    </g>;
                   })}
                 </svg>
                 {definition.nodes.map((node, index) => {
                   const point = nodePosition(node, index);
-                  return <div key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`} style={{ left: point.x, top: point.y }} onPointerDown={(event) => beginNodeDrag(event, node, index)} onPointerMove={moveNodeDrag} onPointerUp={endNodeDrag} onPointerCancel={() => { dragState.current = null; }} role="group" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }} aria-label={`Select and drag ${node.title}`}>
-                    <button type="button" className="graph-node-port graph-port-in" aria-label={`Connect into ${node.title}`} title={connectingFrom ? "Complete connection" : "Choose a source node"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!connectingFrom) { setNotice("Choose an output handle first."); return; } connectNodes(connectingFrom, node.id, connectionLabel); }} />
-                    <span className="graph-node-icon">{nodeMeta[node.type].icon}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {index + 1}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small>
-                    <button type="button" className="graph-node-port graph-port-out" aria-label={`Connect from ${node.title}`} title="Start a connection" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSelectedId(node.id); setConnectingFrom(node.id); setNotice(node.type === "condition" ? "Choose True or False in the connection editor, then select a destination input handle." : "Select a destination input handle."); }} />
+                  const provider = registryCatalog.find((item) => item.id === node.registryNodeId);
+                  const providerName = node.registryNodeId === "email" ? "Resend" : provider?.name || node.registryNodeId || nodeMeta[node.type].label;
+                  return <div
+                    key={node.id}
+                    className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`}
+                    style={{ left: point.x, top: point.y }}
+                    onPointerDown={(event) => beginNodeDrag(event, node, index)}
+                    onPointerMove={moveNodeDrag}
+                    onPointerUp={endNodeDrag}
+                    onPointerCancel={() => { dragState.current = null; }}
+                    onClick={() => setSelectedId(node.id)}
+                    role="group"
+                    tabIndex={0}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }}
+                    aria-label={`${providerName}: ${node.title}. Select to configure; drag to move.`}
+                    title={`${providerName} · ${node.title}`}
+                  >
+                    <div className="graph-node-face">
+                      <button
+                        type="button"
+                        className="graph-node-port graph-port-in"
+                        aria-label={`Connect into ${node.title}`}
+                        title="Input connection"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!connectingFrom) { setNotice("Choose an output handle first."); return; }
+                          connectNodes(connectingFrom, node.id, connectionLabel);
+                        }}
+                      />
+                      <GraphNodeBrand
+                        providerId={node.registryNodeId || node.settings.provider || node.type}
+                        providerName={providerName}
+                        providerIcon={provider?.icon}
+                        nodeType={node.type}
+                      />
+                      <button
+                        type="button"
+                        className="graph-node-port graph-port-out"
+                        aria-label={`Connect from ${node.title}`}
+                        title="Output connection"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedId(node.id);
+                          setConnectingFrom(node.id);
+                          setNotice(node.type === "condition"
+                            ? "Choose True or False in the connection editor, then select a destination input handle."
+                            : "Select a destination input handle.");
+                        }}
+                      />
+                    </div>
+                    <div className="graph-node-copy">
+                      <strong className="graph-node-operation">{node.title}</strong>
+                      <small className="graph-node-provider">{providerName}</small>
+                    </div>
                   </div>;
                 })}
                 {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
@@ -499,7 +771,7 @@ export default function WorkflowBuilderPage() {
               {selectedNode.settings.operator !== "is_set" && <>
                 <label htmlFor="condition-value">{isCommentToDm ? "Keyword to match" : isLeadFollowUp ? "Status to match" : isSupportTriage ? "Urgency to match" : isContentApproval ? "Approval status to match" : "Expected value"}</label><input id="condition-value" maxLength={240} value={selectedNode.settings.value ?? ""} onChange={(event) => updateSetting("value", event.target.value)} placeholder={isCommentToDm ? "guide" : isLeadFollowUp ? "pending" : isSupportTriage ? "urgent" : isContentApproval ? "pending" : "Value to compare against"} />
               </>}
-              <p className="config-note">Rules are stored in your draft. They will not be evaluated until execution is implemented.</p>
+              <p className="config-note">Conditions evaluate against previous-step outputs during tests and runs. Test both true and false paths before activation.</p>
             </div>}
             <div className="panel-divider" />
             <section className="graph-connection-editor" aria-label="Node connections">

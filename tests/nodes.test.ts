@@ -48,6 +48,11 @@ test("manual trigger accepts the legacy builder's manual start event", async () 
     http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
   }, {});
   assert.deepEqual(result, { started: true });
+  const withPayload = await operation.run({
+    credentials: {}, logger: { info() {}, error() {} },
+    http: { async request() { throw new Error("unexpected"); } }, previousOutputs: {},
+  }, { status: "ready" });
+  assert.deepEqual(withPayload, { started: true, payload: { status: "ready" } });
 });
 
 test("webhook trigger refuses events not verified by ingress", async () => {

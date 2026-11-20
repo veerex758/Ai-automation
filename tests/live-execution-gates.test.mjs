@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const durableWorker = await readFile(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
-const registryRoute = await readFile(new URL("../app/api/workflows/[workflowId]/registry-run/route.ts", import.meta.url), "utf8");
+const runsRoute = await readFile(new URL("../app/api/workflows/[workflowId]/runs/route.ts", import.meta.url), "utf8");
+const dispatchRoute = await readFile(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
 const workerOperationMap = await readFile(new URL("../lib/workflows/worker-operation-map.ts", import.meta.url), "utf8");
 
 const utilityActions = [
@@ -18,7 +19,9 @@ test("durable live execution resolves providers from the complete registry opera
   assert.match(durableWorker, /getWorkerOperationMapping, getWorkerProvider/);
   assert.match(durableWorker, /return providerPackLiveId\(step\) \?\? getWorkerProvider\(step\)/);
   assert.match(workerOperationMap, /entries\.map/);
+  assert.match(durableWorker, /const provider = providerForStep\(step\);/);
   assert.match(durableWorker, /return isProviderLiveEnabled\(provider, process\.env\.AIVANTA_LIVE_INTEGRATIONS\)/);
+  assert.doesNotMatch(durableWorker, /step\.kind === "action" \? providerForStep\(step\) : null/);
   assert.match(durableWorker, /WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED/);
   assert.match(durableWorker, /AIVANTA_LIVE_VOICE_RECIPIENTS/);
   assert.match(durableWorker, /AIVANTA_LIVE_PUBLISHING_ENABLED/);
@@ -39,12 +42,12 @@ test("all deterministic utility actions remain explicitly allowed through durabl
   }
 });
 
-test("synchronous registry route runs registry steps in dry-run and guards external live effects", () => {
-  assert.match(registryRoute, /executeRegisteredWorkflow\(\{ steps, context: serverContext\(\), dryRun: true \}\)/);
-  assert.match(registryRoute, /if \(!dryRun\)/);
-  assert.match(registryRoute, /const unsupportedLiveStep = steps\.find\(/);
-  assert.match(registryRoute, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.match(registryRoute, /allowed\.has\(to\)/);
-  assert.match(registryRoute, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-  assert.match(registryRoute, /registry operation is available in dry-run only/);
+test("registry safe tests simulate registered steps while durable dispatch guards live execution", () => {
+  assert.match(runsRoute, /executeRegisteredWorkflow\([\s\S]*dryRun: true/);
+  assert.match(runsRoute, /DRY_RUN_PROVIDER_CALL_BLOCKED/);
+  assert.match(runsRoute, /p_metric: "workflow_execution"/);
+  assert.match(dispatchRoute, /validateDurableLiveSteps\(registrySteps\)/);
+  assert.match(dispatchRoute, /executionMode === "live"/);
+  assert.match(durableWorker, /WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED/);
+  assert.doesNotMatch(runsRoute, /dryRun: false/);
 });

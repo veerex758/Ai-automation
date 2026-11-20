@@ -1,249 +1,56 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { POST as registryRun } from "../registry-run/route";
-import { createClient } from "@/lib/supabase/server";
-import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { runDryRun } from "@/lib/workflows/dry-run.cjs";
-import { executeLiveAction } from "@/lib/workflows/live-action-executor.cjs";
-import { sendResendEmail, isResendConfigured, isLiveEmailRecipientAllowed, getAllowedRecipients } from "@/lib/integrations/resend.cjs";
+import { NextRequest, NextResponse } from "next/server";
+import { POST as dispatch } from "../dispatch/route";
+import { POST as safeRun } from "../runs/route";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const maxInputBytes = 10 * 1024;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
+/** Compatibility alias. All live execution is queued through durable dispatch. */
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
-  const requestStartedAt = Date.now();
+  const startedAt = Date.now();
   const requestId = getRequestId(request.headers.get("x-request-id"));
-  const jsonResponse = (body: unknown, init?: ResponseInit) => {
-    const response = NextResponse.json(body, init);
+  const jsonResponse = (body: unknown, status: number) => {
+    const response = NextResponse.json(body, { status });
     response.headers.set("x-request-id", requestId);
-    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Cache-Control", "private, no-store");
     return response;
   };
-  const logFailure = (errorCode: "LIVE_RUN_FAILED" | "LIVE_RUN_PERSISTENCE_FAILED" | "LIVE_RUN_RECOVERY_FAILED") => {
-    logOperationalEvent({
-      event: "live_workflow_run", requestId, route: "/api/workflows/live-run",
-      outcome: "failure", statusCode: 500,
-      durationMs: Math.min(600000, Math.max(0, Date.now() - requestStartedAt)), errorCode,
-    }, console.error);
-  };
-  // Explicit opt-in keeps existing legacy email behavior unchanged while routing registry-format workflows through the same run-history-backed execution API.
-  if (request.headers.get("x-aivanta-runner") === "registry") return registryRun(request, context);
-  const startedAt = Date.now();
-  try {
-    const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return jsonResponse({ error: "Invalid workflow ID." }, { status: 400 });
-
-    const contentLength = Number(request.headers.get("content-length") ?? "0");
-    if (contentLength > maxInputBytes) return jsonResponse({ error: "Run input must be 10 KB or smaller." }, { status: 413 });
-
-    const idempotencyKey = request.headers.get("idempotency-key") ?? "";
-    if (!uuidPattern.test(idempotencyKey)) {
-      return jsonResponse({ error: "A UUID Idempotency-Key header is required for live execution." }, { status: 400 });
-    }
-
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return jsonResponse({ error: "Authentication required." }, { status: 401 });
-
-    if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-      return jsonResponse({ error: "Live execution is disabled by the server. Configure AIVANTA_LIVE_EXECUTION_ENABLED=true only when you are ready to send real email." }, { status: 503 });
-    }
-    if (!isResendConfigured()) {
-      return jsonResponse({ error: "Email integration is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the server environment." }, { status: 503 });
-    }
-
-    const { data: priorRun, error: priorRunError } = await supabase.from("workflow_runs")
-      .select("id, status, workflow_version, mode, created_at")
-      .eq("idempotency_key", idempotencyKey)
-      .eq("created_by", user.id)
-      .eq("workflow_id", workflowId)
-      .maybeSingle();
-    if (priorRunError) throw priorRunError;
-    if (priorRun) return jsonResponse({
-      run: priorRun,
-      duplicate: true,
-      message: "This idempotency key has already been processed. No second email was sent.",
-    }, { status: 200 });
-
-    let body: unknown;
-    try { body = await request.json(); } catch {
-      return jsonResponse({ error: "Request body must be valid JSON." }, { status: 400 });
-    }
-    if (!isRecord(body)) return jsonResponse({ error: "Run request must be a JSON object." }, { status: 400 });
-    const input = body.input === undefined ? {} : body.input;
-    if (!isRecord(input)) return jsonResponse({ error: "Run input must be a JSON object." }, { status: 400 });
-    if (Buffer.byteLength(JSON.stringify(input), "utf8") > maxInputBytes) return jsonResponse({ error: "Run input must be 10 KB or smaller." }, { status: 413 });
-
-    const { data: workflow, error: workflowError } = await supabase.from("workflows")
-      .select("id, workspace_id, version, definition, status")
-      .eq("id", workflowId).maybeSingle();
-    if (workflowError) throw workflowError;
-    if (!workflow) return jsonResponse({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    if (workflow.status !== "active") return jsonResponse({ error: "Activate this workflow before running live actions." }, { status: 409 });
-
-    const validated = validateDefinition(workflow.definition);
-    if (!validated.definition) return jsonResponse({ error: "Save a valid workflow definition before live execution." }, { status: 422 });
-    if (validated.definition.nodes[0]?.type !== "trigger" || validated.definition.nodes[0]?.settings.event !== "manual") {
-      return jsonResponse({ error: "The first live integration currently supports manual-trigger workflows only." }, { status: 422 });
-    }
-
-    const actions = validated.definition.nodes.filter((node) => node.type === "action");
-    if (actions.length > 1) return jsonResponse({ error: "The first live release supports one action per run to keep external side effects controlled." }, { status: 422 });
-    const emailAction = actions[0];
-    if (!emailAction || emailAction.settings.provider !== "email" || emailAction.settings.operation !== "send_email") {
-      return jsonResponse({ error: "The first live integration supports one Resend email action. Other providers remain in safe preview mode." }, { status: 422 });
-    }
-    if (!emailAction.settings.message?.trim()) return jsonResponse({ error: "Add a message to the email action before running live." }, { status: 422 });
-    if (getAllowedRecipients().length === 0) {
-      return jsonResponse({ error: "Live email is not configured. Add AIVANTA_LIVE_EMAIL_RECIPIENTS to the server environment." }, { status: 503 });
-    }
-    if (!isLiveEmailRecipientAllowed(emailAction.settings.recipient)) {
-      return jsonResponse({ error: "This recipient is not on the server-configured live email allowlist." }, { status: 403 });
-    }
-
-    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: recentLiveRuns, error: rateLimitError } = await supabase.from("workflow_runs")
-      .select("id", { count: "exact", head: true })
-      .eq("created_by", user.id)
-      .eq("mode", "live")
-      .gte("created_at", hourAgo);
-    if (rateLimitError) throw rateLimitError;
-    if ((recentLiveRuns ?? 0) >= 10) {
-      return jsonResponse({ error: "Live run limit reached. A maximum of 10 live runs per user per hour is allowed." }, { status: 429 });
-    }
-
-    const preview = runDryRun(validated.definition, input);
-    const { data: run, error: insertError } = await supabase.from("workflow_runs").insert({
-      workspace_id: workflow.workspace_id,
-      workflow_id: workflow.id,
-      workflow_version: workflow.version,
-      mode: "live",
-      status: "running",
-      created_by: user.id,
-      idempotency_key: idempotencyKey,
-      started_at: new Date(startedAt).toISOString(),
-      completed_at: null,
-      duration_ms: 0,
-    }).select("id, workflow_version, started_at").single();
-
-    if (insertError?.code === "23505") {
-      const { data: existing, error: existingError } = await supabase.from("workflow_runs")
-        .select("id, status, workflow_version, mode, created_at")
-        .eq("idempotency_key", idempotencyKey)
-        .eq("created_by", user.id)
-        .eq("workflow_id", workflowId)
-        .maybeSingle();
-      if (existingError) throw existingError;
-      if (existing) return jsonResponse({
-        run: existing,
-        duplicate: true,
-        message: "This idempotency key has already been processed. No second email was sent.",
-      }, { status: 200 });
-      return jsonResponse({ error: "This live-run key has already been used." }, { status: 409 });
-    }
-    if (insertError) throw insertError;
-
-    let emailSent = false;
-    let providerMessageId: string | null = null;
-    let failureMessage: string | null = null;
-    let halted = false;
-    const stepRows: Array<Record<string, unknown>> = [];
-
-    for (const step of preview.steps) {
-      const node = validated.definition.nodes[step.position - 1];
-      let status: "simulated" | "skipped" | "executed" | "failed" = step.status;
-      let result: Record<string, unknown> = { message: step.message };
-
-      if (halted) {
-        status = "skipped";
-        result = { message: "Skipped because an earlier live action failed." };
-      } else if (node.type === "action" && step.status === "simulated") {
-        try {
-          const sent = await executeLiveAction(node, {
-            idempotencyKey: run.id,
-            sendEmail: sendResendEmail,
-          });
-          emailSent = true;
-          providerMessageId = sent.providerMessageId;
-          status = "executed";
-          result = { message: sent.message, provider: sent.provider, providerMessageId: sent.providerMessageId };
-        } catch (error) {
-          halted = true;
-          status = "failed";
-          failureMessage = error instanceof Error ? error.message : "Email provider request failed.";
-          result = { message: failureMessage };
-        }
-      } else if (node.type === "action") {
-        result = { message: "Email action skipped because an earlier condition did not match." };
-      }
-
-      stepRows.push({
-        run_id: run.id,
-        workspace_id: workflow.workspace_id,
-        step_id: step.stepId,
-        position: step.position,
-        step_type: step.type,
-        title: step.title,
-        status,
-        result,
-      });
-    }
-
-    const status = failureMessage ? "failed" : "succeeded";
-    const durationMs = Math.min(600000, Math.max(0, Date.now() - startedAt));
-    let finalized;
-    try {
-      const { error: stepsError } = await supabase.from("workflow_run_steps").insert(stepRows);
-      if (stepsError) throw stepsError;
-      const { data, error: finalizeError } = await supabase.from("workflow_runs")
-        .update({
-          status,
-          completed_at: new Date().toISOString(),
-          duration_ms: durationMs,
-          error_message: failureMessage,
-        })
-        .eq("id", run.id).eq("status", "running")
-        .select("id, mode, status, workflow_version, started_at, completed_at, duration_ms, error_message")
-        .single();
-      if (finalizeError) throw finalizeError;
-      finalized = data;
-    } catch (persistenceError) {
-      // Never leave a live run looking perpetually in progress after a persistence
-      // failure. Do not retry the provider call: the external side effect may exist.
-      logFailure("LIVE_RUN_PERSISTENCE_FAILED");
-      const recoveryMessage = "Run results could not be fully saved. An external email may already have been accepted; verify provider delivery before retrying.";
-      const { error: recoveryError } = await supabase.from("workflow_runs")
-        .update({
-          status: "failed",
-          completed_at: new Date().toISOString(),
-          duration_ms: Math.min(600000, Math.max(0, Date.now() - startedAt)),
-          error_message: recoveryMessage,
-        })
-        .eq("id", run.id).eq("status", "running");
-      if (recoveryError) logFailure("LIVE_RUN_RECOVERY_FAILED");
-      return jsonResponse({
-        error: recoveryMessage,
-        runId: run.id,
-        sideEffectsMayHaveOccurred: emailSent,
-        retrySafe: false,
-      }, { status: 500 });
-    }
-
-    logOperationalEvent({
-      event: "live_workflow_run", requestId, route: "/api/workflows/live-run",
-      outcome: "success", statusCode: 201,
-      durationMs: Math.min(600000, Math.max(0, Date.now() - requestStartedAt)),
-    });
-    return jsonResponse({
-      run: finalized,
-      steps: stepRows.map((step) => ({ step_id: step.step_id, position: step.position, step_type: step.step_type, title: step.title, status: step.status, result: step.result })),
-      sideEffectsPerformed: emailSent,
-      ...(providerMessageId ? { providerMessageId } : {}),
-    }, { status: 201 });
-  } catch (error) {
-    logFailure("LIVE_RUN_FAILED");
-    return jsonResponse({ error: "Could not complete this live workflow run. Check run history before retrying; an external email may already have been accepted." }, { status: 500 });
+  let payload: unknown;
+  try { payload = await request.json(); } catch {
+    return jsonResponse({ error: "Request body must be valid JSON." }, 400);
   }
+  if (!isRecord(payload)) return jsonResponse({ error: "Request must be a JSON object." }, 400);
+  if ((payload.mode !== undefined && payload.mode !== "live" && payload.mode !== "dry_run") ||
+      (payload.dryRun !== undefined && typeof payload.dryRun !== "boolean") ||
+      (payload.mode === "live" && payload.dryRun === true) ||
+      (payload.mode === "dry_run" && payload.dryRun === false)) {
+    return jsonResponse({ error: "Mode must be live or dry_run, without conflicting flags." }, 400);
+  }
+  const input = payload.input === undefined ? {} : payload.input;
+  if (!isRecord(input)) return jsonResponse({ error: "Input must be a JSON object." }, 400);
+  if (Buffer.byteLength(JSON.stringify(input), "utf8") > maxInputBytes) {
+    return jsonResponse({ error: "Input must be 10 KB or smaller." }, 413);
+  }
+  const mode = payload.mode === "dry_run" || payload.dryRun === true ? "dry_run" : "live";
+  const headers = new Headers(request.headers);
+  headers.delete("content-length");
+  headers.delete("x-aivanta-runner");
+  headers.set("content-type", "application/json");
+  headers.set("x-request-id", requestId);
+  const forwarded = new NextRequest(request.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ mode, input }),
+  });
+  const response = mode === "dry_run" ? await safeRun(forwarded, context) : await dispatch(forwarded, context);
+  response.headers.set("x-request-id", requestId);
+  logOperationalEvent({
+    event: "live_workflow_run", requestId, route: "/api/workflows/live-run",
+    outcome: response.ok ? "success" : response.status < 500 ? "rejected" : "failure",
+    statusCode: response.status, durationMs: Math.max(0, Date.now() - startedAt),
+    ...(!response.ok && response.status >= 500 ? { errorCode: "LIVE_RUN_FAILED" } : {}),
+  }, response.ok ? console.info : console.warn);
+  return response;
 }

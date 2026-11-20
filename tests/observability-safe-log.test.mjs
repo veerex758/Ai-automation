@@ -64,3 +64,61 @@ test("AI, live-run, and scheduler routes use request IDs and safe operational lo
   assert.doesNotMatch(sources[1], /console\.error\([^)]*persistenceError/);
   assert.doesNotMatch(sources[1], /console\.error\([^)]*recoveryError/);
 });
+
+test("successful workflow generation logs Gemini provider and model without prompt or credentials", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+    outcome: "success", statusCode: 200, durationMs: 18,
+    provider: "gemini", model: "gemini-2.5-flash",
+    prompt: "private customer data", apiKey: "secret-key",
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.provider, "gemini");
+  assert.equal(record.model, "gemini-2.5-flash");
+  logOperationalEvent({
+    event: "workflow_generation", requestId, providerStatus: 400,
+    providerReason: "INVALID_ARGUMENT", providerType: "invalid_request",
+    providerRequestId: "gemini-req-123",
+    providerMessage: "must never be logged", prompt: "private prompt", apiKey: "secret",
+  }, value => { output = value; });
+  const diagnostic = JSON.parse(output);
+  assert.equal(diagnostic.providerStatus, 400);
+  assert.equal(diagnostic.providerReason, "INVALID_ARGUMENT");
+  assert.equal(diagnostic.providerType, "invalid_request");
+  assert.equal(diagnostic.providerRequestId, "gemini-req-123");
+  assert.equal("providerMessage" in diagnostic, false);
+  assert.equal("prompt" in diagnostic, false);
+  assert.equal("apiKey" in diagnostic, false);
+  logOperationalEvent({ event: "workflow_generation", providerReason: "bad value; secret" }, value => { output = value; });
+  assert.equal("providerReason" in JSON.parse(output), false);
+  assert.equal("prompt" in record, false);
+  assert.equal("apiKey" in record, false);
+});
+
+
+test("workflow generation logs the selected Gemini fallback without sensitive data", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation",
+    requestId,
+    route: "/api/ai/generate-workflow",
+    outcome: "success",
+    statusCode: 200,
+    provider: "gemini",
+    model: "gemini-3.5-flash-lite",
+    fallbackUsed: true,
+    prompt: "private prompt",
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.model, "gemini-3.5-flash-lite");
+  assert.equal(record.fallbackUsed, true);
+  assert.equal("prompt" in record, false);
+  logOperationalEvent({
+    event: "workflow_generation",
+    outcome: "failure",
+    errorCode: "AI_PROVIDER_OVERLOADED",
+    providerStatus: 503,
+  }, value => { output = value; });
+  assert.equal(JSON.parse(output).errorCode, "AI_PROVIDER_OVERLOADED");
+});

@@ -29,12 +29,34 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
   const nodes = definition.nodes;
   const edges = definition.edges ?? [];
   if (!nodes.length) throw new Error("A workflow needs a trigger.");
+  if (nodes.length > 30 || edges.length > 90) throw new Error("Workflow graph exceeds the supported node or connection limit.");
   const byId = new Map(nodes.map((node) => [node.id, node]));
+  if (byId.size !== nodes.length || nodes.some((node) => !/^[a-zA-Z0-9_-]{1,64}$/.test(node.id))) {
+    throw new Error("Workflow step IDs must be unique and valid.");
+  }
+  if (nodes.filter((node) => node.type === "trigger").length !== 1) throw new Error("A workflow must contain exactly one trigger.");
   const orderIndex = new Map(nodes.map((node, index) => [node.id, index]));
   const outgoing = new Map(nodes.map((node) => [node.id, [] as BuilderEdge[]]));
   const indegree = new Map(nodes.map((node) => [node.id, 0]));
+  const edgeIds = new Set<string>();
+  const edgeKeys = new Set<string>();
   for (const edge of edges) {
-    if (!byId.has(edge.source) || !byId.has(edge.target)) throw new Error("A workflow connection references a missing step.");
+    if (!edge || typeof edge.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(edge.id) || edgeIds.has(edge.id)) {
+      throw new Error("Workflow connection IDs must be unique and valid.");
+    }
+    if (!byId.has(edge.source) || !byId.has(edge.target) || edge.source === edge.target) {
+      throw new Error("A workflow connection references an invalid step.");
+    }
+    if (!["next", "true", "false"].includes(edge.label)) throw new Error("Choose a valid workflow connection type.");
+    if (byId.get(edge.target)?.type === "trigger") throw new Error("A workflow connection cannot point into the trigger.");
+    if (edge.label !== "next") {
+      const source = byId.get(edge.source)!;
+      if (source.type !== "condition") throw new Error("Only IF nodes can create true/false connections.");
+    }
+    const edgeKey = edge.source + ":" + edge.target + ":" + edge.label;
+    if (edgeKeys.has(edgeKey)) throw new Error("Duplicate workflow connections are not allowed.");
+    edgeIds.add(edge.id);
+    edgeKeys.add(edgeKey);
     outgoing.get(edge.source)!.push(edge);
     indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1);
   }
@@ -56,6 +78,23 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
   if (ordered.length !== nodes.length) throw new Error("Workflow connections cannot contain a cycle.");
   const trigger = ordered[0];
   if (trigger.type !== "trigger") throw new Error("The workflow must start with a trigger.");
+  if ((indegree.get(trigger.id) ?? 0) !== 0) throw new Error("The workflow trigger cannot have incoming connections.");
+
+  const reachable = new Set<string>([trigger.id]);
+  for (const node of ordered) {
+    if (!reachable.has(node.id)) continue;
+    for (const edge of outgoing.get(node.id)!) reachable.add(edge.target);
+  }
+  if (reachable.size !== nodes.length) throw new Error("Every workflow node must be reachable from the trigger.");
+
+  for (const node of nodes) {
+    const nodeEdges = outgoing.get(node.id) ?? [];
+    if (nodeEdges.length && node.type === "condition") {
+      if (!nodeEdges.some((edge) => edge.label === "true") || !nodeEdges.some((edge) => edge.label === "false")) {
+        throw new Error("Every IF or Switch node with downstream work needs true and false paths.");
+      }
+    }
+  }
 
   const pathsByNode = new Map<string, Array<Array<{ fromStepId: string; route: string }>>>();
   pathsByNode.set(trigger.id, [[]]);
