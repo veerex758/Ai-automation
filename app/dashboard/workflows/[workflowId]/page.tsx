@@ -260,10 +260,12 @@ function WorkflowBuilderPage() {
     setValidation(null);
     setDefinition((current) => ({
       ...current,
-      nodes: current.nodes.map((node) => node.id !== target || label === "next" ? node : {
-        ...node,
-        position: { x: label === "true" ? 170 : 770, y: Math.min(1800, node.position?.y ?? 90 + Math.floor(current.nodes.findIndex((item) => item.id === node.id) / 3) * 210) },
-      }),
+      // Branch destinations should be positioned from the condition's
+      // output lane. Clearing an old fixed coordinate lets nodePosition
+      // derive the correct upper/lower branch location from the new edge.
+      nodes: current.nodes.map((node) => node.id !== target || label === "next"
+        ? node
+        : { ...node, position: undefined }),
       edges: [...(current.edges ?? []), { id: `edge-${Date.now().toString(36)}`, source, target, label }],
     }));
     setConnectingFrom(null);
