@@ -26,12 +26,17 @@ function serviceClient() {
   });
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
 
+    const body = await request.json().catch(() => null) as { connectionId?: unknown } | null;
+    const requestedConnectionId = typeof body?.connectionId === "string" ? body.connectionId : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedConnectionId)) {
+      return json({ error: "Choose a saved Resend connection before sending a test email." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: membership, error: membershipError } = await supabase.from("workspace_members")
       .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
@@ -42,7 +47,7 @@ export async function POST(_request: NextRequest) {
 
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id").eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
+      .select("id").eq("id", requestedConnectionId).eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save your Resend connection before sending a test email." }, 404);
 
