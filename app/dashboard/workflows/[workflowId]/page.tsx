@@ -133,13 +133,22 @@ export default function WorkflowBuilderPage() {
     const viewport = graphViewportRef.current;
     if (!viewport) return;
     const bounds = viewport.getBoundingClientRect();
-    const scale = Math.max(0.25, Math.min(1.2, (bounds.width - 56) / graphWidth, (bounds.height - 56) / graphHeight));
+    const points = definition.nodes.map((node, index) => nodePosition(node, index));
+    const left = points.length ? Math.min(...points.map((point) => point.x - 82)) : 80;
+    const right = points.length ? Math.max(...points.map((point) => point.x + 82)) : Math.min(graphWidth, 700);
+    const top = points.length ? Math.min(...points.map((point) => point.y - 64)) : 80;
+    const bottom = points.length ? Math.max(...points.map((point) => point.y + 82)) : Math.min(graphHeight, 600);
+    const contentWidth = Math.max(180, right - left);
+    const contentHeight = Math.max(150, bottom - top);
+    const availableWidth = Math.max(160, bounds.width - 64);
+    const availableHeight = Math.max(160, bounds.height - 64);
+    const scale = Math.max(0.25, Math.min(1.35, availableWidth / contentWidth, availableHeight / contentHeight));
     setCamera({
-      x: (bounds.width - graphWidth * scale) / 2,
-      y: (bounds.height - graphHeight * scale) / 2,
+      x: (bounds.width - contentWidth * scale) / 2 - left * scale,
+      y: (bounds.height - contentHeight * scale) / 2 - top * scale,
       scale,
     });
-  }, [graphWidth, graphHeight]);
+  }, [graphWidth, graphHeight, definition.nodes, definition.edges]);
 
   function zoomGraphTo(requestedScale: number, clientX?: number, clientY?: number) {
     const viewport = graphViewportRef.current;
