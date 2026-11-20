@@ -143,18 +143,29 @@ export async function POST(request: NextRequest) {
       const graphLaneById = new Map<string, number>();
       // Lay the graph out left-to-right. IF true/false edges split into upper
       // and lower lanes; following actions inherit their branch lane.
-      for (const step of registrySteps as Array<{ id: string }>) {
-        const incoming = edges.filter((edge) => edge.target === step.id);
-        const depth = incoming.length
-          ? Math.max(...incoming.map((edge) => graphDepthById.get(edge.source) ?? 0)) + 1
-          : 0;
-        const lanes = incoming.map((edge) => {
-          const sourceLane = graphLaneById.get(edge.source) ?? 0;
-          return sourceLane + (edge.label === "true" ? -1 : edge.label === "false" ? 1 : 0);
-        });
-        const lane = lanes.length ? lanes.reduce((sum, value) => sum + value, 0) / lanes.length : 0;
-        graphDepthById.set(step.id, depth);
-        graphLaneById.set(step.id, Math.max(-1, Math.min(1, lane)));
+      const unresolvedGraphSteps = new Set((registrySteps as Array<{ id: string }>).map((step) => step.id));
+      // Resolve parents before children so layout is independent of the order
+      // in which the model happened to list its registered steps.
+      for (let pass = 0; pass < registrySteps.length && unresolvedGraphSteps.size > 0; pass += 1) {
+        let resolvedAny = false;
+        for (const step of registrySteps as Array<{ id: string }>) {
+          if (!unresolvedGraphSteps.has(step.id)) continue;
+          const incoming = edges.filter((edge) => edge.target === step.id);
+          if (incoming.some((edge) => !graphDepthById.has(edge.source))) continue;
+          const depth = incoming.length
+            ? Math.max(...incoming.map((edge) => graphDepthById.get(edge.source) ?? 0)) + 1
+            : 0;
+          const lanes = incoming.map((edge) => {
+            const sourceLane = graphLaneById.get(edge.source) ?? 0;
+            return sourceLane + (edge.label === "true" ? -1 : edge.label === "false" ? 1 : 0);
+          });
+          const lane = lanes.length ? lanes.reduce((sum, value) => sum + value, 0) / lanes.length : 0;
+          graphDepthById.set(step.id, depth);
+          graphLaneById.set(step.id, Math.max(-1, Math.min(1, lane)));
+          unresolvedGraphSteps.delete(step.id);
+          resolvedAny = true;
+        }
+        if (!resolvedAny) break;
       }
       const graphNodes = registrySteps.map((raw) => {
         const step = raw as { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
