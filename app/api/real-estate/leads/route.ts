@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
       lead_score: score.score, lead_temperature: score.temperature, score_factors: score.factors,
     }).select("*").single();
     if (error?.code === "23505" && lead.source_event_id) {
-      const { data: prior } = await supabase.from("real_estate_leads").select("id,full_name,lead_score,status").eq("workspace_id", workspace.id).eq("source", lead.source).eq("source_event_id", lead.source_event_id).maybeSingle();
+      const { data: prior } = await supabase.from("real_estate_leads").select("*").eq("workspace_id", workspace.id).eq("source", lead.source).eq("source_event_id", lead.source_event_id).maybeSingle();
       if (prior) {
         await ensureLeadSideEffects(supabase, prior, workspace.id, user.id);
         let pipeline={enabled:false,claimed:0,completed:0,blocked:0,failed:0};
