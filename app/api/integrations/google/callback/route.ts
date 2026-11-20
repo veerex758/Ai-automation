@@ -9,7 +9,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function connectionsUrl(request: NextRequest, status: string) {
-  const response = NextResponse.redirect(new URL(`/dashboard/connections?google=${encodeURIComponent(status)}`, request.url));
+  const query = new URLSearchParams({ google: status });
+  const product = request.cookies.get("aivanta_google_oauth_product")?.value;
+  const node = request.cookies.get("aivanta_google_oauth_node")?.value;
+  if (product && ["gmail", "sheets", "drive", "calendar", "docs", "forms", "youtube", "contacts"].includes(product)) query.set("googleProduct", product);
+  if (node && /^[a-z_]{2,40}$/.test(node)) query.set("node", node);
+  const response = NextResponse.redirect(new URL(`/dashboard/connections?${query.toString()}`, request.url));
   response.headers.set("Cache-Control", "no-store");
   return response;
 }
@@ -17,7 +22,7 @@ function connectionsUrl(request: NextRequest, status: string) {
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const clearCookies = (response: NextResponse) => {
-    for (const name of ["aivanta_google_oauth_state", "aivanta_google_oauth_verifier", "aivanta_google_oauth_product", "aivanta_google_oauth_user"]) {
+    for (const name of ["aivanta_google_oauth_state", "aivanta_google_oauth_verifier", "aivanta_google_oauth_product", "aivanta_google_oauth_user", "aivanta_google_oauth_node"]) {
       response.cookies.set(name, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/integrations/google", maxAge: 0 });
     }
     return response;
@@ -141,6 +146,8 @@ export async function GET(request: NextRequest) {
       encrypted_credentials: encryptGoogleCredentials(credentials),
       expires_at: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : null,
       status: "connected",
+      last_tested_at: null,
+      last_test_status: null,
       updated_at: new Date().toISOString(),
     }, { onConflict: "workspace_id,provider,product,account_email,connected_by" });
 
