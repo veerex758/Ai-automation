@@ -445,7 +445,7 @@ export default function ConnectionsPage() {
     gmail: "gmail", sheets: "sheets", drive: "google_drive", calendar: "google_calendar",
     docs: "google_docs", forms: "google_forms", youtube: "youtube", contacts: "google_contacts",
   };
-  const googleStartHref = (product: string) => `/api/integrations/google/start?product=${encodeURIComponent(product)}&node=${encodeURIComponent(focusedNode || googleNodeByProduct[product] || "")}`;
+  const googleStartHref = (product: string, connectionId?: string) => `/api/integrations/google/start?product=${encodeURIComponent(product)}&node=${encodeURIComponent(focusedNode || googleNodeByProduct[product] || "")}${connectionId ? `&connectionId=${encodeURIComponent(connectionId)}` : ""}`;
   const visibleGoogleConnections = connections.filter(connection => !focusedGoogleProduct || connection.product === focusedGoogleProduct);
 
   return (
@@ -493,7 +493,7 @@ export default function ConnectionsPage() {
             <span className={`connection-status status-${connection.status}`}>{connection.status.replace("_", " ")}</span>
             <div className="workspace-integration-row-actions">
               <button type="button" onClick={() => void testGoogleConnection(connection.id)}>Test account</button>
-              <a className="connection-button" href={googleStartHref(connection.product)}>Reconnect / rotate</a>
+              <a className="connection-button" href={googleStartHref(connection.product, connection.id)}>Reconnect this account / rotate</a>
               <button type="button" onClick={() => void disconnectGoogleConnection(connection.id)}>Disconnect</button>
             </div>
           </article>
