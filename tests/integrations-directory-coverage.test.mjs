@@ -53,7 +53,8 @@ test("new provider-pack connection checks remain read-only and fail closed when 
 
 test("durable live execution requires an explicitly selected, verified account in the current workspace", () => {
   assert.match(workerSource, /select\("id,status,last_test_status"\)/);
-  assert.match(workerSource, /integration\.status !== "connected" \|\| integration\.last_test_status !== "passed"/);
+  assert.match(workerSource, /eq\("status", "connected"\)\.eq\("last_test_status", "passed"\)/);
+  assert.match(workerSource, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
   assert.match(workerSource, /selectedConnectionIds\.get\(provider\)/);
   assert.match(workerSource, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
   assert.match(workerSource, /eq\("workspace_id", workspaceId\)/);
