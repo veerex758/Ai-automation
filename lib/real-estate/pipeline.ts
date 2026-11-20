@@ -381,13 +381,14 @@ async function sendAgentNotifications(
 }
 
 async function processClaim(db: ServiceClient, claim: PipelineClaim) {
-  const { data: lead, error } = await db.from("real_estate_leads")
+  const { data: leadData, error } = await db.from("real_estate_leads")
     .select("*")
     .eq("id", claim.lead_id)
     .eq("workspace_id", claim.workspace_id)
     .eq("pipeline_lease_token", claim.lease_token)
     .maybeSingle();
-  if (error || !lead) throw new Error("PIPELINE_LEAD_LOOKUP_FAILED");
+  if (error || !leadData) throw new Error("PIPELINE_LEAD_LOOKUP_FAILED");
+  let lead: LeadRow = leadData;
 
   let qualification = lead.qualification_status === "succeeded"
     ? lead.qualification as Qualification
@@ -409,20 +410,21 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       qualification = await operation.run(context, { leadData: qualificationInput(lead) }) as Qualification;
       const merged = mergeQualification(lead, qualification);
       await updateClaim(db, claim, merged);
-      await ensureFollowupDrafts(db, { ...lead, ...merged }, qualification);
-      await ensureQualificationActivity(db, lead, claim.workspace_id, Number(merged.lead_score));
+      lead = { ...lead, ...merged };
     } catch (error) {
       const code = safeErrorCode(error, "GEMINI_QUALIFICATION_FAILED");
       await retryClaim(db, claim, lead, "qualification", code, false);
       return "failed";
     }
-  } else {
-    try {
-      await ensureFollowupDrafts(db, lead, qualification);
-    } catch {
-      await retryClaim(db, claim, lead, "pipeline", "FOLLOWUP_QUEUE_RECOVERY_FAILED", false);
-      return "failed";
-    }
+  }
+
+  try {
+    await ensureFollowupDrafts(db, lead, qualification);
+    await ensureQualificationActivity(db, lead, claim.workspace_id, Number(lead.lead_score));
+  } catch (error) {
+    const code = safeErrorCode(error, "LEAD_PIPELINE_PERSISTENCE_FAILED");
+    await retryClaim(db, claim, lead, "pipeline", code, false);
+    return "failed";
   }
 
   if (lead.agent_notification_status !== "accepted") {
@@ -472,15 +474,12 @@ export async function processRealEstateLeadPipeline(options: {
     p_limit: options.leadId ? 1 : Math.max(1, Math.min(50, options.limit ?? 20)),
     p_lease_seconds: 180,
     p_lead_id: options.leadId ?? null,
+    p_workspace_id: options.workspaceId ?? null,
   });
   if (error || !Array.isArray(data)) throw new Error("PIPELINE_CLAIM_FAILED");
   const claims = data as PipelineClaim[];
   const counts = { enabled: true, claimed: claims.length, completed: 0, blocked: 0, failed: 0 };
   for (const claim of claims) {
-    if (options.workspaceId && claim.workspace_id !== options.workspaceId) {
-      counts.failed++;
-      continue;
-    }
     try {
       const result = await processClaim(db, claim);
       if (result === "completed") counts.completed++;
