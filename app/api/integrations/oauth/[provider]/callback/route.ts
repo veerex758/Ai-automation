@@ -23,7 +23,7 @@ function serviceClient() {
 }
 
 function finish(request: NextRequest, provider: string, success: boolean) {
-  const destination = new URL("/dashboard/integrations", request.url);
+  const destination = new URL("/dashboard/connections", request.url);
   destination.searchParams.set("oauth", success ? "connected" : "failed");
   destination.searchParams.set("provider", provider);
   const response = NextResponse.redirect(destination);
