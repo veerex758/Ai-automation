@@ -22,9 +22,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return NextResponse.json({ error: "Only workspace owners and admins can connect provider accounts." }, { status: 403 });
     }
+    const connectionId = request.nextUrl.searchParams.get("connectionId") ?? undefined;
+    if (connectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
+      return NextResponse.json({ error: "The connection ID is invalid." }, { status: 400 });
+    }
     const callbackPath = "/api/integrations/oauth/" + encodeURIComponent(provider) + "/callback";
     const redirectUri = new URL(callbackPath, request.url).toString();
-    const { state, codeVerifier } = createOAuthState({ provider, workspaceId: workspace.id, userId: user.id });
+    const { state, codeVerifier } = createOAuthState({ provider, workspaceId: workspace.id, userId: user.id, ...(connectionId ? { connectionId } : {}) });
     const authorizeUrl = createProviderAuthorizeUrl({ provider, config, redirectUri, state, codeVerifier });
     const response = NextResponse.redirect(authorizeUrl);
     const cookieOptions = {
