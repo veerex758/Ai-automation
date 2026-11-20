@@ -80,3 +80,11 @@ test("the Integrations directory exposes all 122 executable nodes separately fro
   assert.match(directorySource, /Provider catalogue/);
   assert.match(registrySource, /export function getExecutableNodeCatalog\(\)/);
 });
+
+test("registry connection actions open a provider-focused connection setup page", () => {
+  assert.match(directorySource, /dashboard\\/connections\\?provider=/);
+  assert.match(connectionsSource, /setFocusedProvider/);
+  assert.match(connectionsSource, /focusedProvider \\? `Connect/);
+  assert.match(connectionsSource, /!focusedProvider &&/);
+  assert.match(connectionsSource, /integrations\\.filter\\(item => !focusedProvider \\|\\| item\\.provider === focusedProvider\\)/);
+});

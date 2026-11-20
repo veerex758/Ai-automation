@@ -629,7 +629,7 @@ export default function RegistryIntegrationsDirectory() {
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
           {node.executionStatus === "registered" && connectionRequired(node) && <span className={liveActionReady ? "registry-live-permission permission-enabled" : "registry-live-permission"}>{liveActionReady ? "Live action ready" : "Live action locked"}</span>}
-          {node.executionStatus === "registered" && connectionRequired(node) && (googleProductForNode[node.id] ? <a className="registry-connect-link" href={`/api/integrations/google/start?product=${googleProductForNode[node.id]}`}>Connect Google ↗</a> : <a className="registry-connect-link" href={`/dashboard/connections?provider=${encodeURIComponent(credentialProvider[node.id] ?? node.id)}&node=${encodeURIComponent(node.id)}`}>Connect</a>)}
+          {node.executionStatus === "registered" && connectionRequired(node) && (googleProductForNode[node.id] ? <a className="registry-connect-link" href={`/api/integrations/google/start?product=${googleProductForNode[node.id]}`}>Connect Google ↗</a> : <button className="registry-connect-link" type="button" onClick={() => { setConnecting(node); setCredentialValues({}); setConnectionMessage(""); }}>Connect</button>)}
           {node.executionStatus === "registered" && <button className="registry-expand-button" type="button" aria-expanded={isExpanded} onClick={() => toggle(node.id)}>
             {isExpanded ? "Hide operations" : "View operations"} <span>{isExpanded ? "−" : "+"}</span>
           </button>}
