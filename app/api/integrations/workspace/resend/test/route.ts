@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       const timedOut = error instanceof Error && error.name === "AbortError";
       await db.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
-      }).eq("id", integration.id);
+      }).eq("id", integration.id).eq("workspace_id", workspace.id);
       return json({ error: timedOut ? "Resend did not respond within 8 seconds. Check the connection and try again." : "Aivanta could not reach Resend. Check the server network and try again." }, 502);
     } finally {
       clearTimeout(timeout);
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
         const db = serviceClient();
         await db.from("workspace_integrations").update({
           last_tested_at: new Date().toISOString(), last_test_status: "failed",
-        }).eq("id", integrationId);
+        }).eq("id", integrationId).eq("workspace_id", workspaceId);
       } catch { /* preserve the sanitized response */ }
     }
     return json({ error: "Could not complete the Resend connection check. No email was sent." }, 500);
