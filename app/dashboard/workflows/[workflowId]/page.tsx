@@ -27,7 +27,29 @@ const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> 
   condition: { label: "Condition", icon: "◇", help: "A rule to check before continuing." },
 };
 
-export default function WorkflowBuilderPage() {
+export default const registryIconGlyphs: Record<string, string> = {
+  sparkles: "✦",
+  mail: "✉",
+  slack: "✣",
+  plug: "↗",
+  webhook: "↯",
+  "google-sheets": "▦",
+  sheets: "▦",
+  database: "▤",
+  "file-spreadsheet": "▦",
+  "git-branch": "⑂",
+};
+
+function graphNodeGlyph(node: WorkflowNode, providerIcon?: string) {
+  if (node.type === "condition") return "◇";
+  if (node.registryNodeId === "gemini" || node.registryNodeId === "openai") return "✦";
+  if (node.registryNodeId === "email" || node.registryNodeId === "gmail") return "✉";
+  if (node.registryNodeId === "slack") return "✣";
+  if (node.registryNodeId === "webhooks") return "↯";
+  return (providerIcon && registryIconGlyphs[providerIcon.toLowerCase()]) || (node.type === "trigger" ? "⚡" : "↗");
+}
+
+function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
   const workflowId = params.workflowId;
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -108,11 +130,22 @@ export default function WorkflowBuilderPage() {
 
   useEffect(() => { void loadWorkflow(); }, [loadWorkflow]);
 
-  function nodePosition(node: WorkflowNode, index: number) {
+  function nodePosition(node: WorkflowNode, index: number, seen = new Set<string>()): { x: number; y: number } {
     if (node.position) return node.position;
-    const incomingBranch = (definition.edges ?? []).find((edge) => edge.target === node.id && edge.label !== "next");
-    const col = incomingBranch?.label === "false" ? 2 : incomingBranch?.label === "true" ? 0 : index % 3;
-    return { x: 170 + col * 300, y: 90 + Math.floor(index / 3) * 210 };
+    if (seen.has(node.id)) return { x: 160 + index * 320, y: 330 };
+    const nextSeen = new Set(seen);
+    nextSeen.add(node.id);
+    const incoming = (definition.edges ?? []).filter((edge) => edge.target === node.id);
+    if (!incoming.length) return { x: 160 + index * 320, y: 330 };
+    const parents = incoming.map((edge) => {
+      const parentIndex = definition.nodes.findIndex((candidate) => candidate.id === edge.source);
+      const parent = definition.nodes[parentIndex];
+      return parent ? nodePosition(parent, Math.max(0, parentIndex), nextSeen) : { x: 160, y: 330 };
+    });
+    const x = Math.max(...parents.map((point) => point.x)) + 320;
+    const branchY = incoming.map((edge, edgeIndex) => parents[edgeIndex].y + (edge.label === "true" ? -220 : edge.label === "false" ? 220 : 0));
+    const y = branchY.reduce((sum, value) => sum + value, 0) / branchY.length;
+    return { x, y };
   }
 
   const fitGraphToView = useCallback(() => {
@@ -581,7 +614,7 @@ export default function WorkflowBuilderPage() {
           />
           <div className="builder-canvas">
             <div className="canvas-grid" aria-hidden="true" />
-            <div className="canvas-label"><span>CANVAS · DRAG NODES TO REPOSITION</span><span>{definition.nodes.length} / 30 steps</span></div>
+            <div className="canvas-label"><span>VISUAL GRAPH · DRAG NODES · DRAG BACKGROUND TO PAN · SCROLL TO ZOOM</span><span>{definition.nodes.length} / 30 nodes</span></div>
             <div
               className={`graph-canvas ${isPanning ? "graph-canvas-panning" : ""}`}
               ref={graphViewportRef}
@@ -627,7 +660,7 @@ export default function WorkflowBuilderPage() {
                   const provider = registryCatalog.find((item) => item.id === node.registryNodeId);
                   return <div key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`} style={{ left: point.x, top: point.y }} onPointerDown={(event) => beginNodeDrag(event, node, index)} onPointerMove={moveNodeDrag} onPointerUp={endNodeDrag} onPointerCancel={() => { dragState.current = null; }} onClick={() => setSelectedId(node.id)} role="group" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }} aria-label={`Select and drag ${node.title}`}>
                     <button type="button" className="graph-node-port graph-port-in" aria-label={`Connect into ${node.title}`} title={connectingFrom ? "Complete connection" : "Choose a source node"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!connectingFrom) { setNotice("Choose an output handle first."); return; } connectNodes(connectingFrom, node.id, connectionLabel); }} />
-                    <span className="graph-node-icon">{provider?.icon || nodeMeta[node.type].icon}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {provider?.name || node.registryNodeId || `Step ${index + 1}`}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small>
+                    <span className="graph-node-icon">{graphNodeGlyph(node, provider?.icon)}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {provider?.name || node.registryNodeId || `Step ${index + 1}`}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small>
                     <button type="button" className="graph-node-port graph-port-out" aria-label={`Connect from ${node.title}`} title="Start a connection" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSelectedId(node.id); setConnectingFrom(node.id); setNotice(node.type === "condition" ? "Choose True or False in the connection editor, then select a destination input handle." : "Select a destination input handle."); }} />
                   </div>;
                 })}
