@@ -57,20 +57,29 @@ async function sendOne(db:ReturnType<typeof createRealEstateServiceClient>,claim
  ]);
  return "sent";
 }
-async function run(request:NextRequest){
- if(!authorized(request))return NextResponse.json({error:process.env.CRON_SECRET||process.env.AIVANTA_SCHEDULER_SECRET?"Unauthorized.":"Cron authentication is not configured."},{status:process.env.CRON_SECRET||process.env.AIVANTA_SCHEDULER_SECRET?401:503});
+export async function processDueRealEstateFollowups(db:ReturnType<typeof createRealEstateServiceClient>=createRealEstateServiceClient()){
  if(process.env.REAL_ESTATE_FOLLOWUPS_ENABLED!=="true"||process.env.AIVANTA_LIVE_EXECUTION_ENABLED!=="true"){
-  return NextResponse.json({success:true,enabled:false,claimed:0,sent:0,message:"Follow-up delivery is disabled; no queue rows were claimed."});
+  return {enabled:false,claimed:0,sent:0,retried:0,failed:0,blocked:0,cancelled:0};
  }
- let db:ReturnType<typeof createRealEstateServiceClient>;try{db=createRealEstateServiceClient();}catch{return NextResponse.json({error:"Follow-up database is not configured."},{status:503});}
  const {data,error}=await db.rpc("claim_due_real_estate_followups",{p_limit:20,p_lease_seconds:180});
- if(error||!Array.isArray(data)){console.error("Real-estate follow-up claim failed");return NextResponse.json({error:"Could not claim follow-ups."},{status:500});}
- const counts={claimed:data.length,sent:0,retried:0,failed:0,blocked:0,cancelled:0};
+ if(error||!Array.isArray(data))throw new Error("FOLLOWUP_CLAIM_FAILED");
+ const counts={enabled:true,claimed:data.length,sent:0,retried:0,failed:0,blocked:0,cancelled:0};
  for(const raw of data as Claim[]){
   try{const result=await sendOne(db,raw);if(result==="sent")counts.sent++;else if(result==="retry")counts.retried++;else if(result==="failed")counts.failed++;else if(result==="blocked")counts.blocked++;else counts.cancelled++;}
   catch(error){console.error("Follow-up execution failed",{followupId:raw.id,errorCode:error instanceof Error&&/^[A-Z0-9_]{1,80}$/.test(error.message)?error.message:"FOLLOWUP_EXECUTION_FAILED"});try{await finish(db,raw,false,null,"FOLLOWUP_EXECUTION_FAILED",true);counts.retried++;}catch{counts.failed++;}}
  }
- return NextResponse.json({success:true,...counts});
+ return counts;
+}
+async function run(request:NextRequest){
+ if(!authorized(request))return NextResponse.json({error:process.env.CRON_SECRET||process.env.AIVANTA_SCHEDULER_SECRET?"Unauthorized.":"Cron authentication is not configured."},{status:process.env.CRON_SECRET||process.env.AIVANTA_SCHEDULER_SECRET?401:503});
+ try{
+  const db=createRealEstateServiceClient();
+  const counts=await processDueRealEstateFollowups(db);
+  return NextResponse.json({success:true,...counts});
+ }catch(error){
+  console.error("Real-estate follow-up worker failed",error);
+  return NextResponse.json({error:"Could not process real-estate follow-ups."},{status:500});
+ }
 }
 export async function GET(request:NextRequest){return run(request);}
 export async function POST(request:NextRequest){return run(request);}
