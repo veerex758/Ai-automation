@@ -12,6 +12,8 @@ type Connection = {
   scopes: string[];
   status: "connected" | "needs_reauth" | "revoked";
   expires_at: string | null;
+  last_tested_at?: string | null;
+  last_test_status?: string | null;
 };
 
 const statusMessages: Record<string, string> = {
