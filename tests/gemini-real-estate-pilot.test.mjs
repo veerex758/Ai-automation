@@ -35,13 +35,15 @@ test("activation is explicit, constrained to the supported three-step pilot, and
   assert.match(activation, /status", "succeeded"/);
 });
 
-test("manual and signed-webhook live paths allow only the explicit Gemini qualification operation", () => {
-  for (const source of [registryRun, webhook]) {
-    assert.match(source, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
-    assert.match(source, /GEMINI_API_KEY/);
-    assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-    assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  }
+test("legacy direct live endpoints cannot bypass selected workspace credentials", () => {
+  assert.match(registryRun, /DURABLE_DISPATCH_REQUIRED/);
+  assert.match(registryRun, /dryRun: true/);
+  assert.doesNotMatch(registryRun, /GEMINI_API_KEY|RESEND_API_KEY|SLACK_INCOMING_WEBHOOK_URL/);
+  assert.match(webhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED/);
+  assert.match(webhook, /p_execution_mode: DURABLE_WEBHOOK_QUEUE_MODE/);
+  assert.match(webhook, /webhookVerified: true/);
+  assert.doesNotMatch(webhook, /GEMINI_API_KEY|RESEND_API_KEY|executeRegisteredWorkflow/);
+  assert.match(webhook, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
   assert.match(webhook, /hourlyRuns/);
 });
 
