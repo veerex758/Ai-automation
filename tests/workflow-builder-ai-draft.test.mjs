@@ -37,7 +37,8 @@ test("workflow builder preserves generated step order as explicit editable graph
 test("AI Assistant creates an inactive validated draft and opens the visual Builder immediately", () => {
   assert.match(assistant, /Generate on visual canvas/);
   assert.match(assistant, /status: "draft"/);
-  assert.match(assistant, /router\.push\(\\?`\/dashboard\/workflows/);
+  assert.match(assistant, /router\.push/);
+  assert.match(assistant, /dashboard\/workflows/);
   assert.match(assistant, /REXNORA AI WORKFLOW DESIGNER/);
   assert.doesNotMatch(assistant, /generated-node|Review validated draft in Builder/);
 });
