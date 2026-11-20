@@ -10,7 +10,9 @@ test("Resend setup test email is fixed to the approved test sender and recipient
   assert.match(route, /const TEST_RECIPIENT = "sundayezekielm069@gmail\.com"/);
   assert.match(route, /from: TEST_SENDER/);
   assert.match(route, /to: \[TEST_RECIPIENT\]/);
-  assert.doesNotMatch(route, /request\.json\(\)/);
+  assert.match(route, /requestedConnectionId/);
+  assert.match(route, /JSON\.stringify\(\{ connectionId \}\)/);
+  assert.doesNotMatch(route, /body\.recipient|body\.to|body\.from/);
 });
 
 test("Resend test email requires an authenticated workspace owner or admin", () => {
