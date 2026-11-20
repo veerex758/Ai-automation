@@ -21,6 +21,16 @@ export async function GET(request: NextRequest) {
   if (!isGoogleProduct(productValue)) {
     return NextResponse.json({ error: "Choose a supported read-only Google product." }, { status: 400 });
   }
+  const googleNodeByProduct: Record<string, string> = {
+    gmail: "gmail", sheets: "sheets", drive: "google_drive", calendar: "google_calendar",
+    docs: "google_docs", forms: "google_forms", youtube: "youtube", contacts: "google_contacts",
+  };
+  const expectedNode = googleNodeByProduct[productValue];
+  const requestedNode = request.nextUrl.searchParams.get("node");
+  if (requestedNode && requestedNode !== expectedNode) {
+    return NextResponse.json({ error: "The selected Google node does not match this OAuth product." }, { status: 400 });
+  }
+  const nodeId = expectedNode;
 
   try {
     const config = getGoogleOAuthConfig();
@@ -42,7 +52,7 @@ export async function GET(request: NextRequest) {
     authorize.searchParams.set("scope", scopes.join(" "));
     authorize.searchParams.set("access_type", "offline");
     authorize.searchParams.set("include_granted_scopes", "false");
-    authorize.searchParams.set("prompt", "consent");
+    authorize.searchParams.set("prompt", "select_account consent");
     authorize.searchParams.set("state", state);
     authorize.searchParams.set("code_challenge", challenge);
     authorize.searchParams.set("code_challenge_method", "S256");
@@ -59,6 +69,7 @@ export async function GET(request: NextRequest) {
     response.cookies.set("aivanta_google_oauth_verifier", verifier, cookieOptions);
     response.cookies.set("aivanta_google_oauth_product", productValue, cookieOptions);
     response.cookies.set("aivanta_google_oauth_user", user.id, cookieOptions);
+    response.cookies.set("aivanta_google_oauth_node", nodeId, cookieOptions);
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch {
