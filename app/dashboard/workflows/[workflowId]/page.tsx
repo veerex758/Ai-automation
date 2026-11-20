@@ -658,6 +658,12 @@ export default function WorkflowBuilderPage() {
                     <marker id="graph-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
                       <path d="M0,0 L0,8 L8,4 z" fill="#8BB8FF" />
                     </marker>
+                    <marker id="graph-arrow-true" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#67D5A1" />
+                    </marker>
+                    <marker id="graph-arrow-false" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#F0AD79" />
+                    </marker>
                   </defs>
                   {(definition.edges ?? []).map((edge) => {
                     const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
