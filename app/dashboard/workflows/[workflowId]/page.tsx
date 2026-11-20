@@ -133,7 +133,23 @@ export default function WorkflowBuilderPage() {
     const viewport = graphViewportRef.current;
     if (!viewport) return;
     const bounds = viewport.getBoundingClientRect();
-    const points = definition.nodes.map((node, index) => nodePosition(node, index));
+    function resolvePosition(node: WorkflowNode, index: number, seen = new Set<string>()): { x: number; y: number } {
+      if (node.position) return node.position;
+      if (seen.has(node.id)) return { x: 160 + index * 320, y: 330 };
+      const nextSeen = new Set(seen);
+      nextSeen.add(node.id);
+      const incoming = (definition.edges ?? []).filter((edge) => edge.target === node.id);
+      if (!incoming.length) return { x: 160 + index * 320, y: 330 };
+      const parents = incoming.map((edge) => {
+        const parentIndex = definition.nodes.findIndex((item) => item.id === edge.source);
+        const parent = definition.nodes[parentIndex];
+        return parent ? resolvePosition(parent, Math.max(0, parentIndex), nextSeen) : { x: 160, y: 330 };
+      });
+      const x = Math.max(...parents.map((point) => point.x)) + 320;
+      const ys = incoming.map((edge, edgeIndex) => parents[edgeIndex].y + (edge.label === "true" ? -220 : edge.label === "false" ? 220 : 0));
+      return { x, y: ys.reduce((sum, value) => sum + value, 0) / ys.length };
+    }
+    const points = definition.nodes.map((node, index) => resolvePosition(node, index));
     const left = points.length ? Math.min(...points.map((point) => point.x - 82)) : 80;
     const right = points.length ? Math.max(...points.map((point) => point.x + 82)) : Math.min(graphWidth, 700);
     const top = points.length ? Math.min(...points.map((point) => point.y - 64)) : 80;
