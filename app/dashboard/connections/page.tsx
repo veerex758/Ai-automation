@@ -465,27 +465,43 @@ export default function ConnectionsPage() {
       {error && <div className="connections-error" role="alert"><strong>Connections unavailable</strong><p>{error}</p><small>Diagnostic: {errorCode || "CONNECTIONS_UNAVAILABLE"}</small>{diagnosticHelp[errorCode] && <p>{diagnosticHelp[errorCode]}</p>}<button type="button" onClick={() => window.location.reload()}>Try again</button></div>}
 
       <section className="connections-grid" aria-label="Available integrations">
+        {(!focusedGoogleProduct || focusedGoogleProduct === "gmail") && (
         <article className="connection-card">
           <div className="connection-icon google-icon" aria-hidden="true">G</div>
           <div className="connection-card-copy"><h2>Gmail</h2><p>Authorize access to read messages. Sending email is not enabled by this permission.</p></div>
           <span className="connection-scope">READ ONLY</span>
           <a className="connection-button" href={googleStartHref("gmail")}>Connect Gmail <span aria-hidden="true">↗</span></a>
         </article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "sheets") && (
         <article className="connection-card">
           <div className="connection-icon sheets-icon" aria-hidden="true">▦</div>
           <div className="connection-card-copy"><h2>Google Sheets</h2><p>Authorize read-only access to spreadsheets. Editing cells requires a separate permission rollout.</p></div>
           <span className="connection-scope">READ ONLY</span>
           <a className="connection-button" href={googleStartHref("sheets")}>Connect Sheets <span aria-hidden="true">↗</span></a>
         </article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "drive") && (
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Drive</h2><p>Read file metadata and search Drive. No file edits or deletes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("drive")}>Connect Drive <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "calendar") && (
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Calendar</h2><p>Read calendar events in a selected time window. No event changes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("calendar")}>Connect Calendar <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "docs") && (
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Docs</h2><p>Read document metadata and content structure. No document edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("docs")}>Connect Docs <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "forms") && (
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Forms</h2><p>Read form titles and question metadata. No response or form edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("forms")}>Connect Forms <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "youtube") && (
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">▶</div><div className="connection-card-copy"><h2>YouTube</h2><p>Search videos and read channel metadata. No publishing actions.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("youtube")}>Connect YouTube <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "contacts") && (
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Contacts</h2><p>Read contact names, email addresses and phone numbers.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("contacts")}>Connect Contacts <span aria-hidden="true">↗</span></a></article>
+        )}
       </section>
 
-      <WorkspaceIntegrationManager />
+      {!focusedGoogleProduct && <WorkspaceIntegrationManager />}
 
       <section className="connections-list">
         <div className="connections-list-heading"><div><h2>Connected accounts</h2><p>Only account details and permission names are shown here. Tokens never reach the browser.</p></div><span>{connections.length} {connections.length === 1 ? "connection" : "connections"}</span></div>
