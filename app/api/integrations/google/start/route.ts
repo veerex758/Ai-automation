@@ -2,6 +2,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getGoogleOAuthConfig, GOOGLE_PRODUCTS, isGoogleProduct } from "@/lib/integrations/google-oauth";
+import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,13 @@ export async function GET(request: NextRequest) {
   const nodeId = requestedNode ?? expectedNode;
 
   try {
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
+    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
+      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      return NextResponse.json({ error: "Only workspace owners and admins can connect Google accounts." }, { status: 403 });
+    }
     const config = getGoogleOAuthConfig();
     const requestOrigin = request.nextUrl.origin;
     const redirectOrigin = new URL(config.redirectUri).origin;
