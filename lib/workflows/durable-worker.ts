@@ -245,6 +245,18 @@ function boundedOutput(value: unknown, knownSecrets: readonly string[] = []): Re
   return { outputOmitted: true };
 }
 
+
+function webhookHistoryOutput(output: unknown, payloadSha256: unknown): Record<string, unknown> {
+  if (!isRecord(output)) return { payloadRedacted: true };
+  return {
+    ...(typeof output.eventId === "string" ? { eventId: output.eventId } : {}),
+    ...(typeof output.eventType === "string" ? { eventType: output.eventType } : {}),
+    ...(typeof output.receivedAt === "string" ? { receivedAt: output.receivedAt } : {}),
+    ...(typeof payloadSha256 === "string" && /^[a-f0-9]{64}$/.test(payloadSha256) ? { payloadSha256 } : {}),
+    payloadRedacted: true,
+  };
+}
+
 function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
   const secretField = /(?:token|key|secret|password|credential|webhook|connection.?string|authorization)/i;
   return Object.values(credentials).flatMap((provider) =>
@@ -432,8 +444,17 @@ export async function runDurableWorker() {
         const completedStepIds: string[] = [];
         for (const checkpoint of savedCheckpoints as Array<{ step_id: string; output: unknown }>) {
           if (workflowStepIds.has(checkpoint.step_id) || resumableIterationIds.has(checkpoint.step_id)) {
-            initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
-              ? checkpoint.output.__aivantaArray : checkpoint.output;
+            const checkpointStep = steps.find((step) => step.id === checkpoint.step_id);
+            // The signed ingress payload is retained in the private execution job
+            // for deterministic retries. Rehydrate it in memory while keeping
+            // raw lead/event fields out of checkpoint and run-history output.
+            if (source === "webhook" && checkpointStep?.nodeId === "webhooks" &&
+                isRecord(job.payload?.input)) {
+              initialOutputs[checkpoint.step_id] = job.payload.input;
+            } else {
+              initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
+                ? checkpoint.output.__aivantaArray : checkpoint.output;
+            }
             completedStepIds.push(checkpoint.step_id);
           }
         }
@@ -462,7 +483,9 @@ export async function runDurableWorker() {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
               db, job, step, position, completed.status === "succeeded" ? "succeeded" : "skipped",
-              boundedOutput(completed.output, executionSecrets),
+              step.nodeId === "webhooks" && step.operationId === "receive_event"
+                ? webhookHistoryOutput(completed.output, job.payload?.webhookPayloadSha256)
+                : boundedOutput(completed.output, executionSecrets),
             ),
           } : {}),
         });
@@ -484,7 +507,9 @@ export async function runDurableWorker() {
             title: (steps[index]?.nodeId + "." + steps[index]?.operationId).slice(0, 80),
             status: step.status,
             message: step.error ?? (step.status === "succeeded" ? "Registered operation executed." : "Registered operation validated; no provider action was executed."),
-            output: step.output,
+            output: steps[index]?.nodeId === "webhooks" && steps[index]?.operationId === "receive_event"
+              ? webhookHistoryOutput(step.output, job.payload?.webhookPayloadSha256)
+              : step.output,
           })),
         };
       } else {
