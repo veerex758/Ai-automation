@@ -7,11 +7,9 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// This endpoint is deliberately fixed to Resend's test sender and the account
-// email explicitly approved for this one-time setup test. Never accept a
-// recipient or sender from the browser.
+// This endpoint sends only to the authenticated, verified workspace member's
+// email address. The browser cannot choose a recipient or sender.
 const TEST_SENDER = "onboarding@resend.dev";
-const TEST_RECIPIENT = "sundayezekielm069@gmail.com";
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
@@ -31,6 +29,13 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
+    if (!user.email || !user.email_confirmed_at) {
+      return json({ error: "Verify your account email before sending a Resend setup test." }, 409);
+    }
+    const testRecipient = user.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testRecipient)) {
+      return json({ error: "The verified account email is not a valid test recipient." }, 409);
+    }
 
     const body = await request.json().catch(() => null) as { connectionId?: unknown } | null;
     const requestedConnectionId = typeof body?.connectionId === "string" ? body.connectionId : "";
@@ -76,11 +81,11 @@ export async function POST(request: NextRequest) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
           "User-Agent": "Aivanta/0.1",
-          "Idempotency-Key": `aivanta-resend-setup-test-${workspace.id}`,
+          "Idempotency-Key": `aivanta-resend-setup-test-${workspace.id}-${integration.id}-${user.id}-${crypto.randomUUID()}`,
         },
         body: JSON.stringify({
           from: TEST_SENDER,
-          to: [TEST_RECIPIENT],
+          to: [testRecipient],
           subject: "Aivanta · Resend connection test",
           text: "This is a one-time test email confirming that Aivanta can send through your Resend account. No workflow was executed.",
         }),
@@ -113,10 +118,10 @@ export async function POST(request: NextRequest) {
     }
     return json({
       status: "accepted",
-      recipient: TEST_RECIPIENT,
+      recipient: testRecipient,
       sender: TEST_SENDER,
       emailId: typeof payload.id === "string" ? payload.id : null,
-      message: "Resend accepted the test email for delivery to your account address. No workflow was executed.",
+      message: "Resend accepted the test email for delivery to your verified account email. No workflow was executed.",
     });
   } catch {
     return json({ error: "Could not send the Resend test email. No workflow was executed." }, 500);
