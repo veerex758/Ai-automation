@@ -10,6 +10,9 @@ const builderCss = readFileSync(new URL("../app/dashboard/workflows/[workflowId]
 
 test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-aware node dragging", () => {
   assert.match(page, /const fitGraphToView = useCallback\(/);
+  assert.match(page, /function resolvePosition\(node: WorkflowNode, index: number/);
+  assert.match(page, /const contentWidth = Math\.max\(180, right - left\)/);
+  assert.match(page, /const availableHeight = Math\.max\(160, bounds\.height - 64\)/);
   assert.match(page, /function zoomGraphTo\(/);
   assert.match(page, /onWheel=\{handleGraphWheel\}/);
   assert.match(page, /onPointerDown=\{beginGraphPan\}/);
