@@ -25,7 +25,7 @@ The worker executes legacy workflows and registry workflows in dry-run mode. Reg
 7. Force permanent errors; assert dead-letter copy and terminal job status.
 8. Verify a checkpoint survives worker restart; step-level resume is not claimed in this phase.
 9. Verify non-member clients cannot select or mutate queue, checkpoint, or dead-letter tables.
-10. Confirm no real provider side effects are enabled by this worker.
+10. Confirm live execution stays disabled by default; enable it only in an isolated staging workspace after provider connections, selected account IDs, provider tests, operation approvals, recipient limits, and rollback controls pass.
 
 ## Operational limits
 
@@ -64,6 +64,7 @@ The CI workflow provisions an isolated PostgreSQL 16 service named `aivanta_test
 ## Trigger queue bridge (guarded)
 
 - The internal scheduler dispatches due scheduled workflows into the durable queue using a schedule-occurrence idempotency key, then releases its schedule lease. The queue worker processes the immutable snapshot as a dry-run and owns retries/dead letters.
-- Verified webhook ingress can opt into durable queueing with the server-only `AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED=true` flag. This path persists a dry-run job and returns a queued receipt; it does **not** perform provider side effects. Duplicate delivery retries the same idempotent queue RPC so a receipt cannot permanently strand an event after a transient dispatch failure.
-- Keep the webhook queue flag disabled until the additive queue migration is applied and authenticated staging acceptance passes. The existing synchronous live webhook path remains separate; it is not claimed to be durably recoverable after uncertain provider acceptance.
-- Scheduled and webhook queue registry definitions are validated and simulated without provider calls. Manual registry dispatch may execute the explicitly allowed live operations described above.
+- Verified webhook ingress is queue-only. Dry-run queueing requires the server-only `AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED=true` flag. Live webhook queueing additionally requires `AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED=true` and `AIVANTA_LIVE_EXECUTION_ENABLED=true`, and remains restricted to the approved webhook trigger → Gemini qualification → Resend notification pilot path.
+- The ingress verifies raw-body signature, endpoint/workspace binding, replay timestamp and event ID. It enqueues an immutable job snapshot with an idempotency key and signed-source metadata. The durable worker rejects jobs without a verified webhook marker and endpoint UUID. Live webhook jobs use one attempt; uncertain provider outcomes are not replayed automatically.
+- Duplicate delivery retries the same idempotent queue RPC; the receipt is updated only after checking the endpoint ID. Raw event data remains only in the private queue payload while trigger checkpoints and run history store safe event metadata and the SHA-256 payload digest.
+- Scheduled queue definitions remain dry-run only in this phase. All provider operations—manual or webhook-triggered—must pass through the durable worker and its per-node selected workspace connection checks.
