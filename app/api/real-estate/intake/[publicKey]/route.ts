@@ -18,6 +18,31 @@ async function findForm(key:string):Promise<{db:ReturnType<typeof createRealEsta
  if(error)throw new Error("INTAKE_FORM_LOOKUP_FAILED");
  return {db,form:data as Form|null};
 }
+
+async function ensurePublicLeadSideEffects(
+ db:ReturnType<typeof createRealEstateServiceClient>,
+ lead:Record<string,any>,
+ workspaceId:string,
+ formId:string,
+){
+ const {data:activity,error:activityLookupError}=await db.from("real_estate_lead_activities")
+  .select("id").eq("workspace_id",workspaceId).eq("lead_id",lead.id).eq("activity_type","lead.received").limit(1).maybeSingle();
+ if(activityLookupError)throw activityLookupError;
+ if(!activity){
+  const {error}=await db.from("real_estate_lead_activities").insert({
+   workspace_id:workspaceId,lead_id:lead.id,actor_user_id:null,activity_type:"lead.received",
+   details:{source:lead.source,formId,score:lead.lead_score},
+  });
+  if(error)throw error;
+ }
+ if(!lead.consent_to_contact||lead.contact_preference!=="email"||!lead.email)return 0;
+ const rows=createFollowupRows(lead as Parameters<typeof createFollowupRows>[0],new Date(lead.created_at));
+ const {error:queueError}=await db.from("real_estate_followups")
+  .upsert(rows,{onConflict:"lead_id,sequence",ignoreDuplicates:true});
+ if(queueError)throw queueError;
+ return rows.length;
+}
+
 export async function OPTIONS(request:NextRequest,context:Context){
  try{const {publicKey}=await context.params;if(!/^[A-Za-z0-9_-]{32,100}$/.test(publicKey))return new NextResponse(null,{status:404});
  const {form}=await findForm(publicKey);if(!form||!form.enabled)return new NextResponse(null,{status:404});
@@ -47,13 +72,19 @@ export async function POST(request:NextRequest,context:Context){
   const rate=Array.isArray(limit)?limit[0]:limit;
   if(limitError||!rate||rate.allowed!==true)return NextResponse.json({error:"Too many enquiries from this network. Please try again later."},{status:429,headers});
   const source=form.default_source,sourceEventId=idempotencyKey;
-  const {data:prior,error:priorError}=await db.from("real_estate_leads").select("id,full_name,lead_score,lead_temperature,status,created_at")
+  const {data:prior,error:priorError}=await db.from("real_estate_leads").select("*")
     .eq("workspace_id",form.workspace_id).eq("source",source).eq("source_event_id",sourceEventId).maybeSingle();
-  if(priorError)throw priorError;if(prior)return NextResponse.json({lead:prior,duplicate:true},{status:200,headers});
+  if(priorError)throw priorError;
+  if(prior){
+   await ensurePublicLeadSideEffects(db,prior,form.workspace_id,form.id);
+   return NextResponse.json({lead:{id:prior.id,full_name:prior.full_name,lead_score:prior.lead_score,lead_temperature:prior.lead_temperature,status:prior.status,created_at:prior.created_at},duplicate:true},{status:200,headers});
+  }
   const budgetMin=body.budgetMin===undefined||body.budgetMin===null||body.budgetMin===""?null:Number(body.budgetMin);
   const budgetMax=body.budgetMax===undefined||body.budgetMax===null||body.budgetMax===""?null:Number(body.budgetMax);
   const currency=typeof body.currency==="string"?body.currency.toUpperCase():"USD";
-  if((budgetMin!==null&&(!Number.isFinite(budgetMin)||budgetMin<0||budgetMin>1e12))||(budgetMax!==null&&(!Number.isFinite(budgetMax)||budgetMax<0||budgetMax>1e12))||(budgetMin!==null&&budgetMax!==null&&budgetMax<budgetMin)||!/^[A-Z]{3}$/.test(currency))return NextResponse.json({error:"Invalid budget range or currency."},{status:400,headers});
+  const bedrooms=body.bedrooms===undefined||body.bedrooms===null||body.bedrooms===""?null:Number(body.bedrooms);
+  if((budgetMin!==null&&(!Number.isFinite(budgetMin)||budgetMin<0||budgetMin>1e12))||(budgetMax!==null&&(!Number.isFinite(budgetMax)||budgetMax<0||budgetMax>1e12))||(budgetMin!==null&&budgetMax!==null&&budgetMax<budgetMin)||!/^[A-Z]{3}$/.test(currency)||
+    (bedrooms!==null&&(!Number.isInteger(bedrooms)||bedrooms<0||bedrooms>50)))return NextResponse.json({error:"Invalid budget, currency or bedroom count."},{status:400,headers});
   const enumValue=(value:unknown,values:string[],fallback:string)=>typeof value==="string"&&values.includes(value)?value:fallback;
   const transactionType=enumValue(body.transactionType,["buy","rent","invest","sell","unknown"],"unknown");
   const propertyType=enumValue(body.propertyType,["apartment","house","land","commercial","other","unknown"],"unknown");
@@ -67,7 +98,7 @@ export async function POST(request:NextRequest,context:Context){
    workspace_id:form.workspace_id,source,source_event_id:sourceEventId,full_name:fullName,email,phone,
    transaction_type:transactionType,property_type:propertyType,preferred_location:preferredLocation,
    budget_min:budgetMin,budget_max:budgetMax,currency,
-   bedrooms:body.bedrooms===undefined||body.bedrooms===null||body.bedrooms===""?null:Number(body.bedrooms),
+   bedrooms,
    timeframe,readiness,financing_notes:typeof body.financingNotes==="string"?body.financingNotes.slice(0,500):null,
    main_concern:typeof body.mainConcern==="string"?body.mainConcern.slice(0,500):null,
    contact_preference:contactPreference,consent_to_contact:body.consentToContact,
@@ -75,16 +106,10 @@ export async function POST(request:NextRequest,context:Context){
    consent_at:body.consentToContact?new Date().toISOString():null,status:"new",
    qualification:{},raw_enquiry:{message:typeof body.message==="string"?body.message.slice(0,6000):"",formId:form.id},
    lead_score:score.score,lead_temperature:score.temperature,score_factors:score.factors,
-  }).select("id,full_name,email,phone,lead_score,lead_temperature,status,created_at,consent_to_contact,contact_preference").single();
+  }).select("*").single();
   if(insertError?.code==="23505"){const {data:duplicate}=await db.from("real_estate_leads").select("id,full_name,lead_score,status").eq("workspace_id",form.workspace_id).eq("source",source).eq("source_event_id",sourceEventId).maybeSingle();if(duplicate)return NextResponse.json({lead:duplicate,duplicate:true},{status:200,headers});}
   if(insertError)throw insertError;
-  const {error:activityError}=await db.from("real_estate_lead_activities").insert({workspace_id:form.workspace_id,lead_id:lead.id,actor_user_id:null,activity_type:"lead.received",details:{source,formId:form.id,score:score.score}});
-  if(activityError)throw activityError;
-  let followupsCreated=0;
-  if(lead.consent_to_contact&&lead.contact_preference==="email"&&lead.email){
-   const {error}=await db.from("real_estate_followups").insert(createFollowupRows({...lead,workspace_id:form.workspace_id,preferred_location:preferredLocation,property_type:propertyType,transaction_type:transactionType},new Date(lead.created_at)));
-   if(error)throw error;followupsCreated=5;
-  }
+  const followupsCreated=await ensurePublicLeadSideEffects(db,lead,form.workspace_id,form.id);
   return NextResponse.json({accepted:true,leadId:lead.id,score:lead.lead_score,temperature:lead.lead_temperature,followupsCreated},{status:201,headers});
  }catch(error){console.error("Public real-estate intake failed",error);return NextResponse.json({error:"We could not submit this enquiry. Please contact the agency directly."},{status:500});}
 }
