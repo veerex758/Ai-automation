@@ -27,5 +27,7 @@ test("agent execution fails closed for legacy non-Gemini records before usage is
 
 test("agent dashboard presents Gemini as the only selectable provider", () => {
   assert.match(dashboard, /value="Google Gemini" readOnly/);
+  assert.match(dashboard, /Tool-call trace/);
+  assert.match(dashboard, /item\\.details\\.tool_id/);
   assert.doesNotMatch(dashboard, /<option value="openai">OpenAI<\/option>/);
 });
