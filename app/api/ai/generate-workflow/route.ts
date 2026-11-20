@@ -139,7 +139,24 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-      const graphNodes = registrySteps.map((raw, index) => {
+      const graphDepthById = new Map<string, number>();
+      const graphLaneById = new Map<string, number>();
+      // Lay the graph out left-to-right. IF true/false edges split into upper
+      // and lower lanes; following actions inherit their branch lane.
+      for (const step of registrySteps as Array<{ id: string }>) {
+        const incoming = edges.filter((edge) => edge.target === step.id);
+        const depth = incoming.length
+          ? Math.max(...incoming.map((edge) => graphDepthById.get(edge.source) ?? 0)) + 1
+          : 0;
+        const lanes = incoming.map((edge) => {
+          const sourceLane = graphLaneById.get(edge.source) ?? 0;
+          return sourceLane + (edge.label === "true" ? -1 : edge.label === "false" ? 1 : 0);
+        });
+        const lane = lanes.length ? lanes.reduce((sum, value) => sum + value, 0) / lanes.length : 0;
+        graphDepthById.set(step.id, depth);
+        graphLaneById.set(step.id, Math.max(-1, Math.min(1, lane)));
+      }
+      const graphNodes = registrySteps.map((raw) => {
         const step = raw as { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
         const provider = nodeCatalog.find((item) => item.id === step.nodeId);
         const operation = (step.kind === "trigger" ? provider?.triggers : provider?.actions)?.find((item) => item.id === step.operationId);
@@ -150,6 +167,8 @@ export async function POST(request: NextRequest) {
           : isCondition
             ? { field: String(step.input.value ?? ""), operator: conditionOperator, value: step.input.compareTo === undefined ? "" : String(step.input.compareTo) }
             : { provider: "internal", operation: "create_task" };
+        const depth = graphDepthById.get(step.id) ?? 0;
+        const lane = graphLaneById.get(step.id) ?? 0;
         return {
           id: step.id,
           type: step.kind === "trigger" ? "trigger" : isCondition ? "condition" : "action",
@@ -159,7 +178,7 @@ export async function POST(request: NextRequest) {
           registryNodeId: step.nodeId,
           registryOperationId: step.operationId,
           registryInput: step.input,
-          position: { x: 170 + (index % 3) * 300, y: 90 + Math.floor(index / 3) * 210 },
+          position: { x: 160 + depth * 320, y: 330 + lane * 220 },
         };
       });
       definition = { version: 1, nodes: graphNodes, edges };
