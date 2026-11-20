@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
       provider: "google",
       product,
       account_email: profile.email,
-      scopes: typeof raw.scope === "string" ? raw.scope.split(/\\s+/).filter(Boolean) : [...GOOGLE_PRODUCTS[product].scopes],
+      scopes: typeof raw.scope === "string" ? raw.scope.split(/\s+/).filter(Boolean) : [...GOOGLE_PRODUCTS[product].scopes],
       encrypted_credentials: encryptGoogleCredentials(credentials),
       expires_at: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : null,
       status: "connected",
