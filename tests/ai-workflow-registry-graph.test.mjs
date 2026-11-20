@@ -6,6 +6,19 @@ const generator = readFileSync(new URL("../lib/workflows/ai-workflow-generator.c
 const route = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/page.tsx", import.meta.url), "utf8");
 
+test("Gemini planner is explicitly instructed to preserve provider semantics and data dependency direction", () => {
+  assert.match(generator, /Map every requested app and action to its exact registered provider and operation/);
+  assert.match(generator, /Never replace a named integration with http_request/);
+  assert.match(generator, /Gmail List messages step provides its message ID/);
+  assert.match(generator, /Edges must follow data dependencies and must never create cycles/);
+});
+
+test("AI generation rejects requested Gmail triggers and Sheets writes when the registry does not support them", () => {
+  assert.match(route, /getUnsupportedRequestedCapabilities\(body\.prompt, nodeCatalog\)/);
+  assert.match(route, /AI_UNSUPPORTED_CAPABILITY/);
+  assert.match(route, /unsupportedCapabilities/);
+});
+
 test("Gemini registry planning is instructed to return explicit graph edges and conditional paths", () => {
   assert.match(generator, /\{registrySteps:\[\.\.\.\],edges:\[\.\.\.\]\}/);
   assert.match(generator, /true\/false edges/);
