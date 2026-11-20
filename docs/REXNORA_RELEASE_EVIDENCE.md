@@ -148,3 +148,18 @@ No merge, production deployment, production migration or live external side effe
 - Signup redirect observation: deployed signup code sets `emailRedirectTo` to `window.location.origin/auth/callback?next=/dashboard`. The recording's confirmation link opened `localhost:3000`, which was refused. The connected Vercel environment inventory has no `NEXT_PUBLIC_SITE_URL` variable. The actual Supabase Auth Site URL, Redirect URLs allowlist and confirmation-email template were not accessible for inspection; check that the stable Rexnora URL / preview pattern is allowed, the Site URL is not localhost, and the email template uses the requested redirect target.
 - Latest PR #207 head at this update: `51a433872e14a6037f36c226716453654dea1055`. Latest Vercel deployment and exact-head checks are pending at the time of this update.
 - Stage 1 remains **not passed** until the latest exact-head checks pass and the authenticated preview proves: validate succeeds, save succeeds, reloading preserves the same version/graph structure, and conditional branches survive save/reload and a controlled test. Generation alone remains review-only; do not activate the workflow during this test.
+
+
+### 2026-11-20 visual graph UX implementation follow-up
+
+- PR #207 branch now adds a dedicated canvas camera: wheel zoom, pointer/touch background panning, zoom-in/out controls, zoom percentage and Fit-to-view.
+- Node dragging is scale-aware so node coordinates move by the correct graph-space distance at any zoom level.
+- Registry-backed nodes display provider-specific glyphs and provider names, while retaining trigger/action/condition identity and operation labels.
+- Gemini-generated graphs are positioned left-to-right. IF true/false routes are arranged in distinct upper/lower lanes; later actions inherit their branch lane. Layout resolution follows graph dependencies rather than relying on the model's step-list ordering.
+- Manually created nodes receive graph-derived positions. Connecting a condition branch clears the destination's stale fixed position so it can be laid out on the selected branch lane.
+- Saving now resolves and persists an explicit position for every canvas node, including nodes never manually dragged. The saved client fingerprint uses that same normalized graph; the GET path already restores positions and explicit edges.
+- Focused regression assertions were added for graph zoom/pan, provider glyphs, branch-aware layout, direct AI-to-canvas routing and persistence of all node coordinates.
+- Relevant commits: `258beec` (camera, scale-aware drag and position persistence), `5e2571d` (navigation controls/styles), `e11b79e` and `374402f` (dependency-based layout and branch placement), `a912ec3` (provider glyphs), `99e23c7` (fix default export after initial preview syntax failure), and `68fdf13` (final glyph assertion correction).
+- An intermediate preview for `27300ce` failed because the provider-glyph helper was inserted after the `export default` token. The export placement was corrected in `99e23c7`; that corrected build was still running at this evidence update.
+- Latest branch head at this update: `68fdf139ac18c6dadf159a598aaa50bae3ce22a4`. Vercel preview deployment for this exact head is queued: https://ai-automation-17h7nhndq-veerex-org.vercel.app
+- No authenticated browser acceptance has yet been completed for zoom, pan, node configuration, branch placement or save/reload on the latest preview. Stage 1 remains **in progress**; the preview build and all authenticated staging checks must pass before Stage 1 can be marked complete. No workflow was activated or executed by these changes.
