@@ -31,7 +31,7 @@ test("webhook ingress claims event IDs atomically and rejects changed-payload re
   assert.match(source, /duplicate: true/);
 });
 
-test("webhook dispatch is workspace-bound and persists run, steps, and receipt outcome", async () => {
+test("webhook dispatch is workspace-bound and only queues verified execution work", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /\.eq\("id", endpoint\.workflow_id\)\.eq\("workspace_id", endpoint\.workspace_id\)/);
   assert.match(source, /p_workspace_id: workflow\.workspace_id/);
@@ -60,18 +60,22 @@ test("endpoint provisioning is authenticated and returns the signing secret only
   assert.match(source, /status: "active"/);
 });
 
-test("running webhook runs do not receive a completion timestamp before finalization", async () => {
+test("webhook ingress never writes run rows directly or completes work outside the durable worker", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /dispatch_workflow_execution/);
   assert.doesNotMatch(source, /from\("workflow_runs"\)\.insert/);
 });
 
-test("run history does not persist the raw webhook payload in the trigger result", async () => {
+test("run history stores a payload digest instead of raw webhook content", async () => {
   const source = await readFile(routeUrl, "utf8");
-  assert.match(source, /payloadSha256/);
-  assert.match(source, /payloadSha256/);
   assert.match(source, /target_payload_sha256: payloadSha256/);
+  assert.match(source, /webhookPayloadSha256: payloadSha256/);
   assert.doesNotMatch(source, /from\("workflow_run_steps"\)\.insert/);
+  const worker = await readFile(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
+  assert.match(worker, /function webhookHistoryOutput/);
+  assert.match(worker, /payloadRedacted: true/);
+  assert.match(worker, /checkpointStep\?\.nodeId === "webhooks"/);
+  assert.match(worker, /webhookHistoryOutput\(step\.output/);
 });
 
 
