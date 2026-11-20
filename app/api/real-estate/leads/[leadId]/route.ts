@@ -107,10 +107,15 @@ export async function PATCH(request: NextRequest, context: Context) {
     const details = { updatedFields: Object.keys(update), status: saved.status, score: score.score };
     const { error: activityError } = await supabase.from("real_estate_lead_activities").insert({ workspace_id: workspace.id, lead_id: leadId, actor_user_id: user.id, activity_type: event, details });
     if (activityError) throw activityError;
-    if (input.customerResponded === true || agentTookOver || input.consentToContact === false || ["won","lost"].includes(String(saved.status))) {
-      const { error: cancelError } = await supabase.from("real_estate_followups").update({ status: "cancelled", lease_token: null, lease_until: null, last_error_code: "FOLLOWUP_STOP_CONDITION" })
-        .eq("workspace_id", workspace.id).eq("lead_id", leadId).eq("status", "pending");
-      if (cancelError) throw cancelError;
+    const stopReason = input.customerResponded === true ? "CUSTOMER_RESPONDED"
+      : agentTookOver ? "AGENT_TAKEOVER"
+      : input.consentToContact === false ? "CONSENT_WITHDRAWN"
+      : ["won","lost"].includes(String(saved.status)) ? "LEAD_CLOSED" : null;
+    if (stopReason) {
+      const { error: stopError } = await supabase.rpc("stop_real_estate_followups", {
+        p_workspace_id: workspace.id, p_lead_id: leadId, p_reason: stopReason,
+      });
+      if (stopError) throw stopError;
     }
     return NextResponse.json({ lead: saved, score }, { headers });
   } catch (error) {
