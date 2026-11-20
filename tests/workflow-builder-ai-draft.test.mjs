@@ -40,6 +40,8 @@ test("canvas nodes reuse official provider logos for major integrations and comm
   assert.match(brand, /cdn\.simpleicons\.org/);
   assert.match(brand, /onError=\{\(\) => setFailed\(true\)\}/);
   assert.match(brand, /PrimitiveMark/);
+  assert.match(brand, /providerId === "email" \? officialBrandAssets\.resend/);
+  assert.match(brand, /draggable=\{false\}/);
 });
 
 test("Builder and Integrations directory consume one shared 86-provider official brand catalogue", () => {
