@@ -26,6 +26,7 @@ function titleForGenerationError(code?: string): string {
     AI_SUBSCRIPTION_INACTIVE: "Workspace subscription inactive",
     AI_USAGE_METERING_UNAVAILABLE: "Usage metering unavailable",
     AI_UNSAFE_WORKFLOW: "Generated workflow failed validation",
+    AI_UNSUPPORTED_CAPABILITY: "Requested integration capability is not available yet",
     AI_INVALID_JSON: "Gemini returned an invalid workflow format",
     AI_INVALID_RESPONSE: "Gemini returned an unreadable response",
   };
