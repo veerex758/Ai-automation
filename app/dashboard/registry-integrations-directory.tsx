@@ -395,7 +395,7 @@ const nativeIconGlyphs: Record<string, string> = {
 };
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 const credentialProvider: Record<string,string> = {
-  http_request:"http",twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
+  email:"resend", http_request:"http",twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
 };
 const credentialFields: Record<string,CredentialField[]> = {
   http:[{key:"baseUrl",label:"Base URL"},{key:"apiKey",label:"API key",secret:true},{key:"username",label:"Basic-auth username"},{key:"password",label:"Basic-auth password",secret:true}],
@@ -455,12 +455,12 @@ function connectionState(node: RegistryNode, workspace: ConnectionRecord[], goog
   if (failed) return "unverified";
   if (googleProductForNode[node.id]) {
     const product = googleProductForNode[node.id];
-    return google.some((item) => item.product === product && item.status === "connected") ? "connected" : "not-connected";
+    return google.some((item) => item.product === product && item.status === "connected" && item.last_test_status === "passed") ? "connected" : "not-connected";
   }
   const provider = providerForNode[node.id] ?? node.id;
-  const record = workspace.find((item) => item.provider === provider);
-  if (!record) return "not-connected";
-  return record.status === "connected" && record.last_test_status === "passed" ? "connected" : "not-connected";
+  const matching = workspace.filter((item) => item.provider === provider);
+  if (!matching.length) return "not-connected";
+  return matching.some((item) => item.status === "connected" && item.last_test_status === "passed") ? "connected" : "not-connected";
 }
 
 function BrandMark({ node }: { node: RegistryNode }) {
@@ -629,7 +629,13 @@ export default function RegistryIntegrationsDirectory() {
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
           {node.executionStatus === "registered" && connectionRequired(node) && <span className={liveActionReady ? "registry-live-permission permission-enabled" : "registry-live-permission"}>{liveActionReady ? "Live action ready" : "Live action locked"}</span>}
-          {node.executionStatus === "registered" && connectionRequired(node) && (googleProductForNode[node.id] ? <a className="registry-connect-link" href={`/api/integrations/google/start?product=${googleProductForNode[node.id]}`}>Connect Google ↗</a> : <button className="registry-connect-link" type="button" onClick={() => { setConnecting(node); setCredentialValues({}); setConnectionMessage(""); }}>Connect</button>)}
+          {node.executionStatus === "registered" && connectionRequired(node) && (
+            <a className="registry-connect-link" href={googleProductForNode[node.id]
+              ? `/dashboard/connections?googleProduct=${encodeURIComponent(googleProductForNode[node.id])}&node=${encodeURIComponent(node.id)}`
+              : `/dashboard/connections?provider=${encodeURIComponent(credentialProvider[node.id] ?? node.id)}&node=${encodeURIComponent(node.id)}`}>
+              Connect account ↗
+            </a>
+          )}
           {node.executionStatus === "registered" && <button className="registry-expand-button" type="button" aria-expanded={isExpanded} onClick={() => toggle(node.id)}>
             {isExpanded ? "Hide operations" : "View operations"} <span>{isExpanded ? "−" : "+"}</span>
           </button>}

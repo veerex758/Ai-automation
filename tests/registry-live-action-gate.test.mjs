@@ -4,20 +4,19 @@ import { readFile } from "node:fs/promises";
 
 const routeUrl = new URL("../app/api/workflows/[workflowId]/registry-run/route.ts", import.meta.url);
 
-test("live registry execution remains limited to the guarded manual-to-Resend path", async () => {
+test("legacy synchronous registry route rejects every live execution", async () => {
   const source = await readFile(routeUrl, "utf8");
-  assert.match(source, /unsupportedLiveStep\s*=\s*steps\.find/);
-  assert.match(source, /step\.nodeId === "manual" && step\.operationId === "start"/);
-  assert.match(source, /step\.nodeId === "email" && step\.operationId === "send_email"/);
-  assert.match(source, /available in dry-run only until its live integration is explicitly enabled/);
-  assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+  assert.match(source, /DURABLE_DISPATCH_REQUIRED/);
+  assert.match(source, /dryRun: true/);
+  assert.match(source, /credentials: \{\}/);
+  assert.doesNotMatch(source, /GEMINI_API_KEY|RESEND_API_KEY|SLACK_INCOMING_WEBHOOK_URL/);
 });
 
-test("unapproved OpenAI, Slack and webhook actions cannot enter the live allowlist", async () => {
+test("registered live workflow execution is delegated to the durable worker", async () => {
   const source = await readFile(routeUrl, "utf8");
-  const gate = source.indexOf("const unsupportedLiveStep");
-  const emailAllowlist = source.indexOf("const allowed =", gate);
-  assert.ok(gate >= 0 && emailAllowlist > gate, "live integration gate must run before recipient allowlist checks");
-  const gateSource = source.slice(gate, emailAllowlist);
-  assert.doesNotMatch(gateSource, /nodeId === "(openai|slack|webhooks)"/);
+  const worker = await readFile(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
+  assert.match(worker, /context\.resolveStepCredentials = async/);
+  assert.match(worker, /workspaceCredentials\(/);
+  assert.match(worker, /WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED/);
+  assert.match(worker, /AIVANTA_LIVE_INTEGRATIONS/);
 });

@@ -466,7 +466,11 @@ export async function POST(request: Request) {
     let input: unknown;
     try { input = JSON.parse(rawBody); } catch { return json({ error: "Invalid JSON body." }, 400); }
     const provider = input && typeof input === "object" ? (input as { provider?: unknown }).provider : undefined;
+    const integrationId = input && typeof input === "object" ? (input as { integrationId?: unknown }).integrationId : undefined;
     if (typeof provider !== "string" || !TESTABLE.has(provider)) return json({ error: "This provider does not support a credential test here." }, 400);
+    if (typeof integrationId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(integrationId)) {
+      return json({ error: "Choose a saved connection to test." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: membership, error: membershipError } = await supabase.from("workspace_members").select("role")
       .eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
@@ -474,7 +478,7 @@ export async function POST(request: Request) {
     if (!membership || !["owner", "admin"].includes(membership.role)) return json({ error: "Only workspace owners and admins can test integrations." }, 403);
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations").select("id")
-      .eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
+      .eq("id", integrationId).eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save this integration before testing it." }, 404);
     // A re-test must not leave a previously passed credential marked ready

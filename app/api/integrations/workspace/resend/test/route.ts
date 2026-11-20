@@ -12,8 +12,8 @@ function json(body: unknown, status = 200) {
 }
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
   if (!url || ! key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -25,7 +25,7 @@ function senderDomain(fromEmail: string) {
   return match?.[1]?.toLowerCase() ?? null;
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   let workspaceId: string | null = null;
   let integrationId: string | null = null;
   try {
@@ -33,6 +33,11 @@ export async function POST(_request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
 
+    const body = await request.json().catch(() => null) as { connectionId?: unknown } | null;
+    const requestedConnectionId = typeof body?.connectionId === "string" ? body.connectionId : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedConnectionId)) {
+      return json({ error: "Choose a saved Resend connection to test." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     workspaceId = workspace.id;
     const { data: membership, error: membershipError } = await supabase.from("workspace_members")
@@ -44,7 +49,7 @@ export async function POST(_request: NextRequest) {
 
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id,display_name").eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
+      .select("id,display_name").eq("id", requestedConnectionId).eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save your Resend connection before testing it." }, 404);
     const { error: invalidateError } = await db.from("workspace_integrations").update({
@@ -84,7 +89,7 @@ export async function POST(_request: NextRequest) {
       const timedOut = error instanceof Error && error.name === "AbortError";
       await db.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
-      }).eq("id", integration.id);
+      }).eq("id", integration.id).eq("workspace_id", workspace.id);
       return json({ error: timedOut ? "Resend did not respond within 8 seconds. Check the connection and try again." : "Aivanta could not reach Resend. Check the server network and try again." }, 502);
     } finally {
       clearTimeout(timeout);
@@ -101,7 +106,7 @@ export async function POST(_request: NextRequest) {
             : "Resend could not complete the connection check.";
       await db.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
-      }).eq("id", integration.id);
+      }).eq("id", integration.id).eq("workspace_id", workspace.id);
       return json({ error: message }, status === 429 ? 429 : 502);
     }
 
@@ -145,7 +150,7 @@ export async function POST(_request: NextRequest) {
         const db = serviceClient();
         await db.from("workspace_integrations").update({
           last_tested_at: new Date().toISOString(), last_test_status: "failed",
-        }).eq("id", integrationId);
+        }).eq("id", integrationId).eq("workspace_id", workspaceId);
       } catch { /* preserve the sanitized response */ }
     }
     return json({ error: "Could not complete the Resend connection check. No email was sent." }, 500);

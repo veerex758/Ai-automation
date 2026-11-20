@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,6 +35,15 @@ function presentWorkflow(row: {
     icon: "✳",
     tone: "lime",
   };
+}
+
+
+function serviceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
+  if (!url || !key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
+  return createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 }
 
 async function getAuthenticatedClient() {
@@ -89,21 +99,46 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
 
     if (updates.status === "active") {
       const { data: candidate, error: candidateError } = await auth.supabase
-        .from("workflows").select("id,version,definition").eq("id", workflowId).maybeSingle();
+        .from("workflows").select("id,version,definition,workspace_id").eq("id", workflowId).maybeSingle();
       if (candidateError) throw candidateError;
       if (!candidate) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
       const definition = candidate.definition as { format?: unknown; steps?: unknown } | null;
       if (!definition || definition.format !== "aivanta-registry-v1" || !Array.isArray(definition.steps) || definition.steps.length !== 3) {
         return NextResponse.json({ error: "Activation requires a saved three-step registered workflow: trigger, Gemini qualification, and Resend notification." }, { status: 422 });
       }
-      const steps = definition.steps as Array<{ id?: string; nodeId?: string; operationId?: string; kind?: string; input?: unknown }>;
+      const steps = definition.steps as Array<{ id?: string; nodeId?: string; operationId?: string; kind?: string; input?: unknown; connectionId?: string }>;
       const supported = steps[0]?.kind === "trigger" &&
         ((steps[0]?.nodeId === "webhooks" && steps[0]?.operationId === "receive_event") || (steps[0]?.nodeId === "manual" && steps[0]?.operationId === "start")) &&
         steps[1]?.kind === "action" && steps[1]?.nodeId === "gemini" && steps[1]?.operationId === "qualify_real_estate_lead" &&
         steps[2]?.kind === "action" && steps[2]?.nodeId === "email" && steps[2]?.operationId === "send_email";
       if (!supported) return NextResponse.json({ error: "Activation currently supports only a trigger → Gemini qualification → Resend notification flow." }, { status: 422 });
-      if (!process.env.GEMINI_API_KEY || !process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL || process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-        return NextResponse.json({ error: "Configure Gemini, Resend, and the server live-execution switch before activation." }, { status: 503 });
+
+      // The activation gate verifies selected account IDs against this workflow's
+      // workspace and provider, and requires a successful provider test. Secrets
+      // are never read here or returned to the browser.
+      const service = serviceClient();
+      const selectedProviders = [
+        { step: steps[1], provider: "gemini" },
+        { step: steps[2], provider: "resend" },
+      ];
+      for (const selected of selectedProviders) {
+        const connectionId = selected.step?.connectionId;
+        if (!connectionId || !uuidPattern.test(connectionId)) {
+          return NextResponse.json({ error: `Select a verified ${selected.provider} connection for every provider node before activation.` }, { status: 409 });
+        }
+        const { data: connection, error: connectionError } = await service.from("workspace_integrations")
+          .select("id,provider,status,last_test_status")
+          .eq("id", connectionId)
+          .eq("workspace_id", candidate.workspace_id)
+          .eq("provider", selected.provider)
+          .maybeSingle();
+        if (connectionError) throw connectionError;
+        if (!connection || connection.status !== "connected" || connection.last_test_status !== "passed") {
+          return NextResponse.json({ error: `The selected ${selected.provider} account is missing, belongs to another workspace, or has not passed its latest provider test.` }, { status: 409 });
+        }
+      }
+      if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true" || !process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY) {
+        return NextResponse.json({ error: "Configure workspace credential encryption and the server live-execution switch before activation." }, { status: 503 });
       }
       if (steps[0].nodeId === "webhooks" && (!process.env.AIVANTA_WEBHOOK_ENCRYPTION_KEY ||
           !process.env.AIVANTA_WEBHOOK_SECRET_KEY_VERSION ||
