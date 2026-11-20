@@ -24,8 +24,11 @@ test("activation is explicit, constrained to the supported three-step pilot, and
   assert.match(activation, /definition\.steps\.length !== 3/);
   assert.match(activation, /steps\[1\].*nodeId === "gemini"/s);
   assert.match(activation, /steps\[2\].*nodeId === "email"/s);
-  assert.match(activation, /GEMINI_API_KEY/);
-  assert.match(activation, /RESEND_API_KEY/);
+  assert.match(activation, /selectedProviders/);
+  assert.match(activation, /connectionId/);
+  assert.match(activation, /eq\("workspace_id", candidate\.workspace_id\)/);
+  assert.match(activation, /last_test_status/);
+  assert.doesNotMatch(activation, /GEMINI_API_KEY|RESEND_API_KEY/);
   assert.match(activation, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
   assert.match(activation, /workflow_version", candidate\.version/);
   assert.match(activation, /mode", "dry_run"/);
