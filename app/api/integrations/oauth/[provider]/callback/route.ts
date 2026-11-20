@@ -71,6 +71,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     if (error || !user || user.id !== stateData.userId) return finish(request, provider, false);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     if (workspace.id !== stateData.workspaceId) return finish(request, provider, false);
+    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
+      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
+    if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
+      return finish(request, provider, false);
+    }
 
     const config = PROVIDER_OAUTH_CONFIG[provider];
     let token = await exchangeProviderOAuthCode({
