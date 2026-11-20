@@ -524,97 +524,13 @@ export async function runDurableWorker() {
           // already-queued job to use an implicit/default workspace credential.
           throw new Error("REGISTRY_WORKFLOW_REQUIRED");
         }
-        {
-          result = {
-            status: legacyResult.status,
-            steps: legacyResult.steps.map((step) => ({
-              stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-              status: step.status, message: String(redactSensitiveData(step.message, executionSecrets)),
-            })),
-          };
-        } else {
-          const nodes = validated.definition.nodes;
-          const trigger = nodes[0];
-          const actions = nodes.filter((node) => node.type === "action");
-          const emailAction = actions[0];
-          if (trigger?.type !== "trigger" || trigger.settings.event !== "manual" ||
-              actions.length !== 1 || emailAction?.settings.provider !== "email" ||
-              emailAction.settings.operation !== "send_email") {
-            throw new Error("LIVE_LEGACY_OPERATION_NOT_ENABLED");
-          }
-          const recipient = typeof emailAction.settings.recipient === "string"
-            ? emailAction.settings.recipient.trim().toLowerCase() : "";
-          const message = typeof emailAction.settings.message === "string" ? emailAction.settings.message.trim() : "";
-          const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
-            .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-          if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
-            throw new Error("LIVE_EMAIL_RECIPIENT_NOT_ALLOWED");
-          }
-          if (!message) throw new Error("LIVE_EMAIL_MESSAGE_REQUIRED");
-
-          let sentOutput: unknown = undefined;
-          let sendFailed: string | null = legacyResult.status === "succeeded" ? null : "WORKFLOW_PREVIEW_FAILED";
-          const emailPreview = legacyResult.steps.find((step) => step.stepId === emailAction.id);
-          if (!emailPreview) sendFailed = "EMAIL_PREVIEW_STEP_MISSING";
-          if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
-            const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
-            executionSecrets = knownCredentialValues(credentials);
-            const registrySteps: RegisteredWorkflowStep[] = [
-              { id: trigger.id, nodeId: "manual", operationId: "start", kind: "trigger", input },
-              {
-                id: emailAction.id, nodeId: "email", operationId: "send_email", kind: "action",
-                input: { to: recipient, subject: "Aivanta workflow message", text: message },
-              },
-            ];
-            const liveResult = await executeRegisteredWorkflow({
-              steps: registrySteps,
-              context: executionContext(credentials, false, db, job.workspace_id),
-              dryRun: false,
-              onStepStart: async (step, position) => {
-                await persistCheckpoint(db, job, step, position, "started");
-                preCheckpointed.add(step.id);
-              },
-              onStepComplete: async (step, position, completed) => {
-                await persistCheckpoint(db, job, step, position, "succeeded", boundedOutput(completed.output, executionSecrets));
-                preCheckpointed.add(step.id);
-              },
-            });
-            const emailResult = liveResult.steps.find((step) => step.stepId === emailAction.id);
-            sentOutput = emailResult?.output;
-            sendFailed = liveResult.status !== "succeeded"
-              ? liveResult.steps.find((step) => step.status === "failed")?.error ?? "LIVE_WORKFLOW_FAILED"
-              : null;
-          }
-
-          result = {
-            status: legacyResult.status === "succeeded" && !sendFailed ? "succeeded" : "failed",
-            steps: legacyResult.steps.map((step) => {
-              if (step.stepId === trigger.id) return {
-                stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                status: "succeeded", message: "Manual workflow trigger accepted.",
-              };
-              if (step.stepId === emailAction.id) {
-                if (step.status === "skipped") return {
-                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "skipped", message: String(redactSensitiveData(step.message, executionSecrets)),
-                };
-                if (sendFailed) return {
-                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "failed", message: String(redactSensitiveData(sendFailed, executionSecrets)),
-                };
-                return {
-                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "succeeded", message: "Resend accepted the workflow email.", output: sentOutput,
-                };
-              }
-              return {
-                stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                status: step.status === "skipped" ? "skipped" : "succeeded",
-                message: String(redactSensitiveData(step.message, executionSecrets)),
-              };
-            }),
-          };
-        }
+        result = {
+          status: legacyResult.status,
+          steps: legacyResult.steps.map((step) => ({
+            stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+            status: step.status, message: String(redactSensitiveData(step.message, executionSecrets)),
+          })),
+        };
       }
 
       for (const step of result.steps) {
