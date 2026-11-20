@@ -66,7 +66,7 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
     cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) {
-    await db.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", connection.id);
+    await db.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", connection.id).eq("workspace_id", workspaceId);
     throw new Error("GOOGLE_REAUTH_REQUIRED");
   }
   const token = await response.json() as { access_token?: unknown; expires_in?: unknown; scope?: unknown; token_type?: unknown };
