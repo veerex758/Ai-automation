@@ -6,7 +6,6 @@ const catalogSource = readFileSync("nodes/provider-catalog.ts", "utf8");
 const directorySource = readFileSync("app/dashboard/registry-integrations-directory.tsx", "utf8");
 const builderSource = readFileSync("app/dashboard/builder/page.tsx", "utf8");
 const googleStartSource = readFileSync("app/api/integrations/google/start/route.ts", "utf8");
-const googleCallbackSource = readFileSync("app/api/integrations/google/callback/route.ts", "utf8");
 const googleConnectionsSource = readFileSync("app/api/integrations/google/connections/route.ts", "utf8");
 const genericOAuthStartSource = readFileSync("app/api/integrations/oauth/[provider]/start/route.ts", "utf8");
 const genericOAuthCallbackSource = readFileSync("app/api/integrations/oauth/[provider]/callback/route.ts", "utf8");
