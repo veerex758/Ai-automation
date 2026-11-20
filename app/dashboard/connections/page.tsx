@@ -54,6 +54,12 @@ type WorkspaceIntegration = {
   last_test_status?: string | null;
 };
 
+const oauthProviders = new Set<WorkspaceProvider>([
+  "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "intercom",
+  "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok",
+  "dropbox", "asana", "todoist", "bitbucket",
+]);
+
 const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{ name: string; label: string; type: string; required?: boolean }> }> = {
   openai: { label: "OpenAI", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   gemini: { label: "Google Gemini", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
@@ -332,6 +338,11 @@ function WorkspaceIntegrationManager() {
         </div>
         <form className="workspace-integration-form" onSubmit={save}>
           <h3>{editingConnectionId ? "Rotate saved connection" : "Add a connection"}</h3>
+           {focusedProvider && oauthProviders.has(focusedProvider) && (
+             <Link className="connection-button" href={`/api/integrations/oauth/${focusedProvider}/start`}>
+               {editingConnectionId ? "Reconnect with OAuth" : "Connect with OAuth"} ↗
+             </Link>
+           )}
           <label htmlFor="workspace-provider">Provider</label>
           <select id="workspace-provider" value={provider} onChange={event => { setProvider(event.target.value as WorkspaceProvider); setValues({}); }}>
             {Object.entries(providerFields).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
