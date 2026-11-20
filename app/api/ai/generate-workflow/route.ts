@@ -5,6 +5,7 @@ import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.
 import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +85,14 @@ export async function POST(request: NextRequest) {
     }
 
     const nodeCatalog = getExecutableNodeCatalog();
+    const unsupportedCapabilities = getUnsupportedRequestedCapabilities(body.prompt, nodeCatalog);
+    if (unsupportedCapabilities.length) {
+      return jsonResponse({
+        error: unsupportedCapabilities.map((issue) => issue.message).join(" "),
+        errorCode: "AI_UNSUPPORTED_CAPABILITY",
+        unsupportedCapabilities: unsupportedCapabilities.map((issue) => issue.capability),
+      }, { status: 422 });
+    }
     const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog, mode: "registry" });
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
     const registrySteps = result.registrySteps;
