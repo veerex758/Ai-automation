@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { scoreRealEstateLead } from "@/lib/real-estate/lead-scoring";
 import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-estate/server";
+import { processRealEstateLeadPipeline } from "@/lib/real-estate/pipeline";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 const headers = { "Cache-Control": "private, no-store" };
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const allowed = <T extends string>(value: unknown, values: readonly T[], fallback: T): T => values.includes(value as T) ? value as T : fallback;
@@ -122,7 +124,10 @@ export async function POST(request: NextRequest) {
       if (priorError) throw priorError;
       if (prior) {
         await ensureLeadSideEffects(supabase, prior, workspace.id, user.id);
-        return NextResponse.json({ lead: prior, duplicate: true }, { status: 200, headers });
+        let pipeline={enabled:false,claimed:0,completed:0,blocked:0,failed:0};
+        try{pipeline=await processRealEstateLeadPipeline({db:createRealEstateServiceClient(),workspaceId:workspace.id,leadId:prior.id});}
+        catch(pipelineError){console.error("Duplicate manual lead pipeline recovery failed",pipelineError);}
+        return NextResponse.json({ lead: prior, duplicate: true, pipeline }, { status: 200, headers });
       }
     }
 
@@ -137,12 +142,21 @@ export async function POST(request: NextRequest) {
     }).select("*").single();
     if (error?.code === "23505" && lead.source_event_id) {
       const { data: prior } = await supabase.from("real_estate_leads").select("id,full_name,lead_score,status").eq("workspace_id", workspace.id).eq("source", lead.source).eq("source_event_id", lead.source_event_id).maybeSingle();
-      if (prior) return NextResponse.json({ lead: prior, duplicate: true }, { status: 200, headers });
+      if (prior) {
+        await ensureLeadSideEffects(supabase, prior, workspace.id, user.id);
+        let pipeline={enabled:false,claimed:0,completed:0,blocked:0,failed:0};
+        try{pipeline=await processRealEstateLeadPipeline({db:createRealEstateServiceClient(),workspaceId:workspace.id,leadId:prior.id});}
+        catch(pipelineError){console.error("Racing manual lead pipeline recovery failed",pipelineError);}
+        return NextResponse.json({ lead: prior, duplicate: true, pipeline }, { status: 200, headers });
+      }
     }
     if (error) throw error;
 
     const followupsCreated = await ensureLeadSideEffects(supabase, created, workspace.id, user.id);
-    return NextResponse.json({ lead: created, score, followupsCreated }, { status: 201, headers });
+    let pipeline={enabled:false,claimed:0,completed:0,blocked:0,failed:0};
+    try{pipeline=await processRealEstateLeadPipeline({db:createRealEstateServiceClient(),workspaceId:workspace.id,leadId:created.id});}
+    catch(pipelineError){console.error("New manual lead pipeline queued for recovery",pipelineError);}
+    return NextResponse.json({ lead: created, score, followupsCreated, pipeline }, { status: 201, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (/required|valid|consent|Budget|Currency|three-letter/.test(message)) return NextResponse.json({ error: message }, { status: 400, headers });
