@@ -276,3 +276,87 @@
 .workflow-builder-main .node-connector,.workflow-builder-main .node-endpoint{color:#8BB8FF!important}
 .workflow-builder-main .node-connector{background:#354052!important}
 .workflow-builder-main .node-connector span{background:#0F141D!important}
+
+
+/* Interactive graph navigation: zoom controls, drag-to-pan and touch-safe canvas. */
+.workflow-builder-main .graph-canvas{
+  position:relative;
+  overflow:hidden!important;
+  min-height:680px;
+  touch-action:none;
+  cursor:grab;
+  overscroll-behavior:contain;
+}
+.workflow-builder-main .graph-canvas-panning{cursor:grabbing}
+.workflow-builder-main .graph-canvas .graph-grid{pointer-events:none}
+.workflow-builder-main .graph-layout{
+  position:absolute;
+  top:0;
+  left:0;
+  margin:0;
+  min-width:0;
+  will-change:transform;
+}
+.workflow-builder-main .graph-viewport-controls{
+  position:absolute;
+  z-index:8;
+  top:12px;
+  right:12px;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  padding:5px;
+  border:1px solid #354052;
+  border-radius:10px;
+  background:rgba(17,23,34,.94);
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+  color:#E2E8F0;
+  cursor:default;
+}
+.workflow-builder-main .graph-viewport-controls button{
+  min-width:31px;
+  height:30px;
+  padding:0 8px;
+  border:1px solid #354052;
+  border-radius:7px;
+  background:#1A2433;
+  color:#E2E8F0;
+  font:700 12px 'DM Sans',sans-serif;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.workflow-builder-main .graph-viewport-controls button:hover{
+  background:#24334A;
+  border-color:#4B6B99;
+}
+.workflow-builder-main .graph-viewport-controls button:focus-visible{
+  outline:2px solid #8BB8FF;
+  outline-offset:2px;
+}
+.workflow-builder-main .graph-viewport-controls span{
+  min-width:43px;
+  text-align:center;
+  color:#CBD5E1;
+  font:600 10px 'DM Sans',sans-serif;
+  font-variant-numeric:tabular-nums;
+}
+.workflow-builder-main .graph-node-provider{
+  color:#8BB8FF;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.02em;
+}
+.workflow-builder-main .graph-edge-true path{stroke:#65C18C!important}
+.workflow-builder-main .graph-edge-false path{stroke:#E49A83!important}
+.workflow-builder-main .graph-edge-true text{fill:#8BE0AB!important}
+.workflow-builder-main .graph-edge-false text{fill:#F2B39F!important}
+.workflow-builder-main .graph-node{touch-action:none}
+@media(max-width:720px){
+  .workflow-builder-main .graph-canvas{min-height:570px}
+  .workflow-builder-main .graph-viewport-controls{top:8px;right:8px;gap:3px;padding:4px}
+  .workflow-builder-main .graph-viewport-controls button{min-width:29px;height:28px;padding:0 6px;font-size:11px}
+  .workflow-builder-main .graph-viewport-controls span{min-width:37px;font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .workflow-builder-main .graph-layout{will-change:auto}
+}
