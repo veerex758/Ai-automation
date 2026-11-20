@@ -416,13 +416,14 @@ export default function GraphNodeBrand({
   nodeType: "trigger" | "action" | "condition";
 }) {
   const [failed, setFailed] = useState(false);
-  const asset = OFFICIAL_BRAND_ASSETS[providerId];
-  const tint = BRAND_TINTS[providerId] || "64748B";
+  const asset = OFFICIAL_BRAND_ASSETS[providerId] || (providerId === "email" ? OFFICIAL_BRAND_ASSETS.resend : undefined);
+  const tint = BRAND_TINTS[providerId] || (providerId === "email" ? BRAND_TINTS.resend : "64748B");
+  const logoName = providerId === "email" ? "Resend" : providerName;
   return <span className={`graph-node-brand ${asset && !failed ? "has-brand-asset" : "has-primitive-mark"}`}>
     {asset && !failed ? (
       <img
         src={`https://cdn.simpleicons.org/${asset.slug}/${tint}`}
-        alt={`${providerName} logo`}
+        alt={`${logoName} logo`}
         loading="eager"
         decoding="async"
         referrerPolicy="no-referrer"
