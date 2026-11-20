@@ -103,6 +103,8 @@ test("the Integrations directory exposes all 122 executable nodes separately fro
 
 test("every authenticated registry node opens its own provider or Google product connection experience", () => {
   assert.ok(directorySource.includes("/dashboard/connections?provider="));
+  assert.match(directorySource, /email:\s*"resend"/);
+  assert.match(builderSource, /email:\s*"resend"/);
   assert.ok(directorySource.includes("/dashboard/connections?googleProduct="));
   assert.ok(connectionsSource.includes("setFocusedProvider"));
   assert.ok(connectionsSource.includes("focusedGoogleProduct"));
