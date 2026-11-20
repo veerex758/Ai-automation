@@ -15,7 +15,7 @@ test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-
   assert.match(page, /aria-label="Fit graph to view"/);
   assert.match(page, /transform: `translate\(\$\{camera\.x\}px, \$\{camera\.y\}px\) scale\(\$\{camera\.scale\}\)`/);
   assert.match(page, /\(event\.clientX - drag\.startX\) \/ camera\.scale/);
-  assert.match(page, /provider\?\.icon \|\| nodeMeta\[node\.type\]\.icon/);
+  assert.match(page, /graphNodeGlyph\(node, provider\?\.icon\)/);
 });
 
 test("workflow builder maps validated registry generation steps onto editable graph nodes", () => {
