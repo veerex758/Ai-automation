@@ -227,7 +227,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     }
     receipt = { id: claim.receipt_id, endpoint_id: endpoint.id };
 
-    if (DURABLE_WEBHOOK_DRY_RUN_QUEUE) {
+    if (DURABLE_WEBHOOK_QUEUE_MODE) {
       const { data: dispatch, error: dispatchError } = await db.rpc("dispatch_workflow_execution", {
         p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
         p_workflow_version: workflow.version, p_created_by: null,
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       }
       const { error: receiptUpdateError } = await db.from("webhook_event_receipts").update({
         status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
-      }).eq("id", receipt.id);
+      }).eq("id", receipt.id).eq("endpoint_id", receipt.endpoint_id);
       if (receiptUpdateError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
       return NextResponse.json({
         accepted: true, queued: true, duplicate: false,
