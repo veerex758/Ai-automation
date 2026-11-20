@@ -63,6 +63,7 @@ test("dispatch requires an authenticated user and an idempotency key", () => {
   assert.match(dispatch, /dispatch_workflow_execution/);
   assert.doesNotMatch(dispatch, /from\("workflow_runs"\)\.insert/);
   assert.match(dispatch, /result\.duplicate \? "existing" : "queued"/);
+  assert.match(dispatch, /REGISTRY_WORKFLOW_REQUIRED/);
 });
 
 test("dispatch creates the run and queue row in one serialized transaction", () => {
