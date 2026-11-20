@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
       return clearCookies(connectionsUrl(request, "permission_denied"));
     }
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
     if (!supabaseUrl || !serviceRoleKey) {
       return clearCookies(connectionsUrl(request, "server_not_configured"));
     }
