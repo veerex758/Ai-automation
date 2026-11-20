@@ -144,7 +144,7 @@ test("cross-workspace account IDs fail closed for saves, tests, disconnects and 
 });
 
 test("activation requires workspace-owned Gemini and Resend accounts with passed provider checks", () => {
-  assert.match(workflowActivationSource, /selected\.step\.connectionId/);
+  assert.match(workflowActivationSource, /selected\.step\?\.connectionId/);
   assert.match(workflowActivationSource, /selected\.provider/);
   assert.match(workflowActivationSource, /connection\.status !== "connected" \|\| connection\.last_test_status !== "passed"/);
 });
