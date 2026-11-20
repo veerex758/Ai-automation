@@ -27,7 +27,7 @@ const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> 
   condition: { label: "Condition", icon: "◇", help: "A rule to check before continuing." },
 };
 
-export default const registryIconGlyphs: Record<string, string> = {
+const registryIconGlyphs: Record<string, string> = {
   sparkles: "✦",
   mail: "✉",
   slack: "✣",
@@ -49,7 +49,7 @@ function graphNodeGlyph(node: WorkflowNode, providerIcon?: string) {
   return (providerIcon && registryIconGlyphs[providerIcon.toLowerCase()]) || (node.type === "trigger" ? "⚡" : "↗");
 }
 
-function WorkflowBuilderPage() {
+export default function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
   const workflowId = params.workflowId;
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
