@@ -12,6 +12,7 @@ const genericOAuthCallbackSource = readFileSync("app/api/integrations/oauth/[pro
 const genericOAuthStateSource = readFileSync("lib/integrations/provider-oauth.ts", "utf8");
 const googleCallbackSource = readFileSync("app/api/integrations/google/callback/route.ts", "utf8");
 const workflowActivationSource = readFileSync("app/api/workflows/[workflowId]/route.ts", "utf8");
+const workflowDispatchSource = readFileSync("app/api/workflows/[workflowId]/dispatch/route.ts", "utf8");
 const multiAccountMigration = readFileSync("supabase/migrations/20261120130000_rexnora_multi_account_connections.sql", "utf8");
 const nodeTypesSource = readFileSync("nodes/types.ts", "utf8");
 const stepValidatorSource = readFileSync("nodes/validate-steps.ts", "utf8");
@@ -59,6 +60,10 @@ test("durable live execution requires an explicitly selected, verified account i
   assert.match(workerSource, /eq\("status", "connected"\)\.eq\("last_test_status", "passed"\)/);
   assert.match(workerSource, /if \(!connectionId\) throw new Error\("WORKSPACE_CONNECTION_SELECTION_REQUIRED"\)/);
   assert.match(workerSource, /if \(!selectedConnectionId\) throw new Error\("WORKSPACE_CONNECTION_SELECTION_REQUIRED"\)/);
+  assert.match(workflowDispatchSource, /findNode\(step\.nodeId\)/);
+  assert.match(workflowDispatchSource, /node\.auth\.type !== "none"/);
+  assert.match(workflowDispatchSource, /step\.connectionId !== "string" \|\| !uuidPattern\.test\(step\.connectionId\)/);
+  assert.match(workflowDispatchSource, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
   assert.match(workerSource, /selectedConnectionIds\.get\(provider\)/);
   assert.match(workerSource, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
   assert.match(workerSource, /eq\("workspace_id", workspaceId\)/);
