@@ -48,6 +48,7 @@ type OAuthStatePayload = {
   expiresAt: number;
   nonce: string;
   codeChallenge: string;
+  connectionId?: string;
 };
 
 function stateSecret(): string {
@@ -60,8 +61,8 @@ function stateSignature(encoded: string): Buffer {
   return createHmac("sha256", stateSecret()).update(encoded).digest();
 }
 
-export function createOAuthState(args: { provider: string; workspaceId: string; userId: string }): { state: string; codeVerifier: string } {
-  if (!/^[a-z][a-z0-9_]{0,63}$/.test(args.provider) || !args.workspaceId || !args.userId) throw new Error("OAUTH_STATE_INVALID");
+export function createOAuthState(args: { provider: string; workspaceId: string; userId: string; connectionId?: string }): { state: string; codeVerifier: string } {
+  if (!/^[a-z][a-z0-9_]{0,63}$/.test(args.provider) || !args.workspaceId || !args.userId || (args.connectionId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.connectionId))) throw new Error("OAUTH_STATE_INVALID");
   const now = Date.now();
   const codeVerifier = randomBytes(32).toString("base64url");
   const payload: OAuthStatePayload = {
@@ -72,6 +73,7 @@ export function createOAuthState(args: { provider: string; workspaceId: string; 
     expiresAt: now + 10 * 60 * 1000,
     nonce: randomBytes(16).toString("base64url"),
     codeChallenge: createHash("sha256").update(codeVerifier).digest("base64url"),
+    ...(args.connectionId ? { connectionId: args.connectionId } : {}),
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return { state: encoded + "." + stateSignature(encoded).toString("base64url"), codeVerifier };
@@ -90,7 +92,7 @@ export function verifyOAuthState(state: string, expectedProvider: string): OAuth
   try { payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as OAuthStatePayload; } catch { throw new Error("OAUTH_STATE_INVALID"); }
   const now = Date.now();
   if (!payload || payload.provider !== expectedProvider || !payload.workspaceId || !payload.userId ||
-      !payload.nonce || typeof payload.codeChallenge !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(payload.codeChallenge) || !Number.isFinite(payload.issuedAt) ||
+      !payload.nonce || (payload.connectionId !== undefined && (typeof payload.connectionId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.connectionId))) || typeof payload.codeChallenge !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(payload.codeChallenge) || !Number.isFinite(payload.issuedAt) ||
       !Number.isFinite(payload.expiresAt) || payload.expiresAt <= now ||
       payload.issuedAt > now + 30_000 || payload.expiresAt - payload.issuedAt > 10 * 60 * 1000) {
     throw new Error("OAUTH_STATE_INVALID");
