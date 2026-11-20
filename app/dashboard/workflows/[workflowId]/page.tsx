@@ -9,6 +9,7 @@ import "./builder.css";
 import RunTestPanel from "./run-test-panel";
 import RegistryOperationSettings from "./registry-operation-settings";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
+import GraphNodeBrand from "./graph-node-brand";
 type RegistryCatalog = { id: string; name: string; icon?: string; category?: string; triggers: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[]; actions: { id: string; name: string; description: string; inputSchema: { properties?: Record<string, { type?: string; title?: string; description?: string; enum?: unknown[]; default?: unknown }>; required?: string[] } }[] };
 
 type NodeType = "trigger" | "action" | "condition";
@@ -27,27 +28,7 @@ const nodeMeta: Record<NodeType, { label: string; icon: string; help: string }> 
   condition: { label: "Condition", icon: "◇", help: "A rule to check before continuing." },
 };
 
-const registryIconGlyphs: Record<string, string> = {
-  sparkles: "✦",
-  mail: "✉",
-  slack: "✣",
-  plug: "↗",
-  webhook: "↯",
-  "google-sheets": "▦",
-  sheets: "▦",
-  database: "▤",
-  "file-spreadsheet": "▦",
-  "git-branch": "⑂",
-};
 
-function graphNodeGlyph(node: WorkflowNode, providerIcon?: string) {
-  if (node.type === "condition") return "◇";
-  if (node.registryNodeId === "gemini" || node.registryNodeId === "openai") return "✦";
-  if (node.registryNodeId === "email" || node.registryNodeId === "gmail") return "✉";
-  if (node.registryNodeId === "slack") return "✣";
-  if (node.registryNodeId === "webhooks") return "↯";
-  return (providerIcon && registryIconGlyphs[providerIcon.toLowerCase()]) || (node.type === "trigger" ? "⚡" : "↗");
-}
 
 export default function WorkflowBuilderPage() {
   const params = useParams<{ workflowId: string }>();
@@ -645,25 +626,92 @@ export default function WorkflowBuilderPage() {
                   transformOrigin: "0 0",
                 }}
               >
-                <svg className="graph-edges" aria-hidden="true"><defs><marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#9ab78a" /></marker></defs>
+                <svg className="graph-edges" aria-hidden="true">
+                  <defs>
+                    <marker id="graph-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#8BB8FF" />
+                    </marker>
+                  </defs>
                   {(definition.edges ?? []).map((edge) => {
                     const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source);
                     const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target);
                     if (sourceIndex < 0 || targetIndex < 0) return null;
                     const source = nodePosition(definition.nodes[sourceIndex], sourceIndex);
                     const target = nodePosition(definition.nodes[targetIndex], targetIndex);
-                    const sx = source.x + 105, sy = source.y + 62, tx = target.x + 105, ty = target.y + 62;
-                    const curve = Math.max(45, Math.abs(tx - sx) * .45);
-                    return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}><path d={`M ${sx} ${sy} C ${sx + curve} ${sy}, ${tx - curve} ${ty}, ${tx} ${ty}`} /><text x={(sx + tx) / 2} y={(sy + ty) / 2 - 12}>{edge.label === "next" ? "" : edge.label.toUpperCase()}</text></g>;
+                    // Node coordinates represent the centre of the brand tile.
+                    // Ports sit at the tile's horizontal midpoints, not at card corners.
+                    const sx = source.x + 40;
+                    const sy = source.y - 18;
+                    const tx = target.x - 40;
+                    const ty = target.y - 18;
+                    const direction = tx >= sx ? 1 : -1;
+                    const curve = Math.max(54, Math.abs(tx - sx) * 0.42);
+                    const labelX = (sx + tx) / 2;
+                    const labelY = (sy + ty) / 2 - 13;
+                    return <g key={edge.id} className={`graph-edge graph-edge-${edge.label}`}>
+                      <path d={`M ${sx} ${sy} C ${sx + curve * direction} ${sy}, ${tx - curve * direction} ${ty}, ${tx} ${ty}`} />
+                      {edge.label !== "next" && <text className="graph-edge-branch-label" x={labelX} y={labelY}>{edge.label === "true" ? "TRUE" : "FALSE"}</text>}
+                    </g>;
                   })}
                 </svg>
                 {definition.nodes.map((node, index) => {
                   const point = nodePosition(node, index);
                   const provider = registryCatalog.find((item) => item.id === node.registryNodeId);
-                  return <div key={node.id} className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`} style={{ left: point.x, top: point.y }} onPointerDown={(event) => beginNodeDrag(event, node, index)} onPointerMove={moveNodeDrag} onPointerUp={endNodeDrag} onPointerCancel={() => { dragState.current = null; }} onClick={() => setSelectedId(node.id)} role="group" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }} aria-label={`Select and drag ${node.title}`}>
-                    <button type="button" className="graph-node-port graph-port-in" aria-label={`Connect into ${node.title}`} title={connectingFrom ? "Complete connection" : "Choose a source node"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!connectingFrom) { setNotice("Choose an output handle first."); return; } connectNodes(connectingFrom, node.id, connectionLabel); }} />
-                    <span className="graph-node-icon">{graphNodeGlyph(node, provider?.icon)}</span><span className="graph-node-kind">{nodeMeta[node.type].label} · {provider?.name || node.registryNodeId || `Step ${index + 1}`}</span><strong>{node.title}</strong><small>{node.description || nodeMeta[node.type].help}</small>
-                    <button type="button" className="graph-node-port graph-port-out" aria-label={`Connect from ${node.title}`} title="Start a connection" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSelectedId(node.id); setConnectingFrom(node.id); setNotice(node.type === "condition" ? "Choose True or False in the connection editor, then select a destination input handle." : "Select a destination input handle."); }} />
+                  const providerName = provider?.name || node.registryNodeId || nodeMeta[node.type].label;
+                  return <div
+                    key={node.id}
+                    className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`}
+                    style={{ left: point.x, top: point.y }}
+                    onPointerDown={(event) => beginNodeDrag(event, node, index)}
+                    onPointerMove={moveNodeDrag}
+                    onPointerUp={endNodeDrag}
+                    onPointerCancel={() => { dragState.current = null; }}
+                    onClick={() => setSelectedId(node.id)}
+                    role="group"
+                    tabIndex={0}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }}
+                    aria-label={`${providerName}: ${node.title}. Select to configure; drag to move.`}
+                    title={`${providerName} · ${node.title}`}
+                  >
+                    <div className="graph-node-face">
+                      <button
+                        type="button"
+                        className="graph-node-port graph-port-in"
+                        aria-label={`Connect into ${node.title}`}
+                        title="Input connection"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!connectingFrom) { setNotice("Choose an output handle first."); return; }
+                          connectNodes(connectingFrom, node.id, connectionLabel);
+                        }}
+                      />
+                      <GraphNodeBrand
+                        providerId={node.registryNodeId || node.settings.provider || node.type}
+                        providerName={providerName}
+                        providerIcon={provider?.icon}
+                        nodeType={node.type}
+                      />
+                      <button
+                        type="button"
+                        className="graph-node-port graph-port-out"
+                        aria-label={`Connect from ${node.title}`}
+                        title="Output connection"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedId(node.id);
+                          setConnectingFrom(node.id);
+                          setNotice(node.type === "condition"
+                            ? "Choose True or False in the connection editor, then select a destination input handle."
+                            : "Select a destination input handle.");
+                        }}
+                      />
+                    </div>
+                    <div className="graph-node-copy">
+                      <strong className="graph-node-operation">{node.title}</strong>
+                      <small className="graph-node-provider">{providerName}</small>
+                    </div>
                   </div>;
                 })}
                 {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
