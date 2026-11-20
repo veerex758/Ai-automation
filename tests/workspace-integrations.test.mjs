@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const route = readFileSync(new URL("../app/api/integrations/workspace/route.ts", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../supabase/migrations/20261102091000_aivanta_workspace_integration_secret_upsert.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../supabase/migrations/20261120130000_rexnora_multi_account_connections.sql", import.meta.url), "utf8");
 
 test("workspace integration API authenticates and restricts credential management to admins", () => {
   assert.match(route, /auth\.getUser\(\)/);
@@ -14,7 +14,7 @@ test("workspace integration API authenticates and restricts credential managemen
   for (const provider of ["notion", "hubspot", "twilio", "shopify", "stripe", "linear"]) {
     assert.match(route, new RegExp('"' + provider + '"'));
   }
-  assert.match(route, /save_workspace_integration_credentials/);
+  assert.match(route, /save_workspace_integration_connection/);
 });
 
 test("workspace integration API exposes metadata only and never reads stored secrets", () => {
@@ -26,8 +26,10 @@ test("workspace integration API exposes metadata only and never reads stored sec
 test("credential storage RPC checks workspace role and is service-role only", () => {
   assert.match(migration, /wm\.role in \('owner','admin'\)/);
   assert.match(migration, /insert into public\.workspace_integration_secrets/i);
-  assert.match(migration, /revoke all on function public\.save_workspace_integration_credentials[\s\S]*from public, anon, authenticated/i);
-  assert.match(migration, /grant execute on function public\.save_workspace_integration_credentials[\s\S]*to service_role/i);
+  assert.match(migration, /revoke all on function public\.save_workspace_integration_connection[\s\S]*from public, anon, authenticated/i);
+  assert.match(migration, /grant execute on function public\.save_workspace_integration_connection[\s\S]*to service_role/i);
+  assert.match(migration, /drop constraint if exists workspace_integrations_workspace_id_provider_key/i);
+  assert.match(migration, /where id = p_connection_id[\s\S]*and workspace_id = p_workspace_id[\s\S]*and provider = p_provider/i);
 });
 
 test("durable worker decrypts only the required workspace's connected integration", () => {
