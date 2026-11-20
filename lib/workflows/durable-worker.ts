@@ -171,7 +171,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
   }
-  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture"))) return true;
+  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture") || (step.nodeId === "webhooks" && step.operationId === "receive_event"))) return true;
   if (step.kind === "action" && new Set([
     "if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields",
     "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time",
@@ -390,8 +390,12 @@ export async function runDurableWorker() {
         if (source === "error_trigger" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "error_trigger" || steps[0]?.operationId !== "capture")) {
           throw new Error("INVALID_ERROR_TRIGGER_DEFINITION");
         }
-        if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
+        if (job.execution_mode === "live" && steps[0]?.nodeId === "webhooks" &&
+            (source !== "webhook" || job.payload?.webhookVerified !== true ||
+             typeof job.payload?.endpointId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(job.payload.endpointId))) {
+          throw new Error("VERIFIED_WEBHOOK_SOURCE_REQUIRED");
+        }
+        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || source === "webhook" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
