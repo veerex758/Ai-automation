@@ -170,7 +170,11 @@ function WorkspaceIntegrationManager() {
 
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("provider");
+    const params = new URLSearchParams(window.location.search);
+    const oauthStatus = params.get("oauth");
+    if (oauthStatus === "connected") setNotice("OAuth authorization completed. Test the saved account before using it in a live workflow.");
+    else if (oauthStatus === "failed") setError("OAuth authorization did not complete. Check the provider configuration and try again.");
+    const requested = params.get("provider");
     if (requested && Object.prototype.hasOwnProperty.call(providerFields, requested)) {
       setProvider(requested as WorkspaceProvider);
       setFocusedProvider(requested as WorkspaceProvider);
@@ -273,7 +277,6 @@ function WorkspaceIntegrationManager() {
 
   function addAnotherConnection() {
     setEditingConnectionId(null);
-    setFocusedProvider(null);
     setDisplayName(providerFields[provider].label);
     setValues({});
     setNotice("Add a separate account. Existing connections will remain available to workflow nodes.");
