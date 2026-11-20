@@ -8,6 +8,10 @@ const builderSource = readFileSync("app/dashboard/builder/page.tsx", "utf8");
 const googleStartSource = readFileSync("app/api/integrations/google/start/route.ts", "utf8");
 const googleCallbackSource = readFileSync("app/api/integrations/google/callback/route.ts", "utf8");
 const googleConnectionsSource = readFileSync("app/api/integrations/google/connections/route.ts", "utf8");
+const genericOAuthStartSource = readFileSync("app/api/integrations/oauth/[provider]/start/route.ts", "utf8");
+const genericOAuthCallbackSource = readFileSync("app/api/integrations/oauth/[provider]/callback/route.ts", "utf8");
+const genericOAuthStateSource = readFileSync("lib/integrations/provider-oauth.ts", "utf8");
+const googleCallbackSource = readFileSync("app/api/integrations/google/callback/route.ts", "utf8");
 const workflowActivationSource = readFileSync("app/api/workflows/[workflowId]/route.ts", "utf8");
 const multiAccountMigration = readFileSync("supabase/migrations/20261120130000_rexnora_multi_account_connections.sql", "utf8");
 const nodeTypesSource = readFileSync("nodes/types.ts", "utf8");
@@ -130,6 +134,14 @@ test("Google OAuth setup is node-specific, multi-account aware, and has lifecycl
   assert.match(googleConnectionsSource, /hasOnlyApprovedGoogleScopes/);
   assert.match(googleConnectionsSource, /oauth2\.googleapis\.com\/revoke/);
   assert.match(googleConnectionsSource, /export async function DELETE/);
+  assert.match(googleStartSource, /connectionId/);
+  assert.match(googleCallbackSource, /targetConnectionId/);
+  assert.match(googleCallbackSource, /\.eq\("id", targetConnectionId\).*\.eq\("workspace_id", workspace\.id\)/);
+  assert.match(genericOAuthStateSource, /connectionId\?: string/);
+  assert.match(genericOAuthStartSource, /createOAuthState\(\{ provider, workspaceId: workspace\.id, userId: user\.id, \...\(connectionId \? \{ connectionId \} : \{\}\) \}\)/);
+  assert.match(genericOAuthCallbackSource, /p_connection_id: stateData\.connectionId \?\? null/);
+  assert.match(googleConnectionsSource, /\.eq\("workspace_id", workspace\.id\)/);
+  assert.doesNotMatch(googleConnectionsSource.slice(googleConnectionsSource.indexOf("export async function GET"), googleConnectionsSource.indexOf("const uuidPattern")), /connected_by/);
 });
 
 test("cross-workspace account IDs fail closed for saves, tests, disconnects and live execution", () => {
