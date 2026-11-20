@@ -7,6 +7,7 @@ const assistant = readFileSync(new URL("../app/dashboard/ai-assistant/page.tsx",
 const brand = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/graph-node-brand.tsx", import.meta.url), "utf8");
 const builderCss = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/builder.css", import.meta.url), "utf8");
 const brandAssets = readFileSync(new URL("../lib/integrations/official-brand-assets.ts", import.meta.url), "utf8");
+const integrationsDirectory = readFileSync(new URL("../app/dashboard/registry-integrations-directory.tsx", import.meta.url), "utf8");
 
 
 test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-aware node dragging", () => {
@@ -39,6 +40,15 @@ test("canvas nodes reuse official provider logos for major integrations and comm
   assert.match(brand, /cdn\.simpleicons\.org/);
   assert.match(brand, /onError=\{\(\) => setFailed\(true\)\}/);
   assert.match(brand, /PrimitiveMark/);
+});
+
+test("Builder and Integrations directory consume one shared 86-provider official brand catalogue", () => {
+  assert.match(brand, /import \{ officialBrandAssets \} from "@\/lib\/integrations\/official-brand-assets"/);
+  assert.match(integrationsDirectory, /import \{ officialBrandAssets \} from "@\/lib\/integrations\/official-brand-assets"/);
+  assert.match(brandAssets, /export const officialBrandAssets/);
+  assert.equal((brandAssets.match(/"slug":/g) || []).length, 86);
+  assert.doesNotMatch(integrationsDirectory, /const officialBrandAssets/);
+  assert.match(brand, /providerId === "email" \? officialBrandAssets\.resend/);
 });
 
 test("canvas nodes use compact square brand tiles, operation captions, real connection ports and clean branch styles", () => {
