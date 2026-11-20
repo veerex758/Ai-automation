@@ -122,25 +122,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     if (!key) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
     const encrypted = encryptWorkspaceCredentials({ [provider]: credentials }, key, workspace.id + ":" + provider);
     const admin = serviceClient();
-    const { data: integration, error: integrationError } = await admin.from("workspace_integrations")
-      .upsert({
-        workspace_id: workspace.id,
-        provider,
-        status: "needs_attention",
-        display_name: provider.replace(/_/g, " "),
-        metadata: { connected_at: new Date().toISOString(), expires_at: credentials.expiresAt ?? null, scope: credentials.scope ?? null },
-        created_by: user.id,
-      }, { onConflict: "workspace_id,provider" })
-      .select("id")
-      .single();
-    if (integrationError || !integration?.id) throw new Error("OAUTH_INTEGRATION_SAVE_FAILED");
-    const { error: secretError } = await admin.from("workspace_integration_secrets").upsert({
-      integration_id: integration.id,
-      encrypted_credentials: encrypted,
-      encryption_version: "v1",
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "integration_id" });
-    if (secretError) throw new Error("OAUTH_CREDENTIAL_SAVE_FAILED");
+    const connectedAt = new Date().toISOString();
+    const displayName = provider.replace(/_/g, " ") + " · " + new Date(connectedAt).toLocaleString("en-US", {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+    }) + " UTC";
+    const { data: saved, error: saveError } = await admin.rpc("save_workspace_integration_connection", {
+      p_workspace_id: workspace.id,
+      p_provider: provider,
+      p_display_name: displayName,
+      p_encrypted_credentials: encrypted,
+      p_created_by: user.id,
+      p_connection_id: null,
+    });
+    const integrationId = saved && typeof saved === "object" && "id" in saved &&
+      typeof (saved as { id?: unknown }).id === "string" ? (saved as { id: string }).id : null;
+    if (saveError || !integrationId) throw new Error("OAUTH_INTEGRATION_SAVE_FAILED");
+    const { error: metadataError } = await admin.from("workspace_integrations").update({
+      metadata: { connected_at: connectedAt, expires_at: credentials.expiresAt ?? null, scope: credentials.scope ?? null },
+    }).eq("id", integrationId).eq("workspace_id", workspace.id).eq("provider", provider);
+    if (metadataError) throw new Error("OAUTH_CREDENTIAL_METADATA_SAVE_FAILED");
     return finish(request, provider, true);
   } catch (error) {
     console.error("Provider OAuth callback failed", { provider, code: error instanceof Error ? error.message : "OAUTH_CALLBACK_FAILED" });
