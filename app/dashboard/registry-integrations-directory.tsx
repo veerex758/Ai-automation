@@ -395,7 +395,7 @@ const nativeIconGlyphs: Record<string, string> = {
 };
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 const credentialProvider: Record<string,string> = {
-  http_request:"http",twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
+  email:"resend", http_request:"http",twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
 };
 const credentialFields: Record<string,CredentialField[]> = {
   http:[{key:"baseUrl",label:"Base URL"},{key:"apiKey",label:"API key",secret:true},{key:"username",label:"Basic-auth username"},{key:"password",label:"Basic-auth password",secret:true}],
