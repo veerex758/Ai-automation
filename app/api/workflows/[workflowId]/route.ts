@@ -122,12 +122,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         { step: steps[2], provider: "resend" },
       ];
       for (const selected of selectedProviders) {
-        if (!selected.step.connectionId || !uuidPattern.test(selected.step.connectionId)) {
+        const connectionId = selected.step?.connectionId;
+        if (!connectionId || !uuidPattern.test(connectionId)) {
           return NextResponse.json({ error: `Select a verified ${selected.provider} connection for every provider node before activation.` }, { status: 409 });
         }
         const { data: connection, error: connectionError } = await service.from("workspace_integrations")
           .select("id,provider,status,last_test_status")
-          .eq("id", selected.step.connectionId)
+          .eq("id", connectionId)
           .eq("workspace_id", candidate.workspace_id)
           .eq("provider", selected.provider)
           .maybeSingle();
