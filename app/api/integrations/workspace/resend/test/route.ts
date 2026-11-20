@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
             : "Resend could not complete the connection check.";
       await db.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
-      }).eq("id", integration.id);
+      }).eq("id", integration.id).eq("workspace_id", workspace.id);
       return json({ error: message }, status === 429 ? 429 : 502);
     }
 
