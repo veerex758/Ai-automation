@@ -54,7 +54,7 @@ test("worker endpoint authenticates requests and legacy previews remain side-eff
   assert.match(worker, /timingSafeEqual/);
   assert.match(workerService, /claim_execution_jobs/);
   assert.match(workerService, /sideEffectsPerformed !== false/);
-  assert.match(workerService, /LIVE_LEGACY_OPERATION_NOT_ENABLED/);
+  assert.match(workerService, /REGISTRY_WORKFLOW_REQUIRED/);
 });
 
 test("dispatch requires an authenticated user and an idempotency key", () => {
