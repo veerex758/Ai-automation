@@ -11,12 +11,20 @@ import DashboardSidebar from "../dashboard-sidebar";
 
 type StepKind = "Trigger" | "Action" | "Condition";
 type ActionField = { name: string; label: string; type: "text" | "email" | "url"; required: boolean; maxLength: number };
-type RegistryCatalogNode = { id: string; name: string; icon: string; category: string; group: string; executionStatus: "registered" | "coming_soon"; triggers: { id: string; name: string; description: string; inputSchema: Record<string, unknown> }[]; actions: { id: string; name: string; description: string; inputSchema: Record<string, unknown> }[] };
+type RegistryCatalogNode = { id: string; name: string; icon: string; category: string; group: string; auth: { type: "none" | "oauth2" | "apiKey" | "connectionString" }; executionStatus: "registered" | "coming_soon"; triggers: { id: string; name: string; description: string; inputSchema: Record<string, unknown> }[]; actions: { id: string; name: string; description: string; inputSchema: Record<string, unknown> }[] };
 type CatalogAction = { id: string; provider: string; operation: string; label: string; description: string; category: string; execution: "dry_run_only" | "live_guarded"; fields: ActionField[]; requirements?: string[] };
 type BuilderStep = { id: number; kind: StepKind; title: string; detail: string; actionId?: string; settings?: Record<string, string>; registryBacked?: boolean };
 type GeneratedNode = { id: string; type: "trigger" | "action" | "condition"; title: string; description: string; settings: Record<string, string> };
-type RegistryDraftStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown>; branch?: { fromStepId: string; route: string }; loop?: { sourceStepId: string; itemAs?: string; indexAs?: string; maxIterations?: number } };
+type RegistryDraftStep = { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown>; connectionId?: string; branch?: { fromStepId: string; route: string }; loop?: { sourceStepId: string; itemAs?: string; indexAs?: string; maxIterations?: number } };
 type GeneratedWorkflow = { version: 1; nodes: GeneratedNode[] };
+type WorkspaceConnection = { id: string; provider: string; display_name: string; status: string; last_test_status?: string | null; updated_at: string };
+type GoogleConnection = { id: string; product: string; account_email: string; status: string; scopes: string[]; last_tested_at?: string | null; last_test_status?: string | null };
+const googleProductForNode: Record<string, string> = {
+  gmail: "gmail", sheets: "sheets", google_sheets: "sheets", google_drive: "drive",
+  google_calendar: "calendar", google_docs: "docs", google_forms: "forms",
+  youtube: "youtube", google_contacts: "contacts",
+};
+const providerForNode: Record<string, string> = { email: "resend", google_sheets: "sheets", http_request: "http" };
 
 const starterSteps: BuilderStep[] = [
   { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted", settings: { event: "webhook" } },
@@ -45,6 +53,36 @@ export default function WorkflowBuilderPage() {
   const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogNode[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
+  const [workspaceConnections, setWorkspaceConnections] = useState<WorkspaceConnection[]>([]);
+  const [googleConnections, setGoogleConnections] = useState<GoogleConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [connectionsError, setConnectionsError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadConnections() {
+      try {
+        const [workspaceResponse, googleResponse] = await Promise.all([
+          fetch("/api/integrations/workspace", { cache: "no-store" }),
+          fetch("/api/integrations/google/connections", { cache: "no-store" }),
+        ]);
+        const [workspacePayload, googlePayload] = await Promise.all([
+          workspaceResponse.json(), googleResponse.json(),
+        ]);
+        if (!workspaceResponse.ok) throw new Error(workspacePayload.error || "Workspace connections could not be loaded.");
+        if (!googleResponse.ok) throw new Error(googlePayload.error || "Google connections could not be loaded.");
+        if (!active) return;
+        setWorkspaceConnections(Array.isArray(workspacePayload.integrations) ? workspacePayload.integrations : []);
+        setGoogleConnections(Array.isArray(googlePayload.connections) ? googlePayload.connections : []);
+      } catch (error) {
+        if (active) setConnectionsError(error instanceof Error ? error.message : "Connections could not be loaded.");
+      } finally {
+        if (active) setConnectionsLoading(false);
+      }
+    }
+    void loadConnections();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     try {
@@ -371,8 +409,54 @@ export default function WorkflowBuilderPage() {
                           required?: string[];
                         } | undefined;
                         const registryStep = aiRegistrySteps?.find(item => item.id === String(currentStep.id));
-                        return Object.entries(schema?.properties ?? {}).map(([field, definition]) => (
-                          <label className="action-field" key={field}>
+                        const googleProduct = googleProductForNode[nodeId];
+                        const provider = providerForNode[nodeId] ?? nodeId;
+                        const requiresConnection = Boolean(node && node.auth.type !== "none");
+                        const compatibleConnections = googleProduct
+                          ? googleConnections.filter(item => item.product === googleProduct)
+                          : workspaceConnections.filter(item => item.provider === provider);
+                        const connectHref = googleProduct
+                          ? `/dashboard/connections?googleProduct=${encodeURIComponent(googleProduct)}&node=${encodeURIComponent(nodeId)}`
+                          : `/dashboard/connections?provider=${encodeURIComponent(provider)}&node=${encodeURIComponent(nodeId)}`;
+                        return (
+                          <>
+                            {requiresConnection && (
+                              <div className="action-field">
+                                <label htmlFor={`connection-select-${currentStep.id}`}>Workspace connection</label>
+                                <select
+                                  id={`connection-select-${currentStep.id}`}
+                                  className="settings-input"
+                                  value={registryStep?.connectionId ?? ""}
+                                  disabled={connectionsLoading}
+                                  onChange={event => setAiRegistrySteps(current => (current ?? []).map(item =>
+                                    item.id === String(currentStep.id)
+                                      ? { ...item, connectionId: event.target.value || undefined }
+                                      : item
+                                  ))}
+                                >
+                                  <option value="">{connectionsLoading ? "Loading connections…" : "Choose a saved account…"}</option>
+                                  {registryStep?.connectionId && !compatibleConnections.some(item => item.id === registryStep.connectionId) &&
+                                    <option value={registryStep.connectionId}>Selected connection unavailable</option>}
+                                  {compatibleConnections.map(item => (
+                                    <option key={item.id} value={item.id}>
+                                      {googleProduct ? (item as GoogleConnection).account_email : (item as WorkspaceConnection).display_name}
+                                      {" · "}{item.status === "connected" && item.last_test_status === "passed" ? "verified" : item.status.replaceAll("_", " ")}
+                                      {item.last_test_status !== "passed" ? " · test required" : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                                <small>Only the connection ID is saved with this node. Credentials stay encrypted on the server and can be reused by other nodes in this workspace.</small>
+                                <Link href={connectHref} className="connections-return">
+                                  {googleProduct ? "Connect or manage Google account" : "Connect or manage provider account"} →
+                                </Link>
+                                {connectionsError && <small role="alert">{connectionsError}</small>}
+                                {!connectionsLoading && compatibleConnections.length === 0 && (
+                                  <small>No account saved for {googleProduct ? "this Google product" : provider}. Connect one before live execution.</small>
+                                )}
+                              </div>
+                            )}
+                            {Object.entries(schema?.properties ?? {}).map(([field, definition]) => (
+                              <label className="action-field" key={field}>
                             {definition.title ?? field}{schema?.required?.includes(field) ? " *" : ""}
                             {definition.description && <small>{definition.description}</small>}
                             {definition.enum?.length ? (
@@ -411,8 +495,10 @@ export default function WorkflowBuilderPage() {
                                 ))}
                               />
                             )}
-                          </label>
-                        ));
+                              </label>
+                            ))}
+                          </>
+                        );
                       })()}
                     </section>
                   )}
@@ -447,7 +533,7 @@ export default function WorkflowBuilderPage() {
                   })()}
                 </>}
               </section>)}
-              <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Provider configuration and live credentials will be added when secure integrations are implemented.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setAiRegistrySteps(current => current ? current.filter(step => step.id !== String(currentStep.id)) : null); setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></>) : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
+              <label htmlFor="step-title">Step name</label><input id="step-title" className="settings-input" value={currentStep.title} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, title: event.target.value } : step))} /><label htmlFor="step-detail">Description</label><textarea id="step-detail" className="settings-textarea" value={currentStep.detail} onChange={event => setSteps(current => current.map(step => step.id === currentStep.id ? { ...step, detail: event.target.value } : step))} rows={3} /><div className="settings-info"><span>ⓘ</span><p>Connection IDs are stored on each node. Rexnora checks workspace ownership, provider match and verified status again immediately before live execution.</p></div><button className="remove-step-button" disabled={steps.length <= 1} onClick={() => { setAiRegistrySteps(current => current ? current.filter(step => step.id !== String(currentStep.id)) : null); setSteps(current => current.filter(step => step.id !== currentStep.id)); setSelected(steps.find(step => step.id !== currentStep.id)?.id ?? 0); }}>Remove step</button></>) : <p className="settings-empty">Select a step on the canvas to edit it.</p>}
             </aside>
           </div>
           <div className="builder-safety-note"><span>✳</span><p><strong>Safe by default.</strong> AI-generated workflows are saved as validated registry drafts in your Rexnora workspace. Saving never activates or executes them; live execution remains separately gated.</p></div>
