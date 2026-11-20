@@ -132,7 +132,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
       p_display_name: displayName,
       p_encrypted_credentials: encrypted,
       p_created_by: user.id,
-      p_connection_id: null,
+      p_connection_id: stateData.connectionId ?? null,
     });
     const integrationId = saved && typeof saved === "object" && "id" in saved &&
       typeof (saved as { id?: unknown }).id === "string" ? (saved as { id: string }).id : null;
