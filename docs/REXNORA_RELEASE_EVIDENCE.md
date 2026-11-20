@@ -179,3 +179,15 @@ No merge, production deployment, production migration or live external side effe
 - The external Simple Icons CDN is intentionally consistent with the existing Integrations directory. Native/fallback marks are used when a provider has no official asset mapping or the remote SVG cannot load.
 - Release boundary: this change only affects the draft graph presentation/editor. Generation remains review-only; nothing in the renderer activates or executes workflows. PR #207 remains open and no production deployment or database migration was performed.
 - Authenticated visual acceptance remains required: on the latest preview, inspect Gmail/Google Sheets/Slack/Gemini and database marks on a real generated graph; exercise input/output connections and both condition branches; drag, zoom and pan on mobile; save, reload and confirm positions/edges remain identical. Do not mark Stage 1 passed until that test and exact-head checks pass.
+
+
+### 2026-11-20 AI graph semantic fidelity guard
+
+- Investigation of the generated Gmail → Gemini → IF → Google Sheets/Slack draft showed that a syntactically valid graph can still misrepresent the requested business behavior.
+- Registry audit confirmed Gmail currently exposes read actions (`list_messages`, `get_message`) and no Gmail trigger. Google Sheets currently exposes read operations only; no append/write operation is registered. Slack exposes registered message-sending actions, and Gemini exposes registered lead-qualification.
+- Added `lib/workflows/ai-request-capability-guard.cjs` and wired it before the Gemini provider call and before usage consumption. Requests requiring an unavailable Gmail new-email trigger or Google Sheets write operation now return HTTP 422 with `AI_UNSUPPORTED_CAPABILITY` and an actionable explanation; no Gemini request is made and no AI credit is consumed.
+- Strengthened Gemini registry-planning instructions: use exact requested provider operations, never substitute generic HTTP/internal actions for a missing named integration, avoid speculative/duplicate fetch steps, require Gmail List messages → Get message → downstream processing when those read steps are used, and keep edges aligned with upstream data dependencies without cycles or backward links.
+- AI Assistant now displays a specific title for unsupported requested capabilities instead of a generic generation failure.
+- Added CI-covered tests for unsupported Gmail triggers, missing Sheets write operations, supported Gmail/Gemini/Slack combinations, and allowing requests once the missing capabilities are genuinely registered.
+- This is a fail-closed correctness improvement, not a claim that Gmail event triggers or Google Sheets writes have been implemented. To generate the exact requested workflow, Stage 3 integration work must add and test those operations (including secure Gmail polling/event semantics, deduplication/checkpointing, Sheets write scopes and append behavior). Do not fake these with HTTP nodes.
+- No workflow was activated or executed; no database migration or production change was made. Stage 1 remains in progress pending exact-head CI and authenticated preview acceptance.
