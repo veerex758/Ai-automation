@@ -48,13 +48,14 @@ test("idempotency is scoped to a workspace and immutable workflow snapshot in th
   assert.match(queueMigration, /workflow_row\.version, workflow_row\.definition/);
 });
 
-test("duplicate queue dispatch returns the existing run without creating another provider execution", () => {
+test("duplicate queue dispatch returns the existing run and schedules a safe worker wake-up", () => {
   const rpcCall = dispatchRoute.indexOf('db.rpc("dispatch_workflow_execution"');
-  const duplicateResponse = dispatchRoute.indexOf('result.duplicate ? "existing" : "queued"');
   const workerWakeup = dispatchRoute.indexOf("after(async () =>");
-  assert.ok(rpcCall >= 0 && duplicateResponse > rpcCall);
-  assert.ok(workerWakeup > duplicateResponse);
-  assert.match(dispatchRoute.slice(duplicateResponse, workerWakeup), /duplicate: result\.duplicate/);
+  const duplicateResponse = dispatchRoute.indexOf('result.duplicate ? "existing" : "queued"');
+  assert.ok(rpcCall >= 0 && workerWakeup > rpcCall && duplicateResponse > workerWakeup);
+  assert.match(dispatchRoute, /duplicate: result\.duplicate/);
+  assert.match(dispatchRoute, /status: result\.duplicate \? 200 : 202/);
+  assert.match(dispatchRoute, /queue remains the source of truth/);
 });
 
 test("live jobs have one attempt and uncertain outcomes are not automatically replayed", () => {
