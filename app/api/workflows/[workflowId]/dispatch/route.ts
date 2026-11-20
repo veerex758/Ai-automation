@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
-import { findOperation } from "@/nodes/registry";
+import { findNode, findOperation } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +80,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       }
       if (executionMode === "live") {
         const registrySteps = (workflow.definition as { steps: Parameters<typeof validateDurableLiveSteps>[0] }).steps;
+        for (const step of registrySteps) {
+          const node = findNode(step.nodeId);
+          if (node && node.auth.type !== "none" &&
+              (typeof step.connectionId !== "string" || !uuidPattern.test(step.connectionId))) {
+            return NextResponse.json({
+              error: `Select a saved, verified workspace connection for the ${node.name} node before live dispatch.`,
+              code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED",
+            }, { status: 409 });
+          }
+        }
         const livePolicyError = validateDurableLiveSteps(registrySteps);
         if (livePolicyError) {
           return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
