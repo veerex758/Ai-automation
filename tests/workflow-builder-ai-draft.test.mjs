@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 
 const page = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/page.tsx", import.meta.url), "utf8");
 const assistant = readFileSync(new URL("../app/dashboard/ai-assistant/page.tsx", import.meta.url), "utf8");
+const brand = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/graph-node-brand.tsx", import.meta.url), "utf8");
+const builderCss = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/builder.css", import.meta.url), "utf8");
 
 
 test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-aware node dragging", () => {
@@ -15,7 +17,34 @@ test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-
   assert.match(page, /aria-label="Fit graph to view"/);
   assert.match(page, /transform: `translate\(\$\{camera\.x\}px, \$\{camera\.y\}px\) scale\(\$\{camera\.scale\}\)`/);
   assert.match(page, /\(event\.clientX - drag\.startX\) \/ camera\.scale/);
-  assert.match(page, /graphNodeGlyph\(node, provider\?\.icon\)/);
+  assert.match(page, /<GraphNodeBrand/);
+  assert.match(page, /<strong className="graph-node-operation">\{node\.title\}<\/strong>/);
+  assert.match(page, /className="graph-node-face"/);
+  assert.match(page, /className="graph-node-port graph-port-in"/);
+  assert.match(page, /className="graph-node-port graph-port-out"/);
+  assert.match(page, /const sx = source\.x \+ 40/);
+  assert.match(page, /const tx = target\.x - 40/);
+  assert.match(page, /edge\.label === "true" \? "TRUE" : "FALSE"/);
+});
+
+
+test("canvas nodes reuse official provider logos for major integrations and common provider catalogue entries", () => {
+  for (const provider of ["gmail", "sheets", "google_sheets", "slack", "gemini", "postgresql", "mysql", "mongodb", "supabase", "resend"]) {
+    assert.ok(brand.includes('"' + provider + '"'), "missing brand mapping: " + provider);
+  }
+  assert.match(brand, /cdn\.simpleicons\.org/);
+  assert.match(brand, /onError=\{\(\) => setFailed\(true\)\}/);
+  assert.match(brand, /PrimitiveMark/);
+});
+
+test("canvas nodes use compact square brand tiles, operation captions, real connection ports and clean branch styles", () => {
+  assert.match(builderCss, /\.graph-node-face[\s\S]*?width:80px/);
+  assert.match(builderCss, /\.graph-node-brand img[\s\S]*?object-fit:contain/);
+  assert.match(builderCss, /\.graph-node-operation[\s\S]*?text-align:center/);
+  assert.match(builderCss, /\.graph-port-in/);
+  assert.match(builderCss, /\.graph-port-out/);
+  assert.match(builderCss, /\.graph-edge-true path\{stroke:#67D5A1/);
+  assert.match(builderCss, /\.graph-edge-false path\{stroke:#F0AD79/);
 });
 
 test("workflow builder maps validated registry generation steps onto editable graph nodes", () => {
