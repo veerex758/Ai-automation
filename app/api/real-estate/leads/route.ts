@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { scoreRealEstateLead } from "@/lib/real-estate/lead-scoring";
-import { createFollowupRows } from "@/lib/real-estate/server";
+import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-estate/server";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -25,6 +25,8 @@ function parseLead(body: Record<string, unknown>) {
   }
   const currency = (text(body.currency, 3) ?? "USD").toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Currency must be a three-letter ISO code.");
+  const bedrooms = body.bedrooms === null || body.bedrooms === undefined || body.bedrooms === "" ? null : Number(body.bedrooms);
+  if (bedrooms !== null && (!Number.isInteger(bedrooms) || bedrooms < 0 || bedrooms > 50)) throw new Error("Bedrooms must be a whole number between 0 and 50.");
   return {
     source: text(body.source, 80) ?? "manual",
     source_event_id: text(body.sourceEventId, 200),
@@ -33,7 +35,7 @@ function parseLead(body: Record<string, unknown>) {
     property_type: allowed(body.propertyType, ["apartment","house","land","commercial","other","unknown"] as const, "unknown"),
     preferred_location: text(body.preferredLocation, 200),
     budget_min: budgetMin, budget_max: budgetMax, currency,
-    bedrooms: body.bedrooms === null || body.bedrooms === undefined || body.bedrooms === "" ? null : Number(body.bedrooms),
+    bedrooms,
     timeframe: allowed(body.timeframe, ["urgent","within_30_days","one_to_three_months","over_three_months","unknown"] as const, "unknown"),
     readiness: allowed(body.readiness, ["cash_ready","pre_approved","financing_needed","researching","unknown"] as const, "unknown"),
     financing_notes: text(body.financingNotes, 500), main_concern: text(body.mainConcern, 500),
@@ -44,6 +46,37 @@ function parseLead(body: Record<string, unknown>) {
     status: "new",
     raw_enquiry: isRecord(body.rawEnquiry) ? body.rawEnquiry : {},
   };
+}
+
+
+async function ensureLeadSideEffects(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lead: Record<string, any>,
+  workspaceId: string,
+  userId: string,
+) {
+  const { data: activity, error: activityLookupError } = await supabase.from("real_estate_lead_activities")
+    .select("id").eq("workspace_id", workspaceId).eq("lead_id", lead.id).eq("activity_type", "lead.created").limit(1).maybeSingle();
+  if (activityLookupError) throw activityLookupError;
+  if (!activity) {
+    const { error } = await supabase.from("real_estate_lead_activities").insert({
+      workspace_id: workspaceId, lead_id: lead.id, actor_user_id: userId,
+      activity_type: "lead.created",
+      details: { source: lead.source, score: lead.lead_score, temperature: lead.lead_temperature },
+    });
+    if (error) throw error;
+  }
+
+  if (!lead.consent_to_contact || lead.contact_preference !== "email" || !lead.email) return 0;
+  // Follow-up queue rows are deliberately read-only to workspace members.
+  // Use the server-only service client after this route has authenticated the member
+  // and resolved the lead in their workspace.
+  const service = createRealEstateServiceClient();
+  const rows = createFollowupRows(lead as Parameters<typeof createFollowupRows>[0], new Date(lead.created_at));
+  const { error: queueError } = await service.from("real_estate_followups")
+    .upsert(rows, { onConflict: "lead_id,sequence", ignoreDuplicates: true });
+  if (queueError) throw queueError;
+  return rows.length;
 }
 
 export async function GET(request: NextRequest) {
@@ -84,10 +117,13 @@ export async function POST(request: NextRequest) {
     const workspace = await getOrCreateDefaultWorkspace(supabase);
 
     if (lead.source_event_id) {
-      const { data: prior, error: priorError } = await supabase.from("real_estate_leads").select("id,full_name,lead_score,lead_temperature,status,created_at")
+      const { data: prior, error: priorError } = await supabase.from("real_estate_leads").select("*")
         .eq("workspace_id", workspace.id).eq("source", lead.source).eq("source_event_id", lead.source_event_id).maybeSingle();
       if (priorError) throw priorError;
-      if (prior) return NextResponse.json({ lead: prior, duplicate: true }, { status: 200, headers });
+      if (prior) {
+        await ensureLeadSideEffects(supabase, prior, workspace.id, user.id);
+        return NextResponse.json({ lead: prior, duplicate: true }, { status: 200, headers });
+      }
     }
 
     const score = scoreRealEstateLead({
@@ -105,20 +141,7 @@ export async function POST(request: NextRequest) {
     }
     if (error) throw error;
 
-    const { error: activityError } = await supabase.from("real_estate_lead_activities").insert({
-      workspace_id: workspace.id, lead_id: created.id, actor_user_id: user.id,
-      activity_type: "lead.created", details: { source: lead.source, score: score.score, temperature: score.temperature },
-    });
-    if (activityError) throw activityError;
-
-    let followupsCreated = 0;
-    if (created.consent_to_contact && created.contact_preference === "email" && created.email) {
-      const { error: followupError } = await supabase.from("real_estate_followups").insert(
-        createFollowupRows(created, new Date(created.created_at)),
-      );
-      if (followupError) throw followupError;
-      followupsCreated = 5;
-    }
+    const followupsCreated = await ensureLeadSideEffects(supabase, created, workspace.id, user.id);
     return NextResponse.json({ lead: created, score, followupsCreated }, { status: 201, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
