@@ -31,6 +31,15 @@ test("Graph Builder uses generated graph nodes and edges instead of replacing th
 });
 
 
+test("Gemini graphs receive a left-to-right layout with distinct upper and lower conditional lanes", () => {
+  assert.match(route, /graphDepthById/);
+  assert.match(route, /graphLaneById/);
+  assert.match(route, /edge\.label === "true" \? -1 : edge\.label === "false" \? 1/);
+  assert.match(route, /position: \{ x: 160 \+ depth \* 320, y: 330 \+ lane \* 220 \}/);
+  assert.match(builder, /function nodePosition\(node: WorkflowNode, index: number, seen = new Set<string>\)/);
+  assert.match(builder, /position: undefined/);
+});
+
 test("condition guidance accurately describes evaluation during test and live runs", () => {
   assert.doesNotMatch(builder, /Rules are stored in your draft\. They will not be evaluated until execution is implemented\./);
   assert.match(builder, /Conditions evaluate against previous-step outputs during tests and runs/);
