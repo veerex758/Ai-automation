@@ -7,7 +7,7 @@ import "./agents.css";
 type Agent = { id: string; name: string; description: string; instructions: string; model_provider: string; model_name: string; tool_ids: string[]; status: string; updated_at: string };
 type Activity = { id: string; agent_id: string; event_type: string; details: Record<string, unknown>; created_at: string };
 type Run = { id: string; status: string; input: string; output: string | null; error_code: string | null; created_at: string };
-type AgentForm = { name: string; description: string; instructions: string; model_provider: "gemini" | "openai"; model_name: string; tool_ids: string[]; status: "draft" | "ready" | "paused" };
+type AgentForm = { name: string; description: string; instructions: string; model_provider: "gemini"; model_name: string; tool_ids: string[]; status: "draft" | "ready" | "paused" };
 const blank: AgentForm = { name: "", description: "", instructions: "", model_provider: "gemini", model_name: "gemini-2.5-flash", tool_ids: [], status: "draft" };
 
 export default function AgentsPage() {
@@ -52,7 +52,7 @@ export default function AgentsPage() {
 
   function selectAgent(agent: Agent) {
     setSelected(agent); setCreating(false); setInput(""); setOutput("");
-    setForm({ name: agent.name, description: agent.description, instructions: agent.instructions, model_provider: agent.model_provider as "gemini" | "openai", model_name: agent.model_name, tool_ids: agent.tool_ids ?? [], status: agent.status as AgentForm["status"] });
+    setForm({ name: agent.name, description: agent.description, instructions: agent.instructions, model_provider: "gemini", model_name: agent.model_provider === "gemini" ? agent.model_name : "gemini-2.5-flash", tool_ids: agent.tool_ids ?? [], status: agent.status as AgentForm["status"] });
     void loadRuns(agent.id);
   }
 
@@ -138,7 +138,7 @@ export default function AgentsPage() {
               <label>Agent name<input value={form.name} maxLength={80} onChange={e => setForm({...form,name:e.target.value})} placeholder="Lead qualification"/></label>
               <label>Description<input value={form.description} maxLength={500} onChange={e => setForm({...form,description:e.target.value})} placeholder="What should this agent help with?"/></label>
               <label>Instructions<textarea rows={6} maxLength={12000} value={form.instructions} onChange={e => setForm({...form,instructions:e.target.value})} placeholder="Role, goals, constraints, tone, and when to ask a human."/></label>
-              <div className="agent-form-row"><label>Provider<select value={form.model_provider} onChange={e => setForm({...form,model_provider:e.target.value as AgentForm["model_provider"],model_name:e.target.value === "openai" ? "gpt-4o-mini" : "gemini-2.5-flash"})}><option value="gemini">Gemini</option><option value="openai">OpenAI</option></select></label><label>Model<input value={form.model_name} onChange={e => setForm({...form,model_name:e.target.value})}/></label></div>
+              <div className="agent-form-row"><label>AI provider<input value="Google Gemini" readOnly aria-readonly="true"/></label><label>Model<input value={form.model_name} onChange={e => setForm({...form,model_name:e.target.value})}/></label></div>
               <label>Lifecycle<select value={form.status} onChange={e => setForm({...form,status:e.target.value as AgentForm["status"]})}><option value="draft">Draft</option><option value="ready">Ready (model-only)</option><option value="paused">Paused</option></select></label>
               <label>Read-only tools<input value={form.tool_ids.join(", ")} onChange={e => setForm({...form,tool_ids:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)})} placeholder="workflow.list, workflow.get, integrations.list"/></label>
               <div className="agent-boundary"><strong>Execution boundary</strong><p>Ready agents can use the approved read-only workspace tools: workflow.list, workflow.get, and integrations.list. Tool calls are permission-checked and audited. External actions, writes, workflow activation, and message sending remain disabled.</p></div>
