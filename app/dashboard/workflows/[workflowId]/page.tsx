@@ -220,8 +220,10 @@ export default function WorkflowBuilderPage() {
 
   useEffect(() => {
     if (loading || fittedWorkflowId.current === workflowId) return;
-    const frame = window.requestAnimationFrame(() => fitGraphToView());
-    fittedWorkflowId.current = workflowId;
+    const frame = window.requestAnimationFrame(() => {
+      fitGraphToView();
+      fittedWorkflowId.current = workflowId;
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [loading, workflowId, fitGraphToView]);
 
@@ -682,7 +684,7 @@ export default function WorkflowBuilderPage() {
                 {definition.nodes.map((node, index) => {
                   const point = nodePosition(node, index);
                   const provider = registryCatalog.find((item) => item.id === node.registryNodeId);
-                  const providerName = provider?.name || node.registryNodeId || nodeMeta[node.type].label;
+                  const providerName = node.registryNodeId === "email" ? "Resend" : provider?.name || node.registryNodeId || nodeMeta[node.type].label;
                   return <div
                     key={node.id}
                     className={`graph-node graph-node-${node.type} ${selectedId === node.id ? "graph-node-selected" : ""} ${connectingFrom === node.id ? "graph-node-connecting" : ""}`}
