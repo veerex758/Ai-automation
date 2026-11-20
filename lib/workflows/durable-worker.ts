@@ -36,13 +36,16 @@ function client() {
   });
 }
 
-async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct): Promise<string> {
-  const { data: connection, error } = await db.from("google_connections")
-    .select("id,encrypted_credentials,expires_at,status,scopes")
-    .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
-    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct, connectionId?: string): Promise<string> {
+  let query = db.from("google_connections").select("id,encrypted_credentials,expires_at,status,scopes,last_test_status")
+    .eq("workspace_id", workspaceId).eq("provider", "google").eq("product", product)
+    .eq("status", "connected").eq("last_test_status", "passed");
+  if (connectionId) query = query.eq("id", connectionId);
+  const { data: connections, error } = await query.order("updated_at", { ascending: false }).limit(2);
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
-  if (!connection) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!connections?.length) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (connections.length > 1) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+  const connection = connections[0];
   const requiredScope = GOOGLE_PRODUCTS[product].scopes[0];
   if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
     throw new Error("GOOGLE_SCOPE_MISMATCH");
@@ -82,7 +85,10 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
   return updated.access_token;
 }
 
-async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>): Promise<WorkspaceCredentials> {
+async function workspaceCredentials(
+  db: DbClient, workspaceId: string, providers: Set<string>,
+  selectedConnectionIds: ReadonlyMap<string, string> = new Map(),
+): Promise<WorkspaceCredentials> {
   const credentials: WorkspaceCredentials = {};
   for (const provider of providers) {
     const googleProductByProvider: Record<string, GoogleProduct> = {
@@ -92,18 +98,24 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
     const googleProduct = googleProductByProvider[provider];
     if (provider === "rss_feed") { credentials[provider] = {}; continue; }
     if (googleProduct) {
-      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
+      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct, selectedConnectionIds.get(provider)) };
       continue;
     }
     if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
-    const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider).maybeSingle();
+    let integrationQuery = db.from("workspace_integrations")
+      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider)
+      .eq("status", "connected").eq("last_test_status", "passed");
+    const selectedConnectionId = selectedConnectionIds.get(provider);
+    if (selectedConnectionId) integrationQuery = integrationQuery.eq("id", selectedConnectionId);
+    const { data: integrations, error: integrationError } = await integrationQuery.order("created_at", { ascending: false }).limit(2);
     if (integrationError) throw new Error("WORKSPACE_INTEGRATION_LOOKUP_FAILED");
-    if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed") {
+    if (!integrations?.length) {
       throw new Error(provider === "resend" ? "EMAIL_CONNECTION_REQUIRED" : provider.toUpperCase() + "_CONNECTION_REQUIRED");
     }
+    if (integrations.length > 1) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+    const integration = integrations[0];
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
       .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw new Error("WORKSPACE_CREDENTIAL_LOOKUP_FAILED");
@@ -384,12 +396,23 @@ export async function runDurableWorker() {
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
         }
-        const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value) && value !== "rss_feed"));
-        const credentials = job.execution_mode === "live"
-          ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
-          : {};
-        executionSecrets = knownCredentialValues(credentials);
+        // A mutable, server-only credential map is populated one operation at
+        // a time. Connection IDs are resolved against this job's workspace,
+        // provider and verified status immediately before each live operation.
+        const credentials: WorkspaceCredentials = {};
         const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
+        context.resolveStepCredentials = async ({ nodeId, operationId, kind, connectionId }) => {
+          if (job.execution_mode !== "live") return;
+          const provider = providerPackLiveId({ nodeId, operationId, kind, connectionId } as RegisteredWorkflowStep)
+            ?? getWorkerProvider({ nodeId, operationId, kind });
+          if (!provider || provider === "rss_feed") return;
+          const resolved = await workspaceCredentials(
+            db, job.workspace_id, new Set([provider]),
+            connectionId ? new Map([[provider, connectionId]]) : new Map(),
+          );
+          Object.assign(credentials, resolved);
+          executionSecrets = knownCredentialValues(credentials);
+        };
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
