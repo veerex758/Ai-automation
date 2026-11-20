@@ -30,7 +30,8 @@ create index if not exists real_estate_leads_pipeline_due_idx
 create or replace function public.claim_due_real_estate_lead_pipeline(
   p_limit integer default 10,
   p_lease_seconds integer default 180,
-  p_lead_id uuid default null
+  p_lead_id uuid default null,
+  p_workspace_id uuid default null
 ) returns table(lead_id uuid, workspace_id uuid, lease_token uuid)
 language plpgsql security definer set search_path = ''
 as $$
@@ -56,6 +57,7 @@ begin
       and l.pipeline_next_attempt_at <= now()
       and l.pipeline_attempt_count < 20
       and (p_lead_id is null or l.id = p_lead_id)
+      and (p_workspace_id is null or l.workspace_id = p_workspace_id)
     order by l.pipeline_next_attempt_at asc, l.created_at asc, l.id asc
     for update skip locked
     limit p_limit
@@ -74,5 +76,5 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_due_real_estate_lead_pipeline(integer,integer,uuid) from public,anon,authenticated;
-grant execute on function public.claim_due_real_estate_lead_pipeline(integer,integer,uuid) to service_role;
+revoke all on function public.claim_due_real_estate_lead_pipeline(integer,integer,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.claim_due_real_estate_lead_pipeline(integer,integer,uuid,uuid) to service_role;
