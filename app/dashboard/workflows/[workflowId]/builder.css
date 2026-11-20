@@ -385,7 +385,7 @@
   border:2px solid #60A5FA; box-shadow:0 0 0 4px rgba(59,130,246,.18),0 12px 28px rgba(0,0,0,.34);
   transform:translateY(-1px);
 }
-.workflow-builder-main .graph-node-face:has(.graph-node-primitive-branch){background:#F1ECFF;border-color:#9A82DB}
+.workflow-builder-main .graph-node-condition .graph-node-face{background:#F1ECFF;border-color:#9A82DB}
 .workflow-builder-main .graph-node-brand{width:56px;height:56px;display:grid;place-items:center;pointer-events:none}
 .workflow-builder-main .graph-node-brand img{display:block;width:49px;height:49px;max-width:100%;max-height:100%;object-fit:contain}
 .workflow-builder-main .graph-node-primitive{
