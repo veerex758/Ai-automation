@@ -80,6 +80,7 @@ export default function GraphNodeBrand({
         alt={`${logoName} logo`}
         loading="eager"
         decoding="async"
+        draggable={false}
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
       />
