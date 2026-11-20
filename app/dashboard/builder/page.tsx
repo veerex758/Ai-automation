@@ -24,7 +24,7 @@ const googleProductForNode: Record<string, string> = {
   google_calendar: "calendar", google_docs: "docs", google_forms: "forms",
   youtube: "youtube", google_contacts: "contacts",
 };
-const providerForNode: Record<string, string> = { email: "resend", google_sheets: "sheets", http_request: "http" };
+const providerForNode: Record<string, string> = { email: "resend", google_sheets: "sheets", http_request: "http", twilio_sms: "twilio" };
 
 const starterSteps: BuilderStep[] = [
   { id: 1, kind: "Trigger", title: "New form submission", detail: "Starts when a form is submitted", settings: { event: "webhook" } },
