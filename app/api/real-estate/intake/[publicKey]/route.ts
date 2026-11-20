@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createRealEstateServiceClient, createFollowupRows } from "@/lib/real-estate/server";
 import { scoreRealEstateLead } from "@/lib/real-estate/lead-scoring";
+import { processRealEstateLeadPipeline } from "@/lib/real-estate/pipeline";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
+export const maxDuration=60;
 type Context={params:Promise<{publicKey:string}>};
 type Form={id:string;workspace_id:string;default_source:string;allowed_origins:string[];enabled:boolean};
 const isRecord=(v:unknown):v is Record<string,unknown>=>Boolean(v&&typeof v==="object"&&!Array.isArray(v));
@@ -77,7 +79,10 @@ export async function POST(request:NextRequest,context:Context){
   if(priorError)throw priorError;
   if(prior){
    await ensurePublicLeadSideEffects(db,prior,form.workspace_id,form.id);
-   return NextResponse.json({lead:{id:prior.id,full_name:prior.full_name,lead_score:prior.lead_score,lead_temperature:prior.lead_temperature,status:prior.status,created_at:prior.created_at},duplicate:true},{status:200,headers});
+   let pipeline={enabled:false,claimed:0,completed:0,blocked:0,failed:0};
+   try{pipeline=await processRealEstateLeadPipeline({db,workspaceId:form.workspace_id,leadId:prior.id});}
+   catch(error){console.error("Duplicate enquiry pipeline recovery failed",error);}
+   return NextResponse.json({lead:{id:prior.id,full_name:prior.full_name,lead_score:prior.lead_score,lead_temperature:prior.lead_temperature,status:prior.status,created_at:prior.created_at},duplicate:true,pipeline},{status:200,headers});
   }
   const budgetMin=body.budgetMin===undefined||body.budgetMin===null||body.budgetMin===""?null:Number(body.budgetMin);
   const budgetMax=body.budgetMax===undefined||body.budgetMax===null||body.budgetMax===""?null:Number(body.budgetMax);
@@ -110,6 +115,9 @@ export async function POST(request:NextRequest,context:Context){
   if(insertError?.code==="23505"){const {data:duplicate}=await db.from("real_estate_leads").select("id,full_name,lead_score,status").eq("workspace_id",form.workspace_id).eq("source",source).eq("source_event_id",sourceEventId).maybeSingle();if(duplicate)return NextResponse.json({lead:duplicate,duplicate:true},{status:200,headers});}
   if(insertError)throw insertError;
   const followupsCreated=await ensurePublicLeadSideEffects(db,lead,form.workspace_id,form.id);
-  return NextResponse.json({accepted:true,leadId:lead.id,score:lead.lead_score,temperature:lead.lead_temperature,followupsCreated},{status:201,headers});
+  let pipeline={enabled:false,claimed:0,completed:0,blocked:0,failed:0};
+  try{pipeline=await processRealEstateLeadPipeline({db,workspaceId:form.workspace_id,leadId:lead.id});}
+  catch(error){console.error("New enquiry pipeline queued for recovery",error);}
+  return NextResponse.json({accepted:true,leadId:lead.id,score:lead.lead_score,temperature:lead.lead_temperature,followupsCreated,pipeline},{status:201,headers});
  }catch(error){console.error("Public real-estate intake failed",error);return NextResponse.json({error:"We could not submit this enquiry. Please contact the agency directly."},{status:500});}
 }
