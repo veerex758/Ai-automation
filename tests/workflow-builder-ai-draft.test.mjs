@@ -5,6 +5,19 @@ import { readFileSync } from "node:fs";
 const page = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/page.tsx", import.meta.url), "utf8");
 const assistant = readFileSync(new URL("../app/dashboard/ai-assistant/page.tsx", import.meta.url), "utf8");
 
+
+test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-aware node dragging", () => {
+  assert.match(page, /function fitGraphToView\(\)/);
+  assert.match(page, /function zoomGraphTo\(/);
+  assert.match(page, /onWheel=\{handleGraphWheel\}/);
+  assert.match(page, /onPointerDown=\{beginGraphPan\}/);
+  assert.match(page, /onPointerMove=\{moveGraphPan\}/);
+  assert.match(page, /aria-label="Fit graph to view"/);
+  assert.match(page, /transform: `translate\(\$\{camera\.x\}px, \$\{camera\.y\}px\) scale\(\$\{camera\.scale\}\)`/);
+  assert.match(page, /\(event\.clientX - drag\.startX\) \/ camera\.scale/);
+  assert.match(page, /provider\?\.icon \|\| nodeMeta\[node\.type\]\.icon/);
+});
+
 test("workflow builder maps validated registry generation steps onto editable graph nodes", () => {
   assert.match(page, /registrySteps\?: Array</);
   assert.match(page, /const steps = Array\.isArray\(payload\.registrySteps\) \? payload\.registrySteps : \[\]/);
