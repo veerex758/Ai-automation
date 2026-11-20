@@ -11,7 +11,9 @@ test("Resend setup test email is fixed to the approved test sender and recipient
   assert.match(route, /from: TEST_SENDER/);
   assert.match(route, /to: \[TEST_RECIPIENT\]/);
   assert.match(route, /requestedConnectionId/);
-  assert.match(route, /JSON\.stringify\(\{ connectionId \}\)/);
+  assert.match(route, /body\?\.connectionId/);
+  assert.match(route, /eq\("id", requestedConnectionId\)/);
+  assert.match(page, /JSON\.stringify\(\{ connectionId \}\)/);
   assert.doesNotMatch(route, /body\.recipient|body\.to|body\.from/);
 });
 
