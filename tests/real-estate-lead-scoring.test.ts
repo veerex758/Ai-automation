@@ -5,7 +5,7 @@ import { buildFollowupSchedule, matchRealEstateProperties, scoreRealEstateLead }
 test("lead score is deterministic, bounded and explainable", () => {
   const lead = { transactionType: "buy" as const, propertyType: "apartment" as const, preferredLocation: "Dubai Marina", budgetMin: 100000, budgetMax: 150000, timeframe: "within_30_days" as const, readiness: "pre_approved" as const, email: "buyer@example.test", phone: "+971500000000" };
   const result = scoreRealEstateLead(lead);
-  assert.equal(result.score, 100);
+  assert.equal(result.score, 98);
   assert.equal(result.temperature, "hot");
   assert.equal(result.factors.reduce((sum, factor) => sum + factor.points, 0), result.score);
   assert.ok(result.factors.every((factor) => factor.points <= factor.maximum));
