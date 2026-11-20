@@ -1,5 +1,5 @@
 begin;
-select plan(16);
+select plan(18);
 
 -- The new save RPC is deliberately unavailable to browser roles.
 select ok(
