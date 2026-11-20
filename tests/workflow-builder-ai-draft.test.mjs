@@ -6,6 +6,7 @@ const page = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/page.
 const assistant = readFileSync(new URL("../app/dashboard/ai-assistant/page.tsx", import.meta.url), "utf8");
 const brand = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/graph-node-brand.tsx", import.meta.url), "utf8");
 const builderCss = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/builder.css", import.meta.url), "utf8");
+const brandAssets = readFileSync(new URL("../lib/integrations/official-brand-assets.ts", import.meta.url), "utf8");
 
 
 test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-aware node dragging", () => {
@@ -33,7 +34,7 @@ test("visual graph canvas supports zoom, fit-to-view, background pan, and scale-
 
 test("canvas nodes reuse official provider logos for major integrations and common provider catalogue entries", () => {
   for (const provider of ["gmail", "sheets", "google_sheets", "slack", "gemini", "postgresql", "mysql", "mongodb", "supabase", "resend"]) {
-    assert.ok(brand.includes('"' + provider + '"'), "missing brand mapping: " + provider);
+    assert.ok(brandAssets.includes('"' + provider + '"'), "missing brand mapping: " + provider);
   }
   assert.match(brand, /cdn\.simpleicons\.org/);
   assert.match(brand, /onError=\{\(\) => setFailed\(true\)\}/);
