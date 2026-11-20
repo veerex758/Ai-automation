@@ -76,6 +76,11 @@ export async function POST(request: Request) {
       .eq("id", connectionId).eq("workspace_id", workspace.id).eq("provider", "google").maybeSingle();
     if (lookupError) throw lookupError;
     if (!connection) return NextResponse.json({ error: "Google connection not found in this workspace." }, { status: 404, headers });
+    // Fail closed while this account is being re-verified.
+    const { error: invalidateError } = await admin.from("google_connections").update({
+      status: "needs_reauth", last_tested_at: null, last_test_status: null,
+    }).eq("id", connection.id).eq("workspace_id", workspace.id);
+    if (invalidateError) throw invalidateError;
     const product = connection.product as keyof typeof GOOGLE_PRODUCTS;
     const requiredScope = GOOGLE_PRODUCTS[product]?.scopes?.[0];
     if (!requiredScope || !Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope) ||
