@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getGoogleOAuthConfig, GOOGLE_PRODUCTS, isGoogleProduct } from "@/lib/integrations/google-oauth";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -43,6 +44,21 @@ export async function GET(request: NextRequest) {
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return NextResponse.json({ error: "Only workspace owners and admins can connect Google accounts." }, { status: 403 });
     }
+    const connectionId = request.nextUrl.searchParams.get("connectionId") ?? undefined;
+    if (connectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
+      return NextResponse.json({ error: "The Google connection ID is invalid." }, { status: 400 });
+    }
+    if (connectionId) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
+      if (!supabaseUrl || !serviceKey) throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
+      const admin = createSupabaseClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data: selected, error: lookupError } = await admin.from("google_connections").select("id")
+        .eq("id", connectionId).eq("workspace_id", workspace.id).eq("provider", "google").eq("product", productValue).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (!selected) return NextResponse.json({ error: "The selected Google account was not found in this workspace." }, { status: 404 });
+    }
     const config = getGoogleOAuthConfig();
     const requestOrigin = request.nextUrl.origin;
     const redirectOrigin = new URL(config.redirectUri).origin;
@@ -80,6 +96,7 @@ export async function GET(request: NextRequest) {
     response.cookies.set("aivanta_google_oauth_product", productValue, cookieOptions);
     response.cookies.set("aivanta_google_oauth_user", user.id, cookieOptions);
     response.cookies.set("aivanta_google_oauth_node", nodeId, cookieOptions);
+    response.cookies.set("aivanta_google_oauth_connection", connectionId ?? "", cookieOptions);
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch {
