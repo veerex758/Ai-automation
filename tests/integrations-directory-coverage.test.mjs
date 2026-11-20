@@ -58,7 +58,7 @@ test("durable live execution requires an explicitly selected, verified account i
   assert.match(workerSource, /selectedConnectionIds\.get\(provider\)/);
   assert.match(workerSource, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
   assert.match(workerSource, /eq\("workspace_id", workspaceId\)/);
-  assert.match(directorySource, /record\.last_test_status === "passed"/);
+  assert.match(directorySource, /item\.last_test_status === "passed"/);
   assert.match(directorySource, /liveExecutionEnabled && liveProvidersEnabled\.includes\(providerPermissionKey\)/);
   assert.match(directorySource, /state === "connected" && livePermissionEnabled/);
 });
