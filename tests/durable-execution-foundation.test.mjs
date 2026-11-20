@@ -120,7 +120,7 @@ test("workflow run panel dispatches live runs through the durable queue and poll
   assert.match(runPanel, /idempotencyKey\.current/);
 });
 
-test("dispatch validates registered definitions and guards legacy live email", () => {
+test("dispatch validates registered definitions and blocks legacy live runs without node connection IDs", () => {
   assert.match(dispatch, /isRegistryDefinition/);
   assert.match(dispatch, /findOperation/);
   assert.match(dispatch, /validateDurableLiveSteps/);
@@ -129,8 +129,9 @@ test("dispatch validates registered definitions and guards legacy live email", (
   assert.match(workerService, /LIVE_VOICE_RECIPIENT_NOT_ALLOWED/);
   assert.doesNotMatch(dispatch, /isLiveRegistryOperationAllowed/);
   assert.doesNotMatch(dispatch, /length > 4/);
-  assert.match(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.match(dispatch, /Durable legacy live execution currently supports one manual-trigger Resend email action/);
+  assert.match(dispatch, /REGISTRY_WORKFLOW_REQUIRED/);
+  assert.doesNotMatch(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+  assert.doesNotMatch(dispatch, /Durable legacy live execution/);
 });
 
 test("authenticated dispatch wakes the server-side durable worker after queuing", () => {
