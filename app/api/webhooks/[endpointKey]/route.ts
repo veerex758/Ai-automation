@@ -219,7 +219,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         }
         const { error: receiptError } = await db.from("webhook_event_receipts").update({
           status: "dispatched", dispatched_at: new Date().toISOString(), failure_code: null,
-        }).eq("id", claim.receipt_id);
+        }).eq("id", claim.receipt_id).eq("endpoint_id", endpoint.id);
         if (receiptError) throw new Error("WEBHOOK_RECEIPT_UPDATE_FAILED");
         return NextResponse.json({ accepted: true, queued: true, duplicate: true, jobId: queued.job_id, runId: queued.run_id, mode: DURABLE_WEBHOOK_QUEUE_MODE }, { status: 202 });
       }
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
         p_workspace_id: workflow.workspace_id, p_workflow_id: workflow.id,
         p_workflow_version: workflow.version, p_created_by: null,
         p_idempotency_key: "webhook:" + endpoint.id + ":" + eventId,
-        p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id },
+        p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id, webhookPayloadSha256: payloadSha256 },
         p_max_attempts: DURABLE_WEBHOOK_QUEUE_MODE === "live" ? 1 : 5,
         p_execution_mode: DURABLE_WEBHOOK_QUEUE_MODE,
       });
@@ -263,7 +263,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       await db.from("webhook_event_receipts").update({
         status: "failed",
         failure_code: "WEBHOOK_DISPATCH_FAILED",
-      }).eq("id", receipt.id);
+      }).eq("id", receipt.id).eq("endpoint_id", endpoint.id);
     }
     return jsonError("Webhook could not be dispatched. Check workflow run history before retrying.", 500);
   }
