@@ -78,9 +78,9 @@ test("a reloaded registry graph remains valid under the legacy node-type setting
 });
 
 test("Graph Builder derives registry execution steps from the saved graph before persistence", () => {
-  assert.match(builder, /buildRegistrySteps\(definition\)/);
+  assert.match(builder, /buildRegistrySteps\(definitionToSave\)/);
   assert.match(builder, /registrySteps/);
-  assert.match(builder, /registrySteps: buildRegistrySteps\(definition\)/);
+  assert.match(builder, /registrySteps: buildRegistrySteps\(definitionToSave\)/);
 });
 
 test("workflow reload exposes the exact saved version and the builder updates it after save", () => {
