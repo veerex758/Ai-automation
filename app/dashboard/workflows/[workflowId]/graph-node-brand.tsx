@@ -380,7 +380,7 @@ const BRAND_TINTS: Record<string, string> = {
 
 function PrimitiveMark({ providerId, nodeType, iconName }: { providerId: string; nodeType: string; iconName?: string }) {
   const id = providerId || iconName || "";
-  const tint = id === "if" || id === "switch" ? "branch" : nodeType;
+  const tint = id === "if" || id === "switch" || nodeType === "condition" ? "branch" : nodeType;
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   let drawing: import("react").ReactNode;
   if (["webhooks", "webhook_trigger", "webhook"].includes(id)) {
