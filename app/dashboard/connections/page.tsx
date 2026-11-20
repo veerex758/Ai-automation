@@ -200,7 +200,7 @@ function WorkspaceIntegrationManager() {
   }
 
   async function testProvider(provider: WorkspaceProvider, connectionId: string) {
-    setTestingProvider(provider);
+    setTestingProvider(connectionId);
     setError("");
     setNotice("");
     try {
