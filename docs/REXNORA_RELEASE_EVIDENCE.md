@@ -76,3 +76,63 @@ Durable execution, cancellation, webhook queueing, agent boundaries, provider in
 ## Update protocol
 
 For every update, record the exact branch SHA, workflow run IDs and conclusions, preview URL/state, authenticated staging evidence, provider evidence, blockers and explicit stage exit decision. Never promote an older SHA's result to a newer commit.
+
+
+---
+
+## 2026-11-20 verification refresh
+
+This section supersedes earlier status statements above where they conflict with the live GitHub/Vercel/Supabase inspection below. The authoritative delivery sequence remains `docs/REXNORA_99_READINESS_ROADMAP.md`.
+
+### Exact repository and PR state
+
+- Repository: `veerex758/Ai-automation`.
+- `main` SHA at inspection: `92716c5546117ba337717c0d83c7a1719355c88f`.
+- PR #207 branch: `fix/product-core-ai-draft-canvas`.
+- PR #207 code head inspected: `2f70263b110627c7ea396dc3c0c06dca73ea89aa`.
+- GitHub compare: 262 commits ahead of `main`, zero behind; merge base equals the inspected `main` SHA.
+- PR remains open and GitHub reports it mergeable. This is not merge authorization.
+
+### Exact-head automation
+
+The following GitHub Actions runs are associated with the inspected PR head and all completed successfully:
+
+| Workflow | Run ID | Result |
+|---|---:|---|
+| CI / verify | 44627000066 | Passed |
+| Real MySQL and MongoDB worker adapters | 44626999641 | Passed |
+| Supabase migration replay | 44626999678 | Passed |
+
+These are clean migration replay and database-service integration checks. They do not establish that the connected Supabase project's migration history is fully reconciled or that authenticated staging acceptance has passed.
+
+### Preview deployment
+
+- Vercel project: `ai-automation` (`prj_zsRiRDLRTS22u3ygmuF1hdu7IMmm`).
+- Deployment: `dpl_9yTqBPVo35p68rU73JdbgmecknFM`.
+- Commit: `2f70263b110627c7ea396dc3c0c06dca73ea89aa`.
+- State: **READY**.
+- Preview: https://ai-automation-51qymgg0x-veerex-org.vercel.app
+- Git alias: https://ai-automation-git-fix-product-core-ai-draft-canvas-veerex-org.vercel.app
+
+READY confirms the deployment completed; it does not prove signed-in UI behavior or provider credentials are valid.
+
+### Connected Supabase migration-history audit (read-only)
+
+- Connected project: `uthqrszdtzmicspryxbw` (`supabase-apricot-paddle`), status `ACTIVE_HEALTHY`.
+- The PR's migrations `20261114072354`, `20261114072358`, `20261114072907`, `20261114073109` and `20261114074228` are recorded in the connected project's migration history.
+- The newer PR migration `20261117190000_rexnora_dry_run_dead_letter_recovery.sql` is **not recorded** in that project's migration history.
+- Read-only catalog checks found the cancellation and execution-mode columns, error-event and rate-limit tables, and the expected service-role-only cancellation/dispatch/finalization RPC signatures. The new `execution_dead_letter_recoveries` table is absent, consistent with the unrecorded migration.
+- Relevant RPC execute privileges observed: `service_role` can execute; `authenticated` and `anon` cannot.
+- No migration was applied or modified during this inspection. Do not blindly apply the missing migration; first confirm the preview's intended database/environment and use the authorized migration/release procedure.
+
+### Stage 1 exit decision
+
+**Still not passed.** The current code head has passing CI, database integration, clean migration replay and a READY preview. Remaining required evidence:
+
+1. Sign in to the exact preview and capture prompt → Gemini → valid graph generation.
+2. Edit the generated graph, save it, reload it, and confirm the same workflow version and graph structure.
+3. Save/reload a conditional graph and demonstrate the expected branch in a controlled test.
+4. Capture runtime evidence that Gemini was the provider used.
+5. Confirm generation alone does not activate or execute the workflow.
+
+No merge, production deployment, production migration or live external side effect was performed. Stage 2 and later gates remain separate and are not certified by this refresh.
