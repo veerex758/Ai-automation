@@ -263,7 +263,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       await db.from("webhook_event_receipts").update({
         status: "failed",
         failure_code: "WEBHOOK_DISPATCH_FAILED",
-      }).eq("id", receipt.id).eq("endpoint_id", endpoint.id);
+      }).eq("id", receipt.id).eq("endpoint_id", receipt.endpoint_id);
     }
     return jsonError("Webhook could not be dispatched. Check workflow run history before retrying.", 500);
   }
