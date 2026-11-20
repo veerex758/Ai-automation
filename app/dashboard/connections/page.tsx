@@ -205,6 +205,9 @@ function WorkspaceIntegrationManager() {
       setIntegrations(current => current.map(item => item.id === connectionId ? { ...item, status: payload.senderDomainVerified ? "connected" : "needs_attention", last_test_status: "passed" } : item));
       setNotice(payload.message ?? "Resend connection checked. No email was sent.");
     } catch (reason) {
+      setIntegrations(current => current.map(item => item.id === connectionId
+        ? { ...item, status: "needs_attention", last_test_status: "failed" }
+        : item));
       setError(reason instanceof Error ? reason.message : "Could not test the Resend connection.");
     } finally {
       setTestingResend(false);
