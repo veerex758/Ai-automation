@@ -50,6 +50,7 @@ export default function WorkflowBuilderPage() {
   const graphViewportRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ id: string; pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const panState = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const fittedWorkflowId = useRef<string | null>(null);
   const [camera, setCamera] = useState({ x: 24, y: 24, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
@@ -114,7 +115,7 @@ export default function WorkflowBuilderPage() {
     return { x: 170 + col * 300, y: 90 + Math.floor(index / 3) * 210 };
   }
 
-  function fitGraphToView() {
+  const fitGraphToView = useCallback(() => {
     const viewport = graphViewportRef.current;
     if (!viewport) return;
     const bounds = viewport.getBoundingClientRect();
@@ -124,7 +125,7 @@ export default function WorkflowBuilderPage() {
       y: (bounds.height - graphHeight * scale) / 2,
       scale,
     });
-  }
+  }, [graphWidth, graphHeight]);
 
   function zoomGraphTo(requestedScale: number, clientX?: number, clientY?: number) {
     const viewport = graphViewportRef.current;
@@ -179,10 +180,11 @@ export default function WorkflowBuilderPage() {
   }
 
   useEffect(() => {
-    if (loading) return;
-    const frame = window.requestAnimationFrame(fitGraphToView);
+    if (loading || fittedWorkflowId.current === workflowId) return;
+    const frame = window.requestAnimationFrame(() => fitGraphToView());
+    fittedWorkflowId.current = workflowId;
     return () => window.cancelAnimationFrame(frame);
-  }, [loading, workflowId]);
+  }, [loading, workflowId, fitGraphToView]);
 
   function updateNodePosition(id: string, x: number, y: number) {
     draftRevision.current += 1;
