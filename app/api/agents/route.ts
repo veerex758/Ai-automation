@@ -11,7 +11,8 @@ function cleanAgent(input: unknown) {
  const name=typeof v.name==="string"?v.name.trim():"";
  const description=typeof v.description==="string"?v.description.trim():"";
  const instructions=typeof v.instructions==="string"?v.instructions.trim():"";
- const provider=v.model_provider==="openai"?"openai":"gemini";
+ const provider="gemini";
+ if(v.model_provider!==undefined&&v.model_provider!=="gemini")return {error:"Rexnora agents currently support Gemini only."};
  const model=typeof v.model_name==="string"?v.model_name.trim():(provider==="openai"?"gpt-4o-mini":"gemini-2.5-flash");
  const tools=Array.isArray(v.tool_ids)?v.tool_ids:[];
  if(name.length<1||name.length>80)return {error:"Agent name must be 1–80 characters."};
