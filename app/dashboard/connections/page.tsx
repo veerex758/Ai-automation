@@ -146,6 +146,7 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
 function WorkspaceIntegrationManager() {
   const [integrations, setIntegrations] = useState<WorkspaceIntegration[]>([]);
   const [provider, setProvider] = useState<WorkspaceProvider>("gemini");
+  const [focusedProvider, setFocusedProvider] = useState<WorkspaceProvider | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -160,6 +161,7 @@ function WorkspaceIntegrationManager() {
     const requested = new URLSearchParams(window.location.search).get("provider");
     if (requested && Object.prototype.hasOwnProperty.call(providerFields, requested)) {
       setProvider(requested as WorkspaceProvider);
+      setFocusedProvider(requested as WorkspaceProvider);
       setValues({});
     }
   }, []);
@@ -253,8 +255,8 @@ function WorkspaceIntegrationManager() {
   return (
     <section className="workspace-integration-manager">
       <div className="connections-list-heading">
-        <div><h2>Workflow connections</h2><p>Save provider credentials to this workspace. They are encrypted at rest and only decrypted by the server during an authorized run.</p></div>
-        <span>{integrations.length} saved</span>
+        <div><h2>{focusedProvider ? `Connect ${providerFields[focusedProvider].label}` : "Workflow connections"}</h2><p>{focusedProvider ? "Create or manage this provider connection for your workspace. Credentials are encrypted at rest and only decrypted by the server during an authorized run." : "Save provider credentials to this workspace. They are encrypted at rest and only decrypted by the server during an authorized run."}</p></div>
+        <span>{integrations.filter(item => !focusedProvider || item.provider === focusedProvider).length} saved</span>
       </div>
       <p className="connections-footnote">Google connections use Rexnora-managed OAuth. For other OAuth-based providers, this manager currently accepts a manually issued access token; provider-specific consent screens and automatic token refresh are not yet available. A token must pass its read-only connection test before live execution is permitted.</p>
       {notice && <p className="connections-notice" role="status">{notice}</p>}
@@ -262,9 +264,9 @@ function WorkspaceIntegrationManager() {
       <div className="workspace-integration-layout">
         <div className="workspace-integration-saved">
           <h3>Saved connections</h3>
-          {loading ? <p className="connections-empty">Loading connections…</p> : integrations.length === 0
-            ? <p className="connections-empty">No workflow provider credentials saved yet.</p>
-            : integrations.map(item => (
+          {loading ? <p className="connections-empty">Loading connections…</p> : integrations.filter(item => !focusedProvider || item.provider === focusedProvider).length === 0
+            ? <p className="connections-empty">No saved connection for {focusedProvider ? providerFields[focusedProvider].label : "this workspace"} yet.</p>
+            : integrations.filter(item => !focusedProvider || item.provider === focusedProvider).map(item => (
               <div className="workspace-integration-saved-row" key={item.id}>
                 <div><strong>{item.display_name}</strong><span>{item.provider} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
                 <div className="workspace-integration-row-actions"><span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>{item.provider !== "resend" && <button type="button" onClick={() => testProvider(item.provider)} disabled={testingProvider !== null}>{testingProvider === item.provider ? "Testing…" : "Test connection"}</button>}{item.provider === "resend" && <><button type="button" onClick={testResend} disabled={testingResend || sendingResendTest}>{testingResend ? "Testing…" : "Test connection"}</button><button type="button" onClick={sendResendTestEmail} disabled={testingResend || sendingResendTest}>{sendingResendTest ? "Sending test…" : "Send test email"}</button></>}</div>
@@ -272,11 +274,13 @@ function WorkspaceIntegrationManager() {
             ))}
         </div>
         <form className="workspace-integration-form" onSubmit={save}>
-          <h3>Add or update a connection</h3>
-          <label htmlFor="workspace-provider">Provider</label>
-          <select id="workspace-provider" value={provider} onChange={event => { setProvider(event.target.value as WorkspaceProvider); setValues({}); }}>
-            {Object.entries(providerFields).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
-          </select>
+          <h3>{focusedProvider ? "Connection settings" : "Add or update a connection"}</h3>
+          {!focusedProvider && <>
+            <label htmlFor="workspace-provider">Provider</label>
+            <select id="workspace-provider" value={provider} onChange={event => { setProvider(event.target.value as WorkspaceProvider); setValues({}); }}>
+              {Object.entries(providerFields).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
+            </select>
+          </>}
           {providerFields[provider].fields.map(field => (
             <label className="workspace-secret-field" key={field.name}>
               {field.label}
@@ -300,6 +304,7 @@ function WorkspaceIntegrationManager() {
 export default function ConnectionsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [workflowId, setWorkflowId] = useState("");
+  const [focusedConnectionPage, setFocusedConnectionPage] = useState(false);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [loading, setLoading] = useState(true);
@@ -308,6 +313,7 @@ export default function ConnectionsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedWorkflow = params.get("workflowId");
+    setFocusedConnectionPage(Boolean(params.get("provider")));
     let rememberedWorkflow = "";
     try { rememberedWorkflow = window.sessionStorage.getItem("aivanta-return-workflow") || ""; } catch { /* Continue without remembered target. */ }
     const nextWorkflow = requestedWorkflow && /^[0-9a-f-]{36}$/i.test(requestedWorkflow) ? requestedWorkflow : rememberedWorkflow;
@@ -332,15 +338,16 @@ export default function ConnectionsPage() {
     <main className="app-shell connections-shell"><DashboardSidebar activePage="connections" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Connected accounts</strong></div></header><div className="dashboard-content"><div className="connections-page">
       <section className="connections-hero">
         <div className="connections-eyebrow">YOUR WORKSPACE, CONNECTED</div>
-        <h1>Connected accounts.</h1>
+        <h1>{focusedConnectionPage ? "Connect your account." : "Connected accounts."}</h1>
         {workflowId && <Link className="connections-return" href={`/dashboard/workflows/${workflowId}`}>Return to your workflow <span aria-hidden="true">→</span></Link>}
-        <p>Authorize services using their official sign-in screens. Rexnora never asks for your provider password.</p>
+        {focusedConnectionPage && <Link className="connections-return" href="/dashboard/connections">All connections <span aria-hidden="true">→</span></Link>}
+        <p>{focusedConnectionPage ? "Set up the account required by this workflow node. The connection is saved to your workspace and can be reused by other nodes for this provider." : "Authorize services using their official sign-in screens. Rexnora never asks for your provider password."}</p>
       </section>
 
       {notice && <p className="connections-notice" role="status">{notice}</p>}
       {error && <div className="connections-error" role="alert"><strong>Connections unavailable</strong><p>{error}</p><small>Diagnostic: {errorCode || "CONNECTIONS_UNAVAILABLE"}</small>{diagnosticHelp[errorCode] && <p>{diagnosticHelp[errorCode]}</p>}<button type="button" onClick={() => window.location.reload()}>Try again</button></div>}
 
-      <section className="connections-grid" aria-label="Available integrations">
+      {!focusedConnectionPage && <section className="connections-grid" aria-label="Available integrations">
         <article className="connection-card">
           <div className="connection-icon google-icon" aria-hidden="true">G</div>
           <div className="connection-card-copy"><h2>Gmail</h2><p>Authorize access to read messages. Sending email is not enabled by this permission.</p></div>
@@ -359,11 +366,11 @@ export default function ConnectionsPage() {
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Forms</h2><p>Read form titles and question metadata. No response or form edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=forms">Connect Forms <span aria-hidden="true">↗</span></a></article>
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">▶</div><div className="connection-card-copy"><h2>YouTube</h2><p>Search videos and read channel metadata. No publishing actions.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=youtube">Connect YouTube <span aria-hidden="true">↗</span></a></article>
         <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Contacts</h2><p>Read contact names, email addresses and phone numbers.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=contacts">Connect Contacts <span aria-hidden="true">↗</span></a></article>
-      </section>
+      </section>}
 
       <WorkspaceIntegrationManager />
 
-      <section className="connections-list">
+      {!focusedConnectionPage && <section className="connections-list">
         <div className="connections-list-heading"><div><h2>Connected accounts</h2><p>Only account details and permission names are shown here. Tokens never reach the browser.</p></div><span>{connections.length} {connections.length === 1 ? "connection" : "connections"}</span></div>
         {loading ? <p className="connections-empty">Loading connections…</p> : connections.length === 0 ? <p className="connections-empty">No Google accounts connected yet.</p> : connections.map(connection => (
           <article className="connection-row" key={connection.id}>
@@ -372,7 +379,7 @@ export default function ConnectionsPage() {
             <span className={`connection-status status-${connection.status}`}>{connection.status.replace("_", " ")}</span>
           </article>
         ))}
-      </section>
+      </section>}
       <p className="connections-footnote">Authorization is separate from workflow execution. A connected account will not trigger a workflow by itself.</p>
     </div></div></section></main>
   );
