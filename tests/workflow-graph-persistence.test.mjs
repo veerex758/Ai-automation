@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { validateDefinition } = require("../lib/workflows/validate-definition.cjs");
 
 const route = readFileSync(new URL("../app/api/workflows/[workflowId]/definition/route.ts", import.meta.url), "utf8");
 const createRoute = readFileSync(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
@@ -39,6 +43,27 @@ test("saved graph GET round-trips positions, registry node metadata, and conditi
 test("registry metadata never contaminates the node-type-specific legacy settings schema", () => {
   assert.doesNotMatch(route, /settings:\s*\{\s*\.\.\.node\.settings,\s*provider:\s*step\.nodeId,\s*operation:\s*step\.operationId\s*\}/);
   assert.match(route, /registryNodeId: step\.nodeId,[\s\S]*?registryOperationId: step\.operationId,[\s\S]*?registryInput: step\.input/);
+});
+
+test("a reloaded registry graph remains valid under the legacy node-type settings schema", () => {
+  const definition = {
+    version: 1,
+    nodes: [
+      { id: "trigger", type: "trigger", title: "Webhook", description: "Receive an event.", settings: { event: "webhook" }, registryNodeId: "webhooks", registryOperationId: "receive_event", registryInput: { eventId: "evt_1" } },
+      { id: "condition", type: "condition", title: "Qualified?", description: "Check the lead.", settings: { field: "{{trigger.payload.qualified}}", operator: "equals", value: "true" }, registryNodeId: "if", registryOperationId: "evaluate", registryInput: { value: "{{trigger.payload.qualified}}", operator: "equals", compareTo: "true" } },
+      { id: "yes", type: "action", title: "Approved path", description: "Continue.", settings: { provider: "internal", operation: "create_task" }, registryNodeId: "slack", registryOperationId: "post_message", registryInput: { message: "Qualified lead" } },
+      { id: "no", type: "action", title: "Rejected path", description: "Stop.", settings: { provider: "internal", operation: "create_task" }, registryNodeId: "slack", registryOperationId: "post_message", registryInput: { message: "Needs review" } },
+    ],
+    edges: [
+      { id: "e1", source: "trigger", target: "condition", label: "next" },
+      { id: "e2", source: "condition", target: "yes", label: "true" },
+      { id: "e3", source: "condition", target: "no", label: "false" },
+    ],
+  };
+  const validated = validateDefinition(definition);
+  assert.ok(validated.definition, validated.error);
+  assert.deepEqual(validated.definition.nodes[0].settings, { event: "webhook" });
+  assert.deepEqual(validated.definition.nodes[1].settings, { field: "{{trigger.payload.qualified}}", operator: "equals", value: "true" });
 });
 
 test("Graph Builder derives registry execution steps from the saved graph before persistence", () => {
