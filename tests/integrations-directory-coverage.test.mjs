@@ -119,6 +119,9 @@ test("every authenticated registry node opens its own provider or Google product
 
 test("workflow node configuration stores a connection ID, never a credential, and exposes a provider-filtered selector", () => {
   assert.ok(builderSource.includes("Workspace connection"));
+  assert.match(builderSource, /function getRegistryConnectionIssues/);
+  assert.match(builderSource, /node\.auth\.type === "none" \|\| step\.connectionId/);
+  assert.match(builderSource, />Review<\/button>/);
   assert.ok(builderSource.includes("connectionId: event.target.value || undefined"));
   assert.ok(builderSource.includes("compatibleConnections"));
   assert.match(builderSource, /workspaceConnections\.filter\(item => item\.provider === provider\)/);
