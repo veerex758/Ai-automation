@@ -89,6 +89,7 @@ export async function POST(request: NextRequest, context: Context) {
     .select("id,workspace_id,name,instructions,model_provider,model_name,status,permissions,tool_ids")
     .eq("id", agentId).single();
   if (agentError || !agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
+  if (agent.model_provider !== "gemini") return NextResponse.json({ error: "Rexnora agents currently run on Gemini only. Update this agent configuration before running." }, { status: 409, headers });
   if (agent.status !== "ready") return NextResponse.json({ error: "Set this agent to Ready before running it." }, { status: 409, headers });
   if (!agent.instructions?.trim()) return NextResponse.json({ error: "Add agent instructions before running." }, { status: 422, headers });
 
