@@ -46,12 +46,6 @@ function serviceClient() {
   return createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 }
 
-const googleProviderByNode: Record<string, string> = {
-  gmail: "gmail", sheets: "sheets", google_sheets: "sheets", google_drive: "drive",
-  google_calendar: "calendar", google_docs: "docs", google_forms: "forms",
-  youtube: "youtube", google_contacts: "contacts",
-};
-
 async function getAuthenticatedClient() {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
