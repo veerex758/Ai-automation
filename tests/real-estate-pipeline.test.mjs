@@ -7,7 +7,8 @@ const pipeline = read("../lib/real-estate/pipeline.ts");
 const migration = read("../supabase/migrations/20261120104000_real_estate_pipeline_delivery.sql");
 const intake = read("../app/api/real-estate/intake/[publicKey]/route.ts");
 const manualLead = read("../app/api/real-estate/leads/route.ts");
-const followups = read("../app/api/cron/real-estate-followups/route.ts");
+const followups = read("../lib/real-estate/followups.ts");
+const followupsRoute = read("../app/api/cron/real-estate-followups/route.ts");
 const pipelineWorker = read("../app/api/cron/real-estate-pipeline/route.ts");
 const emailNode = read("../nodes/email.ts");
 
@@ -69,7 +70,8 @@ test("scheduled workers are authenticated and remain behind explicit live-execut
   assert.match(pipelineWorker, /timingSafeEqual/);
   assert.match(pipelineWorker, /REAL_ESTATE_PIPELINE_ENABLED/);
   assert.match(pipelineWorker, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-  assert.match(followups, /timingSafeEqual/);
+  assert.match(followupsRoute, /timingSafeEqual/);
+  assert.match(followupsRoute, /processDueRealEstateFollowups/);
   assert.match(followups, /REAL_ESTATE_FOLLOWUPS_ENABLED/);
   assert.match(followups, /AIVANTA_LIVE_EXECUTION_ENABLED/);
 });
