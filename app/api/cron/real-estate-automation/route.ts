@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createRealEstateServiceClient } from "@/lib/real-estate/server";
 import { processRealEstateLeadPipeline } from "@/lib/real-estate/pipeline";
-import { processDueRealEstateFollowups } from "@/app/api/cron/real-estate-followups/route";
+import { processDueRealEstateFollowups } from "@/lib/real-estate/followups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
