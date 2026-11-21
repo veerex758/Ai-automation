@@ -5,8 +5,9 @@ import { buildFollowupSchedule } from "@/lib/real-estate/lead-scoring";
 
 export function createRealEstateServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+  // Empty Vercel placeholders must not mask the integration-provided server key.
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error("REAL_ESTATE_SERVICE_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
@@ -19,7 +20,7 @@ export function createFollowupRows(lead: {
   id: string; workspace_id: string; full_name: string; email: string | null;
   preferred_location: string | null; property_type: string; transaction_type: string;
 }, createdAt: Date) {
-  const firstName = lead.full_name.trim().split(/\s+/)[0] || "there";
+  const firstName = lead.full_name.trim().split(/\\s+/)[0] || "there";
   const property = lead.property_type !== "unknown" ? lead.property_type : "property";
   const location = lead.preferred_location ? " in " + lead.preferred_location : "";
   const action = lead.transaction_type === "rent" ? "rent" : lead.transaction_type === "sell" ? "sell" : "buy";
