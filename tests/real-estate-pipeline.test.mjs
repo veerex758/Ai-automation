@@ -7,10 +7,18 @@ const pipeline = read("../lib/real-estate/pipeline.ts");
 const migration = read("../supabase/migrations/20261120104000_real_estate_pipeline_delivery.sql");
 const intake = read("../app/api/real-estate/intake/[publicKey]/route.ts");
 const manualLead = read("../app/api/real-estate/leads/route.ts");
+const serviceClient = read("../lib/real-estate/server.ts");
 const followups = read("../lib/real-estate/followups.ts");
 const followupsRoute = read("../app/api/cron/real-estate-followups/route.ts");
 const pipelineWorker = read("../app/api/cron/real-estate-pipeline/route.ts");
 const emailNode = read("../nodes/email.ts");
+
+test("real-estate service client skips empty Supabase placeholders and falls back to integration keys", () => {
+  assert.match(
+    serviceClient,
+    /const key = process\.env\.SUPABASE_SECRET_KEY \|\| process\.env\.SUPABASE_SERVICE_ROLE_KEY \|\|\s*process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY \|\| process\.env\.CODED_SUPABASE_SECRET_KEY;/
+  );
+});
 
 test("lead pipeline requires a tested workspace connection and an operation-specific approval", () => {
   assert.match(pipeline, /status !== "connected"/);
