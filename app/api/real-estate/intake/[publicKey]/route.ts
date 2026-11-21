@@ -8,6 +8,7 @@ export const dynamic="force-dynamic";
 export const maxDuration=60;
 type Context={params:Promise<{publicKey:string}>};
 type Form={id:string;workspace_id:string;default_source:string;allowed_origins:string[];enabled:boolean};
+type IntakeLead = { id: string; workspace_id: string; source: string; full_name: string; email: string | null; preferred_location: string | null; property_type: string; transaction_type: string; lead_score: number; created_at: string; consent_to_contact: boolean; contact_preference: string };
 const isRecord=(v:unknown):v is Record<string,unknown>=>Boolean(v&&typeof v==="object"&&!Array.isArray(v));
 function originHeaders(origin:string|null,form:Form){
  const h:Record<string,string>={"Cache-Control":"no-store","Vary":"Origin"};
@@ -23,7 +24,7 @@ async function findForm(key:string):Promise<{db:ReturnType<typeof createRealEsta
 
 async function ensurePublicLeadSideEffects(
  db:ReturnType<typeof createRealEstateServiceClient>,
- lead:Record<string,any>,
+ lead:IntakeLead,
  workspaceId:string,
  formId:string,
 ){
