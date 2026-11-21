@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createRealEstateServiceClient, createFollowupRows } from "@/lib/real-estate/server";
-import { scoreRealEstateLead } from "@/lib/real-estate/lead-scoring";
+import { scoreRealEstateLead, type RealEstateLeadInput } from "@/lib/real-estate/lead-scoring";
 import { processRealEstateLeadPipeline } from "@/lib/real-estate/pipeline";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -91,14 +91,14 @@ export async function POST(request:NextRequest,context:Context){
   const bedrooms=body.bedrooms===undefined||body.bedrooms===null||body.bedrooms===""?null:Number(body.bedrooms);
   if((budgetMin!==null&&(!Number.isFinite(budgetMin)||budgetMin<0||budgetMin>1e12))||(budgetMax!==null&&(!Number.isFinite(budgetMax)||budgetMax<0||budgetMax>1e12))||(budgetMin!==null&&budgetMax!==null&&budgetMax<budgetMin)||!/^[A-Z]{3}$/.test(currency)||
     (bedrooms!==null&&(!Number.isInteger(bedrooms)||bedrooms<0||bedrooms>50)))return NextResponse.json({error:"Invalid budget, currency or bedroom count."},{status:400,headers});
-  const enumValue=(value:unknown,values:string[],fallback:string)=>typeof value==="string"&&values.includes(value)?value:fallback;
-  const transactionType=enumValue(body.transactionType,["buy","rent","invest","sell","unknown"],"unknown");
-  const propertyType=enumValue(body.propertyType,["apartment","house","land","commercial","other","unknown"],"unknown");
-  const timeframe=enumValue(body.timeframe,["urgent","within_30_days","one_to_three_months","over_three_months","unknown"],"unknown");
-  const readiness=enumValue(body.readiness,["cash_ready","pre_approved","financing_needed","researching","unknown"],"unknown");
+  const enumValue=<T extends string>(value:unknown,values:readonly T[],fallback:T):T=>typeof value==="string"&&values.includes(value as T)?value as T:fallback;
+  const transactionType=enumValue(body.transactionType,["buy","rent","invest","sell","unknown"] as const,"unknown");
+  const propertyType=enumValue(body.propertyType,["apartment","house","land","commercial","other","unknown"] as const,"unknown");
+  const timeframe=enumValue(body.timeframe,["urgent","within_30_days","one_to_three_months","over_three_months","unknown"] as const,"unknown");
+  const readiness=enumValue(body.readiness,["cash_ready","pre_approved","financing_needed","researching","unknown"] as const,"unknown");
   const contactPreference=enumValue(body.contactPreference,["email","phone","whatsapp"],"email");
   const preferredLocation=typeof body.preferredLocation==="string"?body.preferredLocation.trim().slice(0,200):null;
-  const leadInput={transactionType,propertyType,preferredLocation,budgetMin,budgetMax,timeframe,readiness,email,phone};
+  const leadInput: RealEstateLeadInput = {transactionType,propertyType,preferredLocation,budgetMin,budgetMax,timeframe,readiness,email,phone};
   const score=scoreRealEstateLead(leadInput);
   const {data:lead,error:insertError}=await db.from("real_estate_leads").insert({
    workspace_id:form.workspace_id,source,source_event_id:sourceEventId,full_name:fullName,email,phone,
