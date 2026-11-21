@@ -11,6 +11,7 @@ const headers = { "Cache-Control": "private, no-store" };
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const allowed = <T extends string>(value: unknown, values: readonly T[], fallback: T): T => values.includes(value as T) ? value as T : fallback;
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
+type ManualLeadRecord = { id: string; workspace_id: string; source: string; full_name: string; email: string | null; preferred_location: string | null; property_type: string; transaction_type: string; lead_score: number; lead_temperature: string; created_at: string; consent_to_contact: boolean; contact_preference: string };
 
 function parseLead(body: Record<string, unknown>) {
   const fullName = text(body.fullName, 160);
@@ -53,7 +54,7 @@ function parseLead(body: Record<string, unknown>) {
 
 async function ensureLeadSideEffects(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  lead: Record<string, any>,
+  lead: ManualLeadRecord,
   workspaceId: string,
   userId: string,
 ) {
