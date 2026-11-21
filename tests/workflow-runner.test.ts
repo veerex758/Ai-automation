@@ -347,11 +347,21 @@ test("Split in Batches resumes completed downstream iterations without replaying
 
 test("Gemini qualifies real-estate enquiries with structured output and preserves missing facts", async () => {
   const lead = {
-    fullName: "Ada Buyer", email: "ada@example.com", phone: null, propertyType: "apartment",
-    location: "Lekki", budget: "₦80m", timeframe: "within_30_days", temperature: "hot",
-    reason: "Specific property and near-term intent.", missingInformation: ["Phone number"],
+    fullName: "Ada Buyer", email: "ada@example.com", phone: null,
+    transactionType: "buy", propertyType: "apartment",
+    location: "Lekki", budget: "₦80m", budgetMin: null, budgetMax: null, currency: "NGN",
+    timeframe: "within_30_days", readiness: "unknown", temperature: "hot",
+    reason: "Specific property and near-term intent.", mainConcern: null,
+    missingInformation: ["Phone number"],
     suggestedReply: "Thanks for your enquiry. May we have your phone number?",
     summary: "HOT lead: Ada Buyer wants an apartment in Lekki within 30 days; budget ₦80m.",
+    followupMessages: [
+      {subject:"We received your enquiry",message:"Thanks for your enquiry."},
+      {subject:"A quick follow-up",message:"Are you still looking?"},
+      {subject:"More property options",message:"Can we refine your options?"},
+      {subject:"Checking in",message:"Would you like to speak with an agent?"},
+      {subject:"Final check-in",message:"Would you like us to keep helping?"},
+    ],
   };
   let requestBody: unknown;
   const result = await executeRegisteredWorkflow({

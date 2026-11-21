@@ -5,6 +5,7 @@ const inputSchema = z.object({
   to: z.string().email().max(254),
   subject: z.string().trim().min(1).max(200),
   text: z.string().trim().min(1).max(10000),
+  idempotencyKey: z.string().trim().min(1).max(256).optional(),
 }).strict();
 const outputSchema = z.object({ accepted: z.literal(true), messageId: z.string().min(1), provider: z.literal("resend") }).strict();
 
@@ -23,7 +24,7 @@ export const emailNode: NodeDefinition = {
       if (!apiKey || !from) throw new Error("EMAIL_CONNECTION_REQUIRED");
       const response = await ctx.http.request({
         url: "https://api.resend.com/emails", method: "POST",
-        headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+        headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json", ...(input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : {}) },
         body: { from, to: [input.to], subject: input.subject, text: input.text },
         timeoutMs: 15000, retries: 0,
       });
