@@ -9,7 +9,36 @@ import type { NodeContext } from "@/nodes/types";
 
 type ServiceClient = ReturnType<typeof createRealEstateServiceClient>;
 type PipelineClaim = { lead_id: string; workspace_id: string; lease_token: string };
-type LeadRow = Record<string, any>;
+type LeadRow = {
+  id: string;
+  workspace_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  transaction_type: string;
+  property_type: string;
+  preferred_location: string | null;
+  budget_min: number | string | null;
+  budget_max: number | string | null;
+  currency: string | null;
+  timeframe: string;
+  readiness: string;
+  main_concern: string | null;
+  raw_enquiry: Record<string, unknown> | null;
+  lead_score: number | string | null;
+  lead_temperature: string;
+  qualification: unknown;
+  qualification_status: string;
+  qualification_summary: string | null;
+  suggested_reply: string | null;
+  consent_to_contact: boolean;
+  contact_preference: string;
+  created_at: string;
+  pipeline_attempt_count: number | string;
+  agent_notification_status: string;
+  agent_notification_accepted_recipient_hashes: unknown;
+  agent_notified_at: string | null;
+};
 type Qualification = {
   fullName: string | null;
   email: string | null;
