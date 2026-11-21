@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-estate/server";
-import { scoreRealEstateLead } from "@/lib/real-estate/lead-scoring";
+import { scoreRealEstateLead, type RealEstateLeadInput } from "@/lib/real-estate/lead-scoring";
 import { findOperation } from "@/nodes/registry";
 import { getWorkerOperationMapping } from "@/lib/workflows/worker-operation-map";
 import type { NodeContext } from "@/nodes/types";
@@ -15,14 +15,15 @@ type LeadRow = {
   full_name: string;
   email: string | null;
   phone: string | null;
-  transaction_type: string;
-  property_type: string;
+  source: string;
+  transaction_type: NonNullable<RealEstateLeadInput["transactionType"]>;
+  property_type: NonNullable<RealEstateLeadInput["propertyType"]>;
   preferred_location: string | null;
   budget_min: number | string | null;
   budget_max: number | string | null;
   currency: string | null;
-  timeframe: string;
-  readiness: string;
+  timeframe: NonNullable<RealEstateLeadInput["timeframe"]>;
+  readiness: NonNullable<RealEstateLeadInput["readiness"]>;
   main_concern: string | null;
   raw_enquiry: Record<string, unknown> | null;
   lead_score: number | string | null;
@@ -194,7 +195,7 @@ async function updateClaim(
 async function retryClaim(
   db: ServiceClient,
   claim: PipelineClaim,
-  lead: LeadRow,
+  lead: Pick<LeadRow, "pipeline_attempt_count">,
   stage: "qualification" | "notification" | "pipeline",
   code: string,
   blocked: boolean,
