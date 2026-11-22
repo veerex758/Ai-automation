@@ -66,8 +66,6 @@ export async function POST(request: NextRequest) {
       workspace_id: auth.workspace.id,
       email,
       active: true,
-      approved_by: auth.user.id,
-      approved_at: new Date().toISOString(),
     }).select("id,email,active,approved_at,created_at,revoked_at").single();
     if (error?.code === "23505") return NextResponse.json({ error: "That email address is already on the workspace recipient list." }, { status: 409, headers });
     if (error) throw error;
