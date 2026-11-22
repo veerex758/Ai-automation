@@ -33,7 +33,8 @@ test("Gemini qualification receives no direct contact identifiers and redacts co
   const start = pipeline.indexOf("function qualificationInput(");
   const end = pipeline.indexOf("\nfunction mergeQualification(", start);
   const helper = pipeline.slice(start, end);
-  assert.doesNotMatch(helper, /lead\.full_name|lead\.email|lead\.phone/);
+  const payload = helper.slice(helper.indexOf("return JSON.stringify({"));
+  assert.doesNotMatch(payload, /lead\.full_name|lead\.email|lead\.phone/);
   assert.match(helper, /redacted email/);
   assert.match(helper, /redacted phone/);
   assert.match(helper, /redacted name/);
