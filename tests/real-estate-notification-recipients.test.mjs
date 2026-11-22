@@ -23,7 +23,7 @@ test("agency alert recipients require a workspace admin approval and retain revo
 test("recipient APIs enforce owner/admin permissions and normalize email addresses", () => {
   assert.match(route, /\["owner", "admin"\]/);
   assert.match(route, /toLowerCase\(\)/);
-  assert.match(route, /active, true/);
+  assert.match(route, /active: true/);
   assert.match(updateRoute, /\["owner", "admin"\]/);
   assert.match(updateRoute, /const update = \{ active \}/);
 });
