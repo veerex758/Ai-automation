@@ -4,12 +4,6 @@
       "schedule": "0 9 * * *",
       "path": "/api/internal/scheduler",
       "requestMethod": "GET"
-    },
-    "real-estate-automation": {
-      "schedule": "*/15 * * * *",
-      "path": "/api/cron/real-estate-automation",
-      "requestMethod": "GET",
-      "jitter": 15
     }
   }
 }
