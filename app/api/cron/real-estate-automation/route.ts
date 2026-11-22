@@ -24,6 +24,18 @@ async function run(request: NextRequest) {
       { status: configured ? 401 : 503 },
     );
   }
+  const liveExecution = process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true";
+  const pipelineEnabled = process.env.REAL_ESTATE_PIPELINE_ENABLED === "true";
+  const followupsEnabled = process.env.REAL_ESTATE_FOLLOWUPS_ENABLED === "true";
+  if (!liveExecution || (!pipelineEnabled && !followupsEnabled)) {
+    return NextResponse.json({
+      success: true,
+      enabled: false,
+      reason: "REAL_ESTATE_LIVE_EXECUTION_DISABLED",
+      pipeline: { enabled: false, claimed: 0, completed: 0, blocked: 0, failed: 0 },
+      followups: { enabled: false, claimed: 0, sent: 0, retried: 0, failed: 0, blocked: 0, cancelled: 0 },
+    });
+  }
   try {
     const db = createRealEstateServiceClient();
     const pipeline = await processRealEstateLeadPipeline({ db, limit: 20 });
