@@ -1,8 +1,23 @@
 {
-  "crons": [
-    {
+  "schedules": {
+    "internal-scheduler-daily": {
+      "schedule": "0 9 * * *",
       "path": "/api/internal/scheduler",
-      "schedule": "0 9 * * *"
+      "requestMethod": "GET"
+    },
+    "real-estate-automation": {
+      "schedule": "*/15 * * * *",
+      "function": "api/real-estate-automation",
+      "timezone": "Africa/Lagos"
     }
-  ]
+  },
+  "functions": {
+    "api/real-estate-automation.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "schedule/v1beta"
+        }
+      ]
+    }
+  }
 }
