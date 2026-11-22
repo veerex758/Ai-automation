@@ -30,10 +30,10 @@ create or replace function public.enforce_real_estate_notification_recipient_aud
 returns trigger
 language plpgsql
 set search_path = ''
-as $
+as $audit$
 begin
   if auth.uid() is null then
-    raise exception using errcode = '42501', message = 'Authenticated workspace admin required';
+    raise exception 'Authenticated workspace admin required' using errcode = '42501';
   end if;
 
   if tg_op = 'INSERT' then
@@ -50,7 +50,7 @@ begin
   if new.workspace_id is distinct from old.workspace_id
     or new.email is distinct from old.email
     or new.created_at is distinct from old.created_at then
-    raise exception using errcode = '42501', message = 'Recipient identity is immutable';
+    raise exception 'Recipient identity is immutable' using errcode = '42501';
   end if;
 
   if old.active and not new.active then
@@ -71,7 +71,7 @@ begin
   new.updated_at := now();
   return new;
 end;
-$;
+$audit$;
 
 revoke all on function public.enforce_real_estate_notification_recipient_audit() from public, anon, authenticated;
 
