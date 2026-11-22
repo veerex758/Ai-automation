@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("Vercel Schedules keep the existing scheduler daily and poll real-estate automation every 15 minutes", async () => {
+test("Vercel keeps the existing daily scheduler and registers the private 15-minute production worker", async () => {
   const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8"));
   assert.equal(config.crons, undefined);
   assert.deepEqual(config.schedules["internal-scheduler-daily"], {
@@ -12,13 +12,26 @@ test("Vercel Schedules keep the existing scheduler daily and poll real-estate au
   });
   assert.deepEqual(config.schedules["real-estate-automation"], {
     schedule: "*/15 * * * *",
-    path: "/api/cron/real-estate-automation",
-    requestMethod: "GET",
-    jitter: 15,
+    function: "api/real-estate-automation",
+    timezone: "Africa/Lagos",
   });
+  assert.deepEqual(config.functions["api/real-estate-automation.ts"].experimentalTriggers, [
+    { type: "schedule/v1beta" },
+  ]);
 });
 
-test("scheduled real-estate automation runs both pipeline and due follow-ups through one worker", async () => {
+test("private scheduled worker runs only in Production and gates pipeline and follow-ups", async () => {
+  const worker = await readFile(new URL("../api/real-estate-automation.ts", import.meta.url), "utf8");
+  assert.match(worker, /handleSchedule/);
+  assert.match(worker, /VERCEL_ENV !== "production"/);
+  assert.match(worker, /AIVANTA_LIVE_EXECUTION_ENABLED/);
+  assert.match(worker, /REAL_ESTATE_PIPELINE_ENABLED/);
+  assert.match(worker, /REAL_ESTATE_FOLLOWUPS_ENABLED/);
+  assert.match(worker, /processRealEstateLeadPipeline/);
+  assert.match(worker, /processDueRealEstateFollowups/);
+});
+
+test("legacy protected endpoint remains fail-closed for manual fallback invocations", async () => {
   const route = await readFile(new URL("../app/api/cron/real-estate-automation/route.ts", import.meta.url), "utf8");
   assert.match(route, /timingSafeEqual/);
   assert.match(route, /processRealEstateLeadPipeline/);
@@ -26,7 +39,7 @@ test("scheduled real-estate automation runs both pipeline and due follow-ups thr
   assert.match(route, /CRON_SECRET/);
 });
 
-test("scheduler endpoint requires a server-only bearer secret and never runs provider actions directly", async () => {
+test("internal scheduler endpoint keeps a server-only bearer secret and does not run provider actions directly", async () => {
   const route = await readFile(new URL("../app/api/internal/scheduler/route.ts", import.meta.url), "utf8");
   assert.match(route, /CRON_SECRET/);
   assert.match(route, /timingSafeEqual/);
