@@ -38,3 +38,36 @@ test("durable worker decrypts only the required workspace's connected integratio
   assert.match(worker, /eq\("integration_id", integration\.id\)/);
   assert.doesNotMatch(worker, /process\.env\.(OPENAI_API_KEY|SLACK_INCOMING_WEBHOOK_URL|RESEND_API_KEY)/);
 });
+
+
+const integrationsDirectory = readFileSync(new URL("../app/dashboard/registry-integrations-directory.tsx", import.meta.url), "utf8");
+const workspaceRoute = readFileSync(new URL("../app/api/integrations/workspace/route.ts", import.meta.url), "utf8");
+const resendVerificationRoute = readFileSync(new URL("../app/api/integrations/workspace/resend/test/route.ts", import.meta.url), "utf8");
+
+test("Resend setup saves encrypted credentials before verifying the saved connection", () => {
+  assert.match(integrationsDirectory, /fetch\("\/api\/integrations\/workspace", \{ method:"POST"/);
+  assert.match(integrationsDirectory, /const savedConnectionId = typeof savedBody\?\.integration\?\.id === "string"/);
+  assert.match(integrationsDirectory, /const verificationPath = provider === "resend"[\s\S]*?\/api\/integrations\/workspace\/resend\/test/);
+  assert.match(integrationsDirectory, /const verificationBody = provider === "resend" \? \{ connectionId: savedConnectionId \} : \{ provider \}/);
+  assert.match(integrationsDirectory, /setCredentialValues\(\{\}\)/);
+  assert.match(integrationsDirectory, /testedBody\.message/);
+  assert.match(integrationsDirectory, /credentialsSaved \?/);
+});
+
+test("workspace API encrypts and stores credentials but only returns connection metadata", () => {
+  assert.match(workspaceRoute, /encryptWorkspaceCredentials/);
+  assert.match(workspaceRoute, /save_workspace_integration_connection/);
+  assert.match(workspaceRoute, /return json\(\{ integration: data \}, 201\)/);
+  assert.match(workspaceRoute, /select\("id,provider,status,display_name,last_tested_at,last_test_status,updated_at"\)/);
+  assert.doesNotMatch(workspaceRoute, /select\([^\n]*encrypted_credentials/);
+});
+
+test("Resend verification decrypts server-side and checks the saved connection without sending email", () => {
+  assert.match(resendVerificationRoute, /eq\("id", requestedConnectionId\)\.eq\("workspace_id", workspace\.id\)\.eq\("provider", "resend"\)/);
+  assert.match(resendVerificationRoute, /decryptWorkspaceCredentials/);
+  assert.match(resendVerificationRoute, /https:\/\/api\.resend\.com\/domains\?limit=100/);
+  assert.match(resendVerificationRoute, /senderDomainVerified/);
+  assert.match(resendVerificationRoute, /No email was sent/);
+  const result = resendVerificationRoute.slice(resendVerificationRoute.lastIndexOf('return json({\n      status: "passed"'));
+  assert.doesNotMatch(result, /apiKey|encrypted_credentials/);
+});
