@@ -48,7 +48,7 @@ test("Resend setup saves encrypted credentials before verifying the saved connec
   assert.match(integrationsDirectory, /fetch\("\/api\/integrations\/workspace", \{ method:"POST"/);
   assert.match(integrationsDirectory, /const savedConnectionId = typeof savedBody\?\.integration\?\.id === "string"/);
   assert.match(integrationsDirectory, /const verificationPath = provider === "resend"[\s\S]*?\/api\/integrations\/workspace\/resend\/test/);
-  assert.match(integrationsDirectory, /const verificationBody = provider === "resend" \? \{ connectionId: savedConnectionId \} : \{ provider \}/);
+  assert.match(integrationsDirectory, /const verificationBody = provider === "resend"[\s\S]*?\{ provider, integrationId: savedConnectionId \}/);
   assert.match(integrationsDirectory, /setCredentialValues\(\{\}\)/);
   assert.match(integrationsDirectory, /testedBody\.message/);
   assert.match(integrationsDirectory, /credentialsSaved \?/);
