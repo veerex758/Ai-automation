@@ -332,20 +332,17 @@ async function ensureFollowupDrafts(db: ServiceClient, lead: LeadRow, qualificat
 }
 
 async function workspaceNotificationRecipients(db: ServiceClient, workspaceId: string) {
-  const [{ data: workspace, error: workspaceError }, { data: members, error: membersError }] = await Promise.all([
-    db.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle(),
-    db.from("workspace_members").select("user_id,role").eq("workspace_id", workspaceId).in("role", ["owner", "admin"]).limit(25),
-  ]);
-  if (workspaceError || membersError || !workspace) throw new Error("WORKSPACE_NOTIFICATION_RECIPIENT_LOOKUP_FAILED");
-  const ids = [...new Set([workspace.owner_id, ...(members ?? []).map((member) => member.user_id)].filter(Boolean))];
-  const recipients = new Set<string>();
-  for (const userId of ids) {
-    const { data, error } = await db.auth.admin.getUserById(userId);
-    if (!error && data.user?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.user.email)) {
-      recipients.add(data.user.email.toLowerCase());
-    }
-  }
-  return [...recipients].slice(0, 25);
+  const { data, error } = await db.from("real_estate_notification_recipients")
+    .select("email")
+    .eq("workspace_id", workspaceId)
+    .eq("active", true)
+    .order("created_at", { ascending: true })
+    .limit(25);
+  if (error) throw new Error("AGENCY_NOTIFICATION_RECIPIENT_LOOKUP_FAILED");
+  const recipients = (data ?? [])
+    .map((row) => typeof row.email === "string" ? row.email.trim().toLowerCase() : "")
+    .filter((email) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email));
+  return [...new Set(recipients)].slice(0, 25);
 }
 
 async function sendAgentNotifications(
@@ -357,7 +354,7 @@ async function sendAgentNotifications(
   const configured = await approvedCredentials(db, claim.workspace_id, "resend", "email", "send_email");
   if (!configured.ok) return { ok: false as const, blocked: true, code: configured.code };
   const recipients = await workspaceNotificationRecipients(db, claim.workspace_id);
-  if (!recipients.length) return { ok: false as const, blocked: true, code: "WORKSPACE_ADMIN_EMAIL_NOT_FOUND" };
+  if (!recipients.length) return { ok: false as const, blocked: true, code: "AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED" };
 
   const operation = findOperation("email", "send_email", "action");
   if (!operation) return { ok: false as const, blocked: true, code: "RESEND_OPERATION_NOT_REGISTERED" };
