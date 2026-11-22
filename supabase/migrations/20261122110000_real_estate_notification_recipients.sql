@@ -106,12 +106,10 @@ create policy real_estate_notification_recipients_update
   using (private.is_workspace_admin(workspace_id))
   with check (private.is_workspace_admin(workspace_id));
 
+revoke all on public.real_estate_notification_recipients from anon, authenticated, public;
 grant select on public.real_estate_notification_recipients to authenticated;
 grant insert (workspace_id, email, active)
   on public.real_estate_notification_recipients to authenticated;
 grant update (active)
   on public.real_estate_notification_recipients to authenticated;
-revoke all on public.real_estate_notification_recipients from anon, public;
-revoke delete, truncate, references, trigger
-  on public.real_estate_notification_recipients from authenticated;
 grant all on public.real_estate_notification_recipients to service_role;
