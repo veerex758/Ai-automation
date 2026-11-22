@@ -41,9 +41,6 @@ type LeadRow = {
   agent_notified_at: string | null;
 };
 type Qualification = {
-  fullName: string | null;
-  email: string | null;
-  phone: string | null;
   transactionType: "buy" | "rent" | "invest" | "sell" | "unknown";
   propertyType: "apartment" | "house" | "land" | "commercial" | "other" | "unknown";
   location: string | null;
@@ -224,11 +221,19 @@ async function retryClaim(
 function qualificationInput(lead: LeadRow) {
   const rawMessage = lead.raw_enquiry && typeof lead.raw_enquiry === "object"
     ? String(lead.raw_enquiry.message ?? "")
+        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[redacted email]")
+        .replace(/\b\+?\d[\d\s().-]{7,}\d\b/g, "[redacted phone]")
+        .replace(new RegExp(lead.full_name.replace(/[.*+?^${}()|[\]\\]/g, "\\function qualificationInput(lead: LeadRow) {
+  const rawMessage = lead.raw_enquiry && typeof lead.raw_enquiry === "object"
+    ? String(lead.raw_enquiry.message ?? "")
     : "";
   return JSON.stringify({
     fullName: lead.full_name,
     email: lead.email,
     phone: lead.phone,
+"), "gi"), "[redacted name]")
+    : "";
+  return JSON.stringify({
     transactionType: lead.transaction_type,
     propertyType: lead.property_type,
     preferredLocation: lead.preferred_location,
