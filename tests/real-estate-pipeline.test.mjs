@@ -60,11 +60,20 @@ test("AI follow-up drafts are persisted only for email leads with recorded conse
   assert.match(pipeline, /eq\("status", "pending"\)/);
 });
 
-test("agent alerts use stable recipient idempotency and preserve accepted recipients across retries", () => {
+test("agent alerts use an explicit agency allowlist and stable recipient idempotency", () => {
+  assert.match(pipeline, /real_estate_notification_recipients/);
+  assert.match(pipeline, /eq\("active", true\)/);
+  assert.match(pipeline, /AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED/);
   assert.match(pipeline, /real-estate-agent-alert:/);
   assert.match(pipeline, /agent_notification_accepted_recipient_hashes/);
   assert.match(migration, /agent_notification_accepted_recipient_hashes jsonb/i);
-  assert.match(pipeline, /auth\.admin\.getUserById/);
+});
+
+test("follow-up delivery goes through the registered Resend operation with a stable idempotency key", () => {
+  assert.match(followups, /findOperation\("email", "send_email", "action"\)/);
+  assert.match(followups, /idempotencyKey: "real-estate-followup:"/);
+  assert.doesNotMatch(followups, /fetch\("https:\/\/api\.resend\.com\/emails"/);
+  assert.match(emailNode, /EMAIL_PROVIDER_UNAVAILABLE/);
 });
 
 test("public and authenticated lead creation trigger the durable pipeline and repair duplicate side effects", () => {
