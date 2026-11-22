@@ -1,6 +1,6 @@
 begin;
 
-select plan(23);
+select plan(24);
 
 -- Transaction-local fixtures: the test leaves no user, workspace or integration behind.
 insert into auth.users (
@@ -106,6 +106,25 @@ values (
     '00000000-0000-0000-0000-000000000002',
     null
   )
+);
+
+insert into _rexnora_integration_test_state (name, payload)
+values (
+  'owner_saved',
+  public.save_workspace_integration_connection(
+    '00000000-0000-0000-0000-000000000010',
+    'resend',
+    'Agency Resend owner account',
+    'v1.FFFFFFFFFFFFFFFF.FFFFFFFFFFFFFFFFFFFFFF.T3duZXJDcmVkZW50aWFs',
+    '00000000-0000-0000-0000-000000000001',
+    null
+  )
+);
+
+select is(
+  (select payload->>'provider' from _rexnora_integration_test_state where name = 'owner_saved'),
+  'resend',
+  'workspace owner can save an integration'
 );
 
 insert into _rexnora_integration_test_state (name, payload)
