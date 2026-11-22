@@ -1,5 +1,7 @@
 import "server-only";
 import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { findOperation } from "@/nodes/registry";
+import type { NodeContext } from "@/nodes/types";
 import { createRealEstateServiceClient } from "@/lib/real-estate/server";
 
 type Claim = {
@@ -93,43 +95,57 @@ async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, cla
     return "blocked";
   }
 
-  let response: Response;
-  try {
-    response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + credentials.apiKey,
-        "Content-Type": "application/json",
-        "Idempotency-Key": "real-estate-followup:" + claim.id,
-      },
-      body: JSON.stringify({
-        from: credentials.fromEmail,
-        to: [lead.email],
-        subject: claim.subject,
-        text: claim.message,
-      }),
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(12000),
-    });
-  } catch {
-    await finish(db, claim, false, null, "RESEND_NETWORK_ERROR", true);
-    return "retry";
+  const operation = findOperation("email", "send_email", "action");
+  if (!operation) {
+    await finish(db, claim, false, null, "RESEND_OPERATION_NOT_REGISTERED", false);
+    return "failed";
   }
+  const context: NodeContext = {
+    credentials: { resend: credentials },
+    previousOutputs: {},
+    logger: {
+      info(message, meta) { console.info("[real-estate-followups]", message, meta ?? {}); },
+      error(message, meta) { console.error("[real-estate-followups]", message, meta ?? {}); },
+    },
+    http: {
+      async request(args) {
+        let response: Response;
+        try {
+          response = await fetch(args.url, {
+            method: args.method,
+            headers: args.headers,
+            body: args.body === undefined ? undefined : JSON.stringify(args.body),
+            cache: "no-store",
+            redirect: "error",
+            signal: AbortSignal.timeout(Math.min(30000, Math.max(1000, args.timeoutMs ?? 15000))),
+          });
+        } catch {
+          throw new Error("RESEND_NETWORK_ERROR");
+        }
+        const raw = await response.text();
+        let body: unknown;
+        try { body = raw ? JSON.parse(raw) : {}; } catch { body = raw; }
+        return { status: response.status, body };
+      },
+    },
+  };
 
-  const raw = await response.text();
-  let body: unknown;
-  try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
-  const messageId = body && typeof body === "object" &&
-    typeof (body as Record<string, unknown>).id === "string"
-    ? (body as Record<string, string>).id
-    : null;
-  if (!response.ok || !messageId) {
-    const errorCode = response.status === 429
-      ? "RESEND_RATE_LIMITED"
-      : response.status >= 500 ? "RESEND_PROVIDER_UNAVAILABLE" : "RESEND_SEND_REJECTED";
-    await finish(db, claim, false, null, errorCode, response.status === 429 || response.status >= 500);
-    return response.status === 429 || response.status >= 500 ? "retry" : "failed";
+  let messageId: string;
+  try {
+    const result = await operation.run(context, {
+      to: lead.email,
+      subject: claim.subject,
+      text: claim.message,
+      idempotencyKey: "real-estate-followup:" + claim.id,
+    }) as { messageId?: string };
+    if (typeof result?.messageId !== "string" || !result.messageId) throw new Error("EMAIL_PROVIDER_RESULT_INVALID");
+    messageId = result.messageId;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const errorCode = /^[A-Z0-9_]{1,80}$/.test(message) ? message : "RESEND_SEND_FAILED";
+    const retryable = ["RESEND_NETWORK_ERROR", "EMAIL_RATE_LIMITED", "EMAIL_PROVIDER_UNAVAILABLE"].includes(errorCode);
+    await finish(db, claim, false, null, errorCode, retryable);
+    return retryable ? "retry" : "failed";
   }
 
   await finish(db, claim, true, messageId, null, false);
