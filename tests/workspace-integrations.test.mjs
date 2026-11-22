@@ -51,7 +51,7 @@ test("Resend setup saves encrypted credentials before verifying the saved connec
   assert.match(integrationsDirectory, /const verificationBody = provider === "resend"[\s\S]*?\{ provider, integrationId: savedConnectionId \}/);
   assert.match(integrationsDirectory, /setCredentialValues\(\{\}\)/);
   assert.match(integrationsDirectory, /testedBody\.message/);
-  assert.match(integrationsDirectory, /credentialsSaved \?/);
+  assert.match(integrationsDirectory, /credentialsSaved\\s*\\?/);
 });
 
 test("workspace API encrypts and stores credentials but only returns connection metadata", () => {
