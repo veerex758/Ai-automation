@@ -38,15 +38,15 @@ The pipeline remains blocked until at least one agency recipient is explicitly a
 
 The queue and dispatcher are implemented, but sending stays disabled until all checks below pass:
 
-- Configure CRON_SECRET on the server.
-- Set REAL_ESTATE_FOLLOWUPS_ENABLED=true and AIVANTA_LIVE_EXECUTION_ENABLED=true server-side.
-- Connect and successfully test Resend in the same workspace. The worker decrypts only that workspace's credential envelope.
-- Approve the resend / email / send_email operation for the workspace.
-- Configure a scheduler to invoke GET /api/cron/real-estate-followups with Authorization: Bearer CRON_SECRET at least every 5 minutes.
+- Configure the server-only Supabase service-role/secret key and credential-encryption key. Never expose either with a `NEXT_PUBLIC_` variable.
+- Set `AIVANTA_LIVE_EXECUTION_ENABLED=true`, `REAL_ESTATE_PIPELINE_ENABLED=true` and `REAL_ESTATE_FOLLOWUPS_ENABLED=true` only after provider connections, tests, approvals and the agency recipient allowlist are complete.
+- Connect and successfully test Gemini and Resend in the same workspace. The worker decrypts only that workspace's credential envelope.
+- Approve the registered `gemini / qualify_real_estate_lead` and `email / send_email` operations for the workspace.
+- Add the agency's designated inbox to the explicit recipient allowlist in Dashboard → Real Estate → Website forms.
 
-Vercel Hobby Cron is daily and cannot meet the 1-hour and 24-hour timing in this template. The root `vercel.json` intentionally does not register this frequent job. Configure an external scheduler to call `GET /api/cron/real-estate-automation` with `Authorization: Bearer CRON_SECRET` at least every five minutes. The endpoint runs the lead pipeline and due follow-ups; it is safe to invoke repeatedly because work is claimed with database leases and provider idempotency keys. A 15-minute or daily schedule is not sufficient for the stated follow-up sequence.
+The private `api/real-estate-automation.ts` Vercel Schedule runs every 15 minutes in the `Africa/Lagos` timezone. It uses Vercel's private `schedule/v1beta` trigger, so there is no public worker URL or cron bearer secret to expose. The handler deliberately skips Preview deployments because Preview and Production currently share a Supabase project; only Production may process real leads. It runs the pipeline and due follow-ups through the same leased, idempotent workers. The 15-minute cadence stays within the current Hobby Schedules allowance and gives up to roughly 15 minutes of scheduler delay for a due follow-up. Keep the older bearer-protected `/api/cron/real-estate-automation` route fail-closed as an operator fallback; do not enable a second scheduler against the same database.
 
-The endpoint is safe to invoke more than once: rows are claimed with leases, every follow-up has a stable Resend idempotency key, and only the worker holding the current lease may finalize the attempt. A network timeout is retried with the same provider idempotency key.
+The worker is safe to invoke more than once: leads and follow-up rows are claimed with database leases, each provider send uses a stable idempotency key, and only the worker holding the current lease may finalize an attempt. Resend acceptance is recorded separately from confirmed delivery; delivery, bounce, open and click states require a configured Resend event webhook.
 
 ## Current deliberate boundaries
 
