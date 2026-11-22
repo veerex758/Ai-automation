@@ -159,6 +159,11 @@ select is(
   'updating changes only the selected connection metadata'
 );
 
+select ok(
+  not ((select payload from _rexnora_integration_test_state where name = 'updated_first') ? 'encrypted_credentials'),
+  'update response never includes encrypted credential material'
+);
+
 select is(
   (select last_tested_at from public.workspace_integrations
    where id = (select (payload->>'id')::uuid from _rexnora_integration_test_state where name = 'first')),
