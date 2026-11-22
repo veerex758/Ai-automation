@@ -49,7 +49,7 @@ test("Gemini graphs receive a left-to-right layout with distinct upper and lower
   assert.match(route, /graphLaneById/);
   assert.match(route, /edge\.label === "true" \? -1 : edge\.label === "false" \? 1/);
   assert.match(route, /position: \{ x: 160 \+ depth \* 320, y: 330 \+ lane \* 220 \}/);
-  assert.match(builder, /function resolvePosition\(node: WorkflowNode, index: number, seen = new Set<string>\)/);
+  assert.match(builder, /function resolvePosition\(node: WorkflowNode, index: number, seen = new Set<string>\(\)\)/);
   assert.match(builder, /position: undefined/);
 });
 
