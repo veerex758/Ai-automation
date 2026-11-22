@@ -341,7 +341,7 @@ async function workspaceNotificationRecipients(db: ServiceClient, workspaceId: s
   if (error) throw new Error("AGENCY_NOTIFICATION_RECIPIENT_LOOKUP_FAILED");
   const recipients = (data ?? [])
     .map((row) => typeof row.email === "string" ? row.email.trim().toLowerCase() : "")
-    .filter((email) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email));
+    .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
   return [...new Set(recipients)].slice(0, 25);
 }
 
