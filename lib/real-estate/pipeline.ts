@@ -221,18 +221,11 @@ async function retryClaim(
 function qualificationInput(lead: LeadRow) {
   const rawMessage = lead.raw_enquiry && typeof lead.raw_enquiry === "object"
     ? String(lead.raw_enquiry.message ?? "")
-        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[redacted email]")
-        .replace(/\b\+?\d[\d\s().-]{7,}\d\b/g, "[redacted phone]")
-        .replace(new RegExp(lead.full_name.replace(/[.*+?^${}()|[\]\\]/g, "\\function qualificationInput(lead: LeadRow) {
-  const rawMessage = lead.raw_enquiry && typeof lead.raw_enquiry === "object"
-    ? String(lead.raw_enquiry.message ?? "")
     : "";
-  return JSON.stringify({
-    fullName: lead.full_name,
-    email: lead.email,
-    phone: lead.phone,
-"), "gi"), "[redacted name]")
-    : "";
+  const sanitizedMessage = rawMessage
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[redacted email]")
+    .replace(/\b\+?\d[\d\s().-]{7,}\d\b/g, "[redacted phone]")
+    .replaceAll(lead.full_name, "[redacted name]");
   return JSON.stringify({
     transactionType: lead.transaction_type,
     propertyType: lead.property_type,
@@ -244,10 +237,9 @@ function qualificationInput(lead: LeadRow) {
     readiness: lead.readiness,
     mainConcern: lead.main_concern,
     source: lead.source,
-    enquiryMessage: rawMessage,
+    enquiryMessage: sanitizedMessage,
   });
 }
-
 function mergeQualification(lead: LeadRow, qualification: Qualification) {
   const transactionType = lead.transaction_type === "unknown" ? qualification.transactionType : lead.transaction_type;
   const propertyType = lead.property_type === "unknown" ? qualification.propertyType : lead.property_type;
