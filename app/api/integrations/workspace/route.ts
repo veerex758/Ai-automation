@@ -66,7 +66,7 @@ const integrationErrorMessages: Record<string, string> = {
   INTEGRATION_DISPLAY_NAME_INVALID: "The connection name must contain between 1 and 120 characters.",
   INTEGRATION_CREDENTIALS_INVALID: "The encrypted credential payload is invalid.",
   INTEGRATION_WORKSPACE_NOT_FOUND: "The workspace could not be found.",
-  INTEGRATION_PERMISSION_DENIED: "Only workspace owners and administrators can manage integrations.",
+  INTEGRATION_PERMISSION_DENIED: "Only workspace owners and admins can manage integrations.",
   INTEGRATION_CONNECTION_NOT_FOUND: "The requested connection was not found in this workspace.",
   INTEGRATION_MEMBERSHIP_CHECK_FAILED: "Workspace permissions could not be verified.",
   INTEGRATION_DATABASE_SCHEMA_MISMATCH: "Integration storage is not ready. Apply the latest database migration.",
