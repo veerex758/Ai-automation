@@ -29,6 +29,19 @@ test("lead pipeline requires a tested workspace connection and an operation-spec
   assert.match(pipeline, /decryptWorkspaceCredentials/);
 });
 
+test("Gemini qualification receives no direct contact identifiers and redacts contact details in free text", () => {
+  const start = pipeline.indexOf("function qualificationInput(");
+  const end = pipeline.indexOf("\\nfunction mergeQualification(", start);
+  const helper = pipeline.slice(start, end);
+  assert.doesNotMatch(helper, /lead\\.full_name|lead\\.email|lead\\.phone/);
+  assert.match(helper, /redacted email/);
+  assert.match(helper, /redacted phone/);
+  assert.match(helper, /redacted name/);
+  const gemini = read("../nodes/gemini.ts");
+  assert.doesNotMatch(gemini, /fullName: z\\.string|email: z\\.string|phone: z\\.string/);
+  assert.doesNotMatch(gemini, /fullName: \\{ type: "STRING"|email: \\{ type: "STRING"|phone: \\{ type: "STRING"/);
+});
+
 test("lead qualification and notification use existing registered node operations", () => {
   assert.match(pipeline, /findOperation\("gemini", "qualify_real_estate_lead", "action"\)/);
   assert.match(pipeline, /findOperation\("email", "send_email", "action"\)/);
