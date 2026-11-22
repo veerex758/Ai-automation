@@ -1,6 +1,6 @@
 begin;
 
-select plan(19);
+select plan(23);
 
 -- Transaction-local fixtures: the test leaves no user, workspace or integration behind.
 insert into auth.users (
@@ -62,6 +62,24 @@ select ok(
   'anonymous browser role cannot read encrypted integration secrets'
 );
 
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.save_workspace_database_credentials(uuid,text,text,text,uuid)',
+    'EXECUTE'
+  ),
+  'server role retains the database-credentials compatibility RPC'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.save_workspace_database_credentials(uuid,text,text,text,uuid)',
+    'EXECUTE'
+  ),
+  'browser role cannot execute the database-credentials compatibility RPC'
+);
+
 -- The strings below are opaque v1 AES-GCM envelopes. These tests exercise storage
 -- and lifecycle behavior; AES-256-GCM round-trip/tamper tests live in the Node suite.
 insert into _rexnora_integration_test_state (name, payload)
@@ -88,6 +106,35 @@ values (
     '00000000-0000-0000-0000-000000000002',
     null
   )
+);
+
+insert into _rexnora_integration_test_state (name, payload)
+values (
+  'database_credential',
+  jsonb_build_object(
+    'id',
+    public.save_workspace_database_credentials(
+      '00000000-0000-0000-0000-000000000010',
+      'mysql',
+      'Agency MySQL database',
+      'v1.EEEEEEEEEEEEEEEE.EEEEEEEEEEEEEEEEEEEEEE.TXlTUUxDcmVkZW50aWFs',
+      '00000000-0000-0000-0000-000000000002'
+    )::text
+  )
+);
+
+select is(
+  (select status from public.workspace_integrations
+   where id = (select (payload->>'id')::uuid from _rexnora_integration_test_state where name = 'database_credential')),
+  'needs_attention',
+  'legacy database credential RPC keeps its pending-verification status'
+);
+
+select is(
+  (select encrypted_credentials from public.workspace_integration_secrets
+   where integration_id = (select (payload->>'id')::uuid from _rexnora_integration_test_state where name = 'database_credential')),
+  'v1.EEEEEEEEEEEEEEEE.EEEEEEEEEEEEEEEEEEEEEE.TXlTUUxDcmVkZW50aWFs',
+  'legacy database credential RPC stores its encrypted payload through the shared vault'
 );
 
 select is(
