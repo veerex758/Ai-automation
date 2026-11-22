@@ -6,7 +6,7 @@ create table if not exists public.real_estate_notification_recipients (
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   email varchar(254) not null
     check (email = lower(btrim(email)))
-    check (email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+
+    check (email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'),
   active boolean not null default true,
   approved_by uuid not null references auth.users(id) on delete restrict,
   approved_at timestamptz not null default now(),
