@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       const message = status === 401
         ? "Resend rejected this API key. Check the key and save the correct one."
         : status === 403
-          ? "Resend denied access to the domain check. Use a key with domain-read access, or verify the key's permissions in Resend."
+          ? "Resend denied access to domain listing. This can happen with a Sending access key and does not by itself mean the key is invalid. Use the explicit Send test email action in Connections to verify sending access."
           : status === 429
             ? "Resend rate-limited the connection check. Wait a moment and try again."
             : "Resend could not complete the connection check.";
