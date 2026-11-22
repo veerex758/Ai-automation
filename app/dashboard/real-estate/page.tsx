@@ -9,6 +9,7 @@ type Property={id:string;reference:string;title:string;property_type:string;tran
 type Followup={id:string;lead_id:string;sequence:number;channel:string;due_at:string;status:string;subject:string;sent_at:string|null;last_error_code:string|null;attempt_count:number;max_attempts:number;lead:Pick<Lead,"id"|"full_name"|"email"|"status"|"lead_score"|"consent_to_contact"|"customer_responded_at"|"agent_takeover_at">|null};
 type Agent={id:string;name:string;status:string};
 type IntakeForm={id:string;name:string;default_source:string;allowed_origins:string[];enabled:boolean;created_at:string};
+type NotificationRecipient={id:string;email:string;active:boolean;approved_at:string;created_at:string;revoked_at:string|null};
 type Activity={id:string;lead_id:string;activity_type:string;details:Record<string,unknown>;created_at:string};
 type Detail={lead:Lead;activities:Activity[];followups:Array<Omit<Followup,"lead">>};
 type Tab="leads"|"properties"|"followups"|"forms";
@@ -28,6 +29,7 @@ const label=(value:string)=>value.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpp
 export default function RealEstatePage(){
  const [tab,setTab]=useState<Tab>("leads"),[stats,setStats]=useState<Stats>(emptyStats),[leads,setLeads]=useState<Lead[]>([]),[properties,setProperties]=useState<Property[]>([]);
  const [followups,setFollowups]=useState<Followup[]>([]),[forms,setForms]=useState<IntakeForm[]>([]),[agents,setAgents]=useState<Agent[]>([]);
+ const [notificationRecipients,setNotificationRecipients]=useState<NotificationRecipient[]>([]),[recipientError,setRecipientError]=useState(""),[newRecipientEmail,setNewRecipientEmail]=useState("");
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [search,setSearch]=useState(""),[statusFilter,setStatusFilter]=useState("all"),[selected,setSelected]=useState<Detail|null>(null);
  const [propertyMatches,setPropertyMatches]=useState<Array<{property:Property;score:number;reasons:string[]}>>([]),[matching,setMatching]=useState(false);
@@ -36,18 +38,19 @@ export default function RealEstatePage(){
  const [oneTimeKey,setOneTimeKey]=useState<{endpoint:string;publicKey:string}|null>(null);
 
  const load=useCallback(async()=>{
-  setLoading(true);setError("");
+  setLoading(true);setError("");setRecipientError("");
   try{
-   const [dash,leadData,propertyData,followupData,formData,agentData]=await Promise.all([
+   const [dash,leadData,propertyData,followupData,formData,agentData,recipientData]=await Promise.all([
     requestJson<{stats:Stats}>("/api/real-estate/dashboard"),
     requestJson<{leads:Lead[]}>("/api/real-estate/leads?limit=100"),
     requestJson<{properties:Property[]}>("/api/real-estate/properties"),
     requestJson<{followups:Followup[]}>("/api/real-estate/followups"),
     requestJson<{forms:IntakeForm[]}>("/api/real-estate/intake-forms"),
     requestJson<{agents:Agent[]}>("/api/agents"),
+    requestJson<{recipients:NotificationRecipient[]}>("/api/real-estate/notification-recipients").catch(cause=>{setRecipientError(cause instanceof Error?cause.message:"Agency alert recipient approvals are unavailable.");return {recipients:[]};}),
    ]);
    setStats(dash.stats??emptyStats);setLeads(leadData.leads??[]);setProperties(propertyData.properties??[]);
-   setFollowups(followupData.followups??[]);setForms(formData.forms??[]);setAgents(agentData.agents??[]);
+   setFollowups(followupData.followups??[]);setForms(formData.forms??[]);setAgents(agentData.agents??[]);setNotificationRecipients(recipientData.recipients??[]);
   }catch(cause){setError(cause instanceof Error?cause.message:"Could not load the real-estate workspace.");}
   finally{setLoading(false);}
  },[]);
@@ -100,6 +103,24 @@ export default function RealEstatePage(){
   catch(cause){setError(cause instanceof Error?cause.message:"Property update failed.");}
   finally{setBusy(false);}
  }
+ async function approveRecipient(event:FormEvent<HTMLFormElement>){
+  event.preventDefault();setBusy(true);setError("");setNotice("");
+  try{
+   await requestJson("/api/real-estate/notification-recipients",{method:"POST",body:JSON.stringify({email:newRecipientEmail})});
+   setNewRecipientEmail("");setNotice("Agency alert recipient explicitly approved.");await load();
+  }catch(cause){setError(cause instanceof Error?cause.message:"Recipient could not be approved.");}
+  finally{setBusy(false);}
+ }
+ async function changeRecipientApproval(recipient:NotificationRecipient,active:boolean){
+  if(!active&&!window.confirm("Revoke future Rexnora lead alerts for "+recipient.email+"?"))return;
+  setBusy(true);setError("");setNotice("");
+  try{
+   await requestJson("/api/real-estate/notification-recipients/"+recipient.id,{method:"PATCH",body:JSON.stringify({active})});
+   setNotice(active?"Agency alert recipient re-approved.":"Agency alert recipient revoked.");await load();
+  }catch(cause){setError(cause instanceof Error?cause.message:"Recipient approval could not be updated.");}
+  finally{setBusy(false);}
+ }
+
  async function updateForm(form:IntakeForm,enabled:boolean){
   setBusy(true);setError("");
   try{await requestJson("/api/real-estate/intake-forms/"+form.id,{method:"PATCH",body:JSON.stringify({enabled})});setNotice("Intake form updated.");await load();}
@@ -166,6 +187,20 @@ export default function RealEstatePage(){
      {showIntakeForm&&<form className="re-form" onSubmit={createIntake}><label>Form name<input required maxLength={120} value={intakeName} onChange={e=>setIntakeName(e.target.value)}/></label><label>Allowed website origins <small>Exact origins separated by commas; include https:// and no page paths.</small><textarea required rows={3} value={origins} onChange={e=>setOrigins(e.target.value)}/></label><div className="re-form-actions"><button className="re-primary" disabled={busy}>Create secure form</button><button type="button" className="re-plain" onClick={()=>setShowIntakeForm(false)}>Cancel</button></div></form>}
      <div className="re-form-list">{forms.map(form=><article key={form.id}><div><strong>{form.name}</strong><small>Source: {form.default_source} · {form.allowed_origins.join(", ")}</small><small>Created {dateLabel(form.created_at)}</small></div><label className="re-toggle"><input type="checkbox" checked={form.enabled} onChange={e=>void updateForm(form,e.target.checked)}/> <span>{form.enabled?"Enabled":"Paused"}</span></label></article>)}{!loading&&!forms.length&&<p className="re-empty">No public forms configured.</p>}</div>
      <p className="re-footnote">Public keys are displayed once and stored only as SHA-256 hashes. Submissions require an Idempotency-Key, approved website origin, rate-limit capacity and explicit consent choice.</p>
+     <div className="re-panel-head" style={{borderTop:"1px solid #2A3340",borderBottom:0,marginTop:8}}>
+      <div><h2>Approved agency alert recipients</h2><p>Only inboxes added here by a workspace owner or admin receive lead qualification alerts.</p></div>
+      <span className="re-muted-tag">{notificationRecipients.filter(r=>r.active).length} active</span>
+     </div>
+     {recipientError&&<div className="re-alert re-error" role="alert">{recipientError}</div>}
+     <form className="re-form" onSubmit={approveRecipient}>
+      <label>Agency alert inbox<input type="email" required maxLength={254} placeholder="leads@your-agency.com" value={newRecipientEmail} onChange={e=>setNewRecipientEmail(e.target.value)}/></label>
+      <div className="re-form-actions"><button className="re-primary" disabled={busy}>Approve recipient</button></div>
+     </form>
+     <div className="re-form-list">{notificationRecipients.map(recipient=><article key={recipient.id}>
+      <div><strong>{recipient.email}</strong><small>{recipient.active?"Approved "+dateLabel(recipient.approved_at):"Revoked "+(recipient.revoked_at?dateLabel(recipient.revoked_at):"")}</small></div>
+      <button type="button" className="re-small" disabled={busy} onClick={()=>void changeRecipientApproval(recipient,!recipient.active)}>{recipient.active?"Revoke":"Re-approve"}</button>
+     </article>)}{!recipientError&&!notificationRecipients.length&&<p className="re-empty">No agency alert recipients approved. Add the agency's designated inbox before enabling Resend alerts.</p>}</div>
+     <p className="re-footnote">Rexnora no longer sends lead alerts automatically to every workspace owner/admin. Each agency recipient must be explicitly approved here. Revoke access to stop future alerts to that address.</p>
     </section>}
 
     {loading&&<p className="re-loading">Loading real-estate workspace…</p>}
