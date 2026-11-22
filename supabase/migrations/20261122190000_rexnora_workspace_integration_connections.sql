@@ -56,6 +56,12 @@ begin
   -- Repeat authorization at the database boundary. An owner can be recognized
   -- through workspaces.owner_id; an administrator must have an explicit membership.
   if not exists (
+    select 1 from public.workspaces as w where w.id = p_workspace_id
+  ) then
+    raise exception using errcode = 'P0001', message = 'INTEGRATION_WORKSPACE_NOT_FOUND';
+  end if;
+
+  if not exists (
     select 1
     from public.workspaces as w
     where w.id = p_workspace_id
@@ -148,6 +154,55 @@ begin
   );
 end;
 $$;
+
+-- Preserve the older database-provider RPC contract for any older server
+-- callers, but route it through the same multi-account, encrypted storage path.
+-- Database connections retain their prior needs_attention status until tested.
+create or replace function public.save_workspace_database_credentials(
+  p_workspace_id uuid,
+  p_provider text,
+  p_display_name text,
+  p_encrypted_credential text,
+  p_created_by uuid
+) returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $
+declare
+  v_saved jsonb;
+  v_integration_id uuid;
+begin
+  if p_provider is null or p_provider not in ('mysql', 'mongodb') then
+    raise exception using errcode = 'P0001', message = 'INTEGRATION_PROVIDER_UNSUPPORTED';
+  end if;
+
+  v_saved := public.save_workspace_integration_connection(
+    p_workspace_id,
+    p_provider,
+    p_display_name,
+    p_encrypted_credential,
+    p_created_by,
+    null
+  );
+  v_integration_id := (v_saved->>'id')::uuid;
+
+  update public.workspace_integrations
+     set status = 'needs_attention',
+         last_tested_at = null,
+         last_test_status = null,
+         updated_at = now()
+   where id = v_integration_id
+     and workspace_id = p_workspace_id;
+
+  return v_integration_id;
+end;
+$;
+
+revoke all on function public.save_workspace_database_credentials(uuid,text,text,text,uuid)
+  from public, anon, authenticated;
+grant execute on function public.save_workspace_database_credentials(uuid,text,text,text,uuid)
+  to service_role;
 
 -- Secrets are intentionally not readable or writable by browser roles.
 alter table public.workspace_integration_secrets enable row level security;
