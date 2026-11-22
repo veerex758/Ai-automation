@@ -26,11 +26,60 @@ create index if not exists real_estate_notification_recipients_active_idx
   on public.real_estate_notification_recipients(workspace_id, created_at)
   where active = true;
 
+create or replace function public.enforce_real_estate_notification_recipient_audit()
+returns trigger
+language plpgsql
+set search_path = ''
+as $
+begin
+  if auth.uid() is null then
+    raise exception using errcode = '42501', message = 'Authenticated workspace admin required';
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.approved_by := auth.uid();
+    new.approved_at := now();
+    new.revoked_by := null;
+    new.revoked_at := null;
+    new.active := true;
+    new.created_at := now();
+    new.updated_at := now();
+    return new;
+  end if;
+
+  if new.workspace_id is distinct from old.workspace_id
+    or new.email is distinct from old.email
+    or new.created_at is distinct from old.created_at then
+    raise exception using errcode = '42501', message = 'Recipient identity is immutable';
+  end if;
+
+  if old.active and not new.active then
+    new.revoked_by := auth.uid();
+    new.revoked_at := now();
+  elsif not old.active and new.active then
+    new.approved_by := auth.uid();
+    new.approved_at := now();
+    new.revoked_by := null;
+    new.revoked_at := null;
+  else
+    new.approved_by := old.approved_by;
+    new.approved_at := old.approved_at;
+    new.revoked_by := old.revoked_by;
+    new.revoked_at := old.revoked_at;
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$;
+
+revoke all on function public.enforce_real_estate_notification_recipient_audit() from public, anon, authenticated;
+
 drop trigger if exists real_estate_notification_recipients_updated_at
   on public.real_estate_notification_recipients;
-create trigger real_estate_notification_recipients_updated_at
-  before update on public.real_estate_notification_recipients
-  for each row execute function public.set_updated_at();
+create trigger real_estate_notification_recipients_enforce_audit
+  before insert or update on public.real_estate_notification_recipients
+  for each row execute function public.enforce_real_estate_notification_recipient_audit();
 
 alter table public.real_estate_notification_recipients enable row level security;
 
@@ -56,7 +105,9 @@ create policy real_estate_notification_recipients_update
   using (private.is_workspace_admin(workspace_id))
   with check (private.is_workspace_admin(workspace_id));
 
-grant select, insert, update on public.real_estate_notification_recipients to authenticated;
+grant select on public.real_estate_notification_recipients to authenticated;
+grant insert (workspace_id, email, active) on public.real_estate_notification_recipients to authenticated;
+grant update (active) on public.real_estate_notification_recipients to authenticated;
 revoke all on public.real_estate_notification_recipients from anon, public;
 revoke delete, truncate, references, trigger
   on public.real_estate_notification_recipients from authenticated;
