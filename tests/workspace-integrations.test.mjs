@@ -68,6 +68,7 @@ test("Resend verification decrypts server-side and checks the saved connection w
   assert.match(resendVerificationRoute, /https:\/\/api\.resend\.com\/domains\?limit=100/);
   assert.match(resendVerificationRoute, /senderDomainVerified/);
   assert.match(resendVerificationRoute, /No email was sent/);
+  assert.match(resendVerificationRoute, /does not by itself mean the key is invalid/);
   const result = resendVerificationRoute.slice(resendVerificationRoute.lastIndexOf('return json({\n      status: "passed"'));
   assert.doesNotMatch(result, /apiKey|encrypted_credentials/);
 });
