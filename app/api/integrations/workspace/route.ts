@@ -235,7 +235,7 @@ export async function DELETE(request: NextRequest) {
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: membership, error: membershipError } = await supabase.from("workspace_members")
       .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
-    if (membershipError) throw membershipError;
+    if (membershipError) throw new Error("INTEGRATION_MEMBERSHIP_CHECK_FAILED");
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return json({ error: integrationErrorMessages.INTEGRATION_PERMISSION_DENIED, code: "INTEGRATION_PERMISSION_DENIED" }, 403);
     }
