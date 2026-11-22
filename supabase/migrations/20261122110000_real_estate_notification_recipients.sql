@@ -30,7 +30,7 @@ create or replace function public.enforce_real_estate_notification_recipient_aud
 returns trigger
 language plpgsql
 set search_path = ''
-as $function$
+as $
 begin
   if auth.uid() is null then
     raise exception using errcode = '42501', message = 'Authenticated workspace admin required';
@@ -71,7 +71,7 @@ begin
   new.updated_at := now();
   return new;
 end;
-$function$;
+$;
 
 revoke all on function public.enforce_real_estate_notification_recipient_audit() from public, anon, authenticated;
 
