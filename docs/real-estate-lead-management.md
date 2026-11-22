@@ -16,7 +16,7 @@ This is the first customer-facing industry template built on Rexnora's workspace
 
 ## Database migration
 
-Apply supabase/migrations/20261120100000_real_estate_lead_management.sql, then 20261120102000_real_estate_followup_controls.sql through the reviewed Supabase migration process. The migrations have not been applied to production by this pull request.
+Apply the migrations in order: `20261120100000_real_estate_lead_management.sql`, `20261120102000_real_estate_followup_controls.sql`, `20261120103000_real_estate_followup_recovery.sql`, `20261120104000_real_estate_pipeline_delivery.sql`, then `20261122110000_real_estate_notification_recipients.sql` through the reviewed Supabase migration process. The migrations have not been applied to production by this pull request.
 
 ## Configure public intake
 
@@ -28,6 +28,12 @@ Apply supabase/migrations/20261120100000_real_estate_lead_management.sql, then 2
 
 The public endpoint accepts JSON with fullName, email, phone, transactionType, propertyType, preferredLocation, budgetMin, budgetMax, currency, timeframe, readiness, contactPreference, consentToContact, consentText and optional message.
 
+## Approve agency alert recipients
+
+Workspace owner/admin users must add each approved agency inbox in Dashboard → Real Estate → Website forms → Approved agency alert recipients. Only active addresses in this allowlist receive Gemini qualification summaries. Rexnora does not infer recipients from workspace owner/admin profile email addresses. Revocation blocks future notifications to that address; approval and revocation timestamps and actors are retained for audit.
+
+The pipeline remains blocked until at least one agency recipient is explicitly approved. Re-approving an address records a fresh approval timestamp. Notification delivery uses the registered Email → Send email operation and stable idempotency keys.
+
 ## Enable follow-up delivery
 
 The queue and dispatcher are implemented, but sending stays disabled until all checks below pass:
@@ -38,7 +44,7 @@ The queue and dispatcher are implemented, but sending stays disabled until all c
 - Approve the resend / email / send_email operation for the workspace.
 - Configure a scheduler to invoke GET /api/cron/real-estate-followups with Authorization: Bearer CRON_SECRET at least every 5 minutes.
 
-The existing Vercel Hobby Cron cadence is daily, so it cannot meet the 1-hour and 24-hour follow-up timing in this template. Use a scheduler with at-least-five-minute cadence or a Vercel plan that supports per-minute cron scheduling. Do not change the root vercel.json to a frequent cron expression on a Hobby project: Vercel can reject a deployment when the schedule exceeds the plan's cadence.
+Vercel Hobby Cron is daily and cannot meet the 1-hour and 24-hour timing in this template. The root `vercel.json` intentionally does not register this frequent job. Configure an external scheduler to call `GET /api/cron/real-estate-automation` with `Authorization: Bearer CRON_SECRET` at least every five minutes. The endpoint runs the lead pipeline and due follow-ups; it is safe to invoke repeatedly because work is claimed with database leases and provider idempotency keys. A 15-minute or daily schedule is not sufficient for the stated follow-up sequence.
 
 The endpoint is safe to invoke more than once: rows are claimed with leases, every follow-up has a stable Resend idempotency key, and only the worker holding the current lease may finalize the attempt. A network timeout is retried with the same provider idempotency key.
 
