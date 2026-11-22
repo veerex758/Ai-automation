@@ -199,7 +199,7 @@ export default function RealEstatePage(){
      <div className="re-form-list">{notificationRecipients.map(recipient=><article key={recipient.id}>
       <div><strong>{recipient.email}</strong><small>{recipient.active?"Approved "+dateLabel(recipient.approved_at):"Revoked "+(recipient.revoked_at?dateLabel(recipient.revoked_at):"")}</small></div>
       <button type="button" className="re-small" disabled={busy} onClick={()=>void changeRecipientApproval(recipient,!recipient.active)}>{recipient.active?"Revoke":"Re-approve"}</button>
-     </article>)}{!recipientError&&!notificationRecipients.length&&<p className="re-empty">No agency alert recipients approved. Add the agency's designated inbox before enabling Resend alerts.</p>}</div>
+     </article>)}{!recipientError&&!notificationRecipients.length&&<p className="re-empty">No agency alert recipients approved. Add the agency&apos;s designated inbox before enabling Resend alerts.</p>}</div>
      <p className="re-footnote">Rexnora no longer sends lead alerts automatically to every workspace owner/admin. Each agency recipient must be explicitly approved here. Revoke access to stop future alerts to that address.</p>
     </section>}
 
