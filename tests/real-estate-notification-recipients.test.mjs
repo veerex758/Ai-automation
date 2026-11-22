@@ -14,6 +14,9 @@ test("agency alert recipients require a workspace admin approval and retain revo
   assert.match(migration, /approved_at timestamptz not null/);
   assert.match(migration, /revoked_by uuid/);
   assert.match(migration, /revoked_at timestamptz/);
+  assert.match(migration, /enforce_real_estate_notification_recipient_audit/);
+  assert.match(migration, /grant insert \(workspace_id, email, active\)/i);
+  assert.match(migration, /grant update \(active\)/i);
   assert.match(migration, /alter table public\.real_estate_notification_recipients enable row level security/i);
 });
 
@@ -22,7 +25,7 @@ test("recipient APIs enforce owner/admin permissions and normalize email address
   assert.match(route, /toLowerCase\(\)/);
   assert.match(route, /active, true/);
   assert.match(updateRoute, /\["owner", "admin"\]/);
-  assert.match(updateRoute, /revoked_by: user\.id/);
+  assert.match(updateRoute, /const update = \{ active \}/);
 });
 
 test("pipeline never falls back to workspace profile emails", () => {
