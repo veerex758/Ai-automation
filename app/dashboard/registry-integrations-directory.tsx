@@ -578,13 +578,15 @@ export default function RegistryIntegrationsDirectory() {
       setCredentialValues({});
       if (credentialTestable.has(provider)) {
         const savedConnectionId = typeof savedBody?.integration?.id === "string" ? savedBody.integration.id : "";
-        if (provider === "resend" && !savedConnectionId) {
-          throw new Error("Rexnora saved the credentials securely, but could not identify the saved Resend connection for verification.");
+        if (!savedConnectionId) {
+          throw new Error("Rexnora saved the credentials securely, but could not identify the saved connection for verification.");
         }
         const verificationPath = provider === "resend"
           ? "/api/integrations/workspace/resend/test"
           : "/api/integrations/workspace/test";
-        const verificationBody = provider === "resend" ? { connectionId: savedConnectionId } : { provider };
+        const verificationBody = provider === "resend"
+          ? { connectionId: savedConnectionId }
+          : { provider, integrationId: savedConnectionId };
         const tested = await fetch(verificationPath, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(verificationBody) });
         const testedBody = await tested.json().catch(() => ({}));
         if (!tested.ok) throw new Error(testedBody.message ?? testedBody.error ?? "Provider verification failed.");
