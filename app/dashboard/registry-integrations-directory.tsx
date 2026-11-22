@@ -566,16 +566,30 @@ export default function RegistryIntegrationsDirectory() {
     const fields = credentialFields[provider];
     if (!fields) return;
     const credentials = Object.fromEntries(fields.filter((field) => credentialValues[field.key]?.trim()).map((field) => [field.key,credentialValues[field.key].trim()]));
+    let credentialsSaved = false;
     setConnectionBusy(true); setConnectionMessage("");
     try {
       const saved = await fetch("/api/integrations/workspace", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({provider,credentials}) });
       const savedBody = await saved.json().catch(() => ({}));
       if (!saved.ok) throw new Error(savedBody.error ?? "Could not save this connection.");
+      credentialsSaved = true;
+      // The browser must not retain a provider secret after the server confirms
+      // encrypted storage. Tests use the saved connection ID, never the key.
+      setCredentialValues({});
       if (credentialTestable.has(provider)) {
-        const tested = await fetch("/api/integrations/workspace/test", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider})});
+        const savedConnectionId = typeof savedBody?.integration?.id === "string" ? savedBody.integration.id : "";
+        if (provider === "resend" && !savedConnectionId) {
+          throw new Error("Rexnora saved the credentials securely, but could not identify the saved Resend connection for verification.");
+        }
+        const verificationPath = provider === "resend"
+          ? "/api/integrations/workspace/resend/test"
+          : "/api/integrations/workspace/test";
+        const verificationBody = provider === "resend" ? { connectionId: savedConnectionId } : { provider };
+        const tested = await fetch(verificationPath, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(verificationBody) });
         const testedBody = await tested.json().catch(() => ({}));
-        if (!tested.ok) throw new Error(testedBody.message ?? testedBody.error ?? "Credentials were saved but provider verification failed.");
-        setConnectionMessage("Connection verified successfully.");
+        if (!tested.ok) throw new Error(testedBody.message ?? testedBody.error ?? "Provider verification failed.");
+        const resultMessage = typeof testedBody.message === "string" ? testedBody.message : "Connection verified successfully.";
+        setConnectionMessage(`Credentials saved securely. ${resultMessage}`);
       } else {
         setConnectionMessage("Credentials saved securely. This provider does not yet have an implemented read-only verification test, so it is not marked connected.");
       }
@@ -583,7 +597,10 @@ export default function RegistryIntegrationsDirectory() {
       const payload = await response.json().catch(() => ({}));
       setWorkspace(Array.isArray(payload.integrations)?payload.integrations:[]);
     } catch(error) {
-      setConnectionMessage(error instanceof Error?error.message:"Connection setup failed.");
+      const reason = error instanceof Error ? error.message : "Connection setup failed.";
+      setConnectionMessage(credentialsSaved
+        ? `Credentials were saved securely, but verification could not be completed: ${reason}`
+        : reason);
       const response = await fetch("/api/integrations/workspace",{cache:"no-store"}).catch(() => null);
       if (response?.ok) { const payload = await response.json().catch(() => ({})); setWorkspace(Array.isArray(payload.integrations)?payload.integrations:[]); }
     } finally { setConnectionBusy(false); }
