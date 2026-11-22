@@ -30,7 +30,9 @@ export const emailNode: NodeDefinition = {
       });
       if (response.status < 200 || response.status >= 300) {
         ctx.logger.error("Resend email failed", { status: response.status });
-        throw new Error(response.status === 429 ? "EMAIL_RATE_LIMITED" : "EMAIL_REQUEST_FAILED");
+        throw new Error(response.status === 429
+          ? "EMAIL_RATE_LIMITED"
+          : response.status >= 500 ? "EMAIL_PROVIDER_UNAVAILABLE" : "EMAIL_REQUEST_REJECTED");
       }
       const body = response.body as { id?: unknown };
       if (typeof body?.id !== "string" || !body.id) throw new Error("EMAIL_PROVIDER_RESULT_INVALID");
