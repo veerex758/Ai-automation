@@ -30,10 +30,7 @@ export async function PATCH(request: NextRequest, context: Context) {
       return NextResponse.json({ error: "An active true/false value is required." }, { status: 400, headers });
     }
     const active = (body as Record<string, unknown>).active as boolean;
-    const now = new Date().toISOString();
-    const update = active
-      ? { active: true, approved_by: user.id, approved_at: now, revoked_by: null, revoked_at: null }
-      : { active: false, revoked_by: user.id, revoked_at: now };
+    const update = { active };
     const { data, error } = await supabase.from("real_estate_notification_recipients")
       .update(update).eq("id", recipientId).eq("workspace_id", workspace.id)
       .select("id,email,active,approved_at,created_at,revoked_at").maybeSingle();
