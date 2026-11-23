@@ -34,7 +34,7 @@ test("multi-account credential RPC is workspace-scoped and service-role only", (
   assert.match(migration, /revoke all on function public\.save_workspace_integration_connection[\s\S]*from public, anon, authenticated/i);
   assert.match(migration, /grant execute on function public\.save_workspace_integration_connection[\s\S]*to service_role/i);
   assert.match(migration, /drop constraint if exists workspace_integrations_workspace_id_provider_key/i);
-  assert.match(migration, /where id = p_connection_id[\s\S]*and workspace_id = p_workspace_id[\s\S]*and provider = p_provider/i);
+  assert.match(migration, /where wi\.id = p_connection_id[\s\S]*and wi\.workspace_id = p_workspace_id[\s\S]*and wi\.provider = p_provider/i);
 });
 
 test("durable worker resolves one exact tested account before each provider node", () => {

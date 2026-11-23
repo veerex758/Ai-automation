@@ -70,12 +70,12 @@ test("successful workflow generation logs Gemini provider and model without prom
   logOperationalEvent({
     event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
     outcome: "success", statusCode: 200, durationMs: 18,
-    provider: "gemini", model: "gemini-2.5-flash",
+    provider: "gemini", model: "gemini-3.8-flash",
     prompt: "private customer data", apiKey: "secret-key",
   }, value => { output = value; });
   const record = JSON.parse(output);
   assert.equal(record.provider, "gemini");
-  assert.equal(record.model, "gemini-2.5-flash");
+  assert.equal(record.model, "gemini-3.8-flash");
   logOperationalEvent({
     event: "workflow_generation", requestId, providerStatus: 400,
     providerReason: "INVALID_ARGUMENT", providerType: "invalid_request",
