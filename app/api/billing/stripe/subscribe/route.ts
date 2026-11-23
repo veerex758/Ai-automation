@@ -25,6 +25,8 @@ export async function POST(request:Request){
   const supabase=await createClient(),{data:{user}}=await supabase.auth.getUser();
   if(!user)return privateJson({error:"Authentication required."},{status:401});
   if(!user.email)return privateJson({error:"Account email is required."},{status:400});
+  const contentLength=Number(request.headers.get("content-length")??"0");
+  if(contentLength>4096||new TextEncoder().encode(await request.clone().text()).byteLength>4096)return privateJson({error:"Billing request exceeds 4 KiB."},{status:413});
   let body:{plan?:unknown;consent?:unknown};
   try{body=await request.json() as {plan?:unknown;consent?:unknown};}catch{return privateJson({error:"Invalid request body."},{status:400});}
   const plan=getPaidPlan(body.plan);
