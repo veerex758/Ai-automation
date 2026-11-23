@@ -10,7 +10,7 @@ const allowed=["name","description","instructions","model_provider","model_name"
 if("name"in update&&(typeof update.name!=="string"||!update.name.trim()||update.name.trim().length>80))return NextResponse.json({error:"Name must be 1–80 characters."},{status:400,headers});
 if("description"in update&&(typeof update.description!=="string"||update.description.length>500))return NextResponse.json({error:"Description too long."},{status:400,headers});
 if("instructions"in update&&(typeof update.instructions!=="string"||update.instructions.length>12000))return NextResponse.json({error:"Instructions too long."},{status:400,headers});
-if("model_provider"in update&&!["gemini","openai"].includes(String(update.model_provider)))return NextResponse.json({error:"Unsupported provider."},{status:400,headers});
+if("model_provider"in update&&update.model_provider!=="gemini")return NextResponse.json({error:"Rexnora agents currently support Gemini only."},{status:400,headers});
 if("model_name"in update&&(typeof update.model_name!=="string"||!update.model_name.trim()||update.model_name.length>120))return NextResponse.json({error:"Invalid model."},{status:400,headers});
 if("tool_ids"in update&&(!Array.isArray(update.tool_ids)||update.tool_ids.length>30||update.tool_ids.some(x=>typeof x!=="string"||!/^[a-z][a-z0-9._:-]{0,79}$/.test(x))))return NextResponse.json({error:"Invalid tool selection."},{status:400,headers});
 if("tool_ids"in update){try{getAgentTools(update.tool_ids as string[])}catch{return NextResponse.json({error:"Choose only approved read-only tools: workflow.list, workflow.get, integrations.list."},{status:400,headers});}}
