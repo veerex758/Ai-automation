@@ -1,16 +1,33 @@
 {
-  "crons": [
-    {
+  "schedules": {
+    "internal-scheduler-daily": {
+      "schedule": "0 9 * * *",
       "path": "/api/internal/scheduler",
-      "schedule": "0 9 * * *"
+      "requestMethod": "GET"
     },
-    {
+    "billing-reconcile": {
+      "schedule": "0 10 * * *",
       "path": "/api/internal/billing/reconcile",
-      "schedule": "0 10 * * *"
+      "requestMethod": "POST"
     },
-    {
+    "operations-alerts": {
+      "schedule": "0 11 * * *",
       "path": "/api/internal/operations/alerts",
-      "schedule": "0 11 * * *"
+      "requestMethod": "POST"
+    },
+    "real-estate-automation": {
+      "schedule": "*/15 * * * *",
+      "function": "api/real-estate-automation",
+      "timezone": "Africa/Lagos"
     }
-  ]
+  },
+  "functions": {
+    "api/real-estate-automation.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "schedule/v1beta"
+        }
+      ]
+    }
+  }
 }
