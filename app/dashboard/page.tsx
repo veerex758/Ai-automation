@@ -73,32 +73,25 @@ const workflowTemplates: WorkflowTemplate[] = [
   },
 ];
 
-const navGroups = [
-  { label: "WORKSPACE", items: [
-    { label: "Overview", icon: "⌂", href: "/dashboard" },
-    { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
-    { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
-  ] },
-  { label: "BUILD", items: [
-    { label: "Workflow builder", icon: "＋", href: "/dashboard/builder" },
-    { label: "AI assistant", icon: "✧", href: "/dashboard/ai-assistant" },
-    { label: "AI agents", icon: "✺", href: "/dashboard/agents" },
-    { label: "Templates", icon: "▧", href: "/dashboard/templates" },
-  ] },
-  { label: "CONNECT", items: [
-    { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
-    { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
-  ] },
-  { label: "MANAGE", items: [
-    { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
-    { label: "Billing", icon: "◇", href: "/dashboard/billing" },
-    { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
-  ] },
+const navItems = [
+  { label: "Overview", icon: "⌂", href: "/dashboard" },
+  { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
+  { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
+  { label: "Workflow builder", icon: "＋", href: "/dashboard/builder" },
+  { label: "AI assistant", icon: "✧", href: "/dashboard/ai-assistant" },
+  { label: "AI agents", icon: "✺", href: "/dashboard/agents" },
+  { label: "Templates", icon: "▧", href: "/dashboard/templates" },
+  { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
+  { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
+  { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
+  { label: "Billing", icon: "◇", href: "/dashboard/billing" },
+  { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
 ];
 
 export default function DashboardPage() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [activeNav, setActiveNav] = useState("Overview");
   const [filter, setFilter] = useState("All workflows");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -282,23 +275,19 @@ export default function DashboardPage() {
   return (
     <main className="app-shell dashboard-overview-page">
       <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{width:"146px",height:"30px",objectFit:"contain"}}/></Link>
+        <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark">a</span><span>Rexnora<span className="brand-period">.</span></span></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
-        <nav className="side-nav dashboard-nav" aria-label="Workspace navigation">
-          {navGroups.map((group) => <section className="dashboard-nav-group" key={group.label} aria-label={group.label}>
-            <div className="sidebar-label">{group.label}</div>
-            {group.items.map((item) => <Link key={item.label} href={item.href} aria-current={item.label === "Overview" ? "page" : undefined} className={item.label === "Overview" ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
-          </section>)}
-          <section className="dashboard-nav-group" aria-label="Quick actions">
-            <div className="sidebar-label">QUICK ACTION</div>
-            <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
-          </section>
+        <div className="sidebar-label">WORKSPACE</div>
+        <nav className="side-nav" aria-label="Workspace navigation">
+          {navItems.map((item) => <Link key={item.label} href={item.href} className={activeNav === item.label ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
         </nav>
+        <div className="sidebar-label tools-label">BUILD</div>
+        <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
         <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
       </aside>
 
       <section className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>Overview</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
+        <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>{activeNav}</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
         <div className="dashboard-content">
           <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={openCreateModal}><span>＋</span> New workflow</button></div>
 

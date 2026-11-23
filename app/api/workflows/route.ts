@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
@@ -52,6 +53,9 @@ export async function GET() {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.view"))) {
+      return NextResponse.json({ error: "Workspace workflows.view permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+    }
     const { data, error } = await supabase
       .from("workflows")
       .select("id, name, description, status, updated_at")
@@ -218,6 +222,12 @@ export async function POST(request: NextRequest) {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.create"))) {
+      return NextResponse.json({ error: "Workspace workflows.create permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (status === "active" && !(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.execute"))) {
+      return NextResponse.json({ error: "Workspace workflows.execute permission required to create an active workflow." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+    }
     // The database guard intentionally allows workflow creation only with an
     // empty definition. Persist the validated graph through the audited RPC so
     // version history and audit events are written atomically with the definition.

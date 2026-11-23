@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
@@ -91,6 +92,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     }
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "Provide a name, description, or status to update." }, { status: 400 });
+    }
+
+    const { data: workflowAccess, error: workflowAccessError } = await auth.supabase.from("workflows")
+      .select("workspace_id").eq("id", workflowId).maybeSingle();
+    if (workflowAccessError) throw workflowAccessError;
+    if (!workflowAccess) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    const requiredPermission = updates.status === "active" ? "workflows.execute" : "workflows.edit";
+    if (!(await hasWorkspacePermission(auth.supabase, workflowAccess.workspace_id, auth.user.id, requiredPermission))) {
+      return NextResponse.json({ error: "Workspace " + requiredPermission + " permission required." }, { status: 403 });
     }
 
     if (updates.status === "active") {
@@ -214,6 +224,13 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
 
     const auth = await getAuthenticatedClient();
     if ("response" in auth) return auth.response;
+    const { data: workflowAccess, error: workflowAccessError } = await auth.supabase.from("workflows")
+      .select("workspace_id").eq("id", workflowId).maybeSingle();
+    if (workflowAccessError) throw workflowAccessError;
+    if (!workflowAccess) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!(await hasWorkspacePermission(auth.supabase, workflowAccess.workspace_id, auth.user.id, "workflows.delete"))) {
+      return NextResponse.json({ error: "Workspace workflows.delete permission required." }, { status: 403 });
+    }
 
     const { data, error } = await auth.supabase
       .from("workflows")

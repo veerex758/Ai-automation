@@ -42,7 +42,10 @@ test("verified webhook dispatch is workspace-bound and always uses the durable l
   assert.match(source, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true"/);
   assert.match(source, /validateDurableLiveSteps\(steps\)/);
   assert.match(source, /p_execution_mode: "live"/);
-  assert.match(source, /p_created_by: null/);
+  assert.match(source, /workspaceOwner/);
+  assert.match(source, /\.select\("owner_id"\)/);
+  assert.match(source, /p_created_by: dispatchActor/);
+  assert.doesNotMatch(source, /p_created_by: null/);
   assert.match(source, /webhookVerified: true/);
   assert.match(source, /payloadSha256/);
   assert.match(source, /queued: true/);

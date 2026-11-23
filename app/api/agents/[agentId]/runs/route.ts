@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { executeAgentTool, getAgentToolByName, getAgentTools } from "@/lib/agents/tool-runtime";
@@ -104,7 +105,9 @@ export async function POST(request: NextRequest, context: Context) {
     return NextResponse.json({ error: "This agent includes a tool that is not in the approved tool registry." }, { status: 422, headers });
   }
 
-  const { data: usage, error: usageError } = await a.supabase.rpc("consume_workspace_usage", { p_workspace_id: agent.workspace_id, p_metric: "ai_credit", p_quantity: 1, p_metadata: { feature: "agent_run", agent_id: agent.id } });
+  const { data: usage, error: usageError } = await a.supabase.rpc("consume_agent_run_usage", {
+    p_workspace_id: agent.workspace_id, p_agent_id: agent.id, p_idempotency_key: randomUUID(),
+  });
   if (usageError) return NextResponse.json({ error: "Usage metering unavailable. Apply Phase 5 billing migration." }, { status: 503, headers });
   if (!usage?.allowed) return NextResponse.json({ error: "Monthly agent run limit reached. Upgrade your plan.", entitlement: usage }, { status: 402, headers });
   const { data: run, error: insertError } = await a.supabase.from("agent_runs").insert({

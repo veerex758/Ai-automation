@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDryRun } from "@/lib/workflows/dry-run.cjs";
 import { executeRegisteredWorkflow, type RegisteredWorkflowStep } from "@/nodes/workflow-runner";
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       .maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.execute"))) return privateJson({ error: "Workspace workflows.execute permission required." }, { status: 403 });
     if (workflow.status === "archived") {
       return privateJson({ error: "Archived workflows cannot be run." }, { status: 409 });
     }
@@ -209,6 +211,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
       .maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.view"))) return privateJson({ error: "Workspace workflows.view permission required." }, { status: 403 });
 
     const { data: runs, error: runsError } = await supabase
       .from("workflow_runs")

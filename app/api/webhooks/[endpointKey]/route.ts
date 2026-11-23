@@ -110,6 +110,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       .eq("id", endpoint.workflow_id).eq("workspace_id", endpoint.workspace_id).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow || workflow.status !== "active") return jsonError("The linked workflow is not active.", 409);
+
+    const { data: workspaceOwner, error: workspaceOwnerError } = await db.from("workspaces")
+      .select("owner_id").eq("id", endpoint.workspace_id).maybeSingle();
+    if (workspaceOwnerError) throw workspaceOwnerError;
+    const dispatchActor = workspaceOwner?.owner_id;
+    if (typeof dispatchActor !== "string") return jsonError("Webhook workspace has no valid execution owner.", 503);
     if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true" ||
         process.env.AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true") {
       return jsonError("Durable live webhook execution is disabled by the server.", 503);
@@ -165,7 +171,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       p_workspace_id: workflow.workspace_id,
       p_workflow_id: workflow.id,
       p_workflow_version: workflow.version,
-      p_created_by: null,
+      p_created_by: dispatchActor,
       p_idempotency_key: "webhook:" + endpoint.id + ":" + eventKey,
       p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id, payloadSha256 },
       p_max_attempts: 1,

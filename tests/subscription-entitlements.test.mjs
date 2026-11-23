@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const migration = await readFile(new URL("../supabase/migrations/20261107130000_aivanta_subscription_entitlements.sql", import.meta.url), "utf8");
 const hardeningMigration = await readFile(new URL("../supabase/migrations/20261107131500_aivanta_subscription_entitlement_hardening.sql", import.meta.url), "utf8");
+const usageHardeningMigration = await readFile(new URL("../supabase/migrations/20261114130000_aivanta_dashboard_usage_hardening.sql", import.meta.url), "utf8");
 const workflowRoute = await readFile(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
 const agentRunRoute = await readFile(new URL("../app/api/agents/[agentId]/runs/route.ts", import.meta.url), "utf8");
 const aiRoute = await readFile(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
@@ -32,17 +33,17 @@ test("active workflow caps are enforced and AI credit is charged only for valida
   assert.match(hardeningMigration, /workflows_enforce_active_entitlement/);
   assert.match(hardeningMigration, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
-  assert.match(agentRunRoute, /p_metric: "ai_credit".*feature: "agent_run"/);
+  assert.match(agentRunRoute, /consume_agent_run_usage/);
 
   const preflight = aiRoute.indexOf('supabase.rpc("get_workspace_entitlements"');
   const generation = aiRoute.indexOf("await generateWorkflow(");
   const graphValidation = aiRoute.indexOf("validateRegisteredSteps(rebuilt)");
-  const creditMetering = aiRoute.indexOf('supabase.rpc("consume_workspace_usage"');
+  const creditMetering = aiRoute.indexOf('supabase.rpc("consume_ai_generation_usage"');
   const successLog = aiRoute.indexOf('outcome: "success"');
   assert.ok(preflight >= 0 && generation > preflight && graphValidation > generation);
   assert.ok(creditMetering > graphValidation && successLog > creditMetering);
-  assert.match(aiRoute, /p_metric: "ai_credit"/);
-  assert.match(aiRoute, /feature: "workflow_draft_generation"/);
+  assert.match(aiRoute, /consume_ai_generation_usage/);
+  assert.match(usageHardeningMigration, /workflow_draft_generation/);
   assert.doesNotMatch(aiRoute.slice(0, generation), /consume_workspace_usage/);
   assert.match(workflowRunRoute, /p_metric: "workflow_execution"/);
   assert.match(workflowRunRoute, /One workflow run is one execution, including a safe dry-run/);
