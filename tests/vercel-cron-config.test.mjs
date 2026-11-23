@@ -20,6 +20,11 @@ test("Vercel keeps the existing daily scheduler and registers the private 15-min
     path: "/api/internal/operations/alerts",
     requestMethod: "POST",
   });
+  assert.deepEqual(config.schedules["paystack-recurring-renewals"], {
+    schedule: "30 12 * * *",
+    path: "/api/internal/billing/paystack-renewals",
+    requestMethod: "POST",
+  });
   assert.deepEqual(config.schedules["real-estate-automation"], {
     schedule: "*/15 * * * *",
     function: "api/real-estate-automation",
