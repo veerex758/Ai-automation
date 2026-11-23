@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms] = await Promise.all([
+const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, membersRoute, invitationsRoute, rolesRoute, securityRoute, assignRoleRoute, transferRoute, acceptInvitationRoute, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms] = await Promise.all([
   read("../app/dashboard/page.tsx"),
   read("../app/api/dashboards/metrics/route.ts"),
   read("../app/api/workspaces/route.ts"),
@@ -17,6 +17,13 @@ const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflow
   read("../app/api/workflows/[workflowId]/webhook/route.ts"),
   read("../app/api/integrations/workspace/route.ts"),
   read("../app/dashboard/session-expiry-guard.tsx"),
+  read("../app/api/workspaces/[workspaceId]/members/route.ts"),
+  read("../app/api/workspaces/[workspaceId]/invitations/route.ts"),
+  read("../app/api/workspaces/[workspaceId]/roles/route.ts"),
+  read("../app/api/workspaces/[workspaceId]/security/route.ts"),
+  read("../app/api/workspaces/[workspaceId]/roles/assign/route.ts"),
+  read("../app/api/workspaces/[workspaceId]/transfer/route.ts"),
+  read("../app/api/workspaces/invitations/accept/route.ts"),
   read("../lib/supabase/permissions.ts"),
   read("../app/api/agents/route.ts"),
   read("../app/api/agents/[agentId]/route.ts"),
@@ -110,4 +117,25 @@ test("workflow definitions, webhook provisioning and execution inspection enforc
   assert.match(integrationRoute, /integrations\.view/);
   assert.match(sessionGuard, /onAuthStateChange/);
   assert.match(sessionGuard, /SIGNED_OUT/);
+});
+
+test("workspace administration endpoints validate tenant identifiers and sensitive requests", () => {
+  assert.match(membersRoute, /uuidPattern\.test\(workspaceId\)/);
+  assert.match(membersRoute, /members\.manage/);
+  assert.match(membersRoute, /Member update exceeds 4 KiB/);
+  assert.match(invitationsRoute, /uuidPattern\.test\(workspaceId\)/);
+  assert.match(invitationsRoute, /members\.manage/);
+  assert.match(rolesRoute, /uuidPattern\.test\(workspaceId\)/);
+  assert.match(rolesRoute, /Role configuration exceeds 8 KiB/);
+  assert.match(rolesRoute, /WORKSPACE_PERMISSIONS/);
+  assert.match(securityRoute, /uuidPattern\.test\(workspaceId\)/);
+  assert.match(securityRoute, /Only the workspace owner/);
+  assert.match(assignRoleRoute, /uuidPattern\.test\(workspaceId\)/);
+  assert.match(assignRoleRoute, /uuidPattern\.test\(body\.user_id\)/);
+  assert.match(transferRoute, /uuidPattern\.test\(workspaceId\)/);
+  assert.match(transferRoute, /Invalid origin/);
+  assert.match(transferRoute, /uuidPattern\.test\(body\.new_owner_id\)/);
+  assert.match(acceptInvitationRoute, /user\.email_confirmed_at/);
+  assert.match(acceptInvitationRoute, /sha256/);
+  assert.match(acceptInvitationRoute, /Invitation acceptance request exceeds 4 KiB/);
 });
