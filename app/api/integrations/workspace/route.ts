@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { encryptWorkspaceCredentialsV2, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
 
 export const runtime = "nodejs";
@@ -138,6 +139,9 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required.", code: "AUTHENTICATION_REQUIRED" }, 401);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.view"))) {
+      return json({ error: "Workspace integrations.view permission required.", code: "INTEGRATION_PERMISSION_DENIED" }, 403);
+    }
     const { data, error } = await supabase.from("workspace_integrations")
       .select("id,provider,status,display_name,last_tested_at,last_test_status,updated_at")
       .eq("workspace_id", workspace.id).order("provider", { ascending: true });
