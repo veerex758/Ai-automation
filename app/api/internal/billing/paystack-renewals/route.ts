@@ -1,3 +1,4 @@
+import {timingSafeEqual} from "node:crypto";
 import {NextResponse} from "next/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 import {decryptWebhookSecret} from "@/lib/webhooks/secret-crypto";
@@ -67,10 +68,16 @@ async function reconcileAwaitingConfirmations(admin:ReturnType<typeof createAdmi
  return {reconciled,held,expired};
 }
 
+function privateJson(body: unknown, init?: ResponseInit) {
+ const response=NextResponse.json(body,init);
+ response.headers.set("Cache-Control","private, no-store");
+ return response;
+}
 export async function POST(request:Request){
  const cron=process.env.CRON_SECRET,secret=process.env.PAYSTACK_SECRET_KEY,key=process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
- if(!cron||request.headers.get("authorization")!=="Bearer "+cron)return NextResponse.json({error:"Unauthorized."},{status:401});
- if(!secret||!key)return NextResponse.json({error:"Paystack recurring billing is not configured."},{status:503});
+ const expected=cron?Buffer.from("Bearer "+cron):Buffer.alloc(0),received=Buffer.from(request.headers.get("authorization")??"");
+ if(!cron||expected.length!==received.length||!timingSafeEqual(expected,received))return privateJson({error:"Unauthorized."},{status:401});
+ if(!secret||!key)return privateJson({error:"Paystack recurring billing is not configured."},{status:503});
  const admin=createAdminClient();
  try{
   const now=new Date(),nowIso=now.toISOString();
@@ -156,9 +163,9 @@ export async function POST(request:Request){
     console.error("Paystack recurring renewal failed for workspace",sub.workspace_id,error);
    }
   }
-  return NextResponse.json({attempted,started,failed,skipped,awaitingConfirmation:reconciliation.held,reconciliation},{headers:{"Cache-Control":"no-store"}});
+  return privateJson({attempted,started,failed,skipped,awaitingConfirmation:reconciliation.held,reconciliation},{headers:{"Cache-Control":"no-store"}});
  }catch(error){
   console.error("Paystack recurring renewal scheduler failed:",error);
-  return NextResponse.json({error:"Recurring renewal processing failed."},{status:503});
+  return privateJson({error:"Recurring renewal processing failed."},{status:503});
  }
 }
