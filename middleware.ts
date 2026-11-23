@@ -39,14 +39,18 @@ export async function middleware(request: NextRequest) {
   }
 
   const isWorkspace = request.nextUrl.pathname.startsWith("/dashboard");
+  const isPasswordUpdate = request.nextUrl.pathname === "/auth/update-password";
   const isLogin = request.nextUrl.pathname === "/login";
-  if (isWorkspace || isLogin) {
+  if (isWorkspace || isPasswordUpdate || isLogin) {
     response.headers.set("Cache-Control", "private, no-store");
   }
 
-  if (isWorkspace && !user) {
+  if ((isWorkspace || isPasswordUpdate) && !user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+    if (request.cookies.getAll().some(({ name }) => name.includes("auth-token"))) {
+      loginUrl.searchParams.set("reason", "session-expired");
+    }
     return NextResponse.redirect(loginUrl);
   }
 
@@ -58,5 +62,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/auth/update-password", "/login"],
 };
