@@ -45,14 +45,18 @@ export async function middleware(request: NextRequest) {
     response.headers.set("Cache-Control", "private, no-store");
   }
 
-  if ((isWorkspace || isPasswordUpdate) && !user) {
+  const redirectSignedOut = () => {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
     if (request.cookies.getAll().some(({ name }) => name.includes("auth-token"))) {
       loginUrl.searchParams.set("reason", "session-expired");
     }
-    return NextResponse.redirect(loginUrl);
-  }
+    const redirect = NextResponse.redirect(loginUrl);
+    redirect.headers.set("Cache-Control", "private, no-store");
+    return redirect;
+  };
+  if (isWorkspace && !user) return redirectSignedOut();
+  if (isPasswordUpdate && !user) return redirectSignedOut();
 
   if (isLogin && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
