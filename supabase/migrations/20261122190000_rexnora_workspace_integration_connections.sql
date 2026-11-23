@@ -82,13 +82,13 @@ begin
     insert into public.workspace_integrations (
       workspace_id, provider, status, display_name, created_by, updated_at
     ) values (
-      p_workspace_id, p_provider, 'connected', btrim(p_display_name), p_created_by, now()
+      p_workspace_id, p_provider, 'needs_attention', btrim(p_display_name), p_created_by, now()
     )
     returning * into v_integration;
   else
     -- A supplied ID updates only that exact connection inside this workspace/provider.
     update public.workspace_integrations as wi
-       set status = 'connected',
+       set status = 'needs_attention',
            display_name = btrim(p_display_name),
            last_tested_at = null,
            last_test_status = null,
