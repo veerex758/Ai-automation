@@ -206,7 +206,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       for (const step of steps) {
         const provider = getWorkerProvider(step);
         if (!provider) continue;
-        const { data: approval, error } = await auth.supabase.from("workspace_provider_operation_approvals").
+        const { data: approval, error } = await auth.supabase.from("workspace_provider_operation_approvals")
           .select("decision").eq("workspace_id", candidate.workspace_id)
           .eq("provider", provider).eq("node_id", step.nodeId).eq("operation_id", step.operationId)
           .order("decided_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle();
