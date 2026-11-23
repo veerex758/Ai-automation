@@ -13,6 +13,7 @@ const PROVIDER_ALIASES: Readonly<Record<string, string>> = {
   email: "resend",
   google_sheets: "sheets",
   http_request: "http",
+  twilio_sms: "twilio",
 };
 
 function mappingFor(node: NodeDefinition, operationId: string, kind: WorkerOperationKind): WorkerOperationMapping {

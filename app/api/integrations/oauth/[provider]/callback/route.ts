@@ -1,9 +1,10 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { encryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { encryptWorkspaceCredentialsV2 } from "@/lib/integrations/workspace-credentials";
 import {
   exchangeProviderOAuthCode,
   exchangeMetaLongLivedToken,
@@ -16,14 +17,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+  const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
   if (!url || !key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 }
 
 function finish(request: NextRequest, provider: string, success: boolean) {
-  const destination = new URL("/dashboard/integrations", request.url);
+  const destination = new URL("/dashboard/connections", request.url);
   destination.searchParams.set("oauth", success ? "connected" : "failed");
   destination.searchParams.set("provider", provider);
   const response = NextResponse.redirect(destination);
@@ -71,6 +71,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     if (error || !user || user.id !== stateData.userId) return finish(request, provider, false);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     if (workspace.id !== stateData.workspaceId) return finish(request, provider, false);
+    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
+      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
+    if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
+      return finish(request, provider, false);
+    }
 
     const config = PROVIDER_OAUTH_CONFIG[provider];
     let token = await exchangeProviderOAuthCode({
@@ -120,27 +125,29 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
 
     const key = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
     if (!key) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
-    const encrypted = encryptWorkspaceCredentials({ [provider]: credentials }, key, workspace.id + ":" + provider);
+    const connectionId = stateData.connectionId ?? randomUUID();
+    const encrypted = encryptWorkspaceCredentialsV2({ [provider]: credentials }, workspace.id + ":" + provider + ":" + connectionId, key);
     const admin = serviceClient();
-    const { data: integration, error: integrationError } = await admin.from("workspace_integrations")
-      .upsert({
-        workspace_id: workspace.id,
-        provider,
-        status: "needs_attention",
-        display_name: provider.replace(/_/g, " "),
-        metadata: { connected_at: new Date().toISOString(), expires_at: credentials.expiresAt ?? null, scope: credentials.scope ?? null },
-        created_by: user.id,
-      }, { onConflict: "workspace_id,provider" })
-      .select("id")
-      .single();
-    if (integrationError || !integration?.id) throw new Error("OAUTH_INTEGRATION_SAVE_FAILED");
-    const { error: secretError } = await admin.from("workspace_integration_secrets").upsert({
-      integration_id: integration.id,
-      encrypted_credentials: encrypted,
-      encryption_version: "v1",
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "integration_id" });
-    if (secretError) throw new Error("OAUTH_CREDENTIAL_SAVE_FAILED");
+    const connectedAt = new Date().toISOString();
+    const displayName = provider.replace(/_/g, " ") + " · " + new Date(connectedAt).toLocaleString("en-US", {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+    }) + " UTC";
+    const { data: saved, error: saveError } = await admin.rpc("save_workspace_integration_connection", {
+      p_workspace_id: workspace.id,
+      p_provider: provider,
+      p_display_name: displayName,
+      p_encrypted_credentials: encrypted,
+      p_created_by: user.id,
+      p_connection_id: connectionId,
+      p_create_new: stateData.connectionId === undefined,
+    });
+    const integrationId = saved && typeof saved === "object" && "id" in saved &&
+      typeof (saved as { id?: unknown }).id === "string" ? (saved as { id: string }).id : null;
+    if (saveError || !integrationId) throw new Error("OAUTH_INTEGRATION_SAVE_FAILED");
+    const { error: metadataError } = await admin.from("workspace_integrations").update({
+      metadata: { connected_at: connectedAt, expires_at: credentials.expiresAt ?? null, scope: credentials.scope ?? null },
+    }).eq("id", integrationId).eq("workspace_id", workspace.id).eq("provider", provider);
+    if (metadataError) throw new Error("OAUTH_CREDENTIAL_METADATA_SAVE_FAILED");
     return finish(request, provider, true);
   } catch (error) {
     console.error("Provider OAuth callback failed", { provider, code: error instanceof Error ? error.message : "OAUTH_CALLBACK_FAILED" });

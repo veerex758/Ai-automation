@@ -7,6 +7,8 @@ export type RegisteredWorkflowStep = {
   operationId: string;
   kind: "trigger" | "action";
   input: unknown;
+  /** Metadata-only ID of a connection owned by this workflow's workspace. */
+  connectionId?: string;
   branch?: { fromStepId: string; route: string };
   /** OR across paths; predicates inside each path are ANDed. */
   branchPaths?: Array<Array<{ fromStepId: string; route: string }>>;
@@ -135,6 +137,12 @@ export async function executeRegisteredWorkflow(args: {
           return { simulated: true as const };
         }
         await args.context.authorizeOperation?.({ nodeId: step.nodeId, operationId: step.operationId, kind: step.kind });
+        // Credentials are looked up immediately before each operation so two
+        // nodes using the same provider may safely select different accounts.
+        await args.context.resolveStepCredentials?.({
+          nodeId: step.nodeId, operationId: step.operationId, kind: step.kind,
+          ...(step.connectionId ? { connectionId: step.connectionId } : {}),
+        });
         const output = await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput);
         const parsed = operation.outputSchema.parse(output);
         await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "succeeded", output: parsed });

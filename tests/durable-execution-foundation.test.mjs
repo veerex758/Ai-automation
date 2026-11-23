@@ -54,7 +54,7 @@ test("worker endpoint authenticates requests and legacy previews remain side-eff
   assert.match(worker, /timingSafeEqual/);
   assert.match(workerService, /claim_execution_jobs/);
   assert.match(workerService, /sideEffectsPerformed !== false/);
-  assert.match(workerService, /LIVE_LEGACY_OPERATION_NOT_ENABLED/);
+  assert.match(workerService, /REGISTRY_WORKFLOW_REQUIRED/);
 });
 
 test("dispatch requires an authenticated user and an idempotency key", () => {
@@ -63,6 +63,7 @@ test("dispatch requires an authenticated user and an idempotency key", () => {
   assert.match(dispatch, /dispatch_workflow_execution/);
   assert.doesNotMatch(dispatch, /from\("workflow_runs"\)\.insert/);
   assert.match(dispatch, /result\.duplicate \? "existing" : "queued"/);
+  assert.match(dispatch, /REGISTRY_WORKFLOW_REQUIRED/);
 });
 
 test("dispatch creates the run and queue row in one serialized transaction", () => {
@@ -98,11 +99,15 @@ test("legacy enqueue RPC also writes the immutable workflow snapshot", () => {
 test("durable worker executes registered steps only for explicitly gated live jobs", () => {
   assert.match(workerService, /executeRegisteredWorkflow\(/);
   assert.match(workerService, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
-  assert.match(workerService, /workspaceCredentials\(db, job\.workspace_id, requiredProviders\)/);
+  assert.match(workerService, /context\.resolveStepCredentials = async/);
+  assert.match(workerService, /workspaceCredentials\(\s*db, job\.workspace_id, new Set\(\[provider\]\)/);
+  assert.match(workerService, /selectedConnectionIds\.get\(provider\)/);
   assert.match(workerService, /onStepStart/);
   assert.match(workerService, /onStepComplete/);
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
-  assert.match(workerService, /LIVE_DURABLE_WEBHOOK_NOT_ENABLED/);
+  assert.match(workerService, /VERIFIED_WEBHOOK_SOURCE_REQUIRED/);
+  assert.match(workerService, /webhookVerified === true/);
+  assert.match(workerService, /endpointId/);
   assert.match(workerService, /p_limit: 1/);
   assert.match(workerService, /length > MAX_LIVE_ACTION_STEPS/);
   assert.match(workerService, /MAX_LIVE_ACTION_STEPS = 30/);
@@ -116,7 +121,7 @@ test("workflow run panel dispatches live runs through the durable queue and poll
   assert.match(runPanel, /idempotencyKey\.current/);
 });
 
-test("dispatch validates registered definitions and guards legacy live email", () => {
+test("dispatch validates registered definitions and blocks legacy live runs without node connection IDs", () => {
   assert.match(dispatch, /isRegistryDefinition/);
   assert.match(dispatch, /findOperation/);
   assert.match(dispatch, /validateDurableLiveSteps/);
@@ -125,8 +130,9 @@ test("dispatch validates registered definitions and guards legacy live email", (
   assert.match(workerService, /LIVE_VOICE_RECIPIENT_NOT_ALLOWED/);
   assert.doesNotMatch(dispatch, /isLiveRegistryOperationAllowed/);
   assert.doesNotMatch(dispatch, /length > 4/);
-  assert.match(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.match(dispatch, /Durable legacy live execution currently supports one manual-trigger Resend email action/);
+  assert.match(dispatch, /REGISTRY_WORKFLOW_REQUIRED/);
+  assert.doesNotMatch(dispatch, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+  assert.doesNotMatch(dispatch, /Durable legacy live execution/);
 });
 
 test("authenticated dispatch wakes the server-side durable worker after queuing", () => {

@@ -10,7 +10,7 @@ const provision = readFileSync("app/api/workflows/[workflowId]/webhook/route.ts"
 const builder = readFileSync("app/dashboard/workflows/[workflowId]/page.tsx", "utf8");
 const testPanel = readFileSync("app/dashboard/workflows/[workflowId]/run-test-panel.tsx", "utf8");
 
-test("Gemini lead qualification is a registered structured operation and does not return direct contact identifiers", () => {
+test("Gemini lead qualification is a registered structured operation and does not invent missing fields", () => {
   assert.match(node, /id: "qualify_real_estate_lead"/);
   assert.doesNotMatch(node, /fullName: z\.string\(\)|email: z\.string\(\)|phone: z\.string\(\)/);
   assert.match(node, /missingInformation: z\.array/);
@@ -23,30 +23,37 @@ test("activation is explicit, constrained to the supported three-step pilot, and
   assert.match(activation, /definition\.steps\.length !== 3/);
   assert.match(activation, /steps\[1\].*nodeId === "gemini"/s);
   assert.match(activation, /steps\[2\].*nodeId === "email"/s);
-  assert.match(activation, /GEMINI_API_KEY/);
-  assert.match(activation, /RESEND_API_KEY/);
+  assert.match(activation, /selectedProviders/);
+  assert.match(activation, /connectionId/);
+  assert.match(activation, /eq\("workspace_id", candidate\.workspace_id\)/);
+  assert.match(activation, /last_test_status/);
+  assert.doesNotMatch(activation, /GEMINI_API_KEY|RESEND_API_KEY/);
   assert.match(activation, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
   assert.match(activation, /workflow_version", candidate\.version/);
   assert.match(activation, /mode", "dry_run"/);
   assert.match(activation, /status", "succeeded"/);
 });
 
-test("manual and signed-webhook live paths allow only the explicit Gemini qualification operation", () => {
-  for (const source of [registryRun, webhook]) {
-    assert.match(source, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
-    assert.match(source, /GEMINI_API_KEY/);
-    assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-    assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  }
+test("legacy direct live endpoints cannot bypass selected workspace credentials", () => {
+  assert.match(registryRun, /DURABLE_DISPATCH_REQUIRED/);
+  assert.match(registryRun, /dryRun: true/);
+  assert.doesNotMatch(registryRun, /GEMINI_API_KEY|RESEND_API_KEY|SLACK_INCOMING_WEBHOOK_URL/);
+  assert.match(webhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED/);
+  assert.match(webhook, /p_execution_mode: DURABLE_WEBHOOK_QUEUE_MODE/);
+  assert.match(webhook, /webhookVerified: true/);
+  assert.doesNotMatch(webhook, /GEMINI_API_KEY|RESEND_API_KEY|executeRegisteredWorkflow/);
+  assert.match(webhook, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
   assert.match(webhook, /hourlyRuns/);
 });
 
-test("webhook signing secrets remain server-side and CODED Supabase service credentials are supported", () => {
+test("webhook signing secrets remain server-side and admin credentials use the Preview-safe resolver", () => {
+  const adminClient = readFileSync("lib/supabase/admin.ts", "utf8");
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
-  assert.match(provision, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(provision, /CODED_SUPABASE_URL/);
-  assert.match(webhook, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(webhook, /CODED_SUPABASE_URL/);
+  assert.match(provision, /getAdminSupabaseConfig/);
+  assert.match(webhook, /getAdminSupabaseConfig/);
+  assert.doesNotMatch(webhook, /CODED_SUPABASE_SERVICE_ROLE_KEY|CODED_SUPABASE_URL/);
+  assert.match(adminClient, /VERCEL_ENV === "preview"/);
+  assert.match(adminClient, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
 });
 
 

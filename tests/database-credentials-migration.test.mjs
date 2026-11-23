@@ -7,7 +7,7 @@ const rollback = await readFile(new URL("../supabase/rollback/20261106213337_mys
 const workspaceRoute = await readFile(new URL("../app/api/integrations/workspace/route.ts", import.meta.url), "utf8");
 const connectionTest = await readFile(new URL("../app/api/integrations/workspace/test/route.ts", import.meta.url), "utf8");
 
-test("MySQL and MongoDB credential migration adds only the intended provider values and a server-only RPC", () => {
+test("MySQL and MongoDB credentials use the multi-account workspace-scoped server-only save RPC", () => {
   assert.match(migration, /'mysql','mongodb'/);
   assert.match(migration, /create or replace function public\.save_workspace_database_credentials/);
   assert.match(migration, /security definer/);
@@ -15,8 +15,12 @@ test("MySQL and MongoDB credential migration adds only the intended provider val
   assert.match(migration, /revoke all on function public\.save_workspace_database_credentials/);
   assert.match(migration, /grant execute on function public\.save_workspace_database_credentials/);
   assert.match(workspaceRoute, /workspace_members/);
-  assert.match(workspaceRoute, /save_workspace_database_credentials/);
-  assert.match(workspaceRoute, /p_encrypted_credential: encrypted/);
+  assert.match(workspaceRoute, /save_workspace_integration_connection/);
+  assert.match(workspaceRoute, /p_provider: provider/);
+  assert.match(workspaceRoute, /p_connection_id: connectionId/);
+  assert.match(workspaceRoute, /p_create_new: requestedConnectionId === undefined/);
+  assert.match(workspaceRoute, /encryptWorkspaceCredentialsV2/);
+  assert.match(workspaceRoute, /\$\{workspace\.id\}:\$\{provider\}:\$\{connectionId\}/);
 });
 
 test("database rollback refuses to discard customer credentials before narrowing the provider constraint", () => {

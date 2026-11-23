@@ -39,12 +39,10 @@ test("all deterministic utility actions remain explicitly allowed through durabl
   }
 });
 
-test("synchronous registry route runs registry steps in dry-run and guards external live effects", () => {
-  assert.match(registryRoute, /executeRegisteredWorkflow\(\{ steps, context: serverContext\(\), dryRun: true \}\)/);
+test("synchronous registry endpoint is dry-run only; live work must use the selected-connection worker", () => {
   assert.match(registryRoute, /if \(!dryRun\)/);
-  assert.match(registryRoute, /const unsupportedLiveStep = steps\.find\(/);
-  assert.match(registryRoute, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  assert.match(registryRoute, /allowed\.has\(to\)/);
-  assert.match(registryRoute, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-  assert.match(registryRoute, /registry operation is available in dry-run only/);
+  assert.match(registryRoute, /DURABLE_DISPATCH_REQUIRED/);
+  assert.match(registryRoute, /credentials: \{\}/);
+  assert.match(registryRoute, /executeRegisteredWorkflow\(\{ steps, context: serverContext\(\), dryRun: true \}\)/);
+  assert.doesNotMatch(registryRoute, /GEMINI_API_KEY|RESEND_API_KEY|SLACK_INCOMING_WEBHOOK_URL/);
 });

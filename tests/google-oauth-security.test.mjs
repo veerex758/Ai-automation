@@ -164,9 +164,12 @@ test("Google OAuth callback validates state before token exchange and clears coo
 });
 
 
-test("provider OAuth callback stores tokens using server-only CODED Supabase credentials", async () => {
+test("provider OAuth callback stores tokens using the Preview-safe server-only admin client", async () => {
   const callback = await readFile(new URL("../app/api/integrations/oauth/[provider]/callback/route.ts", import.meta.url), "utf8");
-  assert.match(callback, /NEXT_PUBLIC_SUPABASE_URL \?\? process\.env\.CODED_SUPABASE_URL/);
-  assert.match(callback, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(callback, /CODED_SUPABASE_SECRET_KEY/);
+  const adminClient = await readFile(new URL("../lib/supabase/admin.ts", import.meta.url), "utf8");
+  assert.match(callback, /getAdminSupabaseConfig/);
+  assert.match(callback, /save_workspace_integration_connection/);
+  assert.doesNotMatch(callback, /CODED_SUPABASE_SERVICE_ROLE_KEY|CODED_SUPABASE_SECRET_KEY|CODED_SUPABASE_URL/);
+  assert.match(adminClient, /VERCEL_ENV === "preview"/);
+  assert.match(adminClient, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
 });

@@ -8,15 +8,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 function serverContext(): Omit<NodeContext, "previousOutputs"> {
-  const credentials: Record<string, Record<string, string>> = {};
-  if (process.env.OPENAI_API_KEY) credentials.openai = { apiKey: process.env.OPENAI_API_KEY };
-  if (process.env.GEMINI_API_KEY) credentials.gemini = { apiKey: process.env.GEMINI_API_KEY };
-  if (process.env.SLACK_INCOMING_WEBHOOK_URL) credentials.slack = { webhookUrl: process.env.SLACK_INCOMING_WEBHOOK_URL };
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
-    credentials.resend = { apiKey: process.env.RESEND_API_KEY, fromEmail: process.env.RESEND_FROM_EMAIL };
-  }
+  // This route is intentionally dry-run only. Live work is dispatched through
+  // the durable worker, which resolves each node's selected workspace account.
   return {
-    credentials,
+    credentials: {},
     logger: {
       info(message, meta) { console.info("[registry-node]", message, meta ?? {}); },
       error(message, meta) { console.error("[registry-node]", message, meta ?? {}); },
@@ -59,14 +54,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return NextResponse.json({ error: "Provide dryRun as a boolean." }, { status: 400 });
     }
     const dryRun = body.dryRun;
+    if (!dryRun) {
+      return NextResponse.json({
+        error: "Direct registry execution is disabled for live runs. Use the durable workflow dispatch endpoint so each node's selected workspace connection is enforced.",
+        code: "DURABLE_DISPATCH_REQUIRED",
+      }, { status: 409 });
+    }
     const idempotencyKey = request.headers.get("idempotency-key") ?? "";
     if (!dryRun && !uuid.test(idempotencyKey)) {
       return NextResponse.json({ error: "A UUID Idempotency-Key header is required for live execution." }, { status: 400 });
     }
-    if (!dryRun && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-      return NextResponse.json({ error: "Live execution is disabled by the server." }, { status: 503 });
-    }
-
     const { data: workflow, error: workflowError } = await supabase.from("workflows")
       .select("id, workspace_id, version, definition, status")
       .eq("id", workflowId).maybeSingle();
@@ -82,36 +79,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (steps.some((step) => !isRecord(step) || typeof step.id !== "string" || typeof step.nodeId !== "string" ||
       typeof step.operationId !== "string" || !["trigger", "action"].includes(step.kind) || !("input" in step))) {
       return NextResponse.json({ error: "Registry workflow steps are malformed." }, { status: 422 });
-    }
-    if (!dryRun) {
-      // Until each provider has its own workspace-scoped connection and explicit live-action gate,
-      // keep production execution restricted to the existing guarded Resend email action.
-      const unsupportedLiveStep = steps.find((step) =>
-        (step.kind === "trigger" && !(step.nodeId === "manual" && step.operationId === "start")) ||
-        (step.kind === "action" && !((step.nodeId === "email" && step.operationId === "send_email") || (step.nodeId === "gemini" && step.operationId === "qualify_real_estate_lead")))
-      );
-      if (unsupportedLiveStep) {
-        return NextResponse.json({ error: "This registry operation is available in dry-run only until its live integration is explicitly enabled." }, { status: 403 });
-      }
-      if (steps.some((step) => step.nodeId === "gemini") && !process.env.GEMINI_API_KEY) return NextResponse.json({ error: "Gemini is not configured for live execution." }, { status: 503 });
-      if (steps.some((step) => step.nodeId === "email") && (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL)) return NextResponse.json({ error: "Resend is not configured for live execution." }, { status: 503 });
-      const allowed = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-      for (const step of steps) {
-        if (step.nodeId === "email" && step.operationId === "send_email") {
-          const rawTo = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim() : "";
-          if (!rawTo || rawTo.includes("{{")) return NextResponse.json({ error: "Live email recipients must be literal addresses on the server-configured allowlist." }, { status: 403 });
-          const to = rawTo.toLowerCase();
-          if (!allowed.has(to)) return NextResponse.json({ error: "Email recipient is not on the server-configured live email allowlist." }, { status: 403 });
-        }
-      }
-      const { data: prior } = await supabase.from("workflow_runs").select("id,status,mode,created_at")
-        .eq("idempotency_key", idempotencyKey).eq("created_by", user.id).eq("workflow_id", workflowId).maybeSingle();
-      if (prior) return NextResponse.json({ run: prior, duplicate: true }, { status: 200 });
-      const hourAgo = new Date(Date.now() - 3600000).toISOString();
-      const { count, error } = await supabase.from("workflow_runs").select("id", { count: "exact", head: true })
-        .eq("created_by", user.id).eq("mode", "live").gte("created_at", hourAgo);
-      if (error) throw error;
-      if ((count ?? 0) >= 10) return NextResponse.json({ error: "Live run limit reached." }, { status: 429 });
     }
 
     // The blueprint defines one workflow run as one execution, regardless of node count or run mode.

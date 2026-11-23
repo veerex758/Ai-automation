@@ -1,6 +1,7 @@
 import "server-only";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { decryptWorkspaceCredentials, encryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { decryptWorkspaceCredentials, encryptWorkspaceCredentialsV2, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import { PROVIDER_OAUTH_CONFIG, refreshProviderOAuthToken } from "@/lib/integrations/provider-oauth";
 import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
 import { GOOGLE_PRODUCTS, type GoogleProduct } from "@/lib/integrations/google-oauth";
@@ -28,21 +29,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 function client() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+  const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
   if (!url || ! key) throw new Error("WORKER_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
 
-async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct): Promise<string> {
-  const { data: connection, error } = await db.from("google_connections")
-    .select("id,encrypted_credentials,expires_at,status,scopes")
-    .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
-    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct, connectionId?: string): Promise<string> {
+  if (!connectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+  let query = db.from("google_connections").select("id,encrypted_credentials,expires_at,status,scopes,last_test_status")
+    .eq("workspace_id", workspaceId).eq("provider", "google").eq("product", product)
+    .eq("status", "connected").eq("last_test_status", "passed");
+  if (connectionId) query = query.eq("id", connectionId);
+  const { data: connections, error } = await query.order("updated_at", { ascending: false }).limit(2);
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
-  if (!connection) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!connections?.length) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (connections.length > 1) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+  const connection = connections[0];
   const requiredScope = GOOGLE_PRODUCTS[product].scopes[0];
   if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
     throw new Error("GOOGLE_SCOPE_MISMATCH");
@@ -63,7 +67,7 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
     cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) {
-    await db.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", connection.id);
+    await db.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", connection.id).eq("workspace_id", workspaceId);
     throw new Error("GOOGLE_REAUTH_REQUIRED");
   }
   const token = await response.json() as { access_token?: unknown; expires_in?: unknown; scope?: unknown; token_type?: unknown };
@@ -82,7 +86,10 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
   return updated.access_token;
 }
 
-async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>): Promise<WorkspaceCredentials> {
+async function workspaceCredentials(
+  db: DbClient, workspaceId: string, providers: Set<string>,
+  selectedConnectionIds: ReadonlyMap<string, string> = new Map(),
+): Promise<WorkspaceCredentials> {
   const credentials: WorkspaceCredentials = {};
   for (const provider of providers) {
     const googleProductByProvider: Record<string, GoogleProduct> = {
@@ -92,24 +99,32 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
     const googleProduct = googleProductByProvider[provider];
     if (provider === "rss_feed") { credentials[provider] = {}; continue; }
     if (googleProduct) {
-      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
+      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct, selectedConnectionIds.get(provider)) };
       continue;
     }
     if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
-    const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider).maybeSingle();
+    const selectedConnectionId = selectedConnectionIds.get(provider);
+    if (!selectedConnectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+    const integrationQuery = db.from("workspace_integrations")
+      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider)
+      .eq("id", selectedConnectionId)
+      .eq("status", "connected").eq("last_test_status", "passed");
+    const { data: integrations, error: integrationError } = await integrationQuery.order("created_at", { ascending: false }).limit(2);
     if (integrationError) throw new Error("WORKSPACE_INTEGRATION_LOOKUP_FAILED");
-    if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed") {
+    if (!integrations?.length) {
       throw new Error(provider === "resend" ? "EMAIL_CONNECTION_REQUIRED" : provider.toUpperCase() + "_CONNECTION_REQUIRED");
     }
+    if (integrations.length > 1) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+    const integration = integrations[0];
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
       .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw new Error("WORKSPACE_CREDENTIAL_LOOKUP_FAILED");
-    if (!secret || secret.encryption_version !== "v1") throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
+    if (!secret || !["v1", "v2"].includes(secret.encryption_version)) throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
+    const associatedData = secret.encryption_version === "v2" ? `${workspaceId}:${provider}:${integration.id}` : `${workspaceId}:${provider}`;
     let decrypted: WorkspaceCredentials;
-    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspaceId}:${provider}`); }
+    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData); }
     catch { throw new Error("WORKSPACE_CREDENTIALS_DECRYPT_FAILED"); }
     if (!decrypted[provider]) throw new Error("WORKSPACE_CREDENTIAL_PROVIDER_MISMATCH");
     let providerCredentials = decrypted[provider];
@@ -134,9 +149,9 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
             ...(typeof refreshed.token_type === "string" ? { tokenType: refreshed.token_type } : {}),
             ...(typeof refreshed.scope === "string" ? { scope: refreshed.scope } : {}),
           };
-          const encrypted = encryptWorkspaceCredentials({ [provider]: providerCredentials }, undefined, `${workspaceId}:${provider}`);
+          const encrypted = encryptWorkspaceCredentialsV2({ [provider]: providerCredentials }, `${workspaceId}:${provider}:${integration.id}`);
           const { error: refreshSaveError } = await db.from("workspace_integration_secrets").update({
-            encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
+            encrypted_credentials: encrypted, encryption_version: "v2", updated_at: new Date().toISOString(),
           }).eq("integration_id", integration.id);
           if (refreshSaveError) throw new Error("OAUTH_TOKEN_REFRESH_SAVE_FAILED");
         } catch {
@@ -159,7 +174,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   if (step.kind === "action" && step.nodeId === "javascript" && step.operationId === "execute") {
     return process.env.AIVANTA_JAVASCRIPT_SANDBOX_ENABLED === "true";
   }
-  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture"))) return true;
+  if (step.kind === "trigger" && ((step.nodeId === "manual" && step.operationId === "start") || (step.nodeId === "schedule" && step.operationId === "scheduled") || (step.nodeId === "error_trigger" && step.operationId === "capture") || (step.nodeId === "webhooks" && step.operationId === "receive_event"))) return true;
   if (step.kind === "action" && new Set([
     "if.evaluate", "switch.select_route", "merge.merge_inputs", "set_fields.merge_fields",
     "json_parse.parse", "filter.filter_items", "aggregate.calculate", "date_time.current_time",
@@ -231,6 +246,18 @@ function boundedOutput(value: unknown, knownSecrets: readonly string[] = []): Re
     } catch { /* omit unserializable provider output */ }
   }
   return { outputOmitted: true };
+}
+
+
+function webhookHistoryOutput(output: unknown, payloadSha256: unknown): Record<string, unknown> {
+  if (!isRecord(output)) return { payloadRedacted: true };
+  return {
+    ...(typeof output.eventId === "string" ? { eventId: output.eventId } : {}),
+    ...(typeof output.eventType === "string" ? { eventType: output.eventType } : {}),
+    ...(typeof output.receivedAt === "string" ? { receivedAt: output.receivedAt } : {}),
+    ...(typeof payloadSha256 === "string" && /^[a-f0-9]{64}$/.test(payloadSha256) ? { payloadSha256 } : {}),
+    payloadRedacted: true,
+  };
 }
 
 function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
@@ -378,18 +405,33 @@ export async function runDurableWorker() {
         if (source === "error_trigger" && (steps[0]?.kind !== "trigger" || steps[0]?.nodeId !== "error_trigger" || steps[0]?.operationId !== "capture")) {
           throw new Error("INVALID_ERROR_TRIGGER_DEFINITION");
         }
-        if (job.execution_mode === "live" && source === "webhook") throw new Error("LIVE_DURABLE_WEBHOOK_NOT_ENABLED");
-        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
+        if (job.execution_mode === "live" && steps[0]?.nodeId === "webhooks" &&
+            (source !== "webhook" || job.payload?.webhookVerified !== true ||
+             typeof job.payload?.endpointId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(job.payload.endpointId))) {
+          throw new Error("VERIFIED_WEBHOOK_SOURCE_REQUIRED");
+        }
+        if (isRecord(job.payload?.input) && (source === "schedule" || source === "error_trigger" || source === "webhook" || (job.execution_mode === "live" && steps[0]?.nodeId === "manual"))) {
           steps = steps.map((step, index) => index === 0
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
         }
-        const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value) && value !== "rss_feed"));
-        const credentials = job.execution_mode === "live"
-          ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
-          : {};
-        executionSecrets = knownCredentialValues(credentials);
+        // A mutable, server-only credential map is populated one operation at
+        // a time. Connection IDs are resolved against this job's workspace,
+        // provider and verified status immediately before each live operation.
+        const credentials: WorkspaceCredentials = {};
         const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id);
+        context.resolveStepCredentials = async ({ nodeId, operationId, kind, connectionId }) => {
+          if (job.execution_mode !== "live") return;
+          const provider = providerPackLiveId({ nodeId, operationId, kind, connectionId } as RegisteredWorkflowStep)
+            ?? getWorkerProvider({ nodeId, operationId, kind });
+          if (!provider || provider === "rss_feed") return;
+          const resolved = await workspaceCredentials(
+            db, job.workspace_id, new Set([provider]),
+            connectionId ? new Map([[provider, connectionId]]) : new Map(),
+          );
+          Object.assign(credentials, resolved);
+          executionSecrets = knownCredentialValues(credentials);
+        };
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
@@ -405,8 +447,17 @@ export async function runDurableWorker() {
         const completedStepIds: string[] = [];
         for (const checkpoint of savedCheckpoints as Array<{ step_id: string; output: unknown }>) {
           if (workflowStepIds.has(checkpoint.step_id) || resumableIterationIds.has(checkpoint.step_id)) {
-            initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
-              ? checkpoint.output.__aivantaArray : checkpoint.output;
+            const checkpointStep = steps.find((step) => step.id === checkpoint.step_id);
+            // The signed ingress payload is retained in the private execution job
+            // for deterministic retries. Rehydrate it in memory while keeping
+            // raw lead/event fields out of checkpoint and run-history output.
+            if (source === "webhook" && checkpointStep?.nodeId === "webhooks" &&
+                isRecord(job.payload?.input)) {
+              initialOutputs[checkpoint.step_id] = job.payload.input;
+            } else {
+              initialOutputs[checkpoint.step_id] = isRecord(checkpoint.output) && Array.isArray(checkpoint.output.__aivantaArray)
+                ? checkpoint.output.__aivantaArray : checkpoint.output;
+            }
             completedStepIds.push(checkpoint.step_id);
           }
         }
@@ -435,7 +486,9 @@ export async function runDurableWorker() {
             onStepStart: async (step, position) => persistCheckpoint(db, job, step, position, "started"),
             onStepComplete: async (step, position, completed) => persistCheckpoint(
               db, job, step, position, completed.status === "succeeded" ? "succeeded" : "skipped",
-              boundedOutput(completed.output, executionSecrets),
+              step.nodeId === "webhooks" && step.operationId === "receive_event"
+                ? webhookHistoryOutput(completed.output, job.payload?.webhookPayloadSha256)
+                : boundedOutput(completed.output, executionSecrets),
             ),
           } : {}),
         });
@@ -457,7 +510,9 @@ export async function runDurableWorker() {
             title: (steps[index]?.nodeId + "." + steps[index]?.operationId).slice(0, 80),
             status: step.status,
             message: step.error ?? (step.status === "succeeded" ? "Registered operation executed." : "Registered operation validated; no provider action was executed."),
-            output: step.output,
+            output: steps[index]?.nodeId === "webhooks" && steps[index]?.operationId === "receive_event"
+              ? webhookHistoryOutput(step.output, job.payload?.webhookPayloadSha256)
+              : step.output,
           })),
         };
       } else {
@@ -467,97 +522,18 @@ export async function runDurableWorker() {
         const legacyResult = runDryRun(validated.definition, input);
         if (legacyResult.sideEffectsPerformed !== false) throw new Error("UNSAFE_EXECUTOR_RESULT");
 
-        if (job.execution_mode !== "live") {
-          result = {
-            status: legacyResult.status,
-            steps: legacyResult.steps.map((step) => ({
-              stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-              status: step.status, message: String(redactSensitiveData(step.message, executionSecrets)),
-            })),
-          };
-        } else {
-          const nodes = validated.definition.nodes;
-          const trigger = nodes[0];
-          const actions = nodes.filter((node) => node.type === "action");
-          const emailAction = actions[0];
-          if (trigger?.type !== "trigger" || trigger.settings.event !== "manual" ||
-              actions.length !== 1 || emailAction?.settings.provider !== "email" ||
-              emailAction.settings.operation !== "send_email") {
-            throw new Error("LIVE_LEGACY_OPERATION_NOT_ENABLED");
-          }
-          const recipient = typeof emailAction.settings.recipient === "string"
-            ? emailAction.settings.recipient.trim().toLowerCase() : "";
-          const message = typeof emailAction.settings.message === "string" ? emailAction.settings.message.trim() : "";
-          const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
-            .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-          if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
-            throw new Error("LIVE_EMAIL_RECIPIENT_NOT_ALLOWED");
-          }
-          if (!message) throw new Error("LIVE_EMAIL_MESSAGE_REQUIRED");
-
-          let sentOutput: unknown = undefined;
-          let sendFailed: string | null = legacyResult.status === "succeeded" ? null : "WORKFLOW_PREVIEW_FAILED";
-          const emailPreview = legacyResult.steps.find((step) => step.stepId === emailAction.id);
-          if (!emailPreview) sendFailed = "EMAIL_PREVIEW_STEP_MISSING";
-          if (legacyResult.status === "succeeded" && emailPreview?.status === "simulated") {
-            const credentials = await workspaceCredentials(db, job.workspace_id, new Set(["resend"]));
-            executionSecrets = knownCredentialValues(credentials);
-            const registrySteps: RegisteredWorkflowStep[] = [
-              { id: trigger.id, nodeId: "manual", operationId: "start", kind: "trigger", input },
-              {
-                id: emailAction.id, nodeId: "email", operationId: "send_email", kind: "action",
-                input: { to: recipient, subject: "Aivanta workflow message", text: message },
-              },
-            ];
-            const liveResult = await executeRegisteredWorkflow({
-              steps: registrySteps,
-              context: executionContext(credentials, false, db, job.workspace_id),
-              dryRun: false,
-              onStepStart: async (step, position) => {
-                await persistCheckpoint(db, job, step, position, "started");
-                preCheckpointed.add(step.id);
-              },
-              onStepComplete: async (step, position, completed) => {
-                await persistCheckpoint(db, job, step, position, "succeeded", boundedOutput(completed.output, executionSecrets));
-                preCheckpointed.add(step.id);
-              },
-            });
-            const emailResult = liveResult.steps.find((step) => step.stepId === emailAction.id);
-            sentOutput = emailResult?.output;
-            sendFailed = liveResult.status !== "succeeded"
-              ? liveResult.steps.find((step) => step.status === "failed")?.error ?? "LIVE_WORKFLOW_FAILED"
-              : null;
-          }
-
-          result = {
-            status: legacyResult.status === "succeeded" && !sendFailed ? "succeeded" : "failed",
-            steps: legacyResult.steps.map((step) => {
-              if (step.stepId === trigger.id) return {
-                stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                status: "succeeded", message: "Manual workflow trigger accepted.",
-              };
-              if (step.stepId === emailAction.id) {
-                if (step.status === "skipped") return {
-                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "skipped", message: String(redactSensitiveData(step.message, executionSecrets)),
-                };
-                if (sendFailed) return {
-                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "failed", message: String(redactSensitiveData(sendFailed, executionSecrets)),
-                };
-                return {
-                  stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                  status: "succeeded", message: "Resend accepted the workflow email.", output: sentOutput,
-                };
-              }
-              return {
-                stepId: step.stepId, position: step.position, type: step.type, title: step.title,
-                status: step.status === "skipped" ? "skipped" : "succeeded",
-                message: String(redactSensitiveData(step.message, executionSecrets)),
-              };
-            }),
-          };
+        if (job.execution_mode === "live") {
+          // Older definitions have no per-node connection ID. Do not allow an
+          // already-queued job to use an implicit/default workspace credential.
+          throw new Error("REGISTRY_WORKFLOW_REQUIRED");
         }
+        result = {
+          status: legacyResult.status,
+          steps: legacyResult.steps.map((step) => ({
+            stepId: step.stepId, position: step.position, type: step.type, title: step.title,
+            status: step.status, message: String(redactSensitiveData(step.message, executionSecrets)),
+          })),
+        };
       }
 
       for (const step of result.steps) {
