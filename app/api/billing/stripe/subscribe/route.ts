@@ -8,27 +8,37 @@ export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const CONSENT_TERMS_VERSION="rexnora-recurring-v1";
 function stripePriceEnv(slug:string){return "AIVANTA_STRIPE_SUBSCRIPTION_PRICE_"+slug.toUpperCase().replaceAll("-","_");}
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 export async function POST(request:Request){
+  const origin=request.headers.get("origin"),referer=request.headers.get("referer");
+  let sourceOrigin:string|null=origin;
+  if(!sourceOrigin&&referer){try{sourceOrigin=new URL(referer).origin;}catch{sourceOrigin=null;}}
+  if(sourceOrigin!==new URL(request.url).origin)return privateJson({error:"Invalid origin."},{status:403});
+
  let consentId:string|undefined;
  const admin=createAdminClient();
  try{
   const supabase=await createClient(),{data:{user}}=await supabase.auth.getUser();
-  if(!user)return NextResponse.json({error:"Authentication required."},{status:401});
-  if(!user.email)return NextResponse.json({error:"Account email is required."},{status:400});
+  if(!user)return privateJson({error:"Authentication required."},{status:401});
+  if(!user.email)return privateJson({error:"Account email is required."},{status:400});
   let body:{plan?:unknown;consent?:unknown};
-  try{body=await request.json() as {plan?:unknown;consent?:unknown};}catch{return NextResponse.json({error:"Invalid request body."},{status:400});}
+  try{body=await request.json() as {plan?:unknown;consent?:unknown};}catch{return privateJson({error:"Invalid request body."},{status:400});}
   const plan=getPaidPlan(body.plan);
-  if(!plan)return NextResponse.json({error:"Unsupported subscription plan."},{status:400});
-  if(body.consent!==true)return NextResponse.json({error:"Explicit recurring-payment consent is required."},{status:400});
+  if(!plan)return privateJson({error:"Unsupported subscription plan."},{status:400});
+  if(body.consent!==true)return privateJson({error:"Explicit recurring-payment consent is required."},{status:400});
   const stripeSecret=process.env.STRIPE_SECRET_KEY;
-  if(!stripeSecret)return NextResponse.json({error:"Stripe is not configured."},{status:503});
+  if(!stripeSecret)return privateJson({error:"Stripe is not configured."},{status:503});
   const priceId=process.env[stripePriceEnv(plan.slug)];
-  if(!priceId)return NextResponse.json({error:"Recurring Stripe price is not configured."},{status:503});
+  if(!priceId)return privateJson({error:"Recurring Stripe price is not configured."},{status:503});
   const stripe=new Stripe(stripeSecret),price=await stripe.prices.retrieve(priceId);
   if(!price.active||price.currency.toUpperCase()!==plan.currency||price.unit_amount!==plan.amountMinor||price.type!=="recurring"||price.recurring?.interval!==plan.interval)
-   return NextResponse.json({error:"Stripe recurring price does not match the approved plan amount and interval."},{status:409});
+   return privateJson({error:"Stripe recurring price does not match the approved plan amount and interval."},{status:409});
   const workspace=await getOrCreateDefaultWorkspace(supabase),role=await getWorkspaceRole(supabase,workspace.id,user.id);
-  if(!canManageWorkspaceBilling(role))return NextResponse.json({error:"Workspace billing permission required."},{status:403});
+  if(!canManageWorkspaceBilling(role))return privateJson({error:"Workspace billing permission required."},{status:403});
   const {data:consent,error:consentError}=await admin.from("billing_recurring_consents").insert({
    workspace_id:workspace.id,user_id:user.id,provider:"stripe",plan_slug:plan.slug,
    amount_minor:plan.amountMinor,currency:plan.currency,interval:plan.interval,
@@ -55,10 +65,10 @@ export async function POST(request:Request){
    metadata:{workspace_id:workspace.id,user_id:user.id,plan_key:plan.planKey,plan_slug:plan.slug,recurring_consent_id:consent.id}
   });
   if(!session.url)throw new Error("STRIPE_CHECKOUT_URL_MISSING");
-  return NextResponse.json({url:session.url},{headers:{"Cache-Control":"private,no-store"}});
+  return privateJson({url:session.url},{headers:{"Cache-Control":"private,no-store"}});
  }catch(error){
   if(consentId)await admin.from("billing_recurring_consents").update({status:"failed",updated_at:new Date().toISOString()}).eq("id",consentId);
   console.error("Stripe subscription checkout failed:",error);
-  return NextResponse.json({error:"Could not start recurring Stripe checkout."},{status:503});
+  return privateJson({error:"Could not start recurring Stripe checkout."},{status:503});
  }
 }
