@@ -166,7 +166,7 @@ test("Google OAuth callback validates state before token exchange and clears coo
 
 test("provider OAuth callback stores tokens using server-only CODED Supabase credentials", async () => {
   const callback = await readFile(new URL("../app/api/integrations/oauth/[provider]/callback/route.ts", import.meta.url), "utf8");
-  assert.match(callback, /NEXT_PUBLIC_SUPABASE_URL \?\? process\.env\.CODED_SUPABASE_URL/);
-  assert.match(callback, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(callback, /CODED_SUPABASE_SECRET_KEY/);
+  assert.match(callback, /getAdminSupabaseConfig/);
+  assert.match(callback, /const \{ url, serviceRoleKey: key \} = getAdminSupabaseConfig\(\)/);
+  assert.doesNotMatch(callback, /process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
 });
