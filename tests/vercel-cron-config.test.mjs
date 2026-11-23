@@ -8,6 +8,7 @@ test("Vercel cron targets the protected scheduler route at a conservative daily 
     { path: "/api/internal/scheduler", schedule: "0 9 * * *" },
     { path: "/api/internal/billing/reconcile", schedule: "0 10 * * *" },
     { path: "/api/internal/operations/alerts", schedule: "0 11 * * *" },
+    { path: "/api/internal/billing/paystack-renewals", schedule: "30 12 * * *" },
   ]);
 });
 
