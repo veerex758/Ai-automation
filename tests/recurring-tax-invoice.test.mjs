@@ -114,7 +114,9 @@ test("cancellation disables provider renewal before the local cancellation is re
 });
 
 test("Paystack renewal scheduler remains cron protected",()=>{
- assert.match(paystackCron,/headers\.get\("authorization"\)!=="Bearer "\+cron/);
+ assert.match(paystackCron,/timingSafeEqual\(expected,received\)/);
+ assert.match(paystackCron,/expected\.length!==received\.length/);
+ assert.match(paystackCron,/Buffer\.from\(request\.headers\.get\("authorization"\)\?\?"\"\)/);
  assert.ok(cron.schedules["paystack-recurring-renewals"]?.path==="/api/internal/billing/paystack-renewals");
 });
 
