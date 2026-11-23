@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
@@ -12,14 +13,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
-function jsonError(message: string, status: number) {
-  return privateJson({ error: message }, { status, headers: { "Cache-Control": "private, no-store" } });
-}
-
 function privateJson(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init);
   response.headers.set("Cache-Control", "private, no-store");
   return response;
+}
+
+function jsonError(message: string, status: number) {
+  return privateJson({ error: message }, { status });
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
@@ -59,16 +60,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
 
     const encryptionKey = process.env.AIVANTA_WEBHOOK_ENCRYPTION_KEY;
     const keyVersion = process.env.AIVANTA_WEBHOOK_SECRET_KEY_VERSION;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL || process.env.NEXT_PUBLIC_CODED_SUPABASE_URL;
-    if (!encryptionKey || !keyVersion || !serviceRoleKey || !supabaseUrl) {
+    let adminConfig: ReturnType<typeof getAdminSupabaseConfig>;
+    try { adminConfig = getAdminSupabaseConfig(); }
+    catch { return jsonError("Secure webhook provisioning is not configured on this environment.", 503); }
+    if (!encryptionKey || !keyVersion) {
       return jsonError("Secure webhook provisioning is not configured on this environment.", 503);
     }
 
     const endpointKey = randomBytes(32).toString("base64url");
     const signingSecret = randomBytes(32).toString("hex");
     const encryptedSecret = encryptWebhookSecret(signingSecret, encryptionKey);
-    const serviceClient = createSupabaseClient(supabaseUrl, serviceRoleKey, {
+    const serviceClient = createSupabaseClient(adminConfig.url, adminConfig.serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: endpoint, error: insertError } = await serviceClient.from("webhook_endpoints").insert({
@@ -127,10 +129,10 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     if (!workflow) return jsonError("Workflow not found or you do not have access to it.", 404);
     if (!(await hasWorkspacePermission(userClient, workflow.workspace_id, user.id, "workflows.edit"))) return jsonError("Workspace workflows.edit permission required.", 403);
 
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-    if (!serviceRoleKey || !supabaseUrl) return jsonError("Secure webhook provisioning is not configured on this environment.", 503);
-    const serviceClient = createSupabaseClient(supabaseUrl, serviceRoleKey, {
+    let adminConfig: ReturnType<typeof getAdminSupabaseConfig>;
+    try { adminConfig = getAdminSupabaseConfig(); }
+    catch { return jsonError("Secure webhook provisioning is not configured on this environment.", 503); }
+    const serviceClient = createSupabaseClient(adminConfig.url, adminConfig.serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data, error } = await serviceClient.from("webhook_endpoints")
