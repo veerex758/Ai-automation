@@ -8,7 +8,7 @@ const headers={"Cache-Control":"private, no-store"};
 type Context={params:Promise<{leadId:string}>};
 export async function GET(_request:NextRequest,context:Context){
  try{
-  const {leadId}=await context.params;const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();
+  const {leadId}=await context.params;if(!uuidPattern.test(leadId))return NextResponse.json({error:"Invalid lead ID."},{status:400,headers});const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();
   if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
   const workspace=await getOrCreateDefaultWorkspace(supabase);
     if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.view"))) return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });
