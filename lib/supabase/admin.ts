@@ -10,7 +10,10 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 export function getAdminSupabaseConfig() {
   const isPreview = process.env.VERCEL_ENV === "preview";
   const isRexnoraStagingPreview = isPreview
-    && process.env.VERCEL_GIT_COMMIT_REF === "integration/saas-core-stage3-realestate-20261123";
+    && [
+      "integration/saas-core-stage3-realestate-20261123",
+      "feat/core-app-completion-20261123",
+    ].includes(process.env.VERCEL_GIT_COMMIT_REF ?? "");
   const url = isPreview
     ? process.env.NEXT_PUBLIC_SUPABASE_URL
     : process.env.NEXT_PUBLIC_SUPABASE_URL
