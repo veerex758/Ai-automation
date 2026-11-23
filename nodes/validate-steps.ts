@@ -11,6 +11,11 @@ export function validateRegisteredSteps(value: unknown): { steps?: RegisteredWor
     const branchValue = step.branch;
     const branchPathsValue = step.branchPaths;
     const loopValue = step.loop;
+    const connectionId = step.connectionId;
+    if (connectionId !== undefined && (typeof connectionId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId))) {
+      return { error: "A selected connection must be a valid connection ID." };
+    }
     if (typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) ||
       typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
       (step.kind !== "trigger" && step.kind !== "action") || !("input" in step) ||
@@ -37,7 +42,7 @@ export function validateRegisteredSteps(value: unknown): { steps?: RegisteredWor
     if (!operation) return { error: "Unknown registry operation: " + step.nodeId + "." + step.operationId + "." };
     const parsed = operation.inputSchema.safeParse(step.input);
     if (!parsed.success) return { error: "Invalid input for registry step " + step.id + "." };
-    steps.push({ id: step.id, nodeId: step.nodeId, operationId: step.operationId, kind: step.kind, input: parsed.data, ...(branch ? { branch } : {}), ...(branchPaths ? { branchPaths } : {}), ...(loop ? { loop } : {}) });
+    steps.push({ id: step.id, nodeId: step.nodeId, operationId: step.operationId, kind: step.kind, input: parsed.data, ...(typeof connectionId === "string" ? { connectionId } : {}), ...(branch ? { branch } : {}), ...(branchPaths ? { branchPaths } : {}), ...(loop ? { loop } : {}) });
     seen.add(step.id);
   }
   if (steps[0].kind !== "trigger" || steps.filter((step) => step.kind === "trigger").length !== 1) {
