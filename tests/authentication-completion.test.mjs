@@ -30,10 +30,12 @@ test("password update requires a valid authenticated recovery session", () => {
 test("confirmation callback only redirects to a safe internal destination", () => {
   assert.match(callback, /exchangeCodeForSession/);
   assert.match(callback, /safeInternalPath/);
+  assert.match(callback, /private, no-store/);
 });
 
 test("sign-out rejects a mismatched origin and clears the Supabase session", () => {
-  assert.match(signout, /origin !== request\.nextUrl\.origin/);
+  assert.match(signout, /sourceOrigin !== request\.nextUrl\.origin/);
+  assert.match(signout, /referer/);
   assert.match(signout, /auth\.signOut\(\)/);
   assert.match(signout, /status: 303/);
 });
