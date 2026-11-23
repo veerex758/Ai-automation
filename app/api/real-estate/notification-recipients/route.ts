@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -26,6 +27,9 @@ export async function GET() {
   try {
     const auth = await authenticatedWorkspace();
     if ("response" in auth) return auth.response;
+    if (!(await hasWorkspacePermission(auth.supabase, auth.workspace.id, auth.user.id, "real_estate.view"))) {
+      return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });
+    }
     const { data, error } = await auth.supabase.from("real_estate_notification_recipients")
       .select("id,email,active,approved_at,created_at,revoked_at")
       .eq("workspace_id", auth.workspace.id).order("created_at", { ascending: true }).limit(50);
