@@ -94,7 +94,7 @@ export default function LoginPage() {
       }
     } catch (caught) {
       // Do not expose provider/auth internals in the browser UI.
-      setError("We couldn’t complete that request. Check your details and try again.");
+      setError(recovering ? "We couldn’t complete that request. Check your details and try again." : mode === "signup" ? "We couldn’t create your account. Check your details and try again." : "We couldn’t complete sign-in. Check your details and try again.");
     } finally {
       setBusy(false);
     }
