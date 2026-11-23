@@ -42,14 +42,14 @@ select set_config('request.jwt.claim.role','service_role',true);
 -- The same workspace can store two independent accounts for one provider.
 select lives_ok(
  $$select public.save_workspace_integration_connection(
-   'b1111111-1111-4111-8111-111111111111','gemini','Gemini account A',repeat('a',48),
+   'b1111111-1111-4111-8111-111111111111','gemini','Gemini account A','v1.AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAA.Q2lwaGVydGV4dEE',
    'a2222222-2222-4222-8222-222222222222',null
  )$$,
  'workspace admin can create the first Gemini account'
 );
 select lives_ok(
  $$select public.save_workspace_integration_connection(
-   'b1111111-1111-4111-8111-111111111111','gemini','Gemini account B',repeat('b',48),
+   'b1111111-1111-4111-8111-111111111111','gemini','Gemini account B','v1.BBBBBBBBBBBBBBBB.BBBBBBBBBBBBBBBBBBBBBB.U2Vjb25kQ2lwaGVydGV4dA',
    'a2222222-2222-4222-8222-222222222222',null
  )$$,
  'workspace admin can create a second Gemini account'
@@ -81,7 +81,7 @@ select is((select count(*)::integer from connection_fixture),2,'fixture captures
 
 select lives_ok(
  $$select public.save_workspace_integration_connection(
-   'b1111111-1111-4111-8111-111111111111','gemini','Gemini account A rotated',repeat('c',48),
+   'b1111111-1111-4111-8111-111111111111','gemini','Gemini account A rotated','v1.CCCCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCC.VXBkYXRlZENpcGhlcnRleHQ',
    'a2222222-2222-4222-8222-222222222222',
    (select id from connection_fixture where display_name='Gemini account A')
  )$$,
@@ -116,7 +116,7 @@ select is(
 -- Create an account in workspace B and attempt to use its ID while saving in A.
 select lives_ok(
  $$select public.save_workspace_integration_connection(
-   'b2222222-2222-4222-8222-222222222222','gemini','Workspace B Gemini',repeat('d',48),
+   'b2222222-2222-4222-8222-222222222222','gemini','Workspace B Gemini','v1.DDDDDDDDDDDDDDDD.DDDDDDDDDDDDDDDDDDDDDD.V29ya3NwYWNlQkNyZWQ',
    'a2222222-2222-4222-8222-222222222222',null
  )$$,
  'workspace B owner can create an account in workspace B'
@@ -128,12 +128,13 @@ select lives_ok(
  begin
    begin
      perform public.save_workspace_integration_connection(
-       'b1111111-1111-4111-8111-111111111111','gemini','Cross-workspace overwrite',repeat('e',48),
+       'b1111111-1111-4111-8111-111111111111','gemini','Cross-workspace overwrite','v1.EEEEEEEEEEEEEEEE.EEEEEEEEEEEEEEEEEEEEEE.Q3Jvc3NXb3Jrc3BhY2U',
        'a2222222-2222-4222-8222-222222222222',
        (select id from public.workspace_integrations
         where workspace_id='b2222222-2222-4222-8222-222222222222' and provider='gemini')
      );
-   exception when sqlstate 'P0002' then
+   exception when sqlstate 'P0001' then
+     if sqlerrm <> 'INTEGRATION_CONNECTION_NOT_FOUND' then raise; end if;
      v_rejected := true;
    end;
    if not v_rejected then raise exception 'cross-workspace connection ID was accepted'; end if;
@@ -154,10 +155,11 @@ select lives_ok(
  begin
    begin
      perform public.save_workspace_integration_connection(
-       'b1111111-1111-4111-8111-111111111111','gemini','Member must not write',repeat('f',48),
+       'b1111111-1111-4111-8111-111111111111','gemini','Member must not write','v1.FFFFFFFFFFFFFFFF.FFFFFFFFFFFFFFFFFFFFFF.TWVtYmVyQ3JlZGVudGlhbA',
        'a3333333-3333-4333-8333-333333333333',null
      );
-   exception when sqlstate '42501' then
+   exception when sqlstate 'P0001' then
+     if sqlerrm <> 'INTEGRATION_PERMISSION_DENIED' then raise; end if;
      v_rejected := true;
    end;
    if not v_rejected then raise exception 'non-admin member was accepted'; end if;
