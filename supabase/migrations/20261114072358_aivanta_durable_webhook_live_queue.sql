@@ -1,0 +1,83 @@
+-- Allow trusted system events (signed webhooks, scheduler and error-trigger
+-- dispatch) to create durable runs without an interactive user actor. This
+-- overload remains service-role-only; webhook callers must pass a verified flag.
+create or replace function public.dispatch_workflow_execution(
+  p_workspace_id uuid,
+  p_workflow_id uuid,
+  p_workflow_version integer,
+  p_created_by uuid,
+  p_idempotency_key text,
+  p_payload jsonb,
+  p_max_attempts integer,
+  p_execution_mode text
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+declare existing_job public.execution_jobs%rowtype;
+declare workflow_row public.workflows%rowtype;
+declare new_run_id uuid;
+declare new_job_id uuid;
+declare effective_attempts integer;
+declare event_source text;
+begin
+  event_source := p_payload->>'source';
+  if p_workspace_id is null or p_workflow_id is null or p_workflow_version is null
+     or p_idempotency_key is null or length(p_idempotency_key) not between 1 and 200
+     or p_max_attempts is null or p_max_attempts not between 1 and 20
+     or p_execution_mode is null or p_execution_mode not in ('dry_run', 'live')
+     or p_payload is null or jsonb_typeof(p_payload) <> 'object'
+     or octet_length(p_payload::text) > 16384
+     or (p_created_by is null and not (
+       event_source in ('webhook','schedule','error_trigger')
+       and (event_source <> 'webhook' or p_payload->>'webhookVerified' = 'true')
+     )) then
+    raise exception using errcode = '22023', message = 'Invalid execution dispatch request';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_workspace_id::text || ':' || p_idempotency_key, 0)
+  );
+
+  select * into existing_job from public.execution_jobs
+  where workspace_id = p_workspace_id and idempotency_key = p_idempotency_key;
+  if found then
+    if existing_job.workflow_id <> p_workflow_id or existing_job.execution_mode <> p_execution_mode then
+      raise exception using errcode = '23505', message = 'Idempotency key already used for a different workflow or execution mode';
+    end if;
+    return jsonb_build_object('job_id', existing_job.id, 'run_id', existing_job.run_id, 'duplicate', true);
+  end if;
+
+  select w.* into workflow_row from public.workflows w
+  where w.id = p_workflow_id and w.workspace_id = p_workspace_id
+    and w.version = p_workflow_version and w.status = 'active'
+  for share;
+  if not found then
+    raise exception using errcode = '22023', message = 'Workflow is not active or version changed';
+  end if;
+
+  effective_attempts := case when p_execution_mode = 'live' then 1 else p_max_attempts end;
+
+  insert into public.workflow_runs (
+    workspace_id, workflow_id, workflow_version, mode, status, created_by,
+    idempotency_key, started_at, completed_at, duration_ms
+  ) values (
+    p_workspace_id, p_workflow_id, p_workflow_version, p_execution_mode, 'running',
+    p_created_by, p_idempotency_key, now(), null, 0
+  ) returning id into new_run_id;
+
+  insert into public.execution_jobs (
+    workspace_id, workflow_id, run_id, workflow_version, workflow_definition,
+    execution_mode, idempotency_key, payload, max_attempts
+  ) values (
+    p_workspace_id, p_workflow_id, new_run_id, workflow_row.version, workflow_row.definition,
+    p_execution_mode, p_idempotency_key, p_payload, effective_attempts
+  ) returning id into new_job_id;
+
+  return jsonb_build_object('job_id', new_job_id, 'run_id', new_run_id, 'duplicate', false);
+end;
+$$;
+
+revoke all on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer,text)
+  from public, anon, authenticated;
+grant execute on function public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer,text)
+  to service_role;
