@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, executionStatus] = await Promise.all([
+const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, executionStatus, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms] = await Promise.all([
   read("../app/dashboard/page.tsx"),
   read("../app/api/dashboards/metrics/route.ts"),
   read("../app/api/workspaces/route.ts"),
@@ -13,6 +13,14 @@ const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflow
   read("../app/api/workflows/[workflowId]/runs/route.ts"),
   read("../app/api/workflows/[workflowId]/dispatch/route.ts"),
   read("../app/api/workflows/[workflowId]/executions/[jobId]/route.ts"),
+  read("../lib/supabase/permissions.ts"),
+  read("../app/api/agents/route.ts"),
+  read("../app/api/agents/[agentId]/route.ts"),
+  read("../app/api/agents/[agentId]/runs/route.ts"),
+  read("../app/api/real-estate/dashboard/route.ts"),
+  read("../app/api/real-estate/leads/route.ts"),
+  read("../app/api/real-estate/properties/route.ts"),
+  read("../app/api/real-estate/intake-forms/route.ts"),
 ]);
 
 test("dashboard uses workspace-scoped metrics instead of illustrative sample values", () => {
@@ -57,4 +65,30 @@ test("workflow mutation and execution routes enforce workspace authorization", (
   assert.match(dispatch, /workflows\.execute/);
   assert.match(executionStatus, /\.eq\("workspace_id", workflow\.workspace_id\)/);
   assert.match(executionStatus, /from\("workflows"\)/);
+});
+
+test("dashboard activity and workspace-specific management use live data", () => {
+  assert.match(metrics, /recent_runs: recentRuns/);
+  assert.match(dashboard, /recent_runs\.map/);
+  assert.match(dashboard, /No workflow runs recorded in this workspace yet/);
+  assert.match(permissions, /agents\.view/);
+  assert.match(permissions, /agents\.manage/);
+  assert.match(permissions, /real_estate\.view/);
+  assert.match(permissions, /real_estate\.manage/);
+  assert.match(permissions, /agents\.manage.*agents\.view/);
+  assert.match(permissions, /real_estate\.manage.*real_estate\.view/);
+  assert.match(agents, /hasWorkspacePermission/);
+  assert.match(agents, /agents\.view/);
+  assert.match(agents, /agents\.manage/);
+  assert.match(agentItem, /hasWorkspacePermission/);
+  assert.match(agentItem, /uuidPattern\.test\(agentId\)/);
+  assert.match(agentRuns, /hasWorkspacePermission/);
+  assert.match(agentRuns, /16 \* 1024/);
+  assert.match(realEstateDashboard, /real_estate\.view/);
+  assert.match(realEstateLeads, /real_estate\.view/);
+  assert.match(realEstateLeads, /real_estate\.manage/);
+  assert.match(realEstateProperties, /real_estate\.view/);
+  assert.match(realEstateProperties, /real_estate\.manage/);
+  assert.match(intakeForms, /real_estate\.view/);
+  assert.match(intakeForms, /real_estate\.manage/);
 });
