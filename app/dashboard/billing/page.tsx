@@ -97,7 +97,7 @@ export default function BillingPage() {
   useEffect(() => { void loadBilling(); }, [loadBilling]);
 
   const cancelSubscription = async () => {
-    if (!window.confirm("Schedule this workspace subscription to end after the current paid period?")) return;
+    if (!window.confirm("Stop automatic renewal for this workspace? Future provider charges will be disabled. Your current paid access remains available until the paid period ends.")) return;
     setCanceling(true);
     setBillingMessage("");
     setError("");
@@ -201,8 +201,8 @@ export default function BillingPage() {
                     <small className="billing-configured-price">{money(option.amount_minor, option.currency)} · {option.slug.endsWith("annual") ? "annual" : "monthly"}</small>
                     <BillingCheckout plan={option.slug} enabled={data.entitlements.billing.checkout_enabled} />
                     <BillingStripeCheckout plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} />
-                    <BillingStripeSubscription plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_subscription_enabled)} />
-                    <BillingPaystackMandate plan={option.slug} enabled={Boolean(data.entitlements.billing.paystack_recurring_enabled)} />
+                    <BillingStripeSubscription plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_subscription_enabled)} amountMinor={option.amount_minor} currency={option.currency} />
+                    <BillingPaystackMandate plan={option.slug} enabled={Boolean(data.entitlements.billing.paystack_recurring_enabled)} amountMinor={option.amount_minor} currency={option.currency} />
                   </div>)
                 : <span className="billing-current-label">Checkout not configured</span>}
         </article>)}
