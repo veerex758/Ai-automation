@@ -5,3 +5,28 @@
 .billing-stripe-checkout{margin-top:7px}.billing-stripe-checkout button{width:100%;border:1px solid #dce3d9;background:#fff;color:#344638;border-radius:7px;padding:9px 10px;font-size:10px;font-weight:700;cursor:pointer}.billing-stripe-checkout button:disabled{opacity:.5;cursor:not-allowed}.billing-stripe-checkout small{display:block;color:#a34d3d;font-size:9px;margin-top:5px}.billing-payment-retry{display:flex;gap:8px;flex-wrap:wrap;grid-column:1/-1}.billing-payment-retry button{font-size:9px;padding:7px 9px}
 .billing-receipt-link{font-size:9px;color:#536f43;text-decoration:none;white-space:nowrap}
 .billing-usage-warning{font-size:10px;color:#966b39;margin:7px 0 0}.billing-usage-warning a{color:#536f43;font-weight:700;text-decoration:underline}
+
+.billing-app-shell .billing-shell{max-width:1100px;margin:0 auto;padding:28px 28px 64px;color:#F8FAFC!important}
+.billing-app-shell .billing-shell header{margin-bottom:26px}
+.billing-app-shell .billing-eyebrow{color:#94A3B8}
+.billing-app-shell .billing-shell h1,.billing-app-shell .billing-panel h2,.billing-app-shell .billing-current h2{color:#F8FAFC}
+.billing-app-shell .billing-shell header p,.billing-app-shell .billing-panel>p,.billing-app-shell .billing-current p{color:#A8B2C2}
+.billing-app-shell .billing-current,.billing-app-shell .billing-panel{border:1px solid #303B4B;background:#1A1F29!important;color:#F8FAFC!important;box-shadow:none}
+.billing-app-shell .billing-current small,.billing-app-shell .usage-label,.billing-app-shell .billing-payment-row{color:#D5DCE7}
+.billing-app-shell .billing-chip{background:#263449;color:#DDE7F5}
+.billing-app-shell .usage-track{background:#303B4B}
+.billing-app-shell .billing-plan{border:1px solid #384457;background:#111722;color:#E7ECF4}
+.billing-app-shell .billing-plan.selected{border-color:#647A9A;background:#202B3A}
+.billing-app-shell .billing-plan h3,.billing-app-shell .billing-plan li{color:#E7ECF4}
+.billing-app-shell .billing-plan button,.billing-app-shell .billing-current-actions button{border:1px solid #46556A;background:#263449;color:#F8FAFC}
+.billing-app-shell .billing-current-label{color:#AFC4E2}
+.billing-app-shell .billing-payment-row{border-color:#303B4B}
+.billing-app-shell .billing-payment-status{background:#263449;color:#DBE5F3}
+.billing-app-shell .billing-payment-status.success{background:#1E3B33;color:#B7E3D1}
+.billing-app-shell .billing-payment-status.failed,.billing-app-shell .billing-payment-status.refunded{background:#442B2D;color:#F1C5C2}
+.billing-app-shell .billing-checkout button{background:#25374D;color:#F8FAFC}
+.billing-app-shell .billing-stripe-checkout button{background:#111722;color:#E7ECF4;border-color:#46556A}
+.billing-app-shell .billing-note{color:#AFC4E2}
+.billing-app-shell .billing-error{border-color:#70494C;color:#F2C8C8}
+.billing-app-shell .billing-error p{color:#F2C8C8}
+@media(max-width:720px){.billing-app-shell .billing-shell{padding:24px 16px 48px}}
