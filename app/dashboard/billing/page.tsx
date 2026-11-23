@@ -115,7 +115,7 @@ export default function BillingPage() {
   };
 
   if (loading) {
-    return <BillingPageShell ariaBusy="true">
+    return <BillingPageShell ariaBusy={true}>
       <BillingHeader />
       <section className="billing-panel" role="status">Loading your workspace plan and usage…</section>
     </BillingPageShell>;
@@ -220,7 +220,7 @@ export default function BillingPage() {
   </BillingPageShell>;
 }
 
-function BillingPageShell({ children, ariaBusy }: { children: ReactNode; ariaBusy?: string }) {
+function BillingPageShell({ children, ariaBusy }: { children: ReactNode; ariaBusy?: boolean }) {
   return <main className="app-shell billing-app-shell" aria-busy={ariaBusy}>
     <DashboardSidebar activePage="billing" />
     <section className="dashboard-main">
