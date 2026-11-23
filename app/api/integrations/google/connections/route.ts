@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -16,9 +17,7 @@ export async function GET() {
     if (authError || !user) return NextResponse.json({ error: "Authentication required.", code: "CONNECTION_AUTH_REQUIRED" }, { status: 401, headers });
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL;
-    // Support the deployment's existing CODED_* secret naming as well as the canonical alias.
-    const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
+    const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
     if (!url || !key) return NextResponse.json({ error: "Connection storage is not configured for this deployment.", code: "CONNECTION_STORAGE_NOT_CONFIGURED" }, { status: 503, headers });
 
     const admin = createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -43,8 +42,7 @@ export async function GET() {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
+  const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
   if (!url || !key) throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
