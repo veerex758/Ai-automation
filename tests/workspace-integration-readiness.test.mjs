@@ -9,7 +9,8 @@ const oauthCallback = await readFile(new URL("../app/api/integrations/oauth/[pro
 
 test("saving a connection targets exactly one account and revokes previous verification atomically", () => {
   assert.match(route, /save_workspace_integration_connection/);
-  assert.match(route, /p_connection_id: connectionId \?\? null/);
+  assert.match(route, /p_connection_id: connectionId/);
+  assert.match(route, /p_create_new: requestedConnectionId === undefined/);
   assert.match(route, /connectionId && !uuidPattern\.test\(connectionId\)/);
 });
 
@@ -28,5 +29,9 @@ test("activation checks each node's selected connection against its provider and
   assert.match(activation, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
   assert.match(activation, /WORKSPACE_CONNECTION_NOT_VERIFIED/);
   assert.match(activation, /\.eq\("workspace_id", candidate\.workspace_id\)/);
+test("OAuth callback persists the exact selected account using connection-bound encryption", () => {
+  assert.match(oauthCallback, /encryptWorkspaceCredentialsV2/);
+  assert.match(oauthCallback, /stateData\.connectionId \?\? randomUUID\(\)/);
+  assert.match(oauthCallback, /p_create_new: stateData\.connectionId === undefined/);
 });
 test("OAuth callback persists the exact selected account using connection-bound encryption", () => {\n  assert.match(oauthCallback, /encryptWorkspaceCredentialsV2/);\n  assert.match(oauthCallback, /stateData\.connectionId \?\? randomUUID\(\)/);\n  assert.match(oauthCallback, /p_create_new: stateData\.connectionId === undefined/);\n});\n
