@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 export async function GET(request:NextRequest){
  try{const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
- const workspace=await getOrCreateDefaultWorkspace(supabase);const params=request.nextUrl.searchParams;const state=params.get("status");
+ const workspace=await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.view"))) return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });const params=request.nextUrl.searchParams;const state=params.get("status");
  let query=supabase.from("real_estate_followups").select("id,lead_id,sequence,channel,due_at,status,subject,sent_at,last_error_code,attempt_count,max_attempts").eq("workspace_id",workspace.id).order("due_at",{ascending:true}).limit(200);
  if(state&&["pending","sending","sent","failed","cancelled"].includes(state))query=query.eq("status",state);
  const {data,error}=await query;if(error)throw error;
