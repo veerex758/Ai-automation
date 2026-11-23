@@ -1,6 +1,6 @@
 begin;
 
-select plan(24);
+select plan(27);
 
 -- Transaction-local fixtures: the test leaves no user, workspace or integration behind.
 insert into auth.users (
@@ -106,6 +106,14 @@ values (
     '00000000-0000-0000-0000-000000000002',
     null
   )
+);
+
+select is(
+  (select count(*)::integer from public.workspace_integrations
+   where workspace_id = '00000000-0000-0000-0000-000000000010'
+     and provider = 'gemini' and status = 'needs_attention' and last_test_status is null),
+  2,
+  'new connections remain unverified until provider testing succeeds'
 );
 
 insert into _rexnora_integration_test_state (name, payload)
@@ -235,6 +243,18 @@ select is(
    where id = (select (payload->>'id')::uuid from _rexnora_integration_test_state where name = 'first')),
   null::timestamptz,
   'updating credentials clears the previous test timestamp'
+);
+select is(
+  (select status from public.workspace_integrations
+   where id = (select (payload->>'id')::uuid from _rexnora_integration_test_state where name = 'first')),
+  'needs_attention',
+  'updating credentials returns the connection to pending verification'
+);
+select is(
+  (select last_test_status from public.workspace_integrations
+   where id = (select (payload->>'id')::uuid from _rexnora_integration_test_state where name = 'first')),
+  null::text,
+  'updating credentials clears the previous test result'
 );
 
 select is(
