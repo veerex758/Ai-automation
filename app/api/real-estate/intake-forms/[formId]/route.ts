@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -9,7 +10,7 @@ function normalizeOrigin(value:string){try{const u=new URL(value);if(!["https:",
 export async function PATCH(request:NextRequest,context:Context){
  try{const {formId}=await context.params;if(!uuid.test(formId))return NextResponse.json({error:"Invalid form ID."},{status:400,headers});
  const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
- const workspace=await getOrCreateDefaultWorkspace(supabase),raw=await request.text();if(Buffer.byteLength(raw,"utf8")>8000)return NextResponse.json({error:"Form update exceeds 8 KiB."},{status:413,headers});
+ const workspace=await getOrCreateDefaultWorkspace(supabase);if(!(await hasWorkspacePermission(supabase,workspace.id,user.id,"real_estate.manage")))return NextResponse.json({error:"Workspace real_estate.manage permission required."},{status:403,headers});const raw=await request.text();if(Buffer.byteLength(raw,"utf8")>8000)return NextResponse.json({error:"Form update exceeds 8 KiB."},{status:413,headers});
  let body:unknown;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers});}
  if(!body||typeof body!=="object"||Array.isArray(body))return NextResponse.json({error:"Update must be an object."},{status:400,headers});
  const b=body as Record<string,unknown>,update:Record<string,unknown>={};
