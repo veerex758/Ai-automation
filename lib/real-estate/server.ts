@@ -4,7 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { buildFollowupSchedule } from "@/lib/real-estate/lead-scoring";
 
 export function createRealEstateServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL || process.env.NEXT_PUBLIC_CODED_SUPABASE_URL;
   // Empty Vercel placeholders must not mask the integration-provided server key.
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
