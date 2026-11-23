@@ -40,6 +40,11 @@ export async function POST(request:Request){
     const period=getSubscriptionPeriod(subscription);
     const {error}=await admin.from("workspace_subscriptions").upsert({workspace_id:workspaceId,plan_key:planKey,status:subscription.status==="active"?"active":subscription.status,billing_provider:"stripe",provider_subscription_id:subscription.id,provider_customer_id:String(subscription.customer),current_period_start:period.currentPeriodStart,current_period_end:period.currentPeriodEnd,cancel_at_period_end:subscription.cancel_at_period_end,auto_renew:!subscription.cancel_at_period_end,recurring_interval:subscription.items.data[0]?.price.recurring?.interval==="year"?"year":"month",updated_at:new Date().toISOString()},{onConflict:"workspace_id"});
     if(error)throw error;
+    const consentId=session.metadata.recurring_consent_id??subscription.metadata.recurring_consent_id;
+    if(consentId){
+     const {error:consentError}=await admin.from("billing_recurring_consents").update({status:"active",updated_at:new Date().toISOString()}).eq("id",consentId).eq("workspace_id",workspaceId).eq("provider","stripe");
+     if(consentError)throw consentError;
+    }
    }
   }else if(event.type==="invoice.paid"){
    const invoice=event.data.object as Stripe.Invoice;
@@ -59,7 +64,15 @@ export async function POST(request:Request){
    if(subscriptionId){const subscription=await stripe.subscriptions.retrieve(subscriptionId);const workspaceId=subscription.metadata.workspace_id;if(workspaceId){const {error}=await admin.from("workspace_subscriptions").update({status:"past_due",grace_until:new Date(Date.now()+7*86400000).toISOString(),updated_at:new Date().toISOString()}).eq("workspace_id",workspaceId).eq("provider_subscription_id",subscriptionId);if(error)throw error;}}
   }else{
    const subscription=event.data.object as Stripe.Subscription,workspaceId=subscription.metadata.workspace_id;
-   if(workspaceId){const period=getSubscriptionPeriod(subscription);const patch={status:event.type==="customer.subscription.deleted"?"canceled":subscription.status,cancel_at_period_end:subscription.cancel_at_period_end,auto_renew:!subscription.cancel_at_period_end,current_period_start:period.currentPeriodStart,current_period_end:period.currentPeriodEnd,updated_at:new Date().toISOString()};const {error}=await admin.from("workspace_subscriptions").update(patch).eq("workspace_id",workspaceId).eq("provider_subscription_id",subscription.id);if(error)throw error;}
+   if(workspaceId){const period=getSubscriptionPeriod(subscription);const patch={status:event.type==="customer.subscription.deleted"?"canceled":subscription.status,cancel_at_period_end:subscription.cancel_at_period_end,auto_renew:!subscription.cancel_at_period_end,current_period_start:period.currentPeriodStart,current_period_end:period.currentPeriodEnd,updated_at:new Date().toISOString()};const {error}=await admin.from("workspace_subscriptions").update(patch).eq("workspace_id",workspaceId).eq("provider_subscription_id",subscription.id);if(error)throw error;
+    if(subscription.cancel_at_period_end||event.type==="customer.subscription.deleted"){
+     const consentId=subscription.metadata.recurring_consent_id;
+     if(consentId){
+      const {error:consentError}=await admin.from("billing_recurring_consents").update({status:"revoked",revoked_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",consentId).eq("workspace_id",workspaceId).eq("provider","stripe");
+      if(consentError)throw consentError;
+     }
+    }
+   }
   }
   const {error:markError}=await admin.from("billing_recurring_events").update({processed_at:new Date().toISOString(),processing_error:null}).eq("event_key",event.id);if(markError)throw markError;
   return NextResponse.json({received:true});
