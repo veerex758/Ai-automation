@@ -3,6 +3,7 @@ import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { decryptGoogleCredentials, encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
 import { getGoogleOAuthConfig, GOOGLE_PRODUCTS, hasOnlyApprovedGoogleScopes } from "@/lib/integrations/google-oauth";
 
@@ -17,6 +18,9 @@ export async function GET() {
     if (authError || !user) return NextResponse.json({ error: "Authentication required.", code: "CONNECTION_AUTH_REQUIRED" }, { status: 401, headers });
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.view"))) {
+      return NextResponse.json({ error: "Workspace integrations.view permission required.", code: "CONNECTION_PERMISSION_DENIED" }, { status: 403, headers });
+    }
     let admin;
     try {
       const { url, serviceRoleKey } = getAdminSupabaseConfig();
