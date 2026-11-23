@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const migration = await readFile(new URL("../supabase/migrations/20261107130000_aivanta_subscription_entitlements.sql", import.meta.url), "utf8");
 const hardeningMigration = await readFile(new URL("../supabase/migrations/20261107131500_aivanta_subscription_entitlement_hardening.sql", import.meta.url), "utf8");
+const usageHardeningMigration = await readFile(new URL("../supabase/migrations/20261114130000_aivanta_dashboard_usage_hardening.sql", import.meta.url), "utf8");
 const workflowRoute = await readFile(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
 const agentRunRoute = await readFile(new URL("../app/api/agents/[agentId]/runs/route.ts", import.meta.url), "utf8");
 const aiRoute = await readFile(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
@@ -42,7 +43,7 @@ test("active workflow caps are enforced and AI credit is charged only for valida
   assert.ok(preflight >= 0 && generation > preflight && graphValidation > generation);
   assert.ok(creditMetering > graphValidation && successLog > creditMetering);
   assert.match(aiRoute, /consume_ai_generation_usage/);
-  assert.match(aiRoute, /feature: "workflow_draft_generation"/);
+  assert.match(usageHardeningMigration, /workflow_draft_generation/);
   assert.doesNotMatch(aiRoute.slice(0, generation), /consume_workspace_usage/);
   assert.match(workflowRunRoute, /p_metric: "workflow_execution"/);
   assert.match(workflowRunRoute, /One workflow run is one execution, including a safe dry-run/);
