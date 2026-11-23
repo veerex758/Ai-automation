@@ -1,43 +1,55 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
+const maxDefinitionBytes = 64 * 1024;
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   try {
     const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    if (!uuidPattern.test(workflowId)) return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
 
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
     const { data: workflow, error: workflowError } = await supabase.from("workflows")
-      .select("id").eq("id", workflowId).maybeSingle();
+      .select("id,workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!workflow) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.edit"))) return privateJson({ error: "Workspace workflows.edit permission required." }, { status: 403 });
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > maxDefinitionBytes) return privateJson({ error: "Workflow definition exceeds 64 KiB." }, { status: 413 });
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > maxDefinitionBytes) return privateJson({ error: "Workflow definition exceeds 64 KiB." }, { status: 413 });
     let body: unknown;
-    try { body = await request.json(); } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    try { body = JSON.parse(rawBody); } catch {
+      return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
     }
-    if (!body || typeof body !== "object" || !("definition" in body)) {
-      return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
+    if (!body || typeof body !== "object" || Array.isArray(body) || !("definition" in body)) {
+      return privateJson({ error: "A workflow definition is required." }, { status: 400 });
     }
 
     const validated = validateDefinition(body.definition);
-    if (!validated.definition) return NextResponse.json({ valid: false, error: validated.error }, { status: 422 });
+    if (!validated.definition) return privateJson({ valid: false, error: validated.error }, { status: 422 });
 
     const nodes = validated.definition.nodes;
     const rawDefinition = body.definition as Record<string, unknown>;
     const rawNodes = Array.isArray(rawDefinition.nodes) ? rawDefinition.nodes as Array<Record<string, unknown>> : [];
     const hasRegistryGraph = rawNodes.some((node) => typeof node.registryNodeId === "string" || node.type === "condition");
     if (hasRegistryGraph) {
-      if (rawNodes.length !== nodes.length) return NextResponse.json({ valid: false, error: "Every executable step must have a matching canvas node." }, { status: 422 });
-      if (!Array.isArray(rawDefinition.edges)) return NextResponse.json({ valid: false, error: "Registry workflows must include an explicit connection list." }, { status: 422 });
+      if (rawNodes.length !== nodes.length) return privateJson({ valid: false, error: "Every executable step must have a matching canvas node." }, { status: 422 });
+      if (!Array.isArray(rawDefinition.edges)) return privateJson({ valid: false, error: "Registry workflows must include an explicit connection list." }, { status: 422 });
       const graphNodes = nodes.map((node, index) => {
         const raw = rawNodes[index];
         return {
@@ -51,13 +63,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       try {
         const steps = buildRegistrySteps({ nodes: graphNodes, edges });
         const checked = validateRegisteredSteps(steps);
-        if (!checked.steps) return NextResponse.json({ valid: false, error: checked.error || "A registered operation failed validation." }, { status: 422 });
+        if (!checked.steps) return privateJson({ valid: false, error: checked.error || "A registered operation failed validation." }, { status: 422 });
       } catch (cause) {
-        return NextResponse.json({ valid: false, error: cause instanceof Error ? cause.message : "The workflow graph is invalid." }, { status: 422 });
+        return privateJson({ valid: false, error: cause instanceof Error ? cause.message : "The workflow graph is invalid." }, { status: 422 });
       }
     }
 
-    return NextResponse.json({
+    return privateJson({
       valid: true,
       counts: {
         triggers: nodes.filter((node) => node.type === "trigger").length,
@@ -70,25 +82,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     });
   } catch (error) {
     console.error("Failed to validate Aivanta workflow draft:", error);
-    return NextResponse.json({ error: "Could not validate this draft. Try again." }, { status: 500 });
+    return privateJson({ error: "Could not validate this draft. Try again." }, { status: 500 });
   }
 }
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   try {
     const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    if (!uuidPattern.test(workflowId)) return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
 
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
     const { data, error } = await supabase.from("workflows")
-      .select("id, name, description, status, version, definition")
+      .select("id, workspace_id, name, description, status, version, definition")
       .eq("id", workflowId)
       .maybeSingle();
     if (error) throw error;
-    if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!data) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!(await hasWorkspacePermission(supabase, data.workspace_id, user.id, "workflows.view"))) return privateJson({ error: "Workspace workflows.view permission required." }, { status: 403 });
 
     const stored = data.definition as Record<string, unknown> | null;
     const valid = validateDefinition(stored && typeof stored === "object" ? stored : { version: 1, nodes: [] });
@@ -109,11 +122,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     if (stored?.format === "aivanta-registry-v1") {
       const checkedRegistry = validateRegisteredSteps(stored.steps);
       if (!checkedRegistry.steps) {
-        return NextResponse.json({ error: "This saved registry workflow needs repair before it can be edited.", detail: checkedRegistry.error }, { status: 409 });
+        return privateJson({ error: "This saved registry workflow needs repair before it can be edited.", detail: checkedRegistry.error }, { status: 409 });
       }
       registryPlan = { format: "aivanta-registry-v1", steps: checkedRegistry.steps };
     }
-    return NextResponse.json({
+    return privateJson({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status, version: data.version },
       definition: {
         ...(valid.definition ?? starterDefinition),
@@ -141,29 +154,37 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     });
   } catch (error) {
     console.error("Failed to load Aivanta workflow definition:", error);
-    return NextResponse.json({ error: "Could not load this workflow. Try again." }, { status: 500 });
+    return privateJson({ error: "Could not load this workflow. Try again." }, { status: 500 });
   }
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   try {
     const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    if (!uuidPattern.test(workflowId)) return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
 
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
+    const { data: workflowAccess, error: accessError } = await supabase.from("workflows").select("workspace_id").eq("id", workflowId).maybeSingle();
+    if (accessError) throw accessError;
+    if (!workflowAccess) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!(await hasWorkspacePermission(supabase, workflowAccess.workspace_id, user.id, "workflows.edit"))) return privateJson({ error: "Workspace workflows.edit permission required." }, { status: 403 });
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > maxDefinitionBytes) return privateJson({ error: "Workflow definition exceeds 64 KiB." }, { status: 413 });
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > maxDefinitionBytes) return privateJson({ error: "Workflow definition exceeds 64 KiB." }, { status: 413 });
     let body: unknown;
-    try { body = await request.json(); } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    try { body = JSON.parse(rawBody); } catch {
+      return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
     }
     if (!body || typeof body !== "object" || !("definition" in body)) {
-      return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
+      return privateJson({ error: "A workflow definition is required." }, { status: 400 });
     }
     const requestBody = body as Record<string, unknown>;
     const validated = validateDefinition(requestBody.definition);
-    if (!validated.definition) return NextResponse.json({ error: validated.error }, { status: 400 });
+    if (!validated.definition) return privateJson({ error: validated.error }, { status: 400 });
 
     // Keep the existing version-1 nodes contract for the builder and database RPC,
     // while optionally storing a registry execution plan alongside it. The RPC
@@ -210,13 +231,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     if (shouldSaveRegistry) {
       const validatedRegistry = validateRegisteredSteps(registryStepsInput);
       if (!validatedRegistry.steps) {
-        return NextResponse.json({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
+        return privateJson({ error: validatedRegistry.error || "Invalid registry workflow." }, { status: 422 });
       }
       let persistedSteps = validatedRegistry.steps;
       if (hasExplicitRegistrySteps) {
         const rawNodes = definitionToSave.nodes;
         if (!Array.isArray(rawNodes) || rawNodes.length !== validatedRegistry.steps.length) {
-          return NextResponse.json({ error: "Every executable registry step must have a matching canvas node." }, { status: 422 });
+          return privateJson({ error: "Every executable registry step must have a matching canvas node." }, { status: 422 });
         }
         const registryById = new Map(validatedRegistry.steps.map((step) => [step.id, step]));
         const graphNodes = (rawNodes as Array<{ id: string; type: "trigger" | "action" | "condition"; title: string; settings: Record<string, string | undefined>; position?: unknown }>).map((node) => {
@@ -225,22 +246,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
           return { ...node, registryNodeId: step.nodeId, registryOperationId: step.operationId, registryInput: step.input as Record<string, unknown> };
         });
         if (graphNodes.some((node) => !registryById.has(node.id))) {
-          return NextResponse.json({ error: "The canvas contains a node without a registered execution step." }, { status: 422 });
+          return privateJson({ error: "The canvas contains a node without a registered execution step." }, { status: 422 });
         }
         const graphEdges = Array.isArray(definitionToSave.edges)
           ? definitionToSave.edges as Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }>
           : [];
         let graphSteps: RegisteredWorkflowStep[];
         try { graphSteps = buildRegistrySteps({ nodes: graphNodes, edges: graphEdges }); }
-        catch (cause) { return NextResponse.json({ error: cause instanceof Error ? cause.message : "Workflow graph is invalid." }, { status: 422 }); }
+        catch (cause) { return privateJson({ error: cause instanceof Error ? cause.message : "Workflow graph is invalid." }, { status: 422 }); }
         const rebuilt = validateRegisteredSteps(graphSteps);
-        if (!rebuilt.steps) return NextResponse.json({ error: rebuilt.error || "Workflow graph is invalid." }, { status: 422 });
+        if (!rebuilt.steps) return privateJson({ error: rebuilt.error || "Workflow graph is invalid." }, { status: 422 });
         const mismatched = rebuilt.steps.length !== validatedRegistry.steps.length || rebuilt.steps.some((step) => {
           const expected = registryById.get(step.id);
           return !expected || expected.nodeId !== step.nodeId || expected.operationId !== step.operationId || expected.kind !== step.kind ||
             JSON.stringify(expected.input) !== JSON.stringify(step.input);
         });
-        if (mismatched) return NextResponse.json({ error: "Canvas connections and registered execution steps do not match. Rebuild or regenerate the draft before saving." }, { status: 422 });
+        if (mismatched) return privateJson({ error: "Canvas connections and registered execution steps do not match. Rebuild or regenerate the draft before saving." }, { status: 422 });
         persistedSteps = rebuilt.steps;
       }
       definitionToSave = {
@@ -256,15 +277,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     });
     if (error) {
       if (error.code === "P0002") {
-        return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+        return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
       }
       throw error;
     }
     const saved = Array.isArray(data) ? data[0] : data;
-    if (!saved) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    return NextResponse.json({ success: true, version: saved.saved_version, definition: validated.definition, registry: shouldSaveRegistry ? { format: "aivanta-registry-v1", steps: (definitionToSave.steps as RegisteredWorkflowStep[]) } : null });
+    if (!saved) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    return privateJson({ success: true, version: saved.saved_version, definition: validated.definition, registry: shouldSaveRegistry ? { format: "aivanta-registry-v1", steps: (definitionToSave.steps as RegisteredWorkflowStep[]) } : null });
   } catch (error) {
     console.error("Failed to save Aivanta workflow definition:", error);
-    return NextResponse.json({ error: "Could not save workflow steps. Try again." }, { status: 500 });
+    return privateJson({ error: "Could not save workflow steps. Try again." }, { status: 500 });
   }
 }
