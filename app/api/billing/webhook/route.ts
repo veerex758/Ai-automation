@@ -12,29 +12,34 @@ type PaystackChargeEvent={
  };
 };
 export const runtime="nodejs";
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 export async function POST(request:Request){
  const secret=process.env.PAYSTACK_SECRET_KEY;
- if(!secret)return NextResponse.json({error:"Webhook unavailable."},{status:503});
+ if(!secret)return privateJson({error:"Webhook unavailable."},{status:503});
  const raw=await request.text();
- if(new TextEncoder().encode(raw).byteLength>256*1024)return NextResponse.json({error:"Payload too large."},{status:413});
- if(!isValidPaystackSignature(raw,request.headers.get("x-paystack-signature"),secret))return NextResponse.json({error:"Invalid signature."},{status:401});
+ if(new TextEncoder().encode(raw).byteLength>256*1024)return privateJson({error:"Payload too large."},{status:413});
+ if(!isValidPaystackSignature(raw,request.headers.get("x-paystack-signature"),secret))return privateJson({error:"Invalid signature."},{status:401});
  let event:PaystackChargeEvent;
- try{event=JSON.parse(raw) as PaystackChargeEvent;}catch{return NextResponse.json({error:"Invalid JSON."},{status:400});}
- if(!["charge.success","charge.failed"].includes(event.event??"")||typeof event.data?.reference!=="string")return NextResponse.json({received:true});
+ try{event=JSON.parse(raw) as PaystackChargeEvent;}catch{return privateJson({error:"Invalid JSON."},{status:400});}
+ if(!["charge.success","charge.failed"].includes(event.event??"")||typeof event.data?.reference!=="string")return privateJson({received:true});
  try{
   const admin=createAdminClient(),now=new Date().toISOString();
   const {data:payment,error:paymentError}=await admin.from("billing_payments").select("*").eq("reference",event.data.reference).maybeSingle();
   if(paymentError)throw paymentError;
-  if(!payment)return NextResponse.json({received:true});
+  if(!payment)return privateJson({received:true});
   if(event.event==="charge.success"&&!isVerifiedPayment(event.data,{amountMinor:payment.amount_minor,currency:payment.currency}))
-   return NextResponse.json({error:"Payment details mismatch."},{status:422});
+   return privateJson({error:"Payment details mismatch."},{status:422});
 
   const eventKey=event.event+":"+payment.reference;
   const {error:insertError}=await admin.from("billing_webhook_events").insert({event_key:eventKey,event_type:event.event,reference:payment.reference});
   if(insertError&&insertError.code!=="23505")throw insertError;
   const {data:prior,error:priorError}=await admin.from("billing_webhook_events").select("processed_at").eq("event_key",eventKey).maybeSingle();
   if(priorError)throw priorError;
-  if(prior?.processed_at)return NextResponse.json({received:true,duplicate:true});
+  if(prior?.processed_at)return privateJson({received:true,duplicate:true});
 
   if(event.event==="charge.failed"){
    if(payment.status==="pending"){
@@ -53,15 +58,15 @@ export async function POST(request:Request){
    }
    const {error:markError}=await admin.from("billing_webhook_events").update({processed_at:now}).eq("event_key",eventKey);
    if(markError)throw markError;
-   return NextResponse.json({received:true});
+   return privateJson({received:true});
   }
 
   if(payment.recurring_setup){
    const authorization=event.data.authorization;
    if(!authorization?.authorization_code||authorization.reusable!==true||!event.data.customer?.email)
-    return NextResponse.json({error:"Reusable Paystack authorization was not returned."},{status:422});
+    return privateJson({error:"Reusable Paystack authorization was not returned."},{status:422});
    const encryptionKey=process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
-   if(!encryptionKey)return NextResponse.json({error:"Authorization encryption is not configured."},{status:503});
+   if(!encryptionKey)return privateJson({error:"Authorization encryption is not configured."},{status:503});
    const encrypted=encryptWebhookSecret(authorization.authorization_code,encryptionKey).toString("base64");
    const {error:customerError}=await admin.from("workspace_billing_customers").upsert({
     workspace_id:payment.workspace_id,paystack_customer_code:authorization.customer_code??null,
@@ -96,9 +101,9 @@ export async function POST(request:Request){
   }
   const {error:markError}=await admin.from("billing_webhook_events").update({processed_at:now}).eq("event_key",eventKey);
   if(markError)throw markError;
-  return NextResponse.json({received:true});
+  return privateJson({received:true});
  }catch(error){
   console.error("Paystack webhook processing failed:",error);
-  return NextResponse.json({error:"Webhook processing failed."},{status:500});
+  return privateJson({error:"Webhook processing failed."},{status:500});
  }
 }
