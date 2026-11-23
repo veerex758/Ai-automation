@@ -15,7 +15,7 @@ test("OAuth initiation requires an authenticated workspace owner or admin", () =
 
 test("OAuth callback rechecks workspace membership before exchanging or storing credentials", () => {
   const membershipCheck = callbackRoute.indexOf('from("workspace_members")');
-  const tokenExchange = callbackRoute.indexOf("exchangeProviderOAuthCode");
+  const tokenExchange = callbackRoute.indexOf("let token = await exchangeProviderOAuthCode");
   const credentialWrite = callbackRoute.indexOf('from("workspace_integrations")');
   assert.ok(membershipCheck >= 0, "callback must query workspace membership");
   assert.ok(tokenExchange > membershipCheck, "membership must be checked before token exchange");
