@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { decryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
@@ -19,8 +20,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+  const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
   if (!url || !key) throw new Error("WEBHOOK_SERVICE_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
