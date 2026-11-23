@@ -6,13 +6,13 @@ const route = readFileSync(new URL("../app/api/integrations/workspace/resend/tes
 const page = readFileSync(new URL("../app/dashboard/connections/page.tsx", import.meta.url), "utf8");
 
 test("Resend setup test email uses a fixed sender and the authenticated verified account email", () => {
-  assert.match(route, /const TEST_SENDER = "onboarding@resend\\.dev"/);
-  assert.match(route, /const testRecipient = user\\.email\\.trim\\(\\)\\.toLowerCase\\(\\)/);
-  assert.match(route, /to: \\[testRecipient\\]/);
+  assert.match(route, /const TEST_SENDER = "onboarding@resend\.dev"/);
+  assert.match(route, /const testRecipient = user\.email\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(route, /to: \[testRecipient\]/);
   assert.match(route, /email_confirmed_at/);
-  assert.match(route, /const requestedConnectionId = typeof body\\?\\.connectionId === "string"/);
+  assert.match(route, /const requestedConnectionId = typeof body\?\.connectionId === "string"/);
   assert.doesNotMatch(route, /const TEST_RECIPIENT/);
-  assert.doesNotMatch(route, /to: \\[body\\./);
+  assert.doesNotMatch(route, /to: \[body\./);
 });
 
 test("Resend test email requires an authenticated workspace owner or admin", () => {

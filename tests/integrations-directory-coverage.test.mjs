@@ -50,7 +50,7 @@ test("durable live execution requires both a connected integration and a passed 
   assert.match(workerSource, /select\("id,status,last_test_status"\)/);
   assert.match(workerSource, /\.eq\("workspace_id", workspaceId\)\.eq\("provider", provider\)[\s\S]*?\.eq\("id", selectedConnectionId\)[\s\S]*?\.eq\("status", "connected"\)\.eq\("last_test_status", "passed"\)/);
   assert.match(workerSource, /if \(!selectedConnectionId\) throw new Error\("WORKSPACE_CONNECTION_SELECTION_REQUIRED"\)/);
-  assert.match(directorySource, /record\.last_test_status === "passed"/);
+  assert.match(directorySource, /item\.last_test_status === "passed"/);
   assert.match(directorySource, /liveExecutionEnabled && liveProvidersEnabled\.includes\(providerPermissionKey\)/);
   assert.match(directorySource, /state === "connected" && livePermissionEnabled/);
 });
