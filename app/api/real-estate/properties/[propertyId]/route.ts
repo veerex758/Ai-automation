@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 type Context={params:Promise<{propertyId:string}>};
@@ -10,7 +11,8 @@ export async function PATCH(request:NextRequest,context:Context){
  try{
   const {propertyId}=await context.params;if(!uuid.test(propertyId))return NextResponse.json({error:"Invalid property ID."},{status:400,headers});
   const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
-  const workspace=await getOrCreateDefaultWorkspace(supabase);const raw=await request.text();if(Buffer.byteLength(raw,"utf8")>16000)return NextResponse.json({error:"Update exceeds 16 KiB."},{status:413,headers});
+  const workspace=await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.manage"))) return NextResponse.json({ error: "Workspace real_estate.manage permission required." }, { status: 403, headers });const raw=await request.text();if(Buffer.byteLength(raw,"utf8")>16000)return NextResponse.json({error:"Update exceeds 16 KiB."},{status:413,headers});
   let body:unknown;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers});}
   if(!body||typeof body!=="object"||Array.isArray(body))return NextResponse.json({error:"Update must be an object."},{status:400,headers});
   const b=body as Record<string,unknown>,update:Record<string,unknown>={};
@@ -34,7 +36,8 @@ export async function PATCH(request:NextRequest,context:Context){
 export async function DELETE(_request:NextRequest,context:Context){
  try{const {propertyId}=await context.params;if(!uuid.test(propertyId))return NextResponse.json({error:"Invalid property ID."},{status:400,headers});
   const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
-  const workspace=await getOrCreateDefaultWorkspace(supabase);const {data,error}=await supabase.from("real_estate_properties").delete().eq("id",propertyId).eq("workspace_id",workspace.id).select("id").maybeSingle();
+  const workspace=await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.manage"))) return NextResponse.json({ error: "Workspace real_estate.manage permission required." }, { status: 403, headers });const {data,error}=await supabase.from("real_estate_properties").delete().eq("id",propertyId).eq("workspace_id",workspace.id).select("id").maybeSingle();
   if(error)throw error;if(!data)return NextResponse.json({error:"Property not found or workspace owner permission required."},{status:404,headers});
   return NextResponse.json({success:true},{headers});
  }catch(error){console.error("Property delete failed",error);return NextResponse.json({error:"Could not delete property."},{status:500,headers});}
