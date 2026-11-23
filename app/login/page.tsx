@@ -67,6 +67,7 @@ export default function LoginPage() {
           redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
         });
         if (resetError) throw resetError;
+        setRecoveryError(false);
         setNotice("If an account exists for that email, a password reset link will arrive shortly.");
         return;
       }
