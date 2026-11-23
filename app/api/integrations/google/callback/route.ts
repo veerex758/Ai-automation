@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -113,11 +114,10 @@ export async function GET(request: NextRequest) {
     if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
       return clearCookies(connectionsUrl(request, "permission_denied"));
     }
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return clearCookies(connectionsUrl(request, "server_not_configured"));
-    }
+    let adminConfig: ReturnType<typeof getAdminSupabaseConfig>;
+    try { adminConfig = getAdminSupabaseConfig(); }
+    catch { return clearCookies(connectionsUrl(request, "server_not_configured")); }
+    const { url: supabaseUrl, serviceRoleKey } = adminConfig;
 
     // Service-role client is server-only. Every query is explicitly scoped to the
     // authenticated user's resolved workspace and actor; tokens are never selected back.
