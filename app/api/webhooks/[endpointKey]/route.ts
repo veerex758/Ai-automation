@@ -52,8 +52,13 @@ function ciphertextBytes(value: unknown): Buffer {
   throw new Error("WEBHOOK_SECRET_CIPHERTEXT_INVALID");
 }
 
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+  return privateJson({ error: message }, { status });
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ endpointKey: string }> }) {
@@ -196,7 +201,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       }
     });
 
-    return NextResponse.json({
+    return privateJson({
       accepted: true, queued: true, duplicate: !claim.accepted,
       jobId: queued.job_id, runId: queued.run_id, mode: "live",
     }, { status: 202 });
