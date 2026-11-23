@@ -6,14 +6,14 @@ Production project: untouched.
 
 ## Result
 
-- Repository migration files inspected across the Stage 3 integration branch and the staging-fix branch: **158**.
+- Repository migration files included in the PR branch after prerequisite reconciliation: **174**.
 - Staging migration ledger entries before reconciliation: **148**.
 - Source migration versions reconciled into `supabase_migrations.schema_migrations`: **114**.
-- Repository migration versions now recognized as applied: **153 / 158**.
+- Repository migration versions now recognized as applied: **169 / 174**.
 - Deliberately deferred migrations: **5**.
 - Existing migration ledger rows were retained. No migration history was deleted and no database reset was performed.
 
-The 114 version entries were added only after verifying that the corresponding schema changes had been applied, or that a newer implementation already superseded the old migration. The statements array for these repair entries is empty, matching the intent of a migration-repair operation rather than replaying SQL.
+The 114 source-version aliases were added only after verifying that the corresponding schema changes had been applied, or that a newer implementation already superseded the old migration. Sixteen prerequisite migration files from the integration branch were also added to the PR branch so clean migration replay has the same durable execution, billing, entitlement, agent, and recovery foundations that are already present in staging. The statements array for these repair entries is empty, matching the intent of a migration-repair operation rather than replaying SQL.
 
 ## Superseded migrations recorded as applied
 
