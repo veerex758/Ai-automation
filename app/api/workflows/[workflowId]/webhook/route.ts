@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+  return NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!workflow || workflow.status !== "active") {
       return jsonError("Only an active workflow you can access can receive webhook events.", 409);
     }
+    if (!(await hasWorkspacePermission(userClient, workflow.workspace_id, user.id, "workflows.execute"))) return jsonError("Workspace workflows.execute permission required.", 403);
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
     if (!definition || definition.format !== "aivanta-registry-v1" ||
@@ -117,6 +119,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
       .select("id,workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return jsonError("Workflow not found or you do not have access to it.", 404);
+    if (!(await hasWorkspacePermission(userClient, workflow.workspace_id, user.id, "workflows.edit"))) return jsonError("Workspace workflows.edit permission required.", 403);
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
