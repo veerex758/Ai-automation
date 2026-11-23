@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [billing, invoiceDocs, cancel, invoiceIssue, paystackStart, stripeStart, paystackWebhook, stripeWebhook, renewals, scheduler, cronAutomation, cronFollowups, cronPipeline, googleConnections, googleStart, googleCallback, publicWebhook, liveRun, followupWorker, pipelineWorker] = await Promise.all([
+const [billing, invoiceDocs, cancel, invoiceIssue, paystackStart, stripeStart, paystackWebhook, stripeWebhook, renewals, scheduler, cronAutomation, cronFollowups, cronPipeline, googleConnections, googleStart, googleCallback, publicWebhook, liveRun, followupWorker, pipelineWorker, notificationRecipients] = await Promise.all([
   read("../app/api/billing/route.ts"),
   read("../app/api/billing/invoice-docs/[invoiceId]/route.ts"),
   read("../app/api/billing/cancel/route.ts"),
@@ -22,6 +22,7 @@ const [billing, invoiceDocs, cancel, invoiceIssue, paystackStart, stripeStart, p
   read("../app/api/integrations/google/callback/route.ts"),
   read("../app/api/webhooks/[endpointKey]/route.ts"),
   read("../app/api/workflows/[workflowId]/live-run/route.ts"),
+  read("../app/api/real-estate/notification-recipients/route.ts"),
   read("../lib/real-estate/followups.ts"),
   read("../lib/real-estate/pipeline.ts"),
 ]);
@@ -107,4 +108,10 @@ test("public webhook delivery verifies hashed endpoint, HMAC, replay window and 
   assert.match(publicWebhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED/);
   assert.match(publicWebhook, /private, no-store/);
   assert.match(liveRun, /disabled/);
+});
+
+test("agency alert recipients are workspace-visible only with real-estate read access", () => {
+  assert.match(notificationRecipients, /real_estate\.view/);
+  assert.match(notificationRecipients, /Only a workspace owner or admin/);
+  assert.match(notificationRecipients, /\.eq\("workspace_id", auth\.workspace\.id\)/);
 });
