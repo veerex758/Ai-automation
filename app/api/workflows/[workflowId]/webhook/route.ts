@@ -13,7 +13,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "private, no-store" } });
+  return privateJson({ error: message }, { status, headers: { "Cache-Control": "private, no-store" } });
+}
+
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
@@ -81,7 +87,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       throw insertError;
     }
 
-    return NextResponse.json({
+    return privateJson({
       endpoint: {
         id: endpoint.id,
         status: endpoint.status,
@@ -134,7 +140,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
       .in("status", ["active", "disabled"])
       .select("id,status");
     if (error) throw error;
-    return NextResponse.json({ revoked: data?.length ?? 0 });
+    return privateJson({ revoked: data?.length ?? 0 });
   } catch (error) {
     console.error("[webhook-provisioning] revoke failed", {
       code: error instanceof Error ? error.message : "WEBHOOK_REVOKE_FAILED",
