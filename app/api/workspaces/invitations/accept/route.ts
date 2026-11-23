@@ -6,7 +6,7 @@ export const dynamic="force-dynamic";
 function privateJson(body:unknown,init?:ResponseInit){const response=NextResponse.json(body,init);response.headers.set("Cache-Control","private, no-store");return response;}
 export async function POST(request:Request){
  try{
-  const origin=request.headers.get("origin");if(origin&&origin!==new URL(request.url).origin)return privateJson({error:"Invalid origin."},{status:403});
+  const origin=request.headers.get("origin"),referer=request.headers.get("referer");let sourceOrigin:string|null=origin;if(!sourceOrigin&&referer){try{sourceOrigin=new URL(referer).origin;}catch{sourceOrigin=null;}}if(sourceOrigin!==new URL(request.url).origin)return privateJson({error:"Invalid origin."},{status:403});
   const supabase=await createClient(),{data:{user},error:authError}=await supabase.auth.getUser();
   if(authError||!user)return privateJson({error:"Sign in before accepting this invitation."},{status:401});
   if(!user.email||!user.email_confirmed_at)return privateJson({error:"Verify your account email before accepting a workspace invitation."},{status:400});
