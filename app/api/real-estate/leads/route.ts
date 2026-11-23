@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { scoreRealEstateLead } from "@/lib/real-estate/lead-scoring";
 import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-estate/server";
 import { processRealEstateLeadPipeline } from "@/lib/real-estate/pipeline";
