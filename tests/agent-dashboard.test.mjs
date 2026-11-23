@@ -16,7 +16,7 @@ test("agent API enforces workspace ownership, registered tool allowlist, and per
  assert.match(updateRoute,/providerConfigured/);assert.match(updateRoute,/permissionsValid/);assert.match(updateRoute,/No agent run was started/);
 });
 test("agent runtime calls registered tools only when read-only permissions are enabled and audits each call",()=>{
- assert.match(runRoute,/permissions\.mode !== "read_only"/);assert.match(runRoute,/executeAgentTool/);assert.match(runRoute,/AGENT_TOOL_NOT_ALLOWED/);
+ assert.match(runRoute,/permissions\.mode !== "read_only"/);assert.match(runRoute,/consume_agent_run_usage/);assert.match(runRoute,/executeAgentTool/);assert.match(runRoute,/AGENT_TOOL_NOT_ALLOWED/);
  assert.match(runRoute,/agent\.tool_executed/);assert.match(runRoute,/agent\.tool_failed/);assert.match(runRoute,/AGENT_TOOL_LIMIT_REACHED/);
  assert.match(toolRuntime,/workflow\.list/);assert.match(toolRuntime,/workflow\.get/);assert.match(toolRuntime,/integrations\.list/);
  assert.match(toolRuntime,/eq\("workspace_id", workspaceId\)/);assert.doesNotMatch(toolRuntime,/service_role|SUPABASE_SERVICE_ROLE_KEY/);

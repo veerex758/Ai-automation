@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
@@ -222,15 +223,9 @@ export async function POST(request: NextRequest) {
     }
     // Only bill a completed, registry-validated generation. Provider errors and
     // malformed graphs return above this point without consuming a customer credit.
-    const { data: usage, error: usageError } = await supabase.rpc("consume_workspace_usage", {
+    const { data: usage, error: usageError } = await supabase.rpc("consume_ai_generation_usage", {
       p_workspace_id: workspace.id,
-      p_metric: "ai_credit",
-      p_quantity: 1,
-      p_metadata: {
-        feature: "workflow_draft_generation",
-        provider: "gemini",
-        model: result.providerModelUsed || (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
-      },
+      p_idempotency_key: randomUUID(),
     });
     if (usageError) {
       return jsonResponse({ error: "Usage metering is unavailable. Your AI credit was not charged.", errorCode: "AI_USAGE_METERING_UNAVAILABLE" }, { status: 503 });

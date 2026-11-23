@@ -32,16 +32,16 @@ test("active workflow caps are enforced and AI credit is charged only for valida
   assert.match(hardeningMigration, /workflows_enforce_active_entitlement/);
   assert.match(hardeningMigration, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
   assert.match(workflowRoute, /AIVANTA_WORKFLOW_LIMIT_REACHED/);
-  assert.match(agentRunRoute, /p_metric: "ai_credit".*feature: "agent_run"/);
+  assert.match(agentRunRoute, /consume_agent_run_usage/);
 
   const preflight = aiRoute.indexOf('supabase.rpc("get_workspace_entitlements"');
   const generation = aiRoute.indexOf("await generateWorkflow(");
   const graphValidation = aiRoute.indexOf("validateRegisteredSteps(rebuilt)");
-  const creditMetering = aiRoute.indexOf('supabase.rpc("consume_workspace_usage"');
+  const creditMetering = aiRoute.indexOf('supabase.rpc("consume_ai_generation_usage"');
   const successLog = aiRoute.indexOf('outcome: "success"');
   assert.ok(preflight >= 0 && generation > preflight && graphValidation > generation);
   assert.ok(creditMetering > graphValidation && successLog > creditMetering);
-  assert.match(aiRoute, /p_metric: "ai_credit"/);
+  assert.match(aiRoute, /consume_ai_generation_usage/);
   assert.match(aiRoute, /feature: "workflow_draft_generation"/);
   assert.doesNotMatch(aiRoute.slice(0, generation), /consume_workspace_usage/);
   assert.match(workflowRunRoute, /p_metric: "workflow_execution"/);
