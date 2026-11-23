@@ -168,7 +168,7 @@ create or replace function public.save_workspace_database_credentials(
 language plpgsql
 security invoker
 set search_path = ''
-as $
+as $$
 declare
   v_saved jsonb;
   v_integration_id uuid;
@@ -197,7 +197,7 @@ begin
 
   return v_integration_id;
 end;
-$;
+$$;
 
 revoke all on function public.save_workspace_database_credentials(uuid,text,text,text,uuid)
   from public, anon, authenticated;
