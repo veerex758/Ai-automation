@@ -18,20 +18,25 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
  const subscription=parent.subscription_details.subscription;
  return typeof subscription==="string"?subscription:subscription.id;
 }
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 export async function POST(request:Request){
  const secret=process.env.STRIPE_SECRET_KEY,signing=process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET;
- if(!secret||!signing)return NextResponse.json({error:"Recurring Stripe webhook is not configured."},{status:503});
- const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>256*1024)return NextResponse.json({error:"Payload too large."},{status:413});
+ if(!secret||!signing)return privateJson({error:"Recurring Stripe webhook is not configured."},{status:503});
+ const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>256*1024)return privateJson({error:"Payload too large."},{status:413});
  const stripe=new Stripe(secret);let event:Stripe.Event;
- try{const sig=request.headers.get("stripe-signature");if(!sig)throw new Error();event=stripe.webhooks.constructEvent(raw,sig,signing);}catch{return NextResponse.json({error:"Invalid Stripe signature."},{status:401});}
+ try{const sig=request.headers.get("stripe-signature");if(!sig)throw new Error();event=stripe.webhooks.constructEvent(raw,sig,signing);}catch{return privateJson({error:"Invalid Stripe signature."},{status:401});}
  const supported=["checkout.session.completed","invoice.paid","invoice.payment_failed","customer.subscription.deleted","customer.subscription.updated"];
- if(!supported.includes(event.type))return NextResponse.json({received:true});
+ if(!supported.includes(event.type))return privateJson({received:true});
  const admin=createAdminClient();
  try{
   const {error:ledgerError}=await admin.from("billing_recurring_events").insert({provider:"stripe",event_key:event.id,event_type:event.type,payload_hash:Buffer.from(raw).toString("base64").slice(0,64)});
   if(ledgerError&&ledgerError.code!=="23505")throw ledgerError;
   const {data:prior}=await admin.from("billing_recurring_events").select("processed_at").eq("event_key",event.id).maybeSingle();
-  if(prior?.processed_at)return NextResponse.json({received:true,duplicate:true});
+  if(prior?.processed_at)return privateJson({received:true,duplicate:true});
   if(event.type==="checkout.session.completed"){
    const session=event.data.object as Stripe.Checkout.Session;
    if(session.mode==="subscription"&&typeof session.subscription==="string"&&session.metadata?.workspace_id&&session.metadata.plan_key){
@@ -75,6 +80,6 @@ export async function POST(request:Request){
    }
   }
   const {error:markError}=await admin.from("billing_recurring_events").update({processed_at:new Date().toISOString(),processing_error:null}).eq("event_key",event.id);if(markError)throw markError;
-  return NextResponse.json({received:true});
- }catch(error){console.error("Stripe subscription webhook processing failed:",error);await admin.from("billing_recurring_events").update({processing_error:"processing_failed"}).eq("event_key",event.id);return NextResponse.json({error:"Recurring Stripe event processing failed."},{status:503});}
+  return privateJson({received:true});
+ }catch(error){console.error("Stripe subscription webhook processing failed:",error);await admin.from("billing_recurring_events").update({processing_error:"processing_failed"}).eq("event_key",event.id);return privateJson({error:"Recurring Stripe event processing failed."},{status:503});}
 }
