@@ -80,7 +80,7 @@ export async function POST(request:Request){
    .eq("billing_provider","paystack").in("status",["active","past_due"])
    .eq("auto_renew",true).lte("current_period_end",nowIso).limit(100);
   if(error)throw error;
-  let attempted=0,started=0,failed=0,skipped=0,held=0;
+  let attempted=0,started=0,failed=0,skipped=0;
   for(const sub of subscriptions??[]){
    if(sub.status==="past_due"&&sub.grace_until&&Date.parse(sub.grace_until)<=now.getTime()){
     await admin.from("workspace_subscriptions").update({status:"canceled",auto_renew:false,cancel_at_period_end:false,updated_at:nowIso})
@@ -156,7 +156,7 @@ export async function POST(request:Request){
     console.error("Paystack recurring renewal failed for workspace",sub.workspace_id,error);
    }
   }
-  return NextResponse.json({attempted,started,failed,skipped,awaitingConfirmation:held+reconciliation.held,reconciliation},{headers:{"Cache-Control":"no-store"}});
+  return NextResponse.json({attempted,started,failed,skipped,awaitingConfirmation:reconciliation.held,reconciliation},{headers:{"Cache-Control":"no-store"}});
  }catch(error){
   console.error("Paystack recurring renewal scheduler failed:",error);
   return NextResponse.json({error:"Recurring renewal processing failed."},{status:503});
