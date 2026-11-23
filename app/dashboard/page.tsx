@@ -7,7 +7,7 @@ import "./dashboard.css";
 
 type Workflow = { id: string; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused" | "Archived"; runs: string; updated: string; icon: string; tone: string };
 type WorkspaceOption = { id: string; name: string };
-type DashboardMetrics = { workflow_count: number; execution_count: number; agent_count: number; success_rate: number; failed_runs: number; integration_count: number };
+type DashboardMetrics = { workflow_count: number; execution_count: number; agent_count: number; success_rate: number; failed_runs: number; integration_count: number; recent_runs: Array<{ id: string; workflow_id: string; status: string; mode: string; created_at: string }> };
 
 type WorkflowTemplate = {
   id: string;
@@ -393,6 +393,24 @@ export default function DashboardPage() {
             <article className="stat-card"><div className="stat-heading">Workflow runs <span className="stat-symbol">⌁</span></div><div className="stat-number">{metricsLoading ? "…" : dashboardMetrics ? dashboardMetrics.execution_count.toLocaleString() : "—"}</div><div className="stat-bottom"><span className="stat-dot dot-violet" />Last 30 days</div></article>
             <article className="stat-card"><div className="stat-heading">Success rate <span className="stat-symbol">◷</span></div><div className="stat-number">{metricsLoading ? "…" : dashboardMetrics ? dashboardMetrics.success_rate : "—"}<span className="stat-unit">%</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />{dashboardMetrics ? `${dashboardMetrics.failed_runs} failed runs in 30 days` : "Execution outcome data"}</div></article>
           </div>
+
+          <section className="recent-activity-panel" aria-labelledby="recent-activity-title">
+            <div className="recent-activity-heading">
+              <div><h2 id="recent-activity-title">Recent activity</h2><p>Latest workflow runs in the active workspace.</p></div>
+              <Link href="/dashboard/activity">View activity ↗</Link>
+            </div>
+            {metricsLoading && <div className="activity-empty" role="status">Loading recent activity…</div>}
+            {!metricsLoading && dashboardMetrics?.recent_runs?.length ? <div className="activity-list">
+              {dashboardMetrics.recent_runs.map((run) => {
+                const workflowName = workflows.find((workflow) => workflow.id === run.workflow_id)?.name || "Workflow";
+                return <article className="activity-row" key={run.id}>
+                  <span className={"activity-status activity-" + run.status.toLowerCase()}><i /></span>
+                  <span className="activity-copy"><strong>{workflowName}</strong><small>{run.mode === "dry_run" ? "Safe test" : "Live execution"} · {run.status.replaceAll("_", " ")}</small></span>
+                  <time dateTime={run.created_at}>{new Date(run.created_at).toLocaleString()}</time>
+                </article>;
+              })}
+            </div> : !metricsLoading && <div className="activity-empty">No workflow runs recorded in this workspace yet.</div>}
+          </section>
 
           <div className="section-title-row" id="workflows"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
           <div className="workflow-toolbar"><div className="filter-tabs">{["All workflows", "Active", "Draft", "Paused"].map((item) => <button key={item} className={filter === item ? "filter-tab active-filter" : "filter-tab"} onClick={() => setFilter(item)}>{item}{item === "All workflows" && <span>{workflows.length}</span>}</button>)}</div><label className="search-box"><span>⌕</span><input aria-label="Search workflows" placeholder="Search workflows..." value={search} onChange={(e) => setSearch(e.target.value)} /><kbd>⌘ K</kbd></label></div>
