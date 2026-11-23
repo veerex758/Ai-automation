@@ -7,7 +7,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  * Preview uses the Rexnora staging variables; Production can continue using
  * the existing CODED_* environment names until its configuration is migrated.
  */
-export function createAdminClient() {
+export function getAdminSupabaseConfig() {
   const isPreview = process.env.VERCEL_ENV === "preview";
   const url = isPreview
     ? process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -20,16 +20,13 @@ export function createAdminClient() {
       || process.env.SUPABASE_SERVICE_ROLE_KEY
       || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY
       || process.env.CODED_SUPABASE_SECRET_KEY;
+  if (!url || !serviceRoleKey) throw new Error("Supabase admin client is not configured.");
+  return { url, serviceRoleKey };
+}
 
-  if (!url || !serviceRoleKey) {
-    throw new Error("Supabase admin client is not configured.");
-  }
-
+export function createAdminClient() {
+  const { url, serviceRoleKey } = getAdminSupabaseConfig();
   return createSupabaseClient(url, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
 }
