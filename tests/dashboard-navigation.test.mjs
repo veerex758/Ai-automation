@@ -74,13 +74,15 @@ test("customer-facing integration and billing pages use Rexnora naming", () => {
   assert.match(billing, /REXNORA \/ WORKSPACE/);
 });
 
-test("Supabase secret fallback ignores empty placeholder variables", async () => {
+test("Supabase admin credentials ignore empty placeholders and never fall back to Production in Preview", async () => {
   const googleConnections = await readFile(fileURLToPath(new URL("../app/api/integrations/google/connections/route.ts", import.meta.url)), "utf8");
   const adminClient = await readFile(fileURLToPath(new URL("../lib/supabase/admin.ts", import.meta.url)), "utf8");
   const workspaceIntegrations = await readFile(fileURLToPath(new URL("../app/api/integrations/workspace/route.ts", import.meta.url)), "utf8");
-  assert.match(googleConnections, /SUPABASE_SERVICE_ROLE_KEY \|\| process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(adminClient, /SUPABASE_SERVICE_ROLE_KEY\s*\|\| process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(workspaceIntegrations, /SUPABASE_SECRET_KEY \|\| process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(googleConnections, /getAdminSupabaseConfig\(\)/);
+  assert.match(workspaceIntegrations, /getAdminSupabaseConfig\(\)/);
+  assert.match(adminClient, /VERCEL_ENV === "preview"/);
+  assert.match(adminClient, /const serviceRoleKey = isPreview\s*\? process\.env\.SUPABASE_SECRET_KEY \|\| process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(adminClient, /process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
 });
 
 
