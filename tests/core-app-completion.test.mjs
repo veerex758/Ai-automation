@@ -43,6 +43,10 @@ test("dashboard uses workspace-scoped metrics instead of illustrative sample val
   assert.match(dashboard, /workspace-select/);
   assert.match(dashboard, /switchWorkspace\(event\.target\.value\)/);
   assert.match(dashboard, /dashboardMetrics\.success_rate/);
+  assert.match(dashboard, /workflowsError/);
+  assert.match(dashboard, /Could not load workflows/);
+  assert.match(dashboard, /Try again/);
+  assert.match(dashboard, /window\.location\.reload\(\)/);
   assert.doesNotMatch(dashboard, /2,392|48\.5|sample data|Illustrative dashboard metric/);
   assert.match(metrics, /auth\.getUser\(\)/);
   assert.match(metrics, /dashboards\.view/);
