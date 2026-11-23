@@ -141,8 +141,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       }
       if (steps[0].nodeId === "webhooks" && (!process.env.AIVANTA_WEBHOOK_ENCRYPTION_KEY ||
           !process.env.AIVANTA_WEBHOOK_SECRET_KEY_VERSION ||
-          !(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY) ||
-          !(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL))) {
+          !(process.env.VERCEL_ENV === "preview" ? (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) : (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY)) ||
+          !(process.env.VERCEL_ENV === "preview" ? process.env.NEXT_PUBLIC_SUPABASE_URL : (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL)))) {
         return NextResponse.json({ error: "Secure webhook provisioning is not configured. The workflow was not activated." }, { status: 503 });
       }
       const emailInput = steps[2].input as Record<string, unknown> | undefined;
