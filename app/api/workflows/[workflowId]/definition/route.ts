@@ -96,12 +96,17 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
     const { data, error } = await supabase.from("workflows")
-      .select("id, workspace_id, name, description, status, version, definition")
+      .select("id, name, description, status, version, definition")
       .eq("id", workflowId)
       .maybeSingle();
     if (error) throw error;
     if (!data) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    if (!(await hasWorkspacePermission(supabase, data.workspace_id, user.id, "workflows.view"))) return privateJson({ error: "Workspace workflows.view permission required." }, { status: 403 });
+    const { data: workspaceAccess, error: workspaceAccessError } = await supabase.from("workflows")
+      .select("workspace_id").eq("id", workflowId).maybeSingle();
+    if (workspaceAccessError) throw workspaceAccessError;
+    if (!workspaceAccess || !(await hasWorkspacePermission(supabase, workspaceAccess.workspace_id, user.id, "workflows.view"))) {
+      return privateJson({ error: "Workspace workflows.view permission required." }, { status: 403 });
+    }
 
     const stored = data.definition as Record<string, unknown> | null;
     const valid = validateDefinition(stored && typeof stored === "object" ? stored : { version: 1, nodes: [] });
