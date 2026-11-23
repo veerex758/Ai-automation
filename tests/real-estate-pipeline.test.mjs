@@ -106,3 +106,11 @@ test("scheduled workers are authenticated and remain behind explicit live-execut
   assert.match(followups, /REAL_ESTATE_FOLLOWUPS_ENABLED/);
   assert.match(followups, /AIVANTA_LIVE_EXECUTION_ENABLED/);
 });
+
+test("duplicate public intake acknowledgements do not disclose an existing lead profile", () => {
+  const start = intake.indexOf("if(prior){");
+  const end = intake.indexOf("\n  const budgetMin", start);
+  const duplicateBranch = intake.slice(start, end);
+  assert.match(duplicateBranch, /return NextResponse\.json\(\{accepted:true,duplicate:true\}/);
+  assert.doesNotMatch(duplicateBranch, /full_name:prior\.full_name|lead_score:prior\.lead_score|lead_temperature:prior\.lead_temperature|pipeline\},\{status:200/);
+});
