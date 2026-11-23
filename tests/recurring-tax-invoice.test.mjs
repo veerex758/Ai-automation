@@ -115,7 +115,7 @@ test("cancellation disables provider renewal before the local cancellation is re
 
 test("Paystack renewal scheduler remains cron protected",()=>{
  assert.match(paystackCron,/headers\.get\("authorization"\)!=="Bearer "\+cron/);
- assert.ok(cron.crons.some(c=>c.path==="/api/internal/billing/paystack-renewals"));
+ assert.ok(cron.schedules["paystack-recurring-renewals"]?.path==="/api/internal/billing/paystack-renewals");
 });
 
 test("invoice document uses the shared workspace permission implementation",()=>{
