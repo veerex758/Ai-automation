@@ -32,6 +32,8 @@ test("billing reads and mutations are authenticated, workspace-scoped and role-g
   assert.match(billing, /workspace\.id/);
   assert.match(invoiceDocs, /billing\.view/);
   assert.match(invoiceDocs, /workspace\.id/);
+  assert.match(invoiceDocs, /uuidPattern\.test\(invoiceId\)/);
+  assert.match(invoiceDocs, /private, no-store/);
   assert.match(cancel, /canManageWorkspaceBilling/);
   assert.match(cancel, /sourceOrigin/);
   assert.match(cancel, /private, no-store/);
