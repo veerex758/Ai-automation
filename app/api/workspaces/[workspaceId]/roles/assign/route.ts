@@ -19,8 +19,9 @@ export async function PATCH(request: Request, context: Context) {
   const role = workspace?.owner_id === user.id ? "owner" : member?.role;
   if (!workspace || !role || !["owner", "admin"].includes(role)) return NextResponse.json({ error: "Workspace owner/admin access required." }, { status: 403, headers });
   try {
+    const contentLength = Number(request.headers.get("content-length") ?? "0"); if (contentLength > 4096 || new TextEncoder().encode(await request.clone().text()).byteLength > 4096) return NextResponse.json({ error: "Role assignment exceeds 4 KiB." }, { status: 413, headers });
     const body = await request.json() as { user_id?: unknown; custom_role_id?: unknown };
-    if (typeof body.user_id !== "string" || (body.custom_role_id !== null && typeof body.custom_role_id !== "string")) return NextResponse.json({ error: "Member and custom role are required." }, { status: 400, headers });
+    if (typeof body.user_id !== "string" || !uuidPattern.test(body.user_id) || (body.custom_role_id !== null && (typeof body.custom_role_id !== "string" || !uuidPattern.test(body.custom_role_id)))) return NextResponse.json({ error: "Member and custom role are required." }, { status: 400, headers });
     if (body.user_id === workspace.owner_id) return NextResponse.json({ error: "The workspace owner does not use a custom role." }, { status: 409, headers });
     const admin = createAdminClient();
     const { data: target, error: targetError } = await admin.from("workspace_members").select("role").eq("workspace_id", workspaceId).eq("user_id", body.user_id).maybeSingle();
