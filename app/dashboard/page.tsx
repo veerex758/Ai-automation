@@ -74,13 +74,18 @@ const workflowTemplates: WorkflowTemplate[] = [
 ];
 
 const navItems = [
-  { label: "Overview", icon: "⌂" },
-  { label: "Workflows", icon: "↗" },
-  { label: "Integrations", icon: "⌘" },
-  { label: "Activity logs", icon: "◷" },
-  { label: "Dashboard Builder", icon: "▦" },
-  { label: "Operations", icon: "⌁" },
-  { label: "Workspaces & team", icon: "♧" },
+  { label: "Overview", icon: "⌂", href: "/dashboard" },
+  { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
+  { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
+  { label: "Workflow builder", icon: "＋", href: "/dashboard/builder" },
+  { label: "AI assistant", icon: "✧", href: "/dashboard/ai-assistant" },
+  { label: "AI agents", icon: "✺", href: "/dashboard/agents" },
+  { label: "Templates", icon: "▧", href: "/dashboard/templates" },
+  { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
+  { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
+  { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
+  { label: "Billing", icon: "◇", href: "/dashboard/billing" },
+  { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
 ];
 
 export default function DashboardPage() {
@@ -176,7 +181,7 @@ export default function DashboardPage() {
         setNotice("Workflow changes saved.");
       } else {
         setWorkflows((current) => [result.workflow as Workflow, ...current]);
-        setNotice("Draft saved to your Aivanta workspace.");
+        setNotice("Draft saved to your Rexnora workspace.");
       }
       setNewName("");
       setWorkflowDescription("");
@@ -270,11 +275,11 @@ export default function DashboardPage() {
   return (
     <main className="app-shell dashboard-overview-page">
       <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Aivanta home"><span className="brand-mark">a</span><span>Aivanta<span className="brand-period">.</span></span></Link>
+        <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark">a</span><span>Rexnora<span className="brand-period">.</span></span></Link>
         <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
-          {navItems.map((item) => item.label === "Integrations" ? <Link key={item.label} href="/dashboard/connections" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}<span className="soon-tag">NEW</span></Link> : item.label === "Dashboard Builder" ? <Link key={item.label} href="/dashboard/dashboards" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : item.label === "Operations" ? <Link key={item.label} href="/dashboard/operations" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : item.label === "Workspaces & team" ? <Link key={item.label} href="/dashboard/workspaces" className="side-link"><span className="side-icon">{item.icon}</span>{item.label}</Link> : <button key={item.label} className={activeNav === item.label ? "side-link selected" : "side-link"} onClick={() => { setActiveNav(item.label); if (item.label !== "Overview" && item.label !== "Workflows") setNotice(item.label + " is part of the upcoming workspace release."); }}><span className="side-icon">{item.icon}</span>{item.label}</button>)}
+          {navItems.map((item) => <Link key={item.label} href={item.href} className={activeNav === item.label ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
         <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
@@ -308,7 +313,7 @@ export default function DashboardPage() {
             <article className="stat-card"><div className="stat-heading">Time returned <span className="stat-symbol">◷</span></div><div className="stat-number">48.5<span className="stat-unit">h</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />Estimated sample data</div></article>
           </div>
 
-          <div className="section-title-row"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
+          <div className="section-title-row" id="workflows"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
           <div className="workflow-toolbar"><div className="filter-tabs">{["All workflows", "Active", "Draft", "Paused"].map((item) => <button key={item} className={filter === item ? "filter-tab active-filter" : "filter-tab"} onClick={() => setFilter(item)}>{item}{item === "All workflows" && <span>{workflows.length}</span>}</button>)}</div><label className="search-box"><span>⌕</span><input aria-label="Search workflows" placeholder="Search workflows..." value={search} onChange={(e) => setSearch(e.target.value)} /><kbd>⌘ K</kbd></label></div>
 
           <div className="workflow-table"><div className="table-header"><span>WORKFLOW</span><span>STATUS</span><span>RUNS</span><span>LAST UPDATED</span><span /></div>
@@ -316,7 +321,7 @@ export default function DashboardPage() {
             {!loadingWorkflows && visibleWorkflows.map((workflow) => <article className="workflow-row" key={workflow.id}><div className="workflow-name-cell"><span className={"workflow-app-icon " + workflow.tone}>{workflow.icon}</span><span className="workflow-name-copy"><strong>{workflow.name}</strong><small>{workflow.description || "No description yet"}</small></span></div><div><span className={"workflow-status status-" + workflow.status.toLowerCase()}><i />{workflow.status}</span></div><span className="run-count">{workflow.runs}</span><span className="updated-time">{workflow.updated}</span><div className="workflow-actions"><button className="row-menu" aria-label={"Workflow actions for " + workflow.name} aria-expanded={openMenuId === workflow.id} onClick={() => setOpenMenuId((current) => current === workflow.id ? null : workflow.id)}>{deletingWorkflowId === workflow.id ? "…" : "•••"}</button>{openMenuId === workflow.id && <div className="workflow-action-menu"><Link href={`/dashboard/workflows/${workflow.id}`} className="builder-action" onClick={() => setOpenMenuId(null)}>Open builder <span>↗</span></Link><button type="button" onClick={() => openEditModal(workflow)}>Edit details</button><button type="button" className="danger-action" onClick={() => void deleteWorkflow(workflow)}>Delete workflow</button></div>}</div></article>)}
             {!loadingWorkflows && visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
           </div>
-          <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Aivanta database. Live workflow execution and connected services are still in development.</p></div>
+          <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Rexnora database. Live workflow execution and connected services are still in development.</p></div>
         </div>
       </section>
 
