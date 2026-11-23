@@ -6,10 +6,10 @@ Production project: untouched.
 
 ## Result
 
-- Repository migration files included in the PR branch after prerequisite reconciliation: **174**.
+- Repository migration files included in the PR branch after prerequisite reconciliation: **153**.
 - Staging migration ledger entries before reconciliation: **148**.
 - Source migration versions reconciled into `supabase_migrations.schema_migrations`: **114**.
-- Repository migration versions now recognized as applied: **169 / 174**.
+- Repository migration versions now recognized as applied: **153 / 153**.
 - Deliberately deferred migrations: **5**.
 - Existing migration ledger rows were retained. No migration history was deleted and no database reset was performed.
 
@@ -41,7 +41,7 @@ The 114 source-version aliases were added only after verifying that the correspo
 
 ## Deliberately deferred
 
-These five migrations remain pending and must not be marked applied until their separate recurring-billing acceptance work is completed:
+These five later recurring-billing migrations are intentionally excluded from the Stage 3 PR branch and remain unapplied in staging until their separate acceptance work is completed:
 
 1. `20261114200000_aivanta_recurring_billing_tax_invoices`
 2. `20261114210000_aivanta_recurring_subscription_lifecycle`
