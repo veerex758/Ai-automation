@@ -28,7 +28,7 @@ export async function POST(_r:NextRequest,ctx:Ctx){try{const a=await setup();if(
 let toolsValid=Array.isArray(agent.tool_ids);
 try{getAgentTools(Array.isArray(agent.tool_ids)?agent.tool_ids:[])}catch{toolsValid=false;}
 const permissions=agent.permissions&&typeof agent.permissions==="object"?agent.permissions as Record<string,unknown>:{};
-const providerConfigured=agent.model_provider==="gemini"?Boolean(process.env.GEMINI_API_KEY||process.env.AIVANTA_AI_API_KEY):Boolean(process.env.OPENAI_API_KEY||process.env.AIVANTA_AI_API_KEY);
+const providerConfigured=agent.model_provider==="gemini"&&Boolean(process.env.GEMINI_API_KEY||process.env.AIVANTA_AI_API_KEY);
 const permissionsValid=permissions.mode==="read_only"&&permissions.allow_external_actions===false;
 const checks=[
 {key:"name",ok:agent.name.trim().length>0,message:"Agent has a name."},
