@@ -31,14 +31,14 @@ test("webhook ingress claims event IDs atomically and rejects changed-payload re
   assert.match(source, /duplicate: true/);
 });
 
-test("webhook dispatch is workspace-bound and persists run, steps, and receipt outcome", async () => {
+test("webhook dispatch is workspace-bound and only queues verified execution work", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /\.eq\("id", endpoint\.workflow_id\)\.eq\("workspace_id", endpoint\.workspace_id\)/);
-  assert.match(source, /mode: "live",\s*status: "running"/);
-  assert.match(source, /from\("workflow_run_steps"\)\.insert\(rows\)/);
-  assert.match(source, /status: finalStatus === "succeeded" \? "dispatched" : "failed"/);
-  assert.match(source, /webhook: \{ verified: true \}/);
-  assert.match(source, /sideEffectsPerformed:/);
+  assert.match(source, /p_workspace_id: workflow\.workspace_id/);
+  assert.match(source, /p_execution_mode: DURABLE_WEBHOOK_QUEUE_MODE/);
+  assert.match(source, /endpointId: endpoint\.id/);
+  assert.match(source, /DURABLE_WEBHOOK_QUEUE_MODE/);
+  assert.doesNotMatch(source, /executeRegisteredWorkflow/);
 });
 
 test("inbound webhook events cannot bypass the guarded live action allowlist", async () => {
@@ -60,15 +60,22 @@ test("endpoint provisioning is authenticated and returns the signing secret only
   assert.match(source, /status: "active"/);
 });
 
-test("running webhook runs do not receive a completion timestamp before finalization", async () => {
+test("webhook ingress never writes run rows directly or completes work outside the durable worker", async () => {
   const source = await readFile(routeUrl, "utf8");
-  assert.match(source, /status: "running",[\s\S]*?completed_at: null/);
+  assert.match(source, /dispatch_workflow_execution/);
+  assert.doesNotMatch(source, /from\("workflow_runs"\)\.insert/);
 });
 
-test("run history does not persist the raw webhook payload in the trigger result", async () => {
+test("run history stores a payload digest instead of raw webhook content", async () => {
   const source = await readFile(routeUrl, "utf8");
-  assert.match(source, /payloadSha256/);
-  assert.match(source, /eventId, eventType, receivedAt: eventInput\.receivedAt, payloadSha256/);
+  assert.match(source, /target_payload_sha256: payloadSha256/);
+  assert.match(source, /webhookPayloadSha256: payloadSha256/);
+  assert.doesNotMatch(source, /from\("workflow_run_steps"\)\.insert/);
+  const worker = await readFile(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
+  assert.match(worker, /function webhookHistoryOutput/);
+  assert.match(worker, /payloadRedacted: true/);
+  assert.match(worker, /checkpointStep\?\.nodeId === "webhooks"/);
+  assert.match(worker, /webhookHistoryOutput\(step\.output/);
 });
 
 
@@ -81,6 +88,10 @@ test("live webhook actions honor the global execution kill switch", async () => 
 test("durable webhook queue is opt-in and uses the verified receipt idempotency key", async () => {
   const source = await readFile(routeUrl, "utf8");
   assert.match(source, /AIVANTA_DURABLE_WEBHOOK_DRY_RUN_QUEUE_ENABLED === "true"/);
+  assert.match(source, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED === "true"/);
+  assert.match(source, /DURABLE_WEBHOOK_QUEUE_MODE === "live" \? 1 : 5/);
+  assert.match(source, /Secure durable webhook execution is not enabled/);
+  assert.doesNotMatch(source, /GEMINI_API_KEY|RESEND_API_KEY|executeRegisteredWorkflow/);
   assert.match(source, /rpc\("dispatch_workflow_execution"/);
   assert.match(source, /"webhook:" \+ endpoint\.id \+ ":" \+ eventId/);
   assert.match(source, /webhookVerified: true/);
@@ -91,7 +102,19 @@ test("durable webhook queue is opt-in and uses the verified receipt idempotency 
 test("duplicate webhook delivery re-attempts the idempotent queue dispatch", async () => {
   const source = await readFile(routeUrl, "utf8");
   const duplicate = source.slice(source.indexOf("if (!claim.accepted)"), source.indexOf("receipt = { id: claim.receipt_id"));
-  assert.match(duplicate, /DURABLE_WEBHOOK_DRY_RUN_QUEUE/);
+  assert.match(duplicate, /DURABLE_WEBHOOK_QUEUE_MODE/);
   assert.match(duplicate, /dispatch_workflow_execution/);
   assert.match(duplicate, /duplicate: true/);
+});
+
+test("durable webhook live runs require a signed ingress and are executed by the workspace-aware worker", async () => {
+  const source = await readFile(routeUrl, "utf8");
+  const worker = await readFile(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
+  assert.match(source, /verifyWebhookSignature/);
+  assert.match(source, /DURABLE_WEBHOOK_LIVE_ENABLED/);
+  assert.match(source, /webhookVerified: true/);
+  assert.match(source, /p_execution_mode: DURABLE_WEBHOOK_QUEUE_MODE/);
+  assert.match(worker, /VERIFIED_WEBHOOK_SOURCE_REQUIRED/);
+  assert.match(worker, /source === "webhook"/);
+  assert.match(worker, /resolveStepCredentials = async/);
 });

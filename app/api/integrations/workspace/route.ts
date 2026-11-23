@@ -105,6 +105,10 @@ export async function POST(request: NextRequest) {
     const provider = body.provider as WorkspaceCredentialProvider;
     const displayName = typeof body.displayName === "string" && body.displayName.trim()
       ? body.displayName.trim().slice(0, 120) : labels[provider];
+    const connectionId = typeof body.connectionId === "string" ? body.connectionId : undefined;
+    if (connectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
+      return json({ error: "The connection ID is invalid." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: membership, error: membershipError } = await supabase.from("workspace_members")
       .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
@@ -126,47 +130,51 @@ export async function POST(request: NextRequest) {
     }
 
     const db = serviceClient();
-    // Revoke readiness before replacing a saved secret so no worker can race
-    // the credential update using the previous successful verification.
-    const { data: existing, error: existingError } = await db.from("workspace_integrations")
-      .select("id").eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
-    if (existingError) throw existingError;
-    if (existing) {
-      const { error: invalidateError } = await db.from("workspace_integrations").update({
-        status: "needs_attention", last_tested_at: null, last_test_status: null,
-      }).eq("id", existing.id).eq("workspace_id", workspace.id);
-      if (invalidateError) throw invalidateError;
-    }
-    const { data, error } = provider === "mysql" || provider === "mongodb"
-      ? await db.rpc("save_workspace_database_credentials", {
-          p_workspace_id: workspace.id,
-          p_provider: provider,
-          p_display_name: displayName,
-          p_encrypted_credential: encrypted,
-          p_created_by: user.id,
-        })
-      : await db.rpc("save_workspace_integration_credentials", {
-          p_workspace_id: workspace.id,
-          p_provider: provider,
-          p_display_name: displayName,
-          p_encrypted_credentials: encrypted,
-          p_created_by: user.id,
-        });
-    const integrationId = typeof data === "string" ? data : isRecord(data) && typeof data.id === "string" ? data.id : null;
-    if (error || !integrationId) throw error ?? new Error("INTEGRATION_SAVE_FAILED");
-    // Replacing a secret invalidates any previous successful test. A new
-    // credential must pass a fresh provider check before the worker will use it.
-    const { error: invalidateError } = await db.from("workspace_integrations").update({
-      status: "needs_attention",
-      last_tested_at: null,
-      last_test_status: null,
-    }).eq("id", integrationId).eq("workspace_id", workspace.id);
-    if (invalidateError) throw invalidateError;
-    return json({ integration: {
-      id: integrationId, provider, display_name: displayName,
-      status: "needs_attention", last_tested_at: null, last_test_status: null,
-    } }, 201);
+    // The connection RPC writes metadata and the encrypted secret atomically.
+    // Existing connections are updated by (id, workspace, provider), while a
+    // missing ID always creates another account instead of overwriting one.
+    const { data, error } = await db.rpc("save_workspace_integration_connection", {
+      p_workspace_id: workspace.id,
+      p_provider: provider,
+      p_display_name: displayName,
+      p_encrypted_credentials: encrypted,
+      p_created_by: user.id,
+      p_connection_id: connectionId ?? null,
+    });
+    if (error || !isRecord(data) || typeof data.id !== "string") throw error ?? new Error("INTEGRATION_SAVE_FAILED");
+    return json({ integration: data }, 201);
   } catch {
     return json({ error: "Could not securely save this workspace integration." }, 500);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return json({ error: "Authentication required." }, 401);
+    const body = await request.json().catch(() => null);
+    const connectionId = isRecord(body) && typeof body.connectionId === "string" ? body.connectionId : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
+      return json({ error: "A valid connection ID is required." }, 400);
+    }
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
+    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
+      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      return json({ error: "Only workspace owners and admins can disconnect integrations." }, 403);
+    }
+    const db = serviceClient();
+    const { data: connection, error: lookupError } = await db.from("workspace_integrations")
+      .select("id").eq("id", connectionId).eq("workspace_id", workspace.id).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!connection) return json({ error: "Connection not found in this workspace." }, 404);
+    const { error: deleteError } = await db.from("workspace_integrations")
+      .delete().eq("id", connectionId).eq("workspace_id", workspace.id);
+    if (deleteError) throw deleteError;
+    return json({ success: true, disconnected: true });
+  } catch {
+    return json({ error: "Could not disconnect this workspace connection." }, 500);
   }
 }
