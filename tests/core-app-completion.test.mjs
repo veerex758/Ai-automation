@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, executionStatus, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms] = await Promise.all([
+const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms] = await Promise.all([
   read("../app/dashboard/page.tsx"),
   read("../app/api/dashboards/metrics/route.ts"),
   read("../app/api/workspaces/route.ts"),
@@ -13,6 +13,10 @@ const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflow
   read("../app/api/workflows/[workflowId]/runs/route.ts"),
   read("../app/api/workflows/[workflowId]/dispatch/route.ts"),
   read("../app/api/workflows/[workflowId]/executions/[jobId]/route.ts"),
+  read("../app/api/workflows/[workflowId]/definition/route.ts"),
+  read("../app/api/workflows/[workflowId]/webhook/route.ts"),
+  read("../app/api/integrations/workspace/route.ts"),
+  read("../app/dashboard/session-expiry-guard.tsx"),
   read("../lib/supabase/permissions.ts"),
   read("../app/api/agents/route.ts"),
   read("../app/api/agents/[agentId]/route.ts"),
@@ -91,4 +95,19 @@ test("dashboard activity and workspace-specific management use live data", () =>
   assert.match(realEstateProperties, /real_estate\.manage/);
   assert.match(intakeForms, /real_estate\.view/);
   assert.match(intakeForms, /real_estate\.manage/);
+});
+
+test("workflow definitions, webhook provisioning and execution inspection enforce explicit permissions", () => {
+  assert.match(definitionRoute, /hasWorkspacePermission/);
+  assert.match(definitionRoute, /workflows\.view/);
+  assert.match(definitionRoute, /workflows\.edit/);
+  assert.match(definitionRoute, /maxDefinitionBytes/);
+  assert.match(definitionRoute, /private, no-store/);
+  assert.match(webhookRoute, /workflows\.execute/);
+  assert.match(webhookRoute, /workflows\.edit/);
+  assert.match(executionStatus, /workflows\.view/);
+  assert.match(executionStatus, /workflows\.execute/);
+  assert.match(integrationRoute, /integrations\.view/);
+  assert.match(sessionGuard, /onAuthStateChange/);
+  assert.match(sessionGuard, /SIGNED_OUT/);
 });
