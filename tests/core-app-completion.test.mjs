@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, scheduleRoute, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, membersRoute, invitationsRoute, rolesRoute, securityRoute, assignRoleRoute, transferRoute, acceptInvitationRoute, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms, realEstateFollowups, realEstateMatchesconst [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, scheduleRoute, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, membersRoute, invitationsRoute, rolesRoute, securityRoute, assignRoleRoute, transferRoute, acceptInvitationRoute, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms, realEstateFollowups, realEstateMatches, adminConfig] = await Promise.all([
+const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, scheduleRoute, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, membersRoute, invitationsRoute, rolesRoute, securityRoute, assignRoleRoute, transferRoute, acceptInvitationRoute, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms, realEstateFollowups, realEstateMatches, adminConfig] = await Promise.all([
   read("../app/dashboard/page.tsx"),
   read("../app/api/dashboards/metrics/route.ts"),
   read("../app/api/workspaces/route.ts"),
@@ -139,10 +139,10 @@ test("workflow definitions, webhook provisioning and execution inspection enforc
 });
 
 test("only the Stage 3 and core-app Preview branches use isolated staging admin credentials", () => {
-  assert.match(adminConfig, /VERCEL_ENV === "preview"/);
-  assert.match(adminConfig, /integration\\/saas-core-stage3-realestate-20261123/);
-  assert.match(adminConfig, /feat\\/core-app-completion-20261123/);
-  assert.match(adminConfig, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.ok(adminConfig.includes('VERCEL_ENV === "preview"'));
+  assert.ok(adminConfig.includes("integration/saas-core-stage3-realestate-20261123"));
+  assert.ok(adminConfig.includes("feat/core-app-completion-20261123"));
+  assert.ok(adminConfig.includes("CODED_SUPABASE_SERVICE_ROLE_KEY"));
 });
 
 test("workspace administration endpoints validate tenant identifiers and sensitive requests", () => {
