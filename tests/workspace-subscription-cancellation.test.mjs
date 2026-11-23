@@ -26,9 +26,9 @@ test("cancellation API requires an authenticated workspace billing manager and r
   assert.match(route, /getOrCreateDefaultWorkspace/);
   assert.match(route, /getWorkspaceRole\(supabase,workspace\.id,user\.id\)/);
   assert.match(route, /canManageWorkspaceBilling\(role\)/);
-  assert.match(route, /status:\\s*403/);
+  assert.match(route, /status:\s*403/);
   assert.match(route, /request_workspace_subscription_cancellation/);
-  assert.match(route, /status:\\s*409/);
+  assert.match(route, /status:\s*409/);
   assert.ok(
     route.indexOf("canManageWorkspaceBilling(role)") < route.indexOf("createAdminClient();"),
     "workspace billing authorization must run before the privileged admin client is created"
