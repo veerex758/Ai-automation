@@ -19,6 +19,11 @@
       "schedule": "*/15 * * * *",
       "function": "api/real-estate-automation",
       "timezone": "Africa/Lagos"
+    },
+    "paystack-recurring-renewals": {
+      "schedule": "30 12 * * *",
+      "path": "/api/internal/billing/paystack-renewals",
+      "requestMethod": "POST"
     }
   },
   "functions": {
