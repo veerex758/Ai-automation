@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.view"))) return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });
     const params = request.nextUrl.searchParams;
     const status = params.get("status");
     const search = (params.get("q") ?? "").trim().slice(0, 100);
@@ -118,6 +119,7 @@ export async function POST(request: NextRequest) {
     if (!isRecord(body)) return NextResponse.json({ error: "Lead input must be a JSON object." }, { status: 400, headers });
     const lead = parseLead(body);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.manage"))) return NextResponse.json({ error: "Workspace real_estate.manage permission required." }, { status: 403, headers });
 
     if (lead.source_event_id) {
       const { data: prior, error: priorError } = await supabase.from("real_estate_leads").select("*")
