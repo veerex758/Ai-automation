@@ -8,30 +8,31 @@ const activation = await readFile(new URL("../app/api/workflows/[workflowId]/rou
 const oauthCallback = await readFile(new URL("../app/api/integrations/oauth/[provider]/callback/route.ts", import.meta.url), "utf8");
 
 test("saving a connection targets exactly one account and revokes previous verification atomically", () => {
-  assert.match(route, /save_workspace_integration_connection/);
-  assert.match(route, /p_connection_id: connectionId/);
-  assert.match(route, /p_create_new: requestedConnectionId === undefined/);
-  assert.match(route, /connectionId && !uuidPattern\.test\(connectionId\)/);
+  assert.ok(route.includes("save_workspace_integration_connection"));
+  assert.ok(route.includes("p_connection_id: connectionId"));
+  assert.ok(route.includes("p_create_new: requestedConnectionId === undefined"));
+  assert.ok(route.includes("connectionId && !uuidPattern.test(connectionId)"));
 });
 
 test("worker refuses implicit defaults and requires a connected, freshly tested selected account", () => {
-  assert.match(worker, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
-  assert.match(worker, /selectedConnectionIds\.get\(provider\)/);
-  assert.match(worker, /\.eq\("status", "connected"\)/);
-  assert.match(worker, /\.eq\("last_test_status", "passed"\)/);
-  assert.match(worker, /\.eq\("id", selectedConnectionId\)/);
-  assert.match(worker, /secret\.encryption_version === "v2"/);
-  assert.match(worker, /encryptWorkspaceCredentialsV2/);
+  assert.ok(worker.includes("WORKSPACE_CONNECTION_SELECTION_REQUIRED"));
+  assert.ok(worker.includes("selectedConnectionIds.get(provider)"));
+  assert.ok(worker.includes('eq("status", "connected")'));
+  assert.ok(worker.includes('eq("last_test_status", "passed")'));
+  assert.ok(worker.includes('eq("id", selectedConnectionId)'));
+  assert.ok(worker.includes('secret.encryption_version === "v2"'));
+  assert.ok(worker.includes("encryptWorkspaceCredentialsV2"));
 });
 
-test("activation checks each node's selected connection against its provider and workspace", () => {
-  assert.match(activation, /step\.connectionId/);
-  assert.match(activation, /WORKSPACE_CONNECTION_SELECTION_REQUIRED/);
-  assert.match(activation, /WORKSPACE_CONNECTION_NOT_VERIFIED/);
-  assert.match(activation, /\.eq\("workspace_id", candidate\.workspace_id\)/);
-test("OAuth callback persists the exact selected account using connection-bound encryption", () => {
-  assert.match(oauthCallback, /encryptWorkspaceCredentialsV2/);
-  assert.match(oauthCallback, /stateData\.connectionId \?\? randomUUID\(\)/);
-  assert.match(oauthCallback, /p_create_new: stateData\.connectionId === undefined/);
+test("activation checks each node selected connection against its provider and workspace", () => {
+  assert.ok(activation.includes("step.connectionId"));
+  assert.ok(activation.includes("WORKSPACE_CONNECTION_SELECTION_REQUIRED"));
+  assert.ok(activation.includes("WORKSPACE_CONNECTION_NOT_VERIFIED"));
+  assert.ok(activation.includes('eq("workspace_id", candidate.workspace_id)'));
 });
-test("OAuth callback persists the exact selected account using connection-bound encryption", () => {\n  assert.match(oauthCallback, /encryptWorkspaceCredentialsV2/);\n  assert.match(oauthCallback, /stateData\.connectionId \?\? randomUUID\(\)/);\n  assert.match(oauthCallback, /p_create_new: stateData\.connectionId === undefined/);\n});\n
+
+test("OAuth callback persists the exact selected account using connection-bound encryption", () => {
+  assert.ok(oauthCallback.includes("encryptWorkspaceCredentialsV2"));
+  assert.ok(oauthCallback.includes("stateData.connectionId ?? randomUUID()"));
+  assert.ok(oauthCallback.includes("p_create_new: stateData.connectionId === undefined"));
+});
