@@ -2,12 +2,13 @@ import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 function normalizeOrigin(value:string){try{const u=new URL(value);if(!["https:","http:"].includes(u.protocol)||u.username||u.password||u.origin!==value.replace(/\/$/,""))return null;if(u.protocol==="http:"&&!(u.hostname==="localhost"||u.hostname==="127.0.0.1"))return null;return u.origin;}catch{return null;}}
 export async function GET(){
  try{const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
- const workspace=await getOrCreateDefaultWorkspace(supabase);const {data,error}=await supabase.from("real_estate_intake_forms").select("id,name,default_source,allowed_origins,enabled,created_at,updated_at").eq("workspace_id",workspace.id).order("created_at",{ascending:false});
+ const workspace=await getOrCreateDefaultWorkspace(supabase);if(!(await hasWorkspacePermission(supabase,workspace.id,user.id,"real_estate.view")))return NextResponse.json({error:"Workspace real_estate.view permission required."},{status:403,headers});const {data,error}=await supabase.from("real_estate_intake_forms").select("id,name,default_source,allowed_origins,enabled,created_at,updated_at").eq("workspace_id",workspace.id).order("created_at",{ascending:false});
  if(error)throw error;return NextResponse.json({forms:data??[]},{headers});
  }catch(error){console.error("Intake form list failed",error);return NextResponse.json({error:"Could not load intake forms."},{status:500,headers});}
 }
@@ -21,7 +22,7 @@ export async function POST(request:NextRequest){
  if(!/^[a-zA-Z0-9_-]{1,80}$/.test(source))return NextResponse.json({error:"Source must contain only letters, numbers, underscores or hyphens."},{status:400,headers});
  if(!Array.isArray(b.allowedOrigins)||b.allowedOrigins.length<1||b.allowedOrigins.length>30||b.allowedOrigins.some(x=>typeof x!=="string"))return NextResponse.json({error:"Add between 1 and 30 allowed website origins."},{status:400,headers});
  const origins=[...new Set((b.allowedOrigins as string[]).map(normalizeOrigin))];if(origins.some(x=>!x))return NextResponse.json({error:"Each allowed origin must be an exact HTTPS origin (HTTP is allowed only for localhost). Include scheme and host, not a page path."},{status:400,headers});
- const workspace=await getOrCreateDefaultWorkspace(supabase),publicKey=randomBytes(32).toString("base64url");
+ const workspace=await getOrCreateDefaultWorkspace(supabase);if(!(await hasWorkspacePermission(supabase,workspace.id,user.id,"real_estate.manage")))return NextResponse.json({error:"Workspace real_estate.manage permission required."},{status:403,headers});const publicKey=randomBytes(32).toString("base64url");
  const {data,error}=await supabase.from("real_estate_intake_forms").insert({workspace_id:workspace.id,name,default_source:source,allowed_origins:origins,public_key_hash:(await import("node:crypto")).createHash("sha256").update(publicKey).digest("hex"),enabled:true,created_by:user.id})
  .select("id,name,default_source,allowed_origins,enabled,created_at").single();
  if(error)throw error;
