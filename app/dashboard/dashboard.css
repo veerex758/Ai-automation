@@ -631,3 +631,5 @@
 .app-shell .help-card p,.app-shell .help-card a{color:#94A3B8!important}
 .app-shell .stat-symbol,.app-shell .quick-template-icon.lime{background:#172846!important;color:#8BB8FF!important}
 .app-shell .dot-lime,.app-shell .dot-green{background:#3B82F6!important}
+
+.workspace-select{max-width:88px;min-width:0;border:0;background:transparent;color:#667366;font:600 9px "DM Sans",sans-serif;outline:none;cursor:pointer}.workspace-select:disabled{opacity:.35;cursor:not-allowed}.workspace-switch{min-width:0}.workspace-copy{overflow:hidden}.workspace-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
