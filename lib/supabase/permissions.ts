@@ -54,6 +54,8 @@ export async function getWorkspacePermissions(
     if (permissions["operations.manage"]) permissions["operations.view"] = true;
     if (permissions["agents.manage"]) permissions["agents.view"] = true;
     if (permissions["real_estate.manage"]) permissions["real_estate.view"] = true;
+    if (permissions["agents.manage"]) permissions["agents.view"] = true;
+    if (permissions["real_estate.manage"]) permissions["real_estate.view"] = true;
     return { role, customRoleId: member.custom_role_id, permissions };
   }
   return { role, customRoleId: null, permissions: DEFAULT_MEMBER_PERMISSIONS };
