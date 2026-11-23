@@ -10,20 +10,31 @@ alter table public.workspace_subscriptions
   add column if not exists pending_plan_effective_at timestamptz,
   add column if not exists grace_until timestamptz;
 
--- Backfill before applying NOT NULL/default constraints. Legacy plan slugs are retained.
-update public.workspace_subscriptions
-set plan_key = case
-  when plan_slug like 'starter-%' then 'starter'
-  when plan_slug like 'pro-%' then 'pro'
-  when plan_slug like 'business-%' then 'business'
-  when plan_slug = 'enterprise' then 'enterprise'
-  else coalesce(plan_key, 'free')
-end
-where plan_key is null;
+-- Backfill legacy plan/provider fields only when the legacy columns exist.
+-- A clean database already has plan_key/billing_provider and has no plan_slug/provider.
+do $
+begin
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='workspace_subscriptions' and column_name='plan_slug') then
+    execute $backfill_plan$
+      update public.workspace_subscriptions
+      set plan_key = case
+        when plan_slug like 'starter-%' then 'starter'
+        when plan_slug like 'pro-%' then 'pro'
+        when plan_slug like 'business-%' then 'business'
+        when plan_slug = 'enterprise' then 'enterprise'
+        else coalesce(plan_key, 'free')
+      end
+      where plan_key is null
+    $backfill_plan$;
+  else
+    update public.workspace_subscriptions set plan_key = coalesce(plan_key, 'free') where plan_key is null;
+  end if;
 
-update public.workspace_subscriptions
-set billing_provider = coalesce(billing_provider, provider)
-where billing_provider is null;
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='workspace_subscriptions' and column_name='provider') then
+    execute 'update public.workspace_subscriptions set billing_provider = coalesce(billing_provider, provider) where billing_provider is null';
+  end if;
+end;
+$;
 
 alter table public.workspace_subscriptions
   alter column plan_key set default 'free',
