@@ -11,9 +11,13 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
+      const response = NextResponse.redirect(new URL(next, requestUrl.origin));
+      response.headers.set("Cache-Control", "private, no-store");
+      return response;
     }
   }
 
-  return NextResponse.redirect(new URL("/login?error=confirmation", requestUrl.origin));
+  const response = NextResponse.redirect(new URL("/login?error=confirmation", requestUrl.origin));
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
 }
