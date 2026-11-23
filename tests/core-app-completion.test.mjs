@@ -54,7 +54,7 @@ test("workspace switching validates identifiers and relies on the user's RLS-sco
   assert.match(workspaces, /getOrCreateDefaultWorkspace/);
   assert.match(workspaces, /from\("workspaces"\)/);
   assert.match(switchRoute, /uuidPattern\.test\(workspaceId\)/);
-  assert.match(switchRoute, /origin!==new URL\(request\.url\)\.origin/);
+  assert.match(switchRoute, /sourceOrigin!==new URL\(request\.url\)\.origin/);
   assert.match(switchRoute, /from\("workspaces"\).*eq\("id",workspaceId\)/s);
   assert.match(switchRoute, /aivanta_active_workspace/);
 });
@@ -148,4 +148,5 @@ test("workspace administration endpoints validate tenant identifiers and sensiti
   assert.match(acceptInvitationRoute, /user\.email_confirmed_at/);
   assert.match(acceptInvitationRoute, /sha256/);
   assert.match(acceptInvitationRoute, /Invitation acceptance request exceeds 4 KiB/);
+  assert.match(acceptInvitationRoute, /sourceOrigin!==new URL\(request\.url\)\.origin/);
 });
