@@ -224,7 +224,10 @@ declare
   v_subscription public.workspace_subscriptions%rowtype;
   v_actor uuid := auth.uid();
 begin
-  if v_actor is null or p_workspace_id is null or not private.is_workspace_admin(p_workspace_id) then
+  if v_actor is null or p_workspace_id is null or not (
+    exists(select 1 from public.workspaces w where w.id=p_workspace_id and w.owner_id=v_actor)
+    or private.is_workspace_admin(p_workspace_id)
+  ) then
     raise exception 'workspace billing administrator required' using errcode='42501';
   end if;
 
