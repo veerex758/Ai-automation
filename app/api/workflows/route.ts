@@ -7,7 +7,7 @@ import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
-const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
+const maxWorkflowPayloadBytes = 64 * 1024;
 
 function formatUpdatedAt(value: string): string {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
@@ -87,9 +87,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > maxWorkflowPayloadBytes) {
+      return NextResponse.json({ error: "Workflow payload is too large." }, { status: 413, headers: { "Cache-Control": "private, no-store" } });
+    }
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > maxWorkflowPayloadBytes) {
+      return NextResponse.json({ error: "Workflow payload is too large." }, { status: 413, headers: { "Cache-Control": "private, no-store" } });
+    }
     let body: unknown;
     try {
-      body = await request.json();
+      body = JSON.parse(rawBody);
     } catch {
       return NextResponse.json(
         { error: "Request body must be valid JSON." },
@@ -97,7 +105,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!body || typeof body !== "object" || !("name" in body) || typeof body.name !== "string") {
+    if (!body || typeof body !== "object" || Array.isArray(body) || !("name" in body) || typeof body.name !== "string") {
       return NextResponse.json(
         { error: "A workflow name is required." },
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
@@ -122,9 +130,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const status = "status" in body && typeof body.status === "string" && allowedStatuses.has(body.status)
-      ? body.status
-      : "draft";
+    // New workflows must always be drafts. Activation is a separate guarded PATCH
+    // path that verifies the exact saved version, dry-run, connections and approvals.
+    if ("status" in body && body.status !== "draft") {
+      return NextResponse.json({ error: "New workflows must be created as drafts. Activate only after the required safety checks." }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
+    }
+    const status = "draft";
 
     const definitionResult = "definition" in body
       ? validateDefinition(body.definition)
@@ -224,9 +235,6 @@ export async function POST(request: NextRequest) {
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.create"))) {
       return NextResponse.json({ error: "Workspace workflows.create permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
-    }
-    if (status === "active" && !(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.execute"))) {
-      return NextResponse.json({ error: "Workspace workflows.execute permission required to create an active workflow." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
     }
     // The database guard intentionally allows workflow creation only with an
     // empty definition. Persist the validated graph through the audited RPC so
