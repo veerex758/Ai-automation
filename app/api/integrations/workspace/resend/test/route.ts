@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -12,10 +13,10 @@ function json(body: unknown, status = 200) {
 }
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || ! key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, {
+  let config: ReturnType<typeof getAdminSupabaseConfig>;
+  try { config = getAdminSupabaseConfig(); }
+  catch { throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED"); }
+  return createSupabaseClient(config.url, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
@@ -59,13 +60,14 @@ export async function POST(request: NextRequest) {
     integrationId = integration.id;
 
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
-      .select("encrypted_credentials").eq("integration_id", integration.id).maybeSingle();
+      .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
-    if (!secret?.encrypted_credentials) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
+    if (!secret?.encrypted_credentials || !["v1", "v2"].includes(secret.encryption_version)) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
 
     let credentials: Record<string, string>;
     try {
-      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspace.id}:resend`);
+      const associatedData = secret.encryption_version === "v2" ? `${workspace.id}:resend:${integration.id}` : `${workspace.id}:resend`;
+      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData);
       credentials = decrypted.resend;
     } catch {
       return json({ error: "Aivanta could not decrypt this saved credential. Check the workspace encryption key and save the connection again if it changed." }, 503);
