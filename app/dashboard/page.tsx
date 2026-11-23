@@ -400,7 +400,7 @@ export default function DashboardPage() {
               <Link href="/dashboard/activity">View activity ↗</Link>
             </div>
             {metricsLoading && <div className="activity-empty" role="status">Loading recent activity…</div>}
-            {!metricsLoading && dashboardMetrics?.recent_runs?.length ? <div className="activity-list">
+            {!metricsLoading && metricsError ? <div className="activity-empty" role="alert">{metricsError}</div> : !metricsLoading && dashboardMetrics?.recent_runs?.length ? <div className="activity-list">
               {dashboardMetrics.recent_runs.map((run) => {
                 const workflowName = workflows.find((workflow) => workflow.id === run.workflow_id)?.name || "Workflow";
                 return <article className="activity-row" key={run.id}>
@@ -409,7 +409,7 @@ export default function DashboardPage() {
                   <time dateTime={run.created_at}>{new Date(run.created_at).toLocaleString()}</time>
                 </article>;
               })}
-            </div> : !metricsLoading && <div className="activity-empty">No workflow runs recorded in this workspace yet.</div>}
+            </div> : !metricsLoading && !metricsError && <div className="activity-empty">No workflow runs recorded in this workspace yet.</div>}
           </section>
 
           <div className="section-title-row" id="workflows"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
