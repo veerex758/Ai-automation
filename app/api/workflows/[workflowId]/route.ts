@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
@@ -39,9 +40,7 @@ function presentWorkflow(row: {
 
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
+  const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
   if (!url || !key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 }
