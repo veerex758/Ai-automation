@@ -17,6 +17,8 @@ export type NodeContext = {
   signal?: AbortSignal;
   /** Worker-side authorization hook, called immediately before every live provider handler. */
   authorizeOperation?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action" }) => Promise<void>;
+  /** Resolve the exact workspace connection selected on this workflow step. Never resolves credentials in the browser. */
+  resolveStepCredentials?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action"; connectionId?: string }) => Promise<void>;
   webhook?: { verified: boolean };
   /** Shared atomic rate-limit backend. Missing backend fails closed. */
   rateLimit?: { consume(args: { key: string; limit: number; windowMs: number }): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> };
