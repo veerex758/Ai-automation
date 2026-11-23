@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
@@ -36,8 +37,7 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 function createSchedulerClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+  const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
   if (!url || !key) throw new Error("SCHEDULER_DATABASE_NOT_CONFIGURED");
 
   return createSupabaseClient(url, key, {
