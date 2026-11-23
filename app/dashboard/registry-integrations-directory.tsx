@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { officialBrandAssets } from "@/lib/integrations/official-brand-assets";
 
 type Operation = { id: string; name: string; description: string; inputSchema?: unknown; outputSchema?: unknown };
 type RegistryNode = {
@@ -21,6 +20,354 @@ type GooglePayload = { connections?: ConnectionRecord[]; error?: string };
 type ApprovalRecord = { node_id: string; operation_id: string; decision: "approved" | "revoked"; provider: string };
 type ApprovalPayload = { approvals?: ApprovalRecord[]; error?: string };
 type CredentialField = { key: string; label: string; secret?: boolean };
+
+const officialBrandAssets: Record<string, { slug: string; label: string }> = {
+  "openai": {
+    "slug": "openai",
+    "label": "openai"
+  },
+  "gemini": {
+    "slug": "googlegemini",
+    "label": "Google Gemini"
+  },
+  "slack": {
+    "slug": "slack",
+    "label": "slack"
+  },
+  "resend": {
+    "slug": "resend",
+    "label": "resend"
+  },
+  "gmail": {
+    "slug": "gmail",
+    "label": "gmail"
+  },
+  "google_sheets": {
+    "slug": "googlesheets",
+    "label": "Google Sheets"
+  },
+  "sheets": {
+    "slug": "googlesheets",
+    "label": "Google Sheets"
+  },
+  "google_drive": {
+    "slug": "googledrive",
+    "label": "Google Drive"
+  },
+  "google_calendar": {
+    "slug": "googlecalendar",
+    "label": "Google Calendar"
+  },
+  "google_docs": {
+    "slug": "googledocs",
+    "label": "Google Docs"
+  },
+  "google_forms": {
+    "slug": "googleforms",
+    "label": "Google Forms"
+  },
+  "youtube": {
+    "slug": "youtube",
+    "label": "youtube"
+  },
+  "google_contacts": {
+    "slug": "googlecontacts",
+    "label": "Google Contacts"
+  },
+  "notion": {
+    "slug": "notion",
+    "label": "notion"
+  },
+  "hubspot": {
+    "slug": "hubspot",
+    "label": "hubspot"
+  },
+  "twilio_sms": {
+    "slug": "twilio",
+    "label": "Twilio"
+  },
+  "twilio_voice": {
+    "slug": "twilio",
+    "label": "Twilio"
+  },
+  "shopify": {
+    "slug": "shopify",
+    "label": "shopify"
+  },
+  "stripe": {
+    "slug": "stripe",
+    "label": "stripe"
+  },
+  "linear": {
+    "slug": "linear",
+    "label": "linear"
+  },
+  "claude": {
+    "slug": "claude",
+    "label": "claude"
+  },
+  "mistral": {
+    "slug": "mistral",
+    "label": "mistral"
+  },
+  "groq": {
+    "slug": "groq",
+    "label": "groq"
+  },
+  "perplexity": {
+    "slug": "perplexity",
+    "label": "perplexity"
+  },
+  "elevenlabs": {
+    "slug": "elevenlabs",
+    "label": "elevenlabs"
+  },
+  "stability_ai": {
+    "slug": "stability",
+    "label": "Stability AI"
+  },
+  "hugging_face": {
+    "slug": "huggingface",
+    "label": "Hugging Face"
+  },
+  "pinecone": {
+    "slug": "pinecone",
+    "label": "pinecone"
+  },
+  "discord": {
+    "slug": "discord",
+    "label": "discord"
+  },
+  "telegram": {
+    "slug": "telegram",
+    "label": "telegram"
+  },
+  "whatsapp_business": {
+    "slug": "whatsapp",
+    "label": "WhatsApp Business"
+  },
+  "microsoft_teams": {
+    "slug": "microsoftteams",
+    "label": "Microsoft Teams"
+  },
+  "sendgrid": {
+    "slug": "sendgrid",
+    "label": "sendgrid"
+  },
+  "mailgun": {
+    "slug": "mailgun",
+    "label": "mailgun"
+  },
+  "postmark": {
+    "slug": "postmark",
+    "label": "postmark"
+  },
+  "salesforce": {
+    "slug": "salesforce",
+    "label": "salesforce"
+  },
+  "pipedrive": {
+    "slug": "pipedrive",
+    "label": "pipedrive"
+  },
+  "zoho_crm": {
+    "slug": "zoho",
+    "label": "Zoho CRM"
+  },
+  "freshsales": {
+    "slug": "freshworks",
+    "label": "Freshsales"
+  },
+  "close": {
+    "slug": "close",
+    "label": "close"
+  },
+  "apollo": {
+    "slug": "apollo",
+    "label": "apollo"
+  },
+  "intercom": {
+    "slug": "intercom",
+    "label": "intercom"
+  },
+  "jira": {
+    "slug": "jira",
+    "label": "jira"
+  },
+  "asana": {
+    "slug": "asana",
+    "label": "asana"
+  },
+  "trello": {
+    "slug": "trello",
+    "label": "trello"
+  },
+  "clickup": {
+    "slug": "clickup",
+    "label": "clickup"
+  },
+  "monday": {
+    "slug": "monday",
+    "label": "monday"
+  },
+  "todoist": {
+    "slug": "todoist",
+    "label": "todoist"
+  },
+  "airtable": {
+    "slug": "airtable",
+    "label": "airtable"
+  },
+  "github": {
+    "slug": "github",
+    "label": "github"
+  },
+  "gitlab": {
+    "slug": "gitlab",
+    "label": "gitlab"
+  },
+  "bitbucket": {
+    "slug": "bitbucket",
+    "label": "bitbucket"
+  },
+  "sentry": {
+    "slug": "sentry",
+    "label": "sentry"
+  },
+  "vercel": {
+    "slug": "vercel",
+    "label": "vercel"
+  },
+  "netlify": {
+    "slug": "netlify",
+    "label": "netlify"
+  },
+  "supabase": {
+    "slug": "supabase",
+    "label": "supabase"
+  },
+  "postgresql": {
+    "slug": "postgresql",
+    "label": "postgresql"
+  },
+  "mysql": {
+    "slug": "mysql",
+    "label": "mysql"
+  },
+  "mongodb": {
+    "slug": "mongodb",
+    "label": "mongodb"
+  },
+  "redis": {
+    "slug": "redis",
+    "label": "redis"
+  },
+  "firebase": {
+    "slug": "firebase",
+    "label": "firebase"
+  },
+  "dropbox": {
+    "slug": "dropbox",
+    "label": "dropbox"
+  },
+  "aws_s3": {
+    "slug": "amazons3",
+    "label": "Amazon S3"
+  },
+  "cloudflare_r2": {
+    "slug": "cloudflare",
+    "label": "Cloudflare R2"
+  },
+  "woocommerce": {
+    "slug": "woocommerce",
+    "label": "woocommerce"
+  },
+  "paypal": {
+    "slug": "paypal",
+    "label": "paypal"
+  },
+  "paddle": {
+    "slug": "paddle",
+    "label": "paddle"
+  },
+  "lemon_squeezy": {
+    "slug": "lemonsqueezy",
+    "label": "Lemon Squeezy"
+  },
+  "square": {
+    "slug": "square",
+    "label": "square"
+  },
+  "razorpay": {
+    "slug": "razorpay",
+    "label": "razorpay"
+  },
+  "x_twitter": {
+    "slug": "x",
+    "label": "X"
+  },
+  "linkedin": {
+    "slug": "linkedin",
+    "label": "linkedin"
+  },
+  "facebook_pages": {
+    "slug": "facebook",
+    "label": "Facebook Pages"
+  },
+  "instagram": {
+    "slug": "instagram",
+    "label": "instagram"
+  },
+  "tiktok": {
+    "slug": "tiktok",
+    "label": "tiktok"
+  },
+  "mailchimp": {
+    "slug": "mailchimp",
+    "label": "mailchimp"
+  },
+  "typeform": {
+    "slug": "typeform",
+    "label": "typeform"
+  },
+  "calendly": {
+    "slug": "calendly",
+    "label": "calendly"
+  },
+  "zendesk": {
+    "slug": "zendesk",
+    "label": "zendesk"
+  },
+  "freshdesk": {
+    "slug": "freshdesk",
+    "label": "freshdesk"
+  },
+  "zoom": {
+    "slug": "zoom",
+    "label": "zoom"
+  },
+  "cal_com": {
+    "slug": "caldotcom",
+    "label": "Cal.com"
+  },
+  "docusign": {
+    "slug": "docusign",
+    "label": "docusign"
+  },
+  "rss_feed": {
+    "slug": "rss",
+    "label": "RSS Feed"
+  },
+  "serpapi": {
+    "slug": "serpapi",
+    "label": "serpapi"
+  },
+  "openweather": {
+    "slug": "openweathermap",
+    "label": "OpenWeather"
+  }
+};
+
 
 // Native workflow primitives and utility nodes use purposeful marks rather than
 // arbitrary first-letter placeholders. Provider integrations above use brand logos.
@@ -48,7 +395,7 @@ const nativeIconGlyphs: Record<string, string> = {
 };
 const connectionRequired = (node: RegistryNode) => node.auth.type !== "none";
 const credentialProvider: Record<string,string> = {
-  http_request:"http",twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
+  email:"resend", http_request:"http",twilio_sms:"twilio",twilio_voice:"twilio_voice",google_sheets:"google_sheets",gmail:"gmail",resend:"resend",
 };
 const credentialFields: Record<string,CredentialField[]> = {
   http:[{key:"baseUrl",label:"Base URL"},{key:"apiKey",label:"API key",secret:true},{key:"username",label:"Basic-auth username"},{key:"password",label:"Basic-auth password",secret:true}],
@@ -108,12 +455,12 @@ function connectionState(node: RegistryNode, workspace: ConnectionRecord[], goog
   if (failed) return "unverified";
   if (googleProductForNode[node.id]) {
     const product = googleProductForNode[node.id];
-    return google.some((item) => item.product === product && item.status === "connected") ? "connected" : "not-connected";
+    return google.some((item) => item.product === product && item.status === "connected" && item.last_test_status === "passed") ? "connected" : "not-connected";
   }
   const provider = providerForNode[node.id] ?? node.id;
-  const record = workspace.find((item) => item.provider === provider);
-  if (!record) return "not-connected";
-  return record.status === "connected" && record.last_test_status === "passed" ? "connected" : "not-connected";
+  const matching = workspace.filter((item) => item.provider === provider);
+  if (!matching.length) return "not-connected";
+  return matching.some((item) => item.status === "connected" && item.last_test_status === "passed") ? "connected" : "not-connected";
 }
 
 function BrandMark({ node }: { node: RegistryNode }) {
@@ -219,16 +566,32 @@ export default function RegistryIntegrationsDirectory() {
     const fields = credentialFields[provider];
     if (!fields) return;
     const credentials = Object.fromEntries(fields.filter((field) => credentialValues[field.key]?.trim()).map((field) => [field.key,credentialValues[field.key].trim()]));
+    let credentialsSaved = false;
     setConnectionBusy(true); setConnectionMessage("");
     try {
       const saved = await fetch("/api/integrations/workspace", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({provider,credentials}) });
       const savedBody = await saved.json().catch(() => ({}));
       if (!saved.ok) throw new Error(savedBody.error ?? "Could not save this connection.");
+      credentialsSaved = true;
+      // The browser must not retain a provider secret after the server confirms
+      // encrypted storage. Tests use the saved connection ID, never the key.
+      setCredentialValues({});
       if (credentialTestable.has(provider)) {
-        const tested = await fetch("/api/integrations/workspace/test", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider})});
+        const savedConnectionId = typeof savedBody?.integration?.id === "string" ? savedBody.integration.id : "";
+        if (!savedConnectionId) {
+          throw new Error("Rexnora saved the credentials securely, but could not identify the saved connection for verification.");
+        }
+        const verificationPath = provider === "resend"
+          ? "/api/integrations/workspace/resend/test"
+          : "/api/integrations/workspace/test";
+        const verificationBody = provider === "resend"
+          ? { connectionId: savedConnectionId }
+          : { provider, integrationId: savedConnectionId };
+        const tested = await fetch(verificationPath, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(verificationBody) });
         const testedBody = await tested.json().catch(() => ({}));
-        if (!tested.ok) throw new Error(testedBody.message ?? testedBody.error ?? "Credentials were saved but provider verification failed.");
-        setConnectionMessage("Connection verified successfully.");
+        if (!tested.ok) throw new Error(testedBody.message ?? testedBody.error ?? "Provider verification failed.");
+        const resultMessage = typeof testedBody.message === "string" ? testedBody.message : "Connection verified successfully.";
+        setConnectionMessage(`Credentials saved securely. ${resultMessage}`);
       } else {
         setConnectionMessage("Credentials saved securely. This provider does not yet have an implemented read-only verification test, so it is not marked connected.");
       }
@@ -236,7 +599,10 @@ export default function RegistryIntegrationsDirectory() {
       const payload = await response.json().catch(() => ({}));
       setWorkspace(Array.isArray(payload.integrations)?payload.integrations:[]);
     } catch(error) {
-      setConnectionMessage(error instanceof Error?error.message:"Connection setup failed.");
+      const reason = error instanceof Error ? error.message : "Connection setup failed.";
+      setConnectionMessage(credentialsSaved
+        ? `Credentials were saved securely, but verification could not be completed: ${reason}`
+        : reason);
       const response = await fetch("/api/integrations/workspace",{cache:"no-store"}).catch(() => null);
       if (response?.ok) { const payload = await response.json().catch(() => ({})); setWorkspace(Array.isArray(payload.integrations)?payload.integrations:[]); }
     } finally { setConnectionBusy(false); }
@@ -282,7 +648,13 @@ export default function RegistryIntegrationsDirectory() {
             {operations.length > 2 && <span>+{operations.length - 2} more</span>}
           </div>}
           {node.executionStatus === "registered" && connectionRequired(node) && <span className={liveActionReady ? "registry-live-permission permission-enabled" : "registry-live-permission"}>{liveActionReady ? "Live action ready" : "Live action locked"}</span>}
-          {node.executionStatus === "registered" && connectionRequired(node) && (googleProductForNode[node.id] ? <a className="registry-connect-link" href={`/api/integrations/google/start?product=${googleProductForNode[node.id]}`}>Connect Google ↗</a> : <button className="registry-connect-link" type="button" onClick={() => { setConnecting(node); setCredentialValues({}); setConnectionMessage(""); }}>Connect</button>)}
+          {node.executionStatus === "registered" && connectionRequired(node) && (
+            <a className="registry-connect-link" href={googleProductForNode[node.id]
+              ? `/dashboard/connections?googleProduct=${encodeURIComponent(googleProductForNode[node.id])}&node=${encodeURIComponent(node.id)}`
+              : `/dashboard/connections?provider=${encodeURIComponent(credentialProvider[node.id] ?? node.id)}&node=${encodeURIComponent(node.id)}`}>
+              Connect account ↗
+            </a>
+          )}
           {node.executionStatus === "registered" && <button className="registry-expand-button" type="button" aria-expanded={isExpanded} onClick={() => toggle(node.id)}>
             {isExpanded ? "Hide operations" : "View operations"} <span>{isExpanded ? "−" : "+"}</span>
           </button>}
