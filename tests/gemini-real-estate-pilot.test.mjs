@@ -46,12 +46,14 @@ test("legacy direct live endpoints cannot bypass selected workspace credentials"
   assert.match(webhook, /hourlyRuns/);
 });
 
-test("webhook signing secrets remain server-side and CODED Supabase service credentials are supported", () => {
+test("webhook signing secrets remain server-side and admin credentials use the Preview-safe resolver", () => {
+  const adminClient = readFileSync("lib/supabase/admin.ts", "utf8");
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
-  assert.match(provision, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(provision, /CODED_SUPABASE_URL/);
-  assert.match(webhook, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(webhook, /CODED_SUPABASE_URL/);
+  assert.match(provision, /getAdminSupabaseConfig/);
+  assert.match(webhook, /getAdminSupabaseConfig/);
+  assert.doesNotMatch(webhook, /CODED_SUPABASE_SERVICE_ROLE_KEY|CODED_SUPABASE_URL/);
+  assert.match(adminClient, /VERCEL_ENV === "preview"/);
+  assert.match(adminClient, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
 });
 
 
