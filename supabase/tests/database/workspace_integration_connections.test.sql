@@ -1,5 +1,5 @@
 begin;
-select plan(18);
+select plan(20);
 
 -- The new save RPC is deliberately unavailable to browser roles.
 select ok(
@@ -60,6 +60,13 @@ select is(
  2,
  'multiple accounts for one provider coexist in a workspace'
 );
+select is(
+ (select count(*)::integer from public.workspace_integrations
+  where workspace_id='b1111111-1111-4111-8111-111111111111' and provider='gemini'
+    and status='needs_attention' and last_test_status is null),
+ 2,
+ 'new connections remain unverified until a provider test passes'
+);
 
 -- Mark both verified, then rotate only account A.
 update public.workspace_integrations
@@ -98,6 +105,12 @@ select is(
   where id=(select id from connection_fixture where display_name='Gemini account A')),
  null::text,
  'rotated account loses its previous verification'
+);
+select is(
+ (select status from public.workspace_integrations
+  where id=(select id from connection_fixture where display_name='Gemini account A')),
+ 'needs_attention',
+ 'rotated account returns to pending verification'
 );
 select is(
  (select last_test_status from public.workspace_integrations
