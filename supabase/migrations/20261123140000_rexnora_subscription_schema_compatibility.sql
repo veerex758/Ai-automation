@@ -12,7 +12,7 @@ alter table public.workspace_subscriptions
 
 -- Backfill legacy plan/provider fields only when the legacy columns exist.
 -- A clean database already has plan_key/billing_provider and has no plan_slug/provider.
-do $
+do $compat$
 begin
   if exists (select 1 from information_schema.columns where table_schema='public' and table_name='workspace_subscriptions' and column_name='plan_slug') then
     execute $backfill_plan$
@@ -34,7 +34,7 @@ begin
     execute 'update public.workspace_subscriptions set billing_provider = coalesce(billing_provider, provider) where billing_provider is null';
   end if;
 end;
-$;
+$compat$;
 
 alter table public.workspace_subscriptions
   alter column plan_key set default 'free',
