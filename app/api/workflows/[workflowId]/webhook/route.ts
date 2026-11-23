@@ -32,6 +32,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return jsonError("Authentication required.", 401);
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > 1024 || new TextEncoder().encode(await request.clone().text()).byteLength > 1024) return jsonError("Webhook provisioning request exceeds 1 KiB.", 413);
     let body: unknown;
     try { body = await request.json(); } catch { return jsonError("Request body must be valid JSON.", 400); }
     if (!isRecord(body) || body.confirm !== true) {
