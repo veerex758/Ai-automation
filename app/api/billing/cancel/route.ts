@@ -60,7 +60,7 @@ export async function POST(){
    if(disableError)throw disableError;
   }
 
-  const {data,cancelError}=await supabase.rpc("request_workspace_subscription_cancellation",{p_workspace_id:workspace.id});
+  const {data,error:cancelError}=await supabase.rpc("request_workspace_subscription_cancellation",{p_workspace_id:workspace.id});
   if(cancelError){
    if(cancelError.code==="42501")return NextResponse.json({error:"Only a workspace owner or admin can manage billing."},{status:403});
    throw cancelError;
