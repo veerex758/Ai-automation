@@ -30,6 +30,9 @@ test("password update requires a valid authenticated recovery session", () => {
 test("confirmation callback only redirects to a safe internal destination", () => {
   assert.match(callback, /exchangeCodeForSession/);
   assert.match(callback, /safeInternalPath/);
+  assert.match(callback, /isPasswordRecovery/);
+  assert.match(callback, /error=recovery/);
+  assert.match(login, /recoveryError/);
   assert.match(callback, /private, no-store/);
 });
 
