@@ -8,7 +8,7 @@ export async function middleware(request: NextRequest) {
 
   // Fail closed for workspace routes if auth configuration is missing.
   if (!url || !key) {
-    if (request.nextUrl.pathname.startsWith("/dashboard")) {
+    if (request.nextUrl.pathname.startsWith("/dashboard") || request.nextUrl.pathname === "/auth/update-password") {
       return NextResponse.redirect(new URL("/login?reason=configuration", request.url));
     }
     return response;
