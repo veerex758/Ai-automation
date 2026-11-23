@@ -1,79 +1,107 @@
-# Rexnora — staging credentials and acceptance record
+# Rexnora — Stage 3 staging credentials and acceptance record
 
 **Updated:** 2026-11-23  
-**Applies to:** unified integration candidate PR #229 and the Stage 3 / real-estate / SaaS work stacked on it.
+**Candidate:** PR #229 — `integration/saas-core-stage3-realestate-20261123`  
+**Current recorded head:** `c912b86d0333edb157a2a595ea24734f989437de`
 
-## Current verification boundary
+## Verification boundary
 
-Automated CI is evidence for code and disposable-database behavior only. It is not authenticated staging or customer acceptance. The Preview deployment has previously been observed pointing at the same Supabase project URL as Production. The connected Supabase project is production-mapped and has no isolated preview branch. Therefore no candidate migration may be applied to that database, and Preview must not run live customer workflows against it.
+This candidate remains an **open draft**. Do not merge, promote, or run customer traffic until all release gates below pass. Production database and Production Vercel variables have not been changed by this Stage 3 work.
 
-The candidate must remain an unmerged draft until exact-head tests, lint, type-check, production build, clean migration replay, pgTAP, database integration and Vercel Preview are all green. Supabase Preview being skipped because no isolated branch exists is not a pass; record the isolated environment evidence separately.
+The isolated staging Supabase project is `ygclofqxtztnynkljipj` (`aivanta-staging`, eu-west-1). Production is a separate project. Candidate database migrations were applied only to staging; the current manual staging migration ledger contains 262 records. The ledger count is descriptive, not proof of source-history equivalence.
 
-## Environment prerequisites — do not paste secret values into this document
+## Automated workflow evidence
 
-Create or select a genuinely isolated Supabase staging project (or preview database branch whose isolation from production is verified). Configure the Rexnora Vercel Preview environment to use only that staging project.
+| Workflow | Commit | Run | Result |
+|---|---|---:|---|
+| CI (tests, lint, type-check, build) | `c912b86` | 45243920300 | In progress at workflow-validation tests; no green result recorded yet |
+| Clean migration replay + pgTAP | `c912b86` | 45243920091 | In progress |
+| Real MySQL/MongoDB TLS worker integration | `c912b86` | 45243920134 | Passed |
 
-Required server-side configuration to supply through Vercel's encrypted environment settings:
+A previous clean migration replay passed on `86e5cc1` (run 45242478784), and database-service integration passed on both `86e5cc1` and `a7c2db8`. The current replay run remains the required exact-head result. CI must complete all steps, including lint, type-check and production build.
 
-- Supabase staging URL and public/anon key for authenticated application traffic.
-- Service-role key for server-only RPCs and secret-table operations (SUPABASE_SERVICE_ROLE_KEY, or the configured compatible CODED_SUPABASE_* variable set).
-- GEMINI_API_KEY and the approved Gemini model configuration.
-- AIVANTA_CREDENTIALS_ENCRYPTION_KEY with valid key material dedicated to the staging environment.
-- Real-estate pilot feature/scheduler flags after the exact names and intended Preview-only behavior are confirmed from the deployed code.
-- RESEND_API_KEY only where a legacy path explicitly requires it; the Stage 3 customer connection path should use a workspace-saved, encrypted Resend connection, not a deployment-wide fallback.
-- Any existing webhook signing secrets and scheduler/worker authorization secrets needed by the routes under test.
+## Staging database security evidence
 
-Do not enable the shared AIVANTA_LIVE_EXECUTION_ENABLED switch while Preview and Production share a database or execution scope. A Preview-specific live-execution gate must be isolated before any provider side effect is authorized. Use synthetic/test leads and an explicitly approved recipient until the agency signs off.
+Latest staging inventory:
 
-## Observed Vercel Preview variable state (2026-11-23)
+- 96/96 public tables have RLS enabled.
+- 45 RLS-enabled tables have no direct policies; none grants SELECT, INSERT, UPDATE or DELETE to `anon` or `authenticated`. These are service-role/internal tables.
+- 18 `SECURITY DEFINER` functions executable by authenticated users all have an explicit empty search path and an `auth.uid()` check.
+- Browser roles cannot SELECT or INSERT integration secrets and cannot SELECT provider-operation approvals.
+- The Supabase security advisor still reports leaked-password protection disabled. Enable it in the Supabase Auth project settings before customer onboarding.
 
-The Vercel project currently has no Preview environment-variable entries scoped specifically to the PR #229 candidate branch, and no custom Vercel environment is configured. Do not assume branch-specific settings attached to another feature branch are inherited by this candidate.
+### Cross-workspace isolation
 
-The project Preview inventory showed these required values empty (names only; values intentionally omitted):
+A transaction using two synthetic users and workspaces passed these assertions:
 
-- Supabase server access: SUPABASE_SERVICE_ROLE_KEY, CODED_SUPABASE_SERVICE_ROLE_KEY, CODED_SUPABASE_SECRET_KEY.
-- AI/credential encryption: GEMINI_API_KEY, AIVANTA_CREDENTIALS_ENCRYPTION_KEY, AIVANTA_CREDENTIALS_ENCRYPTION_KEY_VERSION.
-- Scheduler and webhook protection: CRON_SECRET, AIVANTA_WEBHOOK_SECRET_KEY_VERSION, AIVANTA_WEBHOOK_ENCRYPTION_KEY, WEBHOOK_ENCRYPTION_KEY.
-- Resend legacy sender configuration: RESEND_API_KEY, RESEND_FROM_EMAIL. Workspace-saved Resend credentials remain the intended Stage 3 pilot path.
-- Billing sandbox: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, PAYSTACK_SECRET_KEY, PAYSTACK_WEBHOOK_SECRET.
-- Provider execution allowlist: AIVANTA_LIVE_INTEGRATIONS.
+1. Workspace A could not read a lead owned by workspace B.
+2. Workspace A could not update workspace B's lead (zero rows updated).
+3. Workspace A could not insert a lead into workspace B (permission denied).
+4. Workspace B could read and update its own lead.
+5. Authenticated browser roles were denied integration-secret SELECT/INSERT and approval-table SELECT.
 
-REAL_ESTATE_PIPELINE_ENABLED, REAL_ESTATE_FOLLOWUPS_ENABLED and AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED were set to false only on a different feature branch, not on PR #229. AIVANTA_LIVE_EXECUTION_ENABLED is empty at the generic Preview scope. Keep all real provider execution disabled until an isolated Supabase staging target and a Preview-only execution boundary are proven. AIVANTA_LIVE_EMAIL_RECIPIENTS is configured in Preview; its value is deliberately not recorded here.
+The fixture transaction was rolled back; no test lead or user fixture was retained. This is database-level JWT-claim/RLS verification, **not** a real browser login acceptance test.
 
-## Stage 3 connection acceptance
+### Connection RPC and entitlement tests
 
-1. Sign in as a staging workspace owner and a separate administrator. Confirm viewer/member roles cannot manage integration credentials.
-2. Save two separate accounts for the same provider. Confirm each has a distinct connection ID and updating one does not replace the other.
-3. Confirm ciphertext is stored server-side, never returned to the browser, logs, prompts, workflow definitions or test output.
-4. Confirm credential verification is recorded on the exact connection. Saving or re-testing resets that connection to needs-attention until verification succeeds.
-5. Create a workflow with an explicit connection ID on each provider node. Verify activation rejects missing, untested, disconnected, revoked or cross-workspace selections.
-6. Run the workflow in staging and verify the worker decrypts only the selected connection immediately before that provider operation. No default-account fallback is accepted.
+A separate rolled-back staging transaction verified:
 
-## Real-estate pilot acceptance
+- Two Gemini connections can coexist in one workspace with distinct IDs.
+- Both secret rows are stored as v2 envelopes.
+- Updating one connection resets only that connection's verification state; the other remains connected and verified.
+- A save attempt for an unowned/nonexistent connection ID fails closed.
+- Usage metering allows 20 credits, treats a duplicate idempotency key as no additional consumption, and rejects a further 6 credits above the free-plan limit of 25.
 
-1. Configure a staging Gemini credential and connect the agency's Resend account through the workspace Integrations UI.
-2. Verify the Resend sender domain. Configure one agency-approved notification recipient; the browser must not be able to override the recipient used by the pilot.
-3. Submit a synthetic or agency-approved enquiry with consent, source, property interest, budget, location and timeline.
-4. Verify intake, lead matching/scoring, Gemini structured qualification, notification, persisted result and visible run trace.
-5. Inject a transient provider or delivery failure. Confirm bounded retry/recovery, no duplicate message, and clear operator-visible failure state.
-6. Exercise signed webhook verification/replay protection and the 15-minute scheduler in the isolated staging environment.
-7. Ask an agency representative to inspect the lead outcome and explicitly accept whether the result saves time or improves response handling. Record date, workspace, workflow version, test case and sign-off evidence without storing personal lead data in this document.
+The tests used synthetic credentials/ciphertext and were rolled back. They do not prove a live Gemini or Resend account can authenticate or send.
 
-## SaaS and recurring billing acceptance
+## Application integration changes made
 
-- Use Stripe and Paystack sandbox credentials, sandbox webhooks and a dedicated staging database to test checkout/authorization, consent, renewal, failure, idempotent retry, reconciliation, cancellation and paid-through entitlement.
-- Tax invoice issuance remains blocked on confirmation of the registered seller identity, tax jurisdiction, legal address and applicable rates. Do not represent invoices as legally compliant until those values are reviewed.
-- No live-money payment or production billing action is part of this CI task.
+- Workspace integration save/update and provider verification use an exact connection ID; there is no implicit account fallback.
+- OAuth callback writes the selected connection, using workspace/provider/connection-bound v2 encryption. Existing v1 credentials remain readable.
+- Resend verification and test-email routes now accept v1/v2 and use the exact connection ID in v2 associated data.
+- The durable worker selects the exact connected, freshly tested connection and supports legacy v1 plus connection-bound v2 refresh.
+- Privileged route clients for integrations, OAuth, scheduler, workflow dispatch/execution, approvals and webhook management use the shared branch-aware admin Supabase configuration.
+- On the Rexnora integration Preview branch, server-side admin access prefers the branch-scoped staging `CODED_SUPABASE_SERVICE_ROLE_KEY`; the branch is explicitly identified with `VERCEL_GIT_COMMIT_REF`. Other Preview branches and Production retain their prior resolution.
+- The test suite was updated to assert the new helper/RPC and whitespace-tolerant SQL contracts. Exact-head CI has not yet completed, so these code paths are not marked release-verified.
 
-## Security and release gates still requiring human/staging evidence
+## Vercel Preview environment
 
-- Confirm Preview and Production point to different Supabase projects and different encryption keys.
-- Review the flagged SECURITY DEFINER functions and their grants/authorization boundary; enable leaked-password protection before customer onboarding.
-- Verify workspace isolation with two real staging accounts, secret access denial from browser roles, webhook signature/replay defenses, provider allowlists, rate limits and audit logs.
-- Verify backup/restore, rollback, incident response and customer-facing privacy/retention/support materials under the Stage 9 roadmap.
-- Capture screenshots or logs that prove the mobile dashboard/builder journey works at phone widths.
-- Obtain pilot-agency acceptance; automated tests cannot supply this approval.
+The Vercel project has 16 environment-variable records scoped to Preview only and this branch only. Names are recorded here; secret values are intentionally omitted.
 
-## Decision rule
+- Staging URL and public/anon keys: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `CODED_SUPABASE_URL`, `NEXT_PUBLIC_CODED_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CODED_SUPABASE_ANON_KEY`.
+- Server credentials: `CODED_SUPABASE_SERVICE_ROLE_KEY`, `CODED_SUPABASE_SECRET_KEY`.
+- Credential encryption: `AIVANTA_CREDENTIALS_ENCRYPTION_KEY`.
+- Scheduler and webhook isolation: branch-only `CRON_SECRET`, `AIVANTA_WEBHOOK_ENCRYPTION_KEY`, `AIVANTA_WEBHOOK_SECRET_KEY_VERSION`.
+- Live gates: `AIVANTA_LIVE_EXECUTION_ENABLED=false`, `REAL_ESTATE_PIPELINE_ENABLED=false`, `REAL_ESTATE_FOLLOWUPS_ENABLED=false`, `AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED=false`.
 
-A passing exact-SHA CI run and a READY Vercel Preview mean the candidate builds and its automated checks pass. They do not authorize production migration, production deployment, live provider execution, customer onboarding, tax invoice claims or release. Those remain blocked until the isolated credentials and acceptance evidence above exist.
+The branch-specific `NEXT_PUBLIC_SUPABASE_URL` resolves to the staging project hostname `ygclofqxtztnynkljipj.supabase.co`. The existing generic Preview/Production `CRON_SECRET` record was left unchanged; a Preview-only branch override was created. No Production variable was edited.
+
+**Deployment gap:** the newest observed READY Vercel Preview for this branch is commit `1a89740`, not the current `c912b86` head. A fresh deployment request hit Vercel's `api-deployments-free-per-day` limit (HTTP 402; over 100 daily API deployments). Therefore the current code and latest branch-scoped variable changes have **not** yet been verified by a newly built exact-head Preview. Do not treat the older READY deployment as current acceptance.
+
+## Authenticated staging acceptance — not complete
+
+No real staging owner/admin browser session has been used. The current tests emulate JWT claims inside database transactions; they do not establish the sign-in flow, cookies, role UI or live API paths from an authenticated browser session.
+
+Still required with actual staging accounts:
+
+1. Sign in as a staging workspace owner and a separate workspace administrator; verify member/viewer roles cannot manage connections.
+2. Save two real accounts for one provider, verify independently, rotate one, and confirm the other remains intact.
+3. Confirm API responses, browser state, logs and workflow definitions never expose ciphertext or tokens.
+4. Author a workflow with explicit connection IDs; confirm activation rejects missing, disconnected, untested, revoked and cross-workspace IDs.
+5. Execute against a provider sandbox/test account and confirm the worker decrypts only the selected connection.
+6. Run a synthetic real-estate enquiry through Gemini qualification and a workspace-saved Resend account; verify persisted output, notification, trace, retry/recovery and duplicate protection.
+7. Test signed webhook replay protection and scheduler execution in Preview with live customer execution disabled.
+8. Obtain and record pilot-agency acceptance before real customer use.
+
+Do not paste credentials into this document or chat. Use encrypted Vercel settings and the approved staging test accounts/recipients.
+
+## Release blockers
+
+- Exact-head CI, including lint, type-check and production build, must pass.
+- Exact-head clean migration replay + pgTAP must pass.
+- A fresh READY Vercel Preview must be built from the exact current SHA after the Vercel deployment limit is cleared.
+- Real authenticated owner/admin staging acceptance and provider-sandbox tests remain outstanding.
+- Enable leaked-password protection in Supabase Auth settings.
+- Agency acceptance, mobile-width acceptance, backup/restore, incident response, customer-facing privacy/retention/support material and the other roadmap gates remain outstanding.
+
+No Production migration, Production deployment, live email, live payment or customer workflow is authorized by this record.
