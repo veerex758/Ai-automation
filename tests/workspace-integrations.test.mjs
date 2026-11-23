@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const route = readFileSync(new URL("../app/api/integrations/workspace/route.ts", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/20261120130000_rexnora_multi_account_connections.sql", import.meta.url), "utf8");
+const connectionMigration = readFileSync(new URL("../supabase/migrations/20261122190000_rexnora_workspace_integration_connections.sql", import.meta.url), "utf8");
 
 test("workspace integration API authenticates and restricts credential management to admins", () => {
   assert.match(route, /auth\.getUser\(\)/);
@@ -71,4 +72,26 @@ test("Resend verification decrypts server-side and checks the saved connection w
   assert.match(resendVerificationRoute, /does not by itself mean the key is invalid/);
   const result = resendVerificationRoute.slice(resendVerificationRoute.lastIndexOf('return json({\n      status: "passed"'));
   assert.doesNotMatch(result, /apiKey|encrypted_credentials/);
+});
+
+
+test("new saves use connection-bound v2 while old v1 records remain compatible",()=>{
+ assert.ok(route.includes("encryptWorkspaceCredentialsV2"));
+ assert.ok(route.includes("p_create_new: requestedConnectionId === undefined"));
+ assert.ok(connectionMigration.includes("encryption_version in ('v1','v2')"));
+ assert.ok(connectionMigration.includes("p_create_new boolean"));
+ assert.ok(worker.includes('secret.encryption_version === "v2"'));
+ assert.ok(worker.includes("integration.id"));
+ assert.ok(worker.includes('encryption_version: "v2"'));
+});
+test("OAuth and provider verification decrypt the exact selected connection",()=>{
+ const oauth=readFileSync(new URL("../app/api/integrations/oauth/[provider]/callback/route.ts",import.meta.url),"utf8");
+ const providerTest=readFileSync(new URL("../app/api/integrations/workspace/test/route.ts",import.meta.url),"utf8");
+ const resendTest=readFileSync(new URL("../app/api/integrations/workspace/resend/test/route.ts",import.meta.url),"utf8");
+ const resendEmail=readFileSync(new URL("../app/api/integrations/workspace/resend/test-email/route.ts",import.meta.url),"utf8");
+ assert.ok(oauth.includes("encryptWorkspaceCredentialsV2"));
+ for(const source of [providerTest,resendTest,resendEmail]){
+  assert.ok(source.includes('secret.encryption_version === "v2"'));
+  assert.ok(source.includes("integration.id"));
+ }
 });

@@ -59,13 +59,14 @@ export async function POST(request: NextRequest) {
     integrationId = integration.id;
 
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
-      .select("encrypted_credentials").eq("integration_id", integration.id).maybeSingle();
+      .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
     if (!secret?.encrypted_credentials) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
 
     let credentials: Record<string, string>;
     try {
-      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspace.id}:resend`);
+      const associatedData = secret.encryption_version === "v2" ? `${workspace.id}:resend:${integration.id}` : `${workspace.id}:resend`;
+      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData);
       credentials = decrypted.resend;
     } catch {
       return json({ error: "Aivanta could not decrypt this saved credential. Check the workspace encryption key and save the connection again if it changed." }, 503);

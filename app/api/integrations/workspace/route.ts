@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { encryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
+import { encryptWorkspaceCredentialsV2, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -181,8 +182,9 @@ export async function POST(request: NextRequest) {
     const provider = body.provider as WorkspaceCredentialProvider;
     const displayName = typeof body.displayName === "string" && body.displayName.trim()
       ? body.displayName.trim().slice(0, 120) : labels[provider];
-    const connectionId = typeof body.connectionId === "string" ? body.connectionId : undefined;
-    if (connectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
+    if (body.connectionId !== undefined && typeof body.connectionId !== "string") return json({ error: "The connection ID is invalid.", code: "INTEGRATION_REQUEST_INVALID" }, 400);
+    const requestedConnectionId = typeof body.connectionId === "string" ? body.connectionId : undefined;
+    if (requestedConnectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedConnectionId)) {
       return json({ error: "The connection ID is invalid.", code: "INTEGRATION_REQUEST_INVALID" }, 400);
     }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
@@ -193,9 +195,10 @@ export async function POST(request: NextRequest) {
       return json({ error: integrationErrorMessages.INTEGRATION_PERMISSION_DENIED, code: "INTEGRATION_PERMISSION_DENIED" }, 403);
     }
 
+    const connectionId = requestedConnectionId ?? randomUUID();
     let encrypted: string;
     try {
-      encrypted = encryptWorkspaceCredentials({ [provider]: body.credentials as Record<string, string> }, undefined, `${workspace.id}:${provider}`);
+      encrypted = encryptWorkspaceCredentialsV2({ [provider]: body.credentials as Record<string, string> }, `${workspace.id}:${provider}:${connectionId}`);
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
       const safeCode = ["WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED", "WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID", "WORKSPACE_CREDENTIALS_INVALID"].includes(code)
@@ -214,7 +217,8 @@ export async function POST(request: NextRequest) {
       p_display_name: displayName,
       p_encrypted_credentials: encrypted,
       p_created_by: user.id,
-      p_connection_id: connectionId ?? null,
+      p_connection_id: connectionId,
+      p_create_new: requestedConnectionId === undefined,
     });
     if (error || !isRecord(data) || typeof data.id !== "string") throw error ?? new Error("INTEGRATION_SAVE_FAILED");
     return json({ integration: data }, 201);

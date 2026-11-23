@@ -1,9 +1,9 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
-import { encryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { encryptWorkspaceCredentialsV2 } from "@/lib/integrations/workspace-credentials";
 import {
   exchangeProviderOAuthCode,
   exchangeMetaLongLivedToken,
@@ -125,7 +125,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
 
     const key = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
     if (!key) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
-    const encrypted = encryptWorkspaceCredentials({ [provider]: credentials }, key, workspace.id + ":" + provider);
+    const connectionId = stateData.connectionId ?? randomUUID();
+    const encrypted = encryptWorkspaceCredentialsV2({ [provider]: credentials }, workspace.id + ":" + provider + ":" + connectionId, key);
     const admin = serviceClient();
     const connectedAt = new Date().toISOString();
     const displayName = provider.replace(/_/g, " ") + " · " + new Date(connectedAt).toLocaleString("en-US", {
@@ -137,7 +138,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
       p_display_name: displayName,
       p_encrypted_credentials: encrypted,
       p_created_by: user.id,
-      p_connection_id: stateData.connectionId ?? null,
+      p_connection_id: connectionId,
+      p_create_new: stateData.connectionId === undefined,
     });
     const integrationId = saved && typeof saved === "object" && "id" in saved &&
       typeof (saved as { id?: unknown }).id === "string" ? (saved as { id: string }).id : null;

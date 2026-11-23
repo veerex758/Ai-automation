@@ -490,9 +490,10 @@ export async function POST(request: Request) {
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets").select("encrypted_credentials,encryption_version")
       .eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
-    if (!secret?.encrypted_credentials || secret.encryption_version !== "v1") return json({ error: "Saved credential is unavailable. Save the integration again." }, 409);
+    if (!secret?.encrypted_credentials || !["v1", "v2"].includes(secret.encryption_version)) return json({ error: "Saved credential is unavailable. Save the integration again." }, 409);
+    const associatedData = secret.encryption_version === "v2" ? workspace.id + ":" + provider + ":" + integration.id : workspace.id + ":" + provider;
     let credentials: Credentials;
-    try { credentials = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, workspace.id + ":" + provider)[provider as Provider]; }
+    try { credentials = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData)[provider as Provider]; }
     catch { return json({ error: "Aivanta could not decrypt this credential. Check the encryption key and save it again if it changed." }, 503); }
     if (!credentials) return json({ error: "Saved credential does not match this provider." }, 409);
     const result = await check(provider as Provider, credentials);

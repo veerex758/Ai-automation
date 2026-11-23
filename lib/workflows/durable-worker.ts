@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { decryptWorkspaceCredentials, encryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { decryptWorkspaceCredentials, encryptWorkspaceCredentialsV2, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import { PROVIDER_OAUTH_CONFIG, refreshProviderOAuthToken } from "@/lib/integrations/provider-oauth";
 import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
 import { GOOGLE_PRODUCTS, type GoogleProduct } from "@/lib/integrations/google-oauth";
@@ -121,9 +121,10 @@ async function workspaceCredentials(
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
       .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw new Error("WORKSPACE_CREDENTIAL_LOOKUP_FAILED");
-    if (!secret || secret.encryption_version !== "v1") throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
+    if (!secret || !["v1", "v2"].includes(secret.encryption_version)) throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
+    const associatedData = secret.encryption_version === "v2" ? `${workspaceId}:${provider}:${integration.id}` : `${workspaceId}:${provider}`;
     let decrypted: WorkspaceCredentials;
-    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspaceId}:${provider}`); }
+    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData); }
     catch { throw new Error("WORKSPACE_CREDENTIALS_DECRYPT_FAILED"); }
     if (!decrypted[provider]) throw new Error("WORKSPACE_CREDENTIAL_PROVIDER_MISMATCH");
     let providerCredentials = decrypted[provider];
@@ -148,9 +149,9 @@ async function workspaceCredentials(
             ...(typeof refreshed.token_type === "string" ? { tokenType: refreshed.token_type } : {}),
             ...(typeof refreshed.scope === "string" ? { scope: refreshed.scope } : {}),
           };
-          const encrypted = encryptWorkspaceCredentials({ [provider]: providerCredentials }, undefined, `${workspaceId}:${provider}`);
+          const encrypted = encryptWorkspaceCredentialsV2({ [provider]: providerCredentials }, `${workspaceId}:${provider}:${integration.id}`);
           const { error: refreshSaveError } = await db.from("workspace_integration_secrets").update({
-            encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
+            encrypted_credentials: encrypted, encryption_version: "v2", updated_at: new Date().toISOString(),
           }).eq("integration_id", integration.id);
           if (refreshSaveError) throw new Error("OAUTH_TOKEN_REFRESH_SAVE_FAILED");
         } catch {
