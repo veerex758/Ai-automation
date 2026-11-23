@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const headers = { "Cache-Control": "private, no-store" };
 type Context = { params: Promise<{ workspaceId: string }> };
 export async function PATCH(request: Request, context: Context) {
   const { workspaceId } = await context.params;
+  if (!uuidPattern.test(workspaceId)) return NextResponse.json({ error: "Invalid workspace ID." }, { status: 400, headers });
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
