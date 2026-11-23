@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import "./../login/login.css";
+import "../../login/login.css";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
