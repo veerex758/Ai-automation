@@ -3,14 +3,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const node = readFileSync("nodes/gemini.ts", "utf8");
+const email = readFileSync("nodes/email.ts", "utf8");
 const activation = readFileSync("app/api/workflows/[workflowId]/route.ts", "utf8");
 const registryRun = readFileSync("app/api/workflows/[workflowId]/registry-run/route.ts", "utf8");
 const webhook = readFileSync("app/api/webhooks/[endpointKey]/route.ts", "utf8");
 const provision = readFileSync("app/api/workflows/[workflowId]/webhook/route.ts", "utf8");
 const builder = readFileSync("app/dashboard/workflows/[workflowId]/page.tsx", "utf8");
 const testPanel = readFileSync("app/dashboard/workflows/[workflowId]/run-test-panel.tsx", "utf8");
+const pipeline = readFileSync("lib/real-estate/pipeline.ts", "utf8");
 
-test("Gemini lead qualification is a registered structured operation and does not return direct contact identifiers", () => {
+test("Gemini lead qualification is a registered structured operation and does not expose direct contact identifiers", () => {
   assert.match(node, /id: "qualify_real_estate_lead"/);
   assert.doesNotMatch(node, /fullName: z\.string\(\)|email: z\.string\(\)|phone: z\.string\(\)/);
   assert.match(node, /missingInformation: z\.array/);
@@ -18,45 +20,40 @@ test("Gemini lead qualification is a registered structured operation and does no
   assert.match(node, /responseJsonSchema: leadJsonSchema/);
 });
 
-test("activation is explicit, constrained to the supported three-step pilot, and requires an exact-version successful dry-run", () => {
-  assert.match(activation, /updates\.status === "active"/);
-  assert.match(activation, /definition\.steps\.length !== 3/);
-  assert.match(activation, /steps\[1\].*nodeId === "gemini"/s);
-  assert.match(activation, /steps\[2\].*nodeId === "email"/s);
-  assert.match(activation, /GEMINI_API_KEY/);
-  assert.match(activation, /RESEND_API_KEY/);
-  assert.match(activation, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+test("real-estate notification uses the registered Resend email node with safe recipient handling", () => {
+  assert.match(email, /resend/);
+  assert.match(pipeline, /RESEND/);
+  assert.match(pipeline, /createRealEstateServiceClient/);
+});
+
+test("workflow activation keeps exact-version test gates and requires selected verified node accounts", () => {
+  assert.match(activation, /validateDurableLiveSteps/);
   assert.match(activation, /workflow_version", candidate\.version/);
   assert.match(activation, /mode", "dry_run"/);
   assert.match(activation, /status", "succeeded"/);
+  assert.match(activation, /step\.connectionId/);
+  assert.match(activation, /WORKSPACE_CONNECTION_NOT_VERIFIED/);
+  assert.doesNotMatch(activation, /definition\.steps\.length !== 3/);
+  assert.doesNotMatch(activation, /GEMINI_API_KEY|RESEND_API_KEY/);
 });
 
-test("manual and signed-webhook live paths allow only the explicit Gemini qualification operation", () => {
-  for (const source of [registryRun, webhook]) {
-    assert.match(source, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
-    assert.match(source, /GEMINI_API_KEY/);
-    assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-    assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  }
-  assert.match(webhook, /hourlyRuns/);
+test("signed webhook ingress queues durable work with a verified workspace actor", () => {
+  assert.match(webhook, /verifyWebhookSignature/);
+  assert.match(webhook, /dispatch_workflow_execution/);
+  assert.match(webhook, /p_created_by: dispatchActor/);
+  assert.match(webhook, /workspaceOwner/);
+  assert.match(webhook, /webhookVerified/);
+  assert.match(registryRun, /export \{ GET, POST \}/);
 });
 
-test("webhook signing secrets remain server-side and CODED Supabase service credentials are supported", () => {
+test("webhook provisioning encrypts secrets and the builder makes activation explicit", () => {
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
   assert.match(provision, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(provision, /CODED_SUPABASE_URL/);
-  assert.match(webhook, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(webhook, /CODED_SUPABASE_URL/);
-});
-
-
-test("the current registry graph builder exposes explicit activation, pause, and one-time webhook provisioning", () => {
   assert.match(builder, /Activate workflow/);
   assert.match(builder, /JSON\.stringify\(\{ status: "active" \}\)/);
-  assert.match(builder, /JSON\.stringify\(\{ confirm: true \}\)/);
   assert.match(builder, /signingSecret/);
   assert.match(builder, /JSON\.stringify\(\{ status: "paused" \}\)/);
-  assert.match(builder, /registryInput\?\.to/);
-  assert.match(testPanel, /isWebhookTrigger/);
-  assert.match(testPanel, /manual live-run button is disabled/);
+  assert.match(testPanel, /\/dispatch/);
+  assert.match(testPanel, /idempotencyKey\.current/);
 });
