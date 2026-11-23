@@ -78,9 +78,11 @@ test("Supabase secret fallback ignores empty placeholder variables", async () =>
   const googleConnections = await readFile(fileURLToPath(new URL("../app/api/integrations/google/connections/route.ts", import.meta.url)), "utf8");
   const adminClient = await readFile(fileURLToPath(new URL("../lib/supabase/admin.ts", import.meta.url)), "utf8");
   const workspaceIntegrations = await readFile(fileURLToPath(new URL("../app/api/integrations/workspace/route.ts", import.meta.url)), "utf8");
-  assert.match(googleConnections, /SUPABASE_SERVICE_ROLE_KEY \|\| process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(adminClient, /SUPABASE_SERVICE_ROLE_KEY\s*\|\| process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(workspaceIntegrations, /SUPABASE_SECRET_KEY \|\| process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(googleConnections, /getAdminSupabaseConfig/);
+  assert.match(workspaceIntegrations, /getAdminSupabaseConfig/);
+  assert.match(adminClient, /isRexnoraStagingPreview/);
+  assert.match(adminClient, /isRexnoraStagingPreview[\s\S]*CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(adminClient, /VERCEL_GIT_COMMIT_REF/);
 });
 
 
