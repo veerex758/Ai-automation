@@ -9,6 +9,12 @@ import { getWorkerProvider } from "@/lib/workflows/worker-operation-map";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
+const maxUpdateBytes = 8 * 1024;
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function formatUpdatedAt(value: string): string {
@@ -46,7 +52,7 @@ function presentWorkflow(row: {
 async function getAuthenticatedClient() {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { response: NextResponse.json({ error: "Authentication required." }, { status: 401 }) };
+  if (error || !user) return { response: privateJson({ error: "Authentication required." }, { status: 401 }) };
   return { supabase, user };
 }
 
@@ -54,73 +60,77 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
   try {
     const { workflowId } = await context.params;
     if (!uuidPattern.test(workflowId)) {
-      return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+      return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
     }
 
     const auth = await getAuthenticatedClient();
     if ("response" in auth) return auth.response;
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > maxUpdateBytes) return privateJson({ error: "Workflow update exceeds 8 KiB." }, { status: 413 });
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > maxUpdateBytes) return privateJson({ error: "Workflow update exceeds 8 KiB." }, { status: 413 });
     let body: unknown;
     try {
-      body = await request.json();
+      body = JSON.parse(rawBody);
     } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+      return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
     }
 
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "A workflow update is required." }, { status: 400 });
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return privateJson({ error: "A workflow update is required." }, { status: 400 });
     }
 
     const updates: { name?: string; description?: string; status?: string } = {};
     if ("name" in body) {
       if (typeof body.name !== "string" || body.name.trim().length < 1 || body.name.trim().length > 80) {
-        return NextResponse.json({ error: "Workflow names must be between 1 and 80 characters." }, { status: 400 });
+        return privateJson({ error: "Workflow names must be between 1 and 80 characters." }, { status: 400 });
       }
       updates.name = body.name.trim();
     }
     if ("description" in body) {
       if (typeof body.description !== "string" || body.description.trim().length > 500) {
-        return NextResponse.json({ error: "Descriptions cannot exceed 500 characters." }, { status: 400 });
+        return privateJson({ error: "Descriptions cannot exceed 500 characters." }, { status: 400 });
       }
       updates.description = body.description.trim();
     }
     if ("status" in body) {
       if (typeof body.status !== "string" || !allowedStatuses.has(body.status)) {
-        return NextResponse.json({ error: "Choose a valid workflow status." }, { status: 400 });
+        return privateJson({ error: "Choose a valid workflow status." }, { status: 400 });
       }
       updates.status = body.status;
     }
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "Provide a name, description, or status to update." }, { status: 400 });
+      return privateJson({ error: "Provide a name, description, or status to update." }, { status: 400 });
     }
 
     const { data: workflowAccess, error: workflowAccessError } = await auth.supabase.from("workflows")
       .select("workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowAccessError) throw workflowAccessError;
-    if (!workflowAccess) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!workflowAccess) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     const requiredPermission = updates.status === "active" ? "workflows.execute" : "workflows.edit";
     if (!(await hasWorkspacePermission(auth.supabase, workflowAccess.workspace_id, auth.user.id, requiredPermission))) {
-      return NextResponse.json({ error: "Workspace " + requiredPermission + " permission required." }, { status: 403 });
+      return privateJson({ error: "Workspace " + requiredPermission + " permission required." }, { status: 403 });
     }
 
     if (updates.status === "active") {
       const { data: candidate, error: candidateError } = await auth.supabase
         .from("workflows").select("id,workspace_id,version,definition").eq("id", workflowId).maybeSingle();
       if (candidateError) throw candidateError;
-      if (!candidate) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      if (!candidate) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
       if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-        return NextResponse.json({ error: "Live execution is disabled by the server. The workflow was not activated." }, { status: 503 });
+        return privateJson({ error: "Live execution is disabled by the server. The workflow was not activated." }, { status: 503 });
       }
 
       let steps: RegisteredWorkflowStep[];
       const stored = candidate.definition as Record<string, unknown> | null;
       if (stored?.format === "aivanta-registry-v1") {
         const checked = validateRegisteredSteps(stored.steps);
-        if (!checked.steps) return NextResponse.json({ error: checked.error || "Workflow registry definition is invalid." }, { status: 422 });
+        if (!checked.steps) return privateJson({ error: checked.error || "Workflow registry definition is invalid." }, { status: 422 });
         steps = checked.steps;
       } else {
         const checked = validateDefinition(candidate.definition);
-        if (!checked.definition) return NextResponse.json({ error: checked.error || "Workflow definition is invalid." }, { status: 422 });
+        if (!checked.definition) return privateJson({ error: checked.error || "Workflow definition is invalid." }, { status: 422 });
         try {
           steps = buildRegistrySteps({
             nodes: checked.definition.nodes,
@@ -134,13 +144,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
                 })),
           });
         } catch (cause) {
-          return NextResponse.json({ error: cause instanceof Error ? cause.message : "Workflow graph is invalid." }, { status: 422 });
+          return privateJson({ error: cause instanceof Error ? cause.message : "Workflow graph is invalid." }, { status: 422 });
         }
       }
 
       const livePolicyError = validateDurableLiveSteps(steps);
       if (livePolicyError) {
-        return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
+        return privateJson({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
       }
 
       const { data: testedRuns, error: testError } = await auth.supabase.from("workflow_runs").select("id")
@@ -148,7 +158,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         .eq("mode", "dry_run").eq("status", "succeeded").limit(10);
       if (testError) throw testError;
       if (!testedRuns?.length) {
-        return NextResponse.json({ error: "Run a successful test of this exact saved workflow version before activating it." }, { status: 409 });
+        return privateJson({ error: "Run a successful test of this exact saved workflow version before activating it." }, { status: 409 });
       }
       const { data: testedSteps, error: testedStepsError } = await auth.supabase.from("workflow_run_steps")
         .select("run_id,step_id,title,status,result").in("run_id", testedRuns.map((run) => run.id));
@@ -159,7 +169,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         (row.status === "simulated" || row.status === "skipped")
       )));
       if (!hasRegistryTest) {
-        return NextResponse.json({ error: "Run a successful safe test of every registered step in this exact workflow version before activating it." }, { status: 409 });
+        return privateJson({ error: "Run a successful safe test of every registered step in this exact workflow version before activating it." }, { status: 409 });
       }
 
       const googleProducts: Record<string, string> = {
@@ -170,7 +180,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         const provider = getWorkerProvider(step);
         if (!provider || provider === "rss_feed") continue;
         if (!step.connectionId || !uuidPattern.test(step.connectionId)) {
-          return NextResponse.json({
+          return privateJson({
             error: "Select a verified account for every " + provider + " step before activation.",
             code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED",
             stepId: step.id,
@@ -183,7 +193,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
             .eq("provider", "google").eq("product", googleProducts[provider])
             .eq("status", "connected").eq("last_test_status", "passed").maybeSingle();
           if (error) throw error;
-          if (!connection) return NextResponse.json({
+          if (!connection) return privateJson({
             error: "The selected " + provider + " account is not connected, verified, or owned by this workspace.",
             code: "WORKSPACE_CONNECTION_NOT_VERIFIED",
             stepId: step.id,
@@ -195,7 +205,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
             .eq("provider", provider).eq("status", "connected").eq("last_test_status", "passed")
             .maybeSingle();
           if (error) throw error;
-          if (!connection) return NextResponse.json({
+          if (!connection) return privateJson({
             error: "The selected " + provider + " account is not connected, verified, or owned by this workspace.",
             code: "WORKSPACE_CONNECTION_NOT_VERIFIED",
             stepId: step.id,
@@ -212,7 +222,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
           .order("decided_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle();
         if (error) throw error;
         if (!approval || approval.decision !== "approved") {
-          return NextResponse.json({ error: "Approve " + provider + " / " + step.operationId + " in workspace integration permissions before activation." }, { status: 403 });
+          return privateJson({ error: "Approve " + provider + " / " + step.operationId + " in workspace integration permissions before activation." }, { status: 403 });
         }
       }
     }
@@ -225,11 +235,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       .maybeSingle();
 
     if (error) throw error;
-    if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    return NextResponse.json({ workflow: presentWorkflow(data) });
+    if (!data) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    return privateJson({ workflow: presentWorkflow(data) });
   } catch (error) {
     console.error("Failed to update Aivanta workflow:", error);
-    return NextResponse.json({ error: "Could not update this workflow. Try again." }, { status: 500 });
+    return privateJson({ error: "Could not update this workflow. Try again." }, { status: 500 });
   }
 }
 
@@ -237,7 +247,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
   try {
     const { workflowId } = await context.params;
     if (!uuidPattern.test(workflowId)) {
-      return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+      return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
     }
 
     const auth = await getAuthenticatedClient();
@@ -245,9 +255,9 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     const { data: workflowAccess, error: workflowAccessError } = await auth.supabase.from("workflows")
       .select("workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowAccessError) throw workflowAccessError;
-    if (!workflowAccess) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    if (!workflowAccess) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     if (!(await hasWorkspacePermission(auth.supabase, workflowAccess.workspace_id, auth.user.id, "workflows.delete"))) {
-      return NextResponse.json({ error: "Workspace workflows.delete permission required." }, { status: 403 });
+      return privateJson({ error: "Workspace workflows.delete permission required." }, { status: 403 });
     }
 
     const { data, error } = await auth.supabase
@@ -258,10 +268,10 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
       .maybeSingle();
 
     if (error) throw error;
-    if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    return NextResponse.json({ success: true, id: data.id });
+    if (!data) return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    return privateJson({ success: true, id: data.id });
   } catch (error) {
     console.error("Failed to delete Aivanta workflow:", error);
-    return NextResponse.json({ error: "Could not delete this workflow. Try again." }, { status: 500 });
+    return privateJson({ error: "Could not delete this workflow. Try again." }, { status: 500 });
   }
 }
