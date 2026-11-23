@@ -16,6 +16,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
+      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      return NextResponse.json({ error: "Only workspace owners and admins can connect integrations." }, { status: 403 });
+    }
     const callbackPath = "/api/integrations/oauth/" + encodeURIComponent(provider) + "/callback";
     const redirectUri = new URL(callbackPath, request.url).toString();
     const { state, codeVerifier } = createOAuthState({ provider, workspaceId: workspace.id, userId: user.id });
