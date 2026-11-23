@@ -5,6 +5,7 @@ import { matchRealEstateProperties } from "@/lib/real-estate/lead-scoring";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
+const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Context={params:Promise<{leadId:string}>};
 export async function GET(_request:NextRequest,context:Context){
  try{
