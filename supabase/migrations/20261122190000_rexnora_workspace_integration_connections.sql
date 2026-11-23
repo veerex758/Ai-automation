@@ -1,6 +1,16 @@
 -- Multi-account workspace integrations with connection-bound credential encryption.
 -- Existing v1 envelopes and legacy RPC signatures remain compatible.
 alter table public.workspace_integrations drop constraint if exists workspace_integrations_workspace_id_provider_key;
+alter table public.workspace_integrations drop constraint if exists workspace_integrations_provider_check;
+alter table public.workspace_integrations add constraint workspace_integrations_provider_check
+ check (provider in ('openai','gemini','resend','slack','http','notion','hubspot','twilio','shopify','stripe','linear',
+'claude','mistral','groq','perplexity','discord','telegram','whatsapp_business','sendgrid','mailgun','postmark',
+'github','gitlab','sentry','vercel','calendly','zendesk','freshdesk','serpapi','openweather','elevenlabs',
+'stability_ai','hugging_face','pinecone','microsoft_teams','salesforce','pipedrive','zoho_crm','freshsales',
+'close','apollo','intercom','jira','asana','trello','clickup','monday','todoist','airtable','bitbucket',
+'netlify','woocommerce','paypal','paddle','lemon_squeezy','square','razorpay','zoom','cal_com','twilio_voice',
+'docusign','x_twitter','linkedin','facebook_pages','instagram','tiktok','mailchimp','typeform','supabase',
+'postgresql','mysql','mongodb','redis','firebase','dropbox','aws_s3','cloudflare_r2'));
 alter table public.workspace_integration_secrets drop constraint if exists workspace_integration_secrets_encryption_version_check;
 alter table public.workspace_integration_secrets add constraint workspace_integration_secrets_encryption_version_check check (encryption_version in ('v1','v2'));
 
