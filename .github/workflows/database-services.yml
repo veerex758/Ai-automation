@@ -64,7 +64,7 @@ jobs:
             --tlsCertificateKeyFile /certs/mongo-server.pem \
             --tlsAllowConnectionsWithoutCertificates --bind_ip_all
           for attempt in $(seq 1 60); do
-            if docker exec aivanta-mysql mysqladmin ping -uroot -paivanta_test_password --silent >/dev/null 2>&1; then break; fi
+            if docker exec aivanta-mysql mysqladmin --protocol=tcp --host=127.0.0.1 --port=3306 ping -uroot -paivanta_test_password --silent >/dev/null 2>&1; then break; fi
             sleep 2
           done
           for attempt in $(seq 1 60); do
@@ -87,7 +87,7 @@ jobs:
               --eval 'db.adminCommand("ping").ok' 2>/dev/null | grep -q 1; then break; fi
             sleep 2
           done
-          docker exec aivanta-mysql mysqladmin ping -uroot -paivanta_test_password --silent
+          docker exec aivanta-mysql mysqladmin --protocol=tcp --host=127.0.0.1 --port=3306 ping -uroot -paivanta_test_password --silent
           docker exec aivanta-mongodb mongosh --quiet --tls --tlsCAFile /certs/ca.pem \
             -u root -p aivanta_test_password --authenticationDatabase admin \
             --eval 'db.adminCommand("ping").ok' | grep -q 1
