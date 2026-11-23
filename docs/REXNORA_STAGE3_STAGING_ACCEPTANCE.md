@@ -2,7 +2,7 @@
 
 **Updated:** 2026-11-23  
 **Candidate:** PR #229 — `integration/saas-core-stage3-realestate-20261123`  
-**Current recorded head:** `c912b86d0333edb157a2a595ea24734f989437de`
+**Validated code/test head:** `623e838f60cb021d6fce4855c57e0ddaa6b5e530` (the update to this acceptance record is documentation-only)
 
 ## Verification boundary
 
@@ -14,11 +14,11 @@ The isolated staging Supabase project is `ygclofqxtztnynkljipj` (`aivanta-stagin
 
 | Workflow | Commit | Run | Result |
 |---|---|---:|---|
-| CI (tests, lint, type-check, build) | `c912b86` | 45243920300 | In progress at workflow-validation tests; no green result recorded yet |
-| Clean migration replay + pgTAP | `c912b86` | 45243920091 | In progress |
-| Real MySQL/MongoDB TLS worker integration | `c912b86` | 45243920134 | Passed |
+| CI (tests, lint, type-check, build) | `623e838` | 45244251944 | **Passed** — workflow tests, lint, type-check and production build |
+| Clean migration replay + pgTAP | `623e838` | 45244251760 | **Passed** — clean replay, pgTAP and migration inventory check |
+| Real MySQL/MongoDB TLS worker integration | `623e838` | 45244251679 | **Passed** — authenticated TLS containers and real driver tests |
 
-A previous clean migration replay passed on `86e5cc1` (run 45242478784), and database-service integration passed on both `86e5cc1` and `a7c2db8`. The current replay run remains the required exact-head result. CI must complete all steps, including lint, type-check and production build.
+All three workflows above completed successfully for the validated code/test head. The current PR head after this documentation-only update differs only in this Markdown acceptance record; no application source, test or SQL migration changed after the validated head.
 
 ## Staging database security evidence
 
@@ -26,7 +26,8 @@ Latest staging inventory:
 
 - 96/96 public tables have RLS enabled.
 - 45 RLS-enabled tables have no direct policies; none grants SELECT, INSERT, UPDATE or DELETE to `anon` or `authenticated`. These are service-role/internal tables.
-- 18 `SECURITY DEFINER` functions executable by authenticated users all have an explicit empty search path and an `auth.uid()` check.
+- 18 `SECURITY DEFINER` functions executable by authenticated users all have an explicit empty search path and user/workspace-scoped authorization in their function bodies. Usage RPCs and workspace RPCs check membership/owner roles; marketplace creator/buyer RPCs constrain reads and mutations to the signed-in user's records.
+- Supabase Advisor still reports 18 authenticated-callable `SECURITY DEFINER` functions. This warning remains visible even though the function bodies were reviewed for explicit search paths and caller scoping; keep these RPCs under review and do not remove their intentional application grants without replacing their functionality.
 - Browser roles cannot SELECT or INSERT integration secrets and cannot SELECT provider-operation approvals.
 - The Supabase security advisor still reports leaked-password protection disabled. Enable it in the Supabase Auth project settings before customer onboarding.
 
@@ -76,7 +77,7 @@ The Vercel project has 16 environment-variable records scoped to Preview only an
 
 The branch-specific `NEXT_PUBLIC_SUPABASE_URL` resolves to the staging project hostname `ygclofqxtztnynkljipj.supabase.co`. The existing generic Preview/Production `CRON_SECRET` record was left unchanged; a Preview-only branch override was created. No Production variable was edited.
 
-**Deployment gap:** the newest observed READY Vercel Preview for this branch is commit `1a89740`, not the current `c912b86` head. A fresh deployment request hit Vercel's `api-deployments-free-per-day` limit (HTTP 402; over 100 daily API deployments). Therefore the current code and latest branch-scoped variable changes have **not** yet been verified by a newly built exact-head Preview. Do not treat the older READY deployment as current acceptance.
+**Deployment gap:** the newest observed READY Vercel Preview for this branch is commit `1a89740`, not the validated `623e838` head. A fresh deployment request hit Vercel's `api-deployments-free-per-day` limit (HTTP 402; over 100 daily API deployments). GitHub's Vercel status is consequently failing with the build-rate-limit link. The current code and latest branch-scoped variable changes have **not** yet been verified by a newly built exact-head Preview. Do not treat the older READY deployment as current acceptance.
 
 ## Authenticated staging acceptance — not complete
 
@@ -97,8 +98,7 @@ Do not paste credentials into this document or chat. Use encrypted Vercel settin
 
 ## Release blockers
 
-- Exact-head CI, including lint, type-check and production build, must pass.
-- Exact-head clean migration replay + pgTAP must pass.
+- The CI, clean migration replay + pgTAP, and MySQL/MongoDB database-service workflows passed for `623e838` (the current PR head after this document-only update has the same application/test/SQL trees).
 - A fresh READY Vercel Preview must be built from the exact current SHA after the Vercel deployment limit is cleared.
 - Real authenticated owner/admin staging acceptance and provider-sandbox tests remain outstanding.
 - Enable leaked-password protection in Supabase Auth settings.
