@@ -48,6 +48,8 @@ test("dashboard uses workspace-scoped metrics instead of illustrative sample val
   assert.match(metrics, /dashboards\.view/);
   assert.match(metrics, /\.eq\("workspace_id",workspace\.id\)/);
   assert.match(metrics, /workflow_runs/);
+  assert.match(metrics, /const completed =/);
+  assert.match(metrics, /success_rate:completed/);
 });
 
 test("workspace switching validates identifiers and relies on the user's RLS-scoped membership", () => {
