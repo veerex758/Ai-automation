@@ -83,7 +83,7 @@ export async function POST(request:NextRequest,context:Context){
    let pipeline={enabled:false,claimed:0,completed:0,blocked:0,failed:0};
    try{pipeline=await processRealEstateLeadPipeline({db,workspaceId:form.workspace_id,leadId:prior.id});}
    catch(error){console.error("Duplicate enquiry pipeline recovery failed",error);}
-   return NextResponse.json({lead:{id:prior.id,full_name:prior.full_name,lead_score:prior.lead_score,lead_temperature:prior.lead_temperature,status:prior.status,created_at:prior.created_at},duplicate:true,pipeline},{status:200,headers});
+   return NextResponse.json({accepted:true,duplicate:true},{status:200,headers});
   }
   const budgetMin=body.budgetMin===undefined||body.budgetMin===null||body.budgetMin===""?null:Number(body.budgetMin);
   const budgetMax=body.budgetMax===undefined||body.budgetMax===null||body.budgetMax===""?null:Number(body.budgetMax);
