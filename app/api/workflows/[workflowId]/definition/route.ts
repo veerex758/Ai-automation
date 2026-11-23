@@ -179,7 +179,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     try { body = JSON.parse(rawBody); } catch {
       return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
     }
-    if (!body || typeof body !== "object" || !("definition" in body)) {
+    if (!body || typeof body !== "object" || Array.isArray(body) || !("definition" in body)) {
       return privateJson({ error: "A workflow definition is required." }, { status: 400 });
     }
     const requestBody = body as Record<string, unknown>;
