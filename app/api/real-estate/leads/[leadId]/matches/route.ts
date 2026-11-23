@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { matchRealEstateProperties } from "@/lib/real-estate/lead-scoring";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 type Context={params:Promise<{leadId:string}>};
@@ -10,6 +11,7 @@ export async function GET(_request:NextRequest,context:Context){
   const {leadId}=await context.params;const supabase=await createClient();const {data:{user},error:authError}=await supabase.auth.getUser();
   if(authError||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
   const workspace=await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.view"))) return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });
   const {data:lead,error:leadError}=await supabase.from("real_estate_leads").select("id,transaction_type,property_type,preferred_location,budget_min,budget_max,currency,bedrooms").eq("id",leadId).eq("workspace_id",workspace.id).maybeSingle();
   if(leadError)throw leadError;if(!lead)return NextResponse.json({error:"Lead not found."},{status:404,headers});
   const {data:properties,error}=await supabase.from("real_estate_properties").select("id,title,property_type,transaction_type,location,price,currency,bedrooms,availability_status,available,last_verified_at").eq("workspace_id",workspace.id).eq("available",true).eq("availability_status","available").order("updated_at",{ascending:false}).limit(500);
