@@ -24,8 +24,15 @@ export async function GET() {
     const problem = [workflows.error,runs.error,succeeded.error,failed.error,agents.error,integrations.error].find(Boolean);
     if (problem) throw problem;
     const total = runs.count ?? 0;
+    const { data: recentRuns, error: recentRunsError } = await supabase.from("workflow_runs")
+      .select("id,workflow_id,status,mode,created_at")
+      .eq("workspace_id", workspace.id)
+      .order("created_at", { ascending: false })
+      .limit(6);
+    if (recentRunsError) throw recentRunsError;
     return NextResponse.json({
       workspace_id:workspace.id,period_days:30,refreshed_at:new Date().toISOString(),
+      recent_runs: recentRuns ?? [],
       metrics:{
         workflow_count:workflows.count ?? 0,
         execution_count:total,
