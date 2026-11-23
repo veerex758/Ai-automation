@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [billing, invoiceDocs, cancel, invoiceIssue, paystackStart, stripeStart, paystackWebhook, stripeWebhook, renewals, scheduler, cronAutomation, cronFollowups, cronPipeline, googleConnections, googleStart, googleCallback, publicWebhook, liveRun, followupWorker, pipelineWorker, notificationRecipients] = await Promise.all([
+const [billing, invoiceDocs, cancel, invoiceIssue, paystackStart, stripeStart, paystackWebhook, stripeWebhook, renewals, scheduler, cronAutomation, cronFollowups, cronPipeline, googleConnections, googleStart, googleCallback, publicWebhook, liveRun, notificationRecipients, followupWorker, pipelineWorker] = await Promise.all([
   read("../app/api/billing/route.ts"),
   read("../app/api/billing/invoice-docs/[invoiceId]/route.ts"),
   read("../app/api/billing/cancel/route.ts"),
