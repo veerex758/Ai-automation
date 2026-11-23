@@ -23,7 +23,7 @@ test("workflow generation meters one AI credit only after a complete validated g
 
 test("provider and invalid-graph failures occur before customer credit metering", () => {
   const generation = route.indexOf("await generateWorkflow(");
-  const metering = route.indexOf('supabase.rpc("consume_workspace_usage"');
+  const metering = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
   const catchBlock = route.indexOf("} catch (error)");
   assert.ok(generation >= 0 && metering > generation && catchBlock > metering);
   assert.match(route, /AI_PROVIDER_OVERLOADED/);
