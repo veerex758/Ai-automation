@@ -17,8 +17,10 @@ test("MySQL and MongoDB credentials use the multi-account workspace-scoped serve
   assert.match(workspaceRoute, /workspace_members/);
   assert.match(workspaceRoute, /save_workspace_integration_connection/);
   assert.match(workspaceRoute, /p_provider: provider/);
-  assert.match(workspaceRoute, /p_connection_id: connectionId \?\? null/);
-  assert.match(workspaceRoute, /encryptWorkspaceCredentials\(\{ \[provider\]: body\.credentials/);
+  assert.match(workspaceRoute, /p_connection_id: connectionId/);
+  assert.match(workspaceRoute, /p_create_new: requestedConnectionId === undefined/);
+  assert.match(workspaceRoute, /encryptWorkspaceCredentialsV2/);
+  assert.match(workspaceRoute, /\$\{workspace\.id\}:\$\{provider\}:\$\{connectionId\}/);
 });
 
 test("database rollback refuses to discard customer credentials before narrowing the provider constraint", () => {

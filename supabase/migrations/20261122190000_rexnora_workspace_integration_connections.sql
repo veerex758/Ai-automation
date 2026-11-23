@@ -61,16 +61,20 @@ begin
 end;
 $$;
 
--- Legacy six-argument overload always creates a separate account and accepts v1.
+-- Legacy six-argument overload remains compatible:
+-- a missing ID creates a fresh connection; a supplied ID updates only that exact
+-- workspace/provider connection (the seven-argument function performs the guard).
 create or replace function public.save_workspace_integration_connection(
  p_workspace_id uuid,p_provider text,p_display_name text,p_encrypted_credentials text,
  p_created_by uuid,p_connection_id uuid default null
-) returns jsonb language plpgsql security invoker set search_path='' as $$
+) returns jsonb language plpgsql security invoker set search_path='' as $
 begin
- return public.save_workspace_integration_connection(p_workspace_id,p_provider,p_display_name,
-  p_encrypted_credentials,p_created_by,pg_catalog.gen_random_uuid(),true);
+ return public.save_workspace_integration_connection(
+  p_workspace_id,p_provider,p_display_name,p_encrypted_credentials,p_created_by,
+  coalesce(p_connection_id,pg_catalog.gen_random_uuid()),p_connection_id is null
+ );
 end;
-$$;
+$;
 create or replace function public.save_workspace_integration_credentials(
  p_workspace_id uuid,p_provider text,p_display_name text,p_encrypted_credentials text,p_created_by uuid
 ) returns jsonb language plpgsql security invoker set search_path='' as $$

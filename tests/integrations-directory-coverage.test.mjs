@@ -86,7 +86,8 @@ test("every credential provider has a non-destructive verification path or an ex
 
 test("saving, rotating and re-testing one account invalidates only that account's previous verification", () => {
   assert.match(saveRouteSource, /db\.rpc\("save_workspace_integration_connection"/);
-  assert.match(saveRouteSource, /p_connection_id: connectionId \?\? null/);
+  assert.match(saveRouteSource, /p_connection_id: connectionId/);
+  assert.match(saveRouteSource, /p_create_new: requestedConnectionId === undefined/);
   assert.match(multiAccountMigration, /last_test_status = null/);
   assert.match(connectionTestSource, /integrationId/);
   assert.match(connectionTestSource, /eq\("id", integrationId\)/);
@@ -149,7 +150,8 @@ test("Google OAuth setup is node-specific, multi-account aware, and has lifecycl
   assert.match(googleCallbackSource, /\.eq\("id", targetConnectionId\).*\.eq\("workspace_id", workspace\.id\)/);
   assert.match(genericOAuthStateSource, /connectionId\?: string/);
   assert.match(genericOAuthStartSource, /createOAuthState\(\{ provider, workspaceId: workspace\.id, userId: user\.id, \...\(connectionId \? \{ connectionId \} : \{\}\) \}\)/);
-  assert.match(genericOAuthCallbackSource, /p_connection_id: stateData\.connectionId \?\? null/);
+  assert.match(genericOAuthCallbackSource, /p_connection_id: connectionId/);
+  assert.match(genericOAuthCallbackSource, /p_create_new: stateData\.connectionId === undefined/);
   assert.match(googleConnectionsSource, /\.eq\("workspace_id", workspace\.id\)/);
   assert.doesNotMatch(googleConnectionsSource.slice(googleConnectionsSource.indexOf("export async function GET"), googleConnectionsSource.indexOf("const uuidPattern")), /connected_by/);
 });

@@ -7,7 +7,8 @@ const worker = await readFile(new URL("../lib/workflows/durable-worker.ts", impo
 
 test("saving or replacing workspace credentials revokes prior successful connection readiness", () => {
   assert.match(route, /save_workspace_integration_connection/);
-  assert.match(route, /p_connection_id: connectionId \?\? null/);
+  assert.match(route, /p_connection_id: connectionId/);
+  assert.match(route, /p_create_new: requestedConnectionId === undefined/);
   assert.match(route, /Only workspace owners and admins can manage integrations/);
 });
 
