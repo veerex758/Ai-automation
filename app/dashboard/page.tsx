@@ -83,6 +83,7 @@ const navItems = [
   { label: "Templates", icon: "▧", href: "/dashboard/templates" },
   { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
   { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
+  { label: "Real Estate", icon: "⌂", href: "/dashboard/real-estate" },
   { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
   { label: "Billing", icon: "◇", href: "/dashboard/billing" },
   { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
