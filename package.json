@@ -34,7 +34,8 @@
     "resend": "6.37.0",
     "@linear/sdk": "100.0.0",
     "mongodb": "6.20.0",
-    "mysql2": "3.15.3"
+    "mysql2": "3.15.3",
+    "@vercel/schedules": "0.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
