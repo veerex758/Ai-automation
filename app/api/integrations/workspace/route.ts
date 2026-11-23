@@ -41,6 +41,7 @@ claude: "Claude",
   x_twitter: "X/Twitter", linkedin: "LinkedIn", facebook_pages: "Facebook Pages", instagram: "Instagram", tiktok: "TikTok", mailchimp: "Mailchimp", typeform: "Typeform",
   supabase: "Supabase", postgresql: "PostgreSQL", mysql: "MySQL", mongodb: "MongoDB", redis: "Redis", firebase: "Firebase", dropbox: "Dropbox", aws_s3: "AWS S3", cloudflare_r2: "Cloudflare R2",
 };
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
@@ -107,8 +108,14 @@ export async function POST(request: NextRequest) {
     const provider = body.provider as WorkspaceCredentialProvider;
     const displayName = typeof body.displayName === "string" && body.displayName.trim()
       ? body.displayName.trim().slice(0, 120) : labels[provider];
+    const connectionId = typeof body.connectionId === "string" ? body.connectionId : undefined;
+    if (connectionId && !uuidPattern.test(connectionId)) {
+      return json({ error: "The selected connection ID is invalid." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.manage"))) return json({ error: "Workspace integrations.manage permission required." }, 403);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.manage"))) {
+      return json({ error: "Workspace integrations.manage permission required." }, 403);
+    }
 
     let encrypted: string;
     try {
@@ -122,47 +129,22 @@ export async function POST(request: NextRequest) {
         : "Credential fields are invalid for this provider." }, status);
     }
 
+    // Save a distinct account unless an explicit, workspace-scoped connection ID
+    // is supplied. The database RPC atomically resets verification and replaces
+    // only that account's encrypted secret; unrelated provider accounts are untouched.
     const db = serviceClient();
-    // Revoke readiness before replacing a saved secret so no worker can race
-    // the credential update using the previous successful verification.
-    const { data: existing, error: existingError } = await db.from("workspace_integrations")
-      .select("id").eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
-    if (existingError) throw existingError;
-    if (existing) {
-      const { error: invalidateError } = await db.from("workspace_integrations").update({
-        status: "needs_attention", last_tested_at: null, last_test_status: null,
-      }).eq("id", existing.id).eq("workspace_id", workspace.id);
-      if (invalidateError) throw invalidateError;
+    const { data, error } = await db.rpc("save_workspace_integration_connection", {
+      p_workspace_id: workspace.id,
+      p_provider: provider,
+      p_display_name: displayName,
+      p_encrypted_credentials: encrypted,
+      p_created_by: user.id,
+      p_connection_id: connectionId ?? null,
+    });
+    if (error || !isRecord(data) || typeof data.id !== "string") {
+      throw error ?? new Error("INTEGRATION_SAVE_FAILED");
     }
-    const { data, error } = provider === "mysql" || provider === "mongodb"
-      ? await db.rpc("save_workspace_database_credentials", {
-          p_workspace_id: workspace.id,
-          p_provider: provider,
-          p_display_name: displayName,
-          p_encrypted_credential: encrypted,
-          p_created_by: user.id,
-        })
-      : await db.rpc("save_workspace_integration_credentials", {
-          p_workspace_id: workspace.id,
-          p_provider: provider,
-          p_display_name: displayName,
-          p_encrypted_credentials: encrypted,
-          p_created_by: user.id,
-        });
-    const integrationId = typeof data === "string" ? data : isRecord(data) && typeof data.id === "string" ? data.id : null;
-    if (error || !integrationId) throw error ?? new Error("INTEGRATION_SAVE_FAILED");
-    // Replacing a secret invalidates any previous successful test. A new
-    // credential must pass a fresh provider check before the worker will use it.
-    const { error: invalidateError } = await db.from("workspace_integrations").update({
-      status: "needs_attention",
-      last_tested_at: null,
-      last_test_status: null,
-    }).eq("id", integrationId).eq("workspace_id", workspace.id);
-    if (invalidateError) throw invalidateError;
-    return json({ integration: {
-      id: integrationId, provider, display_name: displayName,
-      status: "needs_attention", last_tested_at: null, last_test_status: null,
-    } }, 201);
+    return json({ integration: data }, 201);
   } catch {
     return json({ error: "Could not securely save this workspace integration." }, 500);
   }
