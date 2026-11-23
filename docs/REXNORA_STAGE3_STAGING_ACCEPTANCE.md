@@ -25,6 +25,21 @@ Required server-side configuration to supply through Vercel's encrypted environm
 
 Do not enable the shared AIVANTA_LIVE_EXECUTION_ENABLED switch while Preview and Production share a database or execution scope. A Preview-specific live-execution gate must be isolated before any provider side effect is authorized. Use synthetic/test leads and an explicitly approved recipient until the agency signs off.
 
+## Observed Vercel Preview variable state (2026-11-23)
+
+The Vercel project currently has no Preview environment-variable entries scoped specifically to the PR #229 candidate branch, and no custom Vercel environment is configured. Do not assume branch-specific settings attached to another feature branch are inherited by this candidate.
+
+The project Preview inventory showed these required values empty (names only; values intentionally omitted):
+
+- Supabase server access: SUPABASE_SERVICE_ROLE_KEY, CODED_SUPABASE_SERVICE_ROLE_KEY, CODED_SUPABASE_SECRET_KEY.
+- AI/credential encryption: GEMINI_API_KEY, AIVANTA_CREDENTIALS_ENCRYPTION_KEY, AIVANTA_CREDENTIALS_ENCRYPTION_KEY_VERSION.
+- Scheduler and webhook protection: CRON_SECRET, AIVANTA_WEBHOOK_SECRET_KEY_VERSION, AIVANTA_WEBHOOK_ENCRYPTION_KEY, WEBHOOK_ENCRYPTION_KEY.
+- Resend legacy sender configuration: RESEND_API_KEY, RESEND_FROM_EMAIL. Workspace-saved Resend credentials remain the intended Stage 3 pilot path.
+- Billing sandbox: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, PAYSTACK_SECRET_KEY, PAYSTACK_WEBHOOK_SECRET.
+- Provider execution allowlist: AIVANTA_LIVE_INTEGRATIONS.
+
+REAL_ESTATE_PIPELINE_ENABLED, REAL_ESTATE_FOLLOWUPS_ENABLED and AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED were set to false only on a different feature branch, not on PR #229. AIVANTA_LIVE_EXECUTION_ENABLED is empty at the generic Preview scope. Keep all real provider execution disabled until an isolated Supabase staging target and a Preview-only execution boundary are proven. AIVANTA_LIVE_EMAIL_RECIPIENTS is configured in Preview; its value is deliberately not recorded here.
+
 ## Stage 3 connection acceptance
 
 1. Sign in as a staging workspace owner and a separate administrator. Confirm viewer/member roles cannot manage integration credentials.
