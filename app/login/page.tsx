@@ -22,12 +22,16 @@ export default function LoginPage() {
   const [nextPath, setNextPath] = useState("/dashboard");
   const [reason, setReason] = useState("");
   const [confirmationError, setConfirmationError] = useState(false);
+  const [recoveryError, setRecoveryError] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setNextPath(safeInternalPath(params.get("next"), window.location.origin));
     setReason(params.get("reason") ?? "");
     setConfirmationError(params.get("error") === "confirmation");
+    const resetLinkFailed = params.get("error") === "recovery";
+    setRecoveryError(resetLinkFailed);
+    if (resetLinkFailed) setRecovering(true);
   }, []);
 
   async function resendConfirmation() {
@@ -128,7 +132,8 @@ export default function LoginPage() {
             <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "auth-tab active" : "auth-tab"} onClick={() => { setMode("signin"); setError(""); setNotice(""); setNeedsConfirmation(false); }}>Sign in</button>
             <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "auth-tab active" : "auth-tab"} onClick={() => { setMode("signup"); setError(""); setNotice(""); setNeedsConfirmation(false); }}>Create account</button>
           </div>}
-          {recovering && <button type="button" className="auth-back" onClick={() => { setRecovering(false); setError(""); setNotice(""); }}>← Back to sign in</button>}
+          {recovering && <button type="button" className="auth-back" onClick={() => { setRecovering(false); setRecoveryError(false); setError(""); setNotice(""); }}>← Back to sign in</button>}
+          {recoveryError && <div className="auth-message auth-error" role="alert">That password reset link is invalid or expired. Request a new reset link below.</div>}
           {confirmationError && <div className="auth-message auth-error" role="alert">That confirmation link could not be completed. Request a new confirmation email and try again. <button type="button" className="auth-back" disabled={resendingConfirmation || !email.trim()} onClick={() => void resendConfirmation()}>{resendingConfirmation ? "Sending…" : "Resend confirmation email"}</button></div>}
           <form className="auth-form" onSubmit={handleSubmit}>
             {mode === "signup" && <label>Full name<input autoComplete="name" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" maxLength={100} required /></label>}
