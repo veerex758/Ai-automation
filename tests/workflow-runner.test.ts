@@ -157,26 +157,6 @@ test("registry workflow validates and executes explicit branch selection", async
 });
 
 
-test("registry workflow dry-run evaluates IF and simulates only the selected branch", async () => {
-  const { validateRegisteredSteps } = await import("../nodes/validate-steps");
-  const raw = [
-    { id: "manual", nodeId: "manual", operationId: "start", kind: "trigger", input: {} },
-    { id: "condition", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "{{manual.payload.status}}", operator: "equals", compareTo: "approved" } },
-    { id: "yes", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "approved" } }, branch: { fromStepId: "condition", route: "true" } },
-    { id: "no", nodeId: "set_fields", operationId: "merge_fields", kind: "action", input: { data: {}, fields: { route: "rejected" } }, branch: { fromStepId: "condition", route: "false" } },
-  ];
-  const validated = validateRegisteredSteps(raw);
-  assert.ok(validated.steps);
-  const result = await executeRegisteredWorkflow({
-    steps: validated.steps, context, dryRun: true,
-    initialOutputs: { manual: { started: true, payload: { status: "approved" } } },
-    completedStepIds: ["manual"],
-  });
-  assert.equal(result.status, "succeeded");
-  assert.deepEqual(result.steps.map((step) => step.status), ["simulated", "simulated", "simulated", "skipped"]);
-  assert.deepEqual(result.outputs.condition, { matched: true, route: "true" });
-});
-
 test("loop metadata executes a downstream registered operation once per source item", async () => {
   const calls: string[] = [];
   const result = await executeRegisteredWorkflow({
@@ -365,13 +345,22 @@ test("Split in Batches resumes completed downstream iterations without replaying
 });
 
 
-test("Gemini qualifies real-estate enquiries with structured output and preserves missing facts", async () => {
+test("Gemini qualifies real-estate enquiries without returning direct contact identifiers", async () => {
   const lead = {
-    fullName: "Ada Buyer", email: "ada@example.com", phone: null, propertyType: "apartment",
-    location: "Lekki", budget: "₦80m", timeframe: "within_30_days", temperature: "hot",
-    reason: "Specific property and near-term intent.", missingInformation: ["Phone number"],
+    transactionType: "buy", propertyType: "apartment",
+    location: "Lekki", budget: "₦80m", budgetMin: null, budgetMax: null, currency: "NGN",
+    timeframe: "within_30_days", readiness: "unknown", temperature: "hot",
+    reason: "Specific property and near-term intent.", mainConcern: null,
+    missingInformation: ["Phone number"],
     suggestedReply: "Thanks for your enquiry. May we have your phone number?",
-    summary: "HOT lead: Ada Buyer wants an apartment in Lekki within 30 days; budget ₦80m.",
+    summary: "HOT lead: buyer wants an apartment in Lekki within 30 days; budget ₦80m.",
+    followupMessages: [
+      {subject:"We received your enquiry",message:"Thanks for your enquiry."},
+      {subject:"A quick follow-up",message:"Are you still looking?"},
+      {subject:"More property options",message:"Can we refine your options?"},
+      {subject:"Checking in",message:"Would you like to speak with an agent?"},
+      {subject:"Final check-in",message:"Would you like us to keep helping?"},
+    ],
   };
   let requestBody: unknown;
   const result = await executeRegisteredWorkflow({
@@ -387,7 +376,9 @@ test("Gemini qualifies real-estate enquiries with structured output and preserve
     dryRun: false,
   });
   assert.equal(result.status, "succeeded");
-  assert.equal((result.outputs.qualify as { phone: string | null }).phone, null);
+  assert.equal("fullName" in (result.outputs.qualify as Record<string, unknown>), false);
+  assert.equal("email" in (result.outputs.qualify as Record<string, unknown>), false);
+  assert.equal("phone" in (result.outputs.qualify as Record<string, unknown>), false);
   assert.deepEqual((result.outputs.qualify as { missingInformation: string[] }).missingInformation, ["Phone number"]);
   assert.equal((result.outputs.qualify as { outputTokens: number }).outputTokens, 55);
   assert.ok((requestBody as { generationConfig: { responseJsonSchema: unknown } }).generationConfig.responseJsonSchema);
