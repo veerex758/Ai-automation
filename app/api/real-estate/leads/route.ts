@@ -92,6 +92,9 @@ export async function GET(request: NextRequest) {
     if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.view"))) return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });
     const params = request.nextUrl.searchParams;
     const status = params.get("status");
+    if (status && !["new","qualified","contacted","viewing_scheduled","negotiation","won","lost"].includes(status)) {
+      return NextResponse.json({ error: "Invalid lead status." }, { status: 400, headers });
+    }
     const search = (params.get("q") ?? "").trim().slice(0, 100);
     const limit = Math.max(1, Math.min(100, Number(params.get("limit") ?? 50) || 50));
     const offset = Math.max(0, Math.min(100000, Number(params.get("offset") ?? 0) || 0));
