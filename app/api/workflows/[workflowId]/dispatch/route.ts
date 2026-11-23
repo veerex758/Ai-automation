@@ -1,5 +1,6 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
@@ -31,10 +32,10 @@ function isRegistryDefinition(value: unknown): boolean {
 }
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("QUEUE_DATABASE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, {
+  let config: ReturnType<typeof getAdminSupabaseConfig>;
+  try { config = getAdminSupabaseConfig(); }
+  catch { throw new Error("QUEUE_DATABASE_NOT_CONFIGURED"); }
+  return createSupabaseClient(config.url, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
