@@ -50,6 +50,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
+    if (new TextEncoder().encode(await request.clone().text()).byteLength > maxInputBytes) return privateJson({ error: "Dry-run input must be 10 KB or smaller." }, { status: 413 });
     let body: unknown;
     try { body = await request.json(); } catch {
       return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
