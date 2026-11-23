@@ -5,6 +5,7 @@ export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 type Ctx={params:Promise<{workspaceId:string}>};
 async function authorize(workspaceId:string){
+  if (!uuidPattern.test(workspaceId)) return { response: NextResponse.json({ error: "Invalid workspace ID." }, { status: 400, headers }) };
  const supabase=await createClient(),{data:{user},error}=await supabase.auth.getUser();
  if(error||!user)return {response:NextResponse.json({error:"Authentication required."},{status:401,headers})};
  const [{data:workspace,error:we},{data:member,error:me}]=await Promise.all([
