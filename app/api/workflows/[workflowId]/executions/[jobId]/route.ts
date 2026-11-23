@@ -2,9 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const headers = { "Cache-Control": "private, no-store" };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -29,7 +31,7 @@ export async function GET(
 
     const userDb = await createClient();
     const { data: { user }, error: authError } = await userDb.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
 
     // Resolve workspace through the user's RLS-scoped workflow read before
     // using the server client. Never accept workspace IDs from the caller.
@@ -37,6 +39,7 @@ export async function GET(
       .select("id, workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.view"))) return NextResponse.json({ error: "Workspace workflows.view permission required." }, { status: 403, headers });
 
     const db = serviceClient();
     const { data: job, error: jobError } = await db.from("execution_jobs")
@@ -77,6 +80,7 @@ export async function PATCH(
       .select("id,workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403, headers });
 
     const db = serviceClient();
     const { data, error } = await db.rpc("cancel_execution_job", {
