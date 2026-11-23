@@ -4,8 +4,10 @@ export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export async function POST(request:Request,context:{params:Promise<{workspaceId:string}>}){
- const origin=request.headers.get("origin");
- if(origin && origin!==new URL(request.url).origin)return NextResponse.json({error:"Invalid origin."},{status:403,headers});
+ const origin=request.headers.get("origin"),referer=request.headers.get("referer");
+ let sourceOrigin:string|null=origin;
+ if(!sourceOrigin&&referer){try{sourceOrigin=new URL(referer).origin;}catch{sourceOrigin=null;}}
+ if(sourceOrigin!==new URL(request.url).origin)return NextResponse.json({error:"Invalid origin."},{status:403,headers});
  const supabase=await createClient(),{data:{user},error}=await supabase.auth.getUser();
  if(error||!user)return NextResponse.json({error:"Authentication required."},{status:401,headers});
  const {workspaceId}=await context.params;
