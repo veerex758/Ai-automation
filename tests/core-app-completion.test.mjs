@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, membersRoute, invitationsRoute, rolesRoute, securityRoute, assignRoleRoute, transferRoute, acceptInvitationRoute, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms] = await Promise.all([
+const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflowItem, workflowRuns, dispatch, scheduleRoute, executionStatus, definitionRoute, webhookRoute, integrationRoute, sessionGuard, membersRoute, invitationsRoute, rolesRoute, securityRoute, assignRoleRoute, transferRoute, acceptInvitationRoute, permissions, agents, agentItem, agentRuns, realEstateDashboard, realEstateLeads, realEstateProperties, intakeForms, realEstateFollowups, realEstateMatches] = await Promise.all([
   read("../app/dashboard/page.tsx"),
   read("../app/api/dashboards/metrics/route.ts"),
   read("../app/api/workspaces/route.ts"),
@@ -12,6 +12,7 @@ const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflow
   read("../app/api/workflows/[workflowId]/route.ts"),
   read("../app/api/workflows/[workflowId]/runs/route.ts"),
   read("../app/api/workflows/[workflowId]/dispatch/route.ts"),
+  read("../app/api/workflows/[workflowId]/schedule/route.ts"),
   read("../app/api/workflows/[workflowId]/executions/[jobId]/route.ts"),
   read("../app/api/workflows/[workflowId]/definition/route.ts"),
   read("../app/api/workflows/[workflowId]/webhook/route.ts"),
@@ -32,6 +33,8 @@ const [dashboard, metrics, workspaces, switchRoute, workflowCollection, workflow
   read("../app/api/real-estate/leads/route.ts"),
   read("../app/api/real-estate/properties/route.ts"),
   read("../app/api/real-estate/intake-forms/route.ts"),
+  read("../app/api/real-estate/followups/route.ts"),
+  read("../app/api/real-estate/leads/[leadId]/matches/route.ts"),
 ]);
 
 test("dashboard uses workspace-scoped metrics instead of illustrative sample values", () => {
@@ -74,6 +77,11 @@ test("workflow mutation and execution routes enforce workspace authorization", (
   assert.match(workflowRuns, /workflows\.execute/);
   assert.match(dispatch, /hasWorkspacePermission/);
   assert.match(dispatch, /workflows\.execute/);
+  assert.match(dispatch, /Dispatch request exceeds 64 KiB/);
+  assert.match(scheduleRoute, /workflows\.execute/);
+  assert.match(scheduleRoute, /Schedule request exceeds 8 KiB/);
+  assert.match(workflowRuns, /request\.clone\(\)\.text\(\)/);
+  assert.match(webhookRoute, /Webhook provisioning request exceeds 1 KiB/);
   assert.match(executionStatus, /\.eq\("workspace_id", workflow\.workspace_id\)/);
   assert.match(executionStatus, /from\("workflows"\)/);
 });
@@ -102,6 +110,8 @@ test("dashboard activity and workspace-specific management use live data", () =>
   assert.match(realEstateProperties, /real_estate\.manage/);
   assert.match(intakeForms, /real_estate\.view/);
   assert.match(intakeForms, /real_estate\.manage/);
+  assert.match(realEstateFollowups, /Invalid follow-up status/);
+  assert.match(realEstateMatches, /uuidPattern\.test\(leadId\)/);
 });
 
 test("workflow definitions, webhook provisioning and execution inspection enforce explicit permissions", () => {
