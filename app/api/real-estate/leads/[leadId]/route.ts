@@ -17,6 +17,7 @@ export async function GET(_request: NextRequest, context: Context) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.view"))) return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });
     const { data: lead, error } = await supabase.from("real_estate_leads").select("*").eq("id", leadId).eq("workspace_id", workspace.id).maybeSingle();
     if (error) throw error;
     if (!lead) return NextResponse.json({ error: "Lead not found." }, { status: 404, headers });
@@ -40,6 +41,7 @@ export async function PATCH(request: NextRequest, context: Context) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.manage"))) return NextResponse.json({ error: "Workspace real_estate.manage permission required." }, { status: 403, headers });
     const raw = await request.text();
     if (Buffer.byteLength(raw, "utf8") > 12000) return NextResponse.json({ error: "Update exceeds 12 KiB." }, { status: 413, headers });
     let body: unknown;
