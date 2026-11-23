@@ -177,8 +177,8 @@ begin
      or length(p_idempotency_key)<8 or length(p_idempotency_key)>128 then
     raise exception 'invalid agent usage request' using errcode='22023';
   end if;
-  if not exists(select 1 from public.agents where id=p_agent_id and workspace_id=p_workspace_id and status='active') then
-    raise exception 'active workspace agent not found' using errcode='P0002';
+  if not exists(select 1 from public.agents where id=p_agent_id and workspace_id=p_workspace_id and status='ready') then
+    raise exception 'ready workspace agent not found' using errcode='P0002';
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended(p_workspace_id::text,0));
