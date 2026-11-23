@@ -6,14 +6,19 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = safeInternalPath(requestUrl.searchParams.get("next"), requestUrl.origin);
+  const isPasswordRecovery = next === "/auth/update-password";
 
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
+      const response = NextResponse.redirect(new URL(next, requestUrl.origin));
+      response.headers.set("Cache-Control", "private, no-store");
+      return response;
     }
   }
 
-  return NextResponse.redirect(new URL("/login?error=confirmation", requestUrl.origin));
+  const response = NextResponse.redirect(new URL(isPasswordRecovery ? "/login?error=recovery" : "/login?error=confirmation", requestUrl.origin));
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
 }

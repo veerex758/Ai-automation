@@ -5,8 +5,11 @@ import {createAdminClient} from "@/lib/supabase/admin";
 import {hasWorkspacePermission} from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 type Ctx={params:Promise<{workspaceId:string}>};
 async function authorize(workspaceId:string){
+ if(!uuidPattern.test(workspaceId))return {response:NextResponse.json({error:"Invalid workspace ID."},{status:400,headers})};
  const supabase=await createClient(),{data:{user},error}=await supabase.auth.getUser();
  if(error||!user)return {response:NextResponse.json({error:"Authentication required."},{status:401,headers})};
  const [{data:workspace,error:workspaceError},{data:member,error:memberError}]=await Promise.all([

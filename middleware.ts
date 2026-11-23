@@ -8,7 +8,7 @@ export async function middleware(request: NextRequest) {
 
   // Fail closed for workspace routes if auth configuration is missing.
   if (!url || !key) {
-    if (request.nextUrl.pathname.startsWith("/dashboard")) {
+    if (request.nextUrl.pathname.startsWith("/dashboard") || request.nextUrl.pathname === "/auth/update-password") {
       return NextResponse.redirect(new URL("/login?reason=configuration", request.url));
     }
     return response;
@@ -39,16 +39,24 @@ export async function middleware(request: NextRequest) {
   }
 
   const isWorkspace = request.nextUrl.pathname.startsWith("/dashboard");
+  const isPasswordUpdate = request.nextUrl.pathname === "/auth/update-password";
   const isLogin = request.nextUrl.pathname === "/login";
-  if (isWorkspace || isLogin) {
+  if (isWorkspace || isPasswordUpdate || isLogin) {
     response.headers.set("Cache-Control", "private, no-store");
   }
 
-  if (isWorkspace && !user) {
+  const redirectSignedOut = () => {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
-    return NextResponse.redirect(loginUrl);
-  }
+    if (request.cookies.getAll().some(({ name }) => name.includes("auth-token"))) {
+      loginUrl.searchParams.set("reason", "session-expired");
+    }
+    const redirect = NextResponse.redirect(loginUrl);
+    redirect.headers.set("Cache-Control", "private, no-store");
+    return redirect;
+  };
+  if (isWorkspace && !user) return redirectSignedOut();
+  if (isPasswordUpdate && !user) return redirectSignedOut();
 
   if (isLogin && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -58,5 +66,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/auth/update-password", "/login"],
 };

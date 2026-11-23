@@ -10,6 +10,9 @@ import "./login.css";
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [recovering, setRecovering] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -19,13 +22,37 @@ export default function LoginPage() {
   const [nextPath, setNextPath] = useState("/dashboard");
   const [reason, setReason] = useState("");
   const [confirmationError, setConfirmationError] = useState(false);
+  const [recoveryError, setRecoveryError] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setNextPath(safeInternalPath(params.get("next"), window.location.origin));
     setReason(params.get("reason") ?? "");
     setConfirmationError(params.get("error") === "confirmation");
+    const resetLinkFailed = params.get("error") === "recovery";
+    setRecoveryError(resetLinkFailed);
+    if (resetLinkFailed) setRecovering(true);
   }, []);
+
+  async function resendConfirmation() {
+    if (!email.trim() || resendingConfirmation) return;
+    setResendingConfirmation(true);
+    setError("");
+    try {
+      const { error: resendError } = await createClient().auth.resend({
+        type: "signup",
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
+      });
+      if (resendError) throw resendError;
+      setNeedsConfirmation(false);
+      setNotice("If this address has a pending signup, a new confirmation email has been sent.");
+    } catch {
+      setError("We couldn’t request a confirmation email. Check the address and try again.");
+    } finally {
+      setResendingConfirmation(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,6 +62,15 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
+      if (recovering) {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
+        });
+        if (resetError) throw resetError;
+        setRecoveryError(false);
+        setNotice("If an account exists for that email, a password reset link will arrive shortly.");
+        return;
+      }
       if (mode === "signup") {
         const { data, error: authError } = await supabase.auth.signUp({
           email: email.trim(),
@@ -50,6 +86,7 @@ export default function LoginPage() {
           router.refresh();
         } else {
           setNotice("Check your inbox for the confirmation link to finish creating your account.");
+          setNeedsConfirmation(true);
         }
       } else {
         const { error: authError } = await supabase.auth.signInWithPassword({
@@ -62,7 +99,7 @@ export default function LoginPage() {
       }
     } catch (caught) {
       // Do not expose provider/auth internals in the browser UI.
-      setError("We couldn’t complete sign-in. Check your details and try again.");
+      setError(recovering ? "We couldn’t complete that request. Check your details and try again." : mode === "signup" ? "We couldn’t create your account. Check your details and try again." : "We couldn’t complete sign-in. Check your details and try again.");
     } finally {
       setBusy(false);
     }
@@ -91,20 +128,24 @@ export default function LoginPage() {
 
         <div className="auth-card">
           <div className="auth-card-top"><span className="auth-card-symbol"><img src="/rexnora-mark.svg" alt="" aria-hidden="true" /></span><span className="auth-secure"><i /> SECURE WORKSPACE ACCESS</span></div>
-          <div className="auth-heading"><h2>{mode === "signin" ? "Welcome back" : "Create your account"}</h2><p>{mode === "signin" ? "Sign in to continue to your workspace." : "Start building a more thoughtful way to work."}</p></div>
-          <div className="auth-tabs" role="tablist" aria-label="Account access">
-            <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "auth-tab active" : "auth-tab"} onClick={() => { setMode("signin"); setError(""); setNotice(""); }}>Sign in</button>
-            <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "auth-tab active" : "auth-tab"} onClick={() => { setMode("signup"); setError(""); setNotice(""); }}>Create account</button>
-          </div>
-          {confirmationError && <div className="auth-message auth-error" role="alert">That confirmation link could not be completed. Request a new confirmation email and try again.</div>}
+          <div className="auth-heading"><h2>{recovering ? "Reset your password" : mode === "signin" ? "Welcome back" : "Create your account"}</h2><p>{recovering ? "We’ll email you a secure link to choose a new password." : mode === "signin" ? "Sign in to continue to your workspace." : "Start building a more thoughtful way to work."}</p></div>
+          {!recovering && <div className="auth-tabs" role="tablist" aria-label="Account access">
+            <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? "auth-tab active" : "auth-tab"} onClick={() => { setMode("signin"); setError(""); setNotice(""); setNeedsConfirmation(false); }}>Sign in</button>
+            <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? "auth-tab active" : "auth-tab"} onClick={() => { setMode("signup"); setError(""); setNotice(""); setNeedsConfirmation(false); }}>Create account</button>
+          </div>}
+          {recovering && <button type="button" className="auth-back" onClick={() => { setRecovering(false); setRecoveryError(false); setError(""); setNotice(""); }}>← Back to sign in</button>}
+          {recoveryError && <div className="auth-message auth-error" role="alert">That password reset link is invalid or expired. Request a new reset link below.</div>}
+          {confirmationError && <div className="auth-message auth-error" role="alert">That confirmation link could not be completed. Request a new confirmation email and try again. <button type="button" className="auth-back" disabled={resendingConfirmation || !email.trim()} onClick={() => void resendConfirmation()}>{resendingConfirmation ? "Sending…" : "Resend confirmation email"}</button></div>}
           <form className="auth-form" onSubmit={handleSubmit}>
             {mode === "signup" && <label>Full name<input autoComplete="name" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" maxLength={100} required /></label>}
             <label>Email address<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required /></label>
-            <label>Password<input type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 8 characters" minLength={8} maxLength={128} required /></label>
+            {!recovering && <label>Password<input type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 8 characters" minLength={8} maxLength={128} required /></label>}
+            {mode === "signin" && !recovering && <button type="button" className="auth-back" onClick={() => { setRecovering(true); setError(""); setNotice(""); setNeedsConfirmation(false); }}>Forgot password?</button> }
             {error && <div className="auth-message auth-error" role="alert">{error}</div>}
-            {notice && <div className="auth-message auth-success" role="status">{notice}</div>}
+            {notice && <div className="auth-message auth-success" role="status">{notice}{needsConfirmation && <button type="button" className="auth-back" disabled={resendingConfirmation || !email.trim()} onClick={() => void resendConfirmation()}>{resendingConfirmation ? "Sending…" : "Resend confirmation email"}</button>}</div>}
             {reason === "configuration" && <div className="auth-message auth-error" role="alert">Workspace sign-in is not configured yet. Add the Supabase environment variables to your deployment.</div>}
-            <button className="auth-submit" type="submit" disabled={busy}>{busy ? "Please wait…" : mode === "signin" ? "Sign in to workspace" : "Create account"} <span>↗</span></button>
+            {reason === "session-expired" && <div className="auth-message" role="status">Your session expired. Sign in again to continue.</div>}
+            <button className="auth-submit" type="submit" disabled={busy}>{busy ? "Please wait…" : recovering ? "Send reset link" : mode === "signin" ? "Sign in to workspace" : "Create account"} <span>↗</span></button>
           </form>
           <div className="auth-card-foot"><span>⌑</span> Your session is protected by Supabase Auth.</div>
         </div>

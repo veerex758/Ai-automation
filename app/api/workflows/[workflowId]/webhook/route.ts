@@ -4,6 +4,7 @@ import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +13,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+
 function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+  return privateJson({ error: message }, { status });
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
@@ -25,6 +32,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return jsonError("Authentication required.", 401);
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > 1024 || new TextEncoder().encode(await request.clone().text()).byteLength > 1024) return jsonError("Webhook provisioning request exceeds 1 KiB.", 413);
     let body: unknown;
     try { body = await request.json(); } catch { return jsonError("Request body must be valid JSON.", 400); }
     if (!isRecord(body) || body.confirm !== true) {
@@ -37,6 +46,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!workflow || workflow.status !== "active") {
       return jsonError("Only an active workflow you can access can receive webhook events.", 409);
     }
+    if (!(await hasWorkspacePermission(userClient, workflow.workspace_id, user.id, "workflows.execute"))) return jsonError("Workspace workflows.execute permission required.", 403);
 
     const definition = workflow.definition as { format?: unknown; steps?: unknown } | null;
     if (!definition || definition.format !== "aivanta-registry-v1" ||
@@ -81,7 +91,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       throw insertError;
     }
 
-    return NextResponse.json({
+    return privateJson({
       endpoint: {
         id: endpoint.id,
         status: endpoint.status,
@@ -119,6 +129,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
       .select("id,workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
     if (!workflow) return jsonError("Workflow not found or you do not have access to it.", 404);
+    if (!(await hasWorkspacePermission(userClient, workflow.workspace_id, user.id, "workflows.edit"))) return jsonError("Workspace workflows.edit permission required.", 403);
 
     let adminConfig: ReturnType<typeof getAdminSupabaseConfig>;
     try { adminConfig = getAdminSupabaseConfig(); }
@@ -133,7 +144,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
       .in("status", ["active", "disabled"])
       .select("id,status");
     if (error) throw error;
-    return NextResponse.json({ revoked: data?.length ?? 0 });
+    return privateJson({ revoked: data?.length ?? 0 });
   } catch (error) {
     console.error("[webhook-provisioning] revoke failed", {
       code: error instanceof Error ? error.message : "WEBHOOK_REVOKE_FAILED",

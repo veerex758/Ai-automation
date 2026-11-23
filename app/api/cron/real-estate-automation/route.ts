@@ -8,6 +8,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+
+
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_SCHEDULER_SECRET;
   if (!secret) return false;
@@ -19,7 +26,7 @@ function authorized(request: NextRequest) {
 async function run(request: NextRequest) {
   if (!authorized(request)) {
     const configured = Boolean(process.env.CRON_SECRET ?? process.env.AIVANTA_SCHEDULER_SECRET);
-    return NextResponse.json(
+    return privateJson(
       { error: configured ? "Unauthorized." : "Cron authentication is not configured." },
       { status: configured ? 401 : 503 },
     );
@@ -28,7 +35,7 @@ async function run(request: NextRequest) {
   const pipelineEnabled = process.env.REAL_ESTATE_PIPELINE_ENABLED === "true";
   const followupsEnabled = process.env.REAL_ESTATE_FOLLOWUPS_ENABLED === "true";
   if (!liveExecution || (!pipelineEnabled && !followupsEnabled)) {
-    return NextResponse.json({
+    return privateJson({
       success: true,
       enabled: false,
       reason: "REAL_ESTATE_LIVE_EXECUTION_DISABLED",
@@ -40,10 +47,10 @@ async function run(request: NextRequest) {
     const db = createRealEstateServiceClient();
     const pipeline = await processRealEstateLeadPipeline({ db, limit: 20 });
     const followups = await processDueRealEstateFollowups(db);
-    return NextResponse.json({ success: true, pipeline, followups });
+    return privateJson({ success: true, pipeline, followups });
   } catch (error) {
     console.error("Real-estate automation tick failed", error);
-    return NextResponse.json({ error: "Could not process the real-estate automation queue." }, { status: 500 });
+    return privateJson({ error: "Could not process the real-estate automation queue." }, { status: 500 });
   }
 }
 

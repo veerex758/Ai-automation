@@ -8,6 +8,11 @@ import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/dura
 import { findOperation } from "@/nodes/registry";
 
 export const runtime = "nodejs";
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 export const dynamic = "force-dynamic";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -43,54 +48,56 @@ function serviceClient() {
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   try {
     const { workflowId } = await context.params;
-    if (!uuidPattern.test(workflowId)) return NextResponse.json({ error: "Invalid workflow ID." }, { status: 400 });
+    if (!uuidPattern.test(workflowId)) return privateJson({ error: "Invalid workflow ID." }, { status: 400 });
     const idempotencyKey = request.headers.get("idempotency-key") ?? "";
-    if (!uuidPattern.test(idempotencyKey)) return NextResponse.json({ error: "A UUID Idempotency-Key header is required." }, { status: 400 });
+    if (!uuidPattern.test(idempotencyKey)) return privateJson({ error: "A UUID Idempotency-Key header is required." }, { status: 400 });
 
     const userDb = await createClient();
     const { data: { user }, error: authError } = await userDb.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > 64 * 1024 || new TextEncoder().encode(await request.clone().text()).byteLength > 64 * 1024) return privateJson({ error: "Dispatch request exceeds 64 KiB." }, { status: 413 });
     let body: unknown;
     try { body = await request.json(); } catch {
-      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+      return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
     }
-    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Request must be a JSON object." }, { status: 400 });
+    if (!body || typeof body !== "object" || Array.isArray(body)) return privateJson({ error: "Request must be a JSON object." }, { status: 400 });
     const requestBody = body as Record<string, unknown>;
     const input = requestBody.input ?? {};
     const executionMode = requestBody.mode ?? "dry_run";
     if (executionMode !== "dry_run" && executionMode !== "live") {
-      return NextResponse.json({ error: "Mode must be dry_run or live." }, { status: 400 });
+      return privateJson({ error: "Mode must be dry_run or live." }, { status: 400 });
     }
     if (executionMode === "live" && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
-      return NextResponse.json({ error: "Live execution is disabled by the server." }, { status: 503 });
+      return privateJson({ error: "Live execution is disabled by the server." }, { status: 503 });
     }
     if (!input || typeof input !== "object" || Array.isArray(input) || Buffer.byteLength(JSON.stringify(input), "utf8") > 10240) {
-      return NextResponse.json({ error: "Input must be a JSON object no larger than 10 KB." }, { status: 400 });
+      return privateJson({ error: "Input must be a JSON object no larger than 10 KB." }, { status: 400 });
     }
 
     const { data: workflow, error: workflowError } = await userDb.from("workflows")
       .select("id, workspace_id, version, definition, status")
       .eq("id", workflowId).maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
-    if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 });
-    if (workflow.status !== "active") return NextResponse.json({ error: "Only active workflows can be dispatched." }, { status: 409 });
+    if (!workflow) return privateJson({ error: "Workflow not found or access denied." }, { status: 404 });
+    if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return privateJson({ error: "Workspace workflows.execute permission required." }, { status: 403 });
+    if (workflow.status !== "active") return privateJson({ error: "Only active workflows can be dispatched." }, { status: 409 });
     const registryFormat = isRecord(workflow.definition) && workflow.definition.format === "aivanta-registry-v1";
     if (registryFormat) {
       if (!isRegistryDefinition(workflow.definition)) {
-        return NextResponse.json({ error: "Registry workflow definition is invalid." }, { status: 422 });
+        return privateJson({ error: "Registry workflow definition is invalid." }, { status: 422 });
       }
       if (executionMode === "live") {
         const registrySteps = (workflow.definition as { steps: Parameters<typeof validateDurableLiveSteps>[0] }).steps;
         const livePolicyError = validateDurableLiveSteps(registrySteps);
         if (livePolicyError) {
-          return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
+          return privateJson({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
         }
       }
     } else {
       const validated = validateDefinition(workflow.definition);
-      if (!validated.definition) return NextResponse.json({ error: "Workflow definition is invalid." }, { status: 422 });
+      if (!validated.definition) return privateJson({ error: "Workflow definition is invalid." }, { status: 422 });
       if (executionMode === "live") {
         const nodes = validated.definition.nodes;
         const actions = nodes.filter((node) => node.type === "action");
@@ -98,13 +105,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         if (nodes[0]?.type !== "trigger" || nodes[0].settings.event !== "manual" ||
             actions.length !== 1 || emailAction?.settings.provider !== "email" ||
             emailAction.settings.operation !== "send_email" || !emailAction.settings.message?.trim()) {
-          return NextResponse.json({ error: "Durable legacy live execution currently supports one manual-trigger Resend email action." }, { status: 422 });
+          return privateJson({ error: "Durable legacy live execution currently supports one manual-trigger Resend email action." }, { status: 422 });
         }
         const allowedRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
           .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
         const recipient = emailAction.settings.recipient?.trim().toLowerCase() ?? "";
         if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
-          return NextResponse.json({ error: "The email recipient must be a literal address on the server allowlist." }, { status: 403 });
+          return privateJson({ error: "The email recipient must be a literal address on the server allowlist." }, { status: 403 });
         }
       }
     }
@@ -134,7 +141,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         console.error("Aivanta dispatch worker wake-up failed.", { errorCode, jobId: result.job_id });
       }
     });
-    return NextResponse.json({
+    return privateJson({
       jobId: result.job_id, runId: result.run_id,
       status: result.duplicate ? "existing" : "queued",
       mode: executionMode,
@@ -144,6 +151,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     console.error("Aivanta workflow dispatch failed.", {
       errorCode: error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "DISPATCH_FAILED",
     });
-    return NextResponse.json({ error: "Could not dispatch this workflow." }, { status: 500 });
+    return privateJson({ error: "Could not dispatch this workflow." }, { status: 500 });
   }
 }

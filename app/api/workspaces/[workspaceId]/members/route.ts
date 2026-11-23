@@ -4,8 +4,11 @@ import {createAdminClient} from "@/lib/supabase/admin";
 import {hasWorkspacePermission} from "@/lib/supabase/permissions";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 type Ctx={params:Promise<{workspaceId:string}>};
 async function authorize(workspaceId:string){
+ if(!uuidPattern.test(workspaceId))return {response:NextResponse.json({error:"Invalid workspace ID."},{status:400,headers})};
  const supabase=await createClient(),{data:{user},error}=await supabase.auth.getUser();
  if(error||!user)return {response:NextResponse.json({error:"Authentication required."},{status:401,headers})};
  const [{data:workspace,error:we},{data:member,error:me}]=await Promise.all([
@@ -28,8 +31,9 @@ export async function GET(_request:Request,ctx:Ctx){
 export async function PATCH(request:Request,ctx:Ctx){
  const {workspaceId}=await ctx.params;const a=await authorize(workspaceId);if("response"in a)return a.response;
  try{
+  const contentLength=Number(request.headers.get("content-length")??"0");if(contentLength>4096||new TextEncoder().encode(await request.clone().text()).byteLength>4096)return NextResponse.json({error:"Member update exceeds 4 KiB."},{status:413,headers});
   const body=await request.json() as {user_id?:unknown;role?:unknown};
-  if(typeof body.user_id!=="string"||!["admin","member"].includes(String(body.role)))return NextResponse.json({error:"Member and valid role are required."},{status:400,headers});
+  if(typeof body.user_id!=="string"||!uuidPattern.test(body.user_id)||!["admin","member"].includes(String(body.role)))return NextResponse.json({error:"Member and valid role are required."},{status:400,headers});
   if(body.role==="admin"&&a.role!=="owner")return NextResponse.json({error:"Only the workspace owner can grant administrator access."},{status:403,headers});
   const admin=createAdminClient();
   const {data:target,error:targetError}=await admin.from("workspace_members").select("role").eq("workspace_id",workspaceId).eq("user_id",body.user_id).maybeSingle();
@@ -43,7 +47,7 @@ export async function PATCH(request:Request,ctx:Ctx){
 export async function DELETE(request:Request,ctx:Ctx){
  const {workspaceId}=await ctx.params;const a=await authorize(workspaceId);if("response"in a)return a.response;
  const userId=new URL(request.url).searchParams.get("user_id");
- if(!userId)return NextResponse.json({error:"Member user_id is required."},{status:400,headers});
+ if(!userId||!uuidPattern.test(userId))return NextResponse.json({error:"A valid member user_id is required."},{status:400,headers});
  try{
   const admin=createAdminClient();const {data:target,error:targetError}=await admin.from("workspace_members").select("role").eq("workspace_id",workspaceId).eq("user_id",userId).maybeSingle();
   if(targetError)throw targetError;if(!target||target.role==="owner")return NextResponse.json({error:"Workspace owner cannot be removed."},{status:409,headers});

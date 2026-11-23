@@ -5,20 +5,32 @@ import {getOrCreateDefaultWorkspace,getWorkspaceRole,canManageWorkspaceBilling} 
 import {createPaymentReference,getPaidPlan} from "@/lib/billing/paystack";
 export const runtime="nodejs";
 const CONSENT_TERMS_VERSION="rexnora-recurring-v1";
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
 export async function POST(request:Request){
+  const origin=request.headers.get("origin"),referer=request.headers.get("referer");
+  let sourceOrigin:string|null=origin;
+  if(!sourceOrigin&&referer){try{sourceOrigin=new URL(referer).origin;}catch{sourceOrigin=null;}}
+  if(sourceOrigin!==new URL(request.url).origin)return privateJson({error:"Invalid origin."},{status:403});
+
  try{
   const supabase=await createClient(),{data:{user}}=await supabase.auth.getUser();
-  if(!user)return NextResponse.json({error:"Authentication required."},{status:401});
-  if(!user.email)return NextResponse.json({error:"Account email is required."},{status:400});
+  if(!user)return privateJson({error:"Authentication required."},{status:401});
+  if(!user.email)return privateJson({error:"Account email is required."},{status:400});
+  const contentLength=Number(request.headers.get("content-length")??"0");
+  if(contentLength>4096||new TextEncoder().encode(await request.clone().text()).byteLength>4096)return privateJson({error:"Billing request exceeds 4 KiB."},{status:413});
   let body:{plan?:unknown;consent?:unknown};
-  try{body=await request.json() as {plan?:unknown;consent?:unknown};}catch{return NextResponse.json({error:"Invalid request body."},{status:400});}
+  try{body=await request.json() as {plan?:unknown;consent?:unknown};}catch{return privateJson({error:"Invalid request body."},{status:400});}
   const plan=getPaidPlan(body.plan);
-  if(!plan)return NextResponse.json({error:"Plan is not configured."},{status:400});
-  if(body.consent!==true)return NextResponse.json({error:"Explicit recurring-payment consent is required."},{status:400});
+  if(!plan)return privateJson({error:"Plan is not configured."},{status:400});
+  if(body.consent!==true)return privateJson({error:"Explicit recurring-payment consent is required."},{status:400});
   const secret=process.env.PAYSTACK_SECRET_KEY;
-  if(!secret)return NextResponse.json({error:"Paystack is not configured."},{status:503});
+  if(!secret)return privateJson({error:"Paystack is not configured."},{status:503});
   const workspace=await getOrCreateDefaultWorkspace(supabase),role=await getWorkspaceRole(supabase,workspace.id,user.id);
-  if(!canManageWorkspaceBilling(role))return NextResponse.json({error:"Workspace billing permission required."},{status:403});
+  if(!canManageWorkspaceBilling(role))return privateJson({error:"Workspace billing permission required."},{status:403});
   const admin=createAdminClient(),reference=createPaymentReference();
   const {data:consent,error:consentError}=await admin.from("billing_recurring_consents").insert({
    workspace_id:workspace.id,user_id:user.id,provider:"paystack",plan_slug:plan.slug,
@@ -50,15 +62,15 @@ export async function POST(request:Request){
     admin.from("billing_payments").update({status:"failed",updated_at:new Date().toISOString()}).eq("id",payment.id),
     admin.from("billing_recurring_consents").update({status:"failed",updated_at:new Date().toISOString()}).eq("id",consent.id)
    ]);
-   return NextResponse.json({error:"Paystack could not initialize the recurring authorization."},{status:502});
+   return privateJson({error:"Paystack could not initialize the recurring authorization."},{status:502});
   }
   const {error:saveError}=await admin.from("billing_payments").update({
    authorization_url:result.data.authorization_url,access_code:result.data.access_code
   }).eq("id",payment.id);
   if(saveError)throw saveError;
-  return NextResponse.json({authorizationUrl:result.data.authorization_url,reference,plan:plan.slug,recurring:true},{headers:{"Cache-Control":"private,no-store"}});
+  return privateJson({authorizationUrl:result.data.authorization_url,reference,plan:plan.slug,recurring:true},{headers:{"Cache-Control":"private,no-store"}});
  }catch(error){
   console.error("Paystack recurring authorization setup failed:",error);
-  return NextResponse.json({error:"Could not start recurring authorization."},{status:503});
+  return privateJson({error:"Could not start recurring authorization."},{status:503});
  }
 }

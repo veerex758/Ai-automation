@@ -8,6 +8,7 @@ export const WORKSPACE_PERMISSIONS = [
   "members.view", "members.manage",
   "billing.view", "billing.manage",
   "operations.view", "operations.manage",
+  "agents.view", "agents.manage", "real_estate.view", "real_estate.manage",
   "settings.manage",
 ] as const;
 export type WorkspacePermission = typeof WORKSPACE_PERMISSIONS[number];
@@ -16,6 +17,7 @@ export type WorkspacePermissionMap = Partial<Record<WorkspacePermission, boolean
 export const DEFAULT_MEMBER_PERMISSIONS: WorkspacePermissionMap = {
   "workflows.view": true, "workflows.create": true, "workflows.edit": true,
   "workflows.execute": true, "integrations.view": true, "dashboards.view": true,
+  "agents.view": true, "agents.manage": true, "real_estate.view": true, "real_estate.manage": true,
 };
 
 export async function getWorkspacePermissions(
@@ -50,6 +52,8 @@ export async function getWorkspacePermissions(
     if (permissions["members.manage"]) permissions["members.view"] = true;
     if (permissions["billing.manage"]) permissions["billing.view"] = true;
     if (permissions["operations.manage"]) permissions["operations.view"] = true;
+    if (permissions["agents.manage"]) permissions["agents.view"] = true;
+    if (permissions["real_estate.manage"]) permissions["real_estate.view"] = true;
     return { role, customRoleId: member.custom_role_id, permissions };
   }
   return { role, customRoleId: null, permissions: DEFAULT_MEMBER_PERMISSIONS };

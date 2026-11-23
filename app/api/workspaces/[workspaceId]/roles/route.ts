@@ -3,9 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { WORKSPACE_PERMISSIONS } from "@/lib/supabase/permissions";
 export const dynamic = "force-dynamic";
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const headers = { "Cache-Control": "private, no-store" };
 type Context = { params: Promise<{ workspaceId: string }> };
 async function authorize(workspaceId: string) {
+  if (!uuidPattern.test(workspaceId)) return { response: NextResponse.json({ error: "Invalid workspace ID." }, { status: 400, headers }) };
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { response: NextResponse.json({ error: "Authentication required." }, { status: 401, headers }) };
@@ -32,6 +34,8 @@ export async function POST(request: Request, context: Context) {
   const access = await authorize(workspaceId);
   if ("response" in access) return access.response;
   try {
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > 8192 || new TextEncoder().encode(await request.clone().text()).byteLength > 8192) return NextResponse.json({ error: "Role configuration exceeds 8 KiB." }, { status: 413, headers });
     const body = await request.json() as { name?: unknown; description?: unknown; permissions?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const description = typeof body.description === "string" ? body.description.trim() : "";
@@ -57,8 +61,10 @@ export async function PATCH(request: Request, context: Context) {
   const access = await authorize(workspaceId);
   if ("response" in access) return access.response;
   try {
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > 8192 || new TextEncoder().encode(await request.clone().text()).byteLength > 8192) return NextResponse.json({ error: "Role update exceeds 8 KiB." }, { status: 413, headers });
     const body = await request.json() as { id?: unknown; name?: unknown; description?: unknown; permissions?: unknown };
-    if (typeof body.id !== "string") return NextResponse.json({ error: "Role id is required." }, { status: 400, headers });
+    if (typeof body.id !== "string" || !uuidPattern.test(body.id)) return NextResponse.json({ error: "A valid role id is required." }, { status: 400, headers });
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (body.name !== undefined) {
       if (typeof body.name !== "string" || body.name.trim().length < 2 || body.name.trim().length > 48) return NextResponse.json({ error: "Role name must be 2–48 characters." }, { status: 400, headers });
@@ -89,7 +95,7 @@ export async function DELETE(request: Request, context: Context) {
   const access = await authorize(workspaceId);
   if ("response" in access) return access.response;
   const id = new URL(request.url).searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "Role id is required." }, { status: 400, headers });
+  if (!id || !uuidPattern.test(id)) return NextResponse.json({ error: "Role id is required." }, { status: 400, headers });
   const admin = createAdminClient();
   const { data: assigned, error: checkError } = await admin.from("workspace_members").select("user_id").eq("workspace_id", workspaceId).eq("custom_role_id", id).limit(1);
   if (checkError) return NextResponse.json({ error: "Could not verify role assignments." }, { status: 503, headers });

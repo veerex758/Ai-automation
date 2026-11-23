@@ -2,9 +2,11 @@ import {NextResponse} from "next/server";
 import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 export const dynamic="force-dynamic";
+const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const headers={"Cache-Control":"private, no-store"};
 type Ctx={params:Promise<{workspaceId:string}>};
 async function authorize(workspaceId:string){
+  if (!uuidPattern.test(workspaceId)) return { response: NextResponse.json({ error: "Invalid workspace ID." }, { status: 400, headers }) };
  const supabase=await createClient(),{data:{user},error}=await supabase.auth.getUser();
  if(error||!user)return {response:NextResponse.json({error:"Authentication required."},{status:401,headers})};
  const [{data:workspace,error:we},{data:member,error:me}]=await Promise.all([
@@ -28,6 +30,7 @@ export async function PATCH(request:Request,ctx:Ctx){
  const {workspaceId}=await ctx.params,a=await authorize(workspaceId);if("response"in a)return a.response;
  if(a.role!=="owner")return NextResponse.json({error:"Only the workspace owner can change security policies."},{status:403,headers});
  try{
+  const contentLength=Number(request.headers.get("content-length")??"0");if(contentLength>4096||new TextEncoder().encode(await request.clone().text()).byteLength>4096)return NextResponse.json({error:"Security policy update exceeds 4 KiB."},{status:413,headers});
   const body=await request.json() as {allow_member_invites?:unknown};
   if(typeof body.allow_member_invites!=="boolean")return NextResponse.json({error:"allow_member_invites must be boolean."},{status:400,headers});
   const admin=createAdminClient();

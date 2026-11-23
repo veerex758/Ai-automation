@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { scoreRealEstateLead } from "@/lib/real-estate/lead-scoring";
 import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-estate/server";
 import { processRealEstateLeadPipeline } from "@/lib/real-estate/pipeline";
@@ -88,8 +89,12 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.view"))) return NextResponse.json({ error: "Workspace real_estate.view permission required." }, { status: 403, headers });
     const params = request.nextUrl.searchParams;
     const status = params.get("status");
+    if (status && !["new","qualified","contacted","viewing_scheduled","negotiation","won","lost"].includes(status)) {
+      return NextResponse.json({ error: "Invalid lead status." }, { status: 400, headers });
+    }
     const search = (params.get("q") ?? "").trim().slice(0, 100);
     const limit = Math.max(1, Math.min(100, Number(params.get("limit") ?? 50) || 50));
     const offset = Math.max(0, Math.min(100000, Number(params.get("offset") ?? 0) || 0));
@@ -118,6 +123,7 @@ export async function POST(request: NextRequest) {
     if (!isRecord(body)) return NextResponse.json({ error: "Lead input must be a JSON object." }, { status: 400, headers });
     const lead = parseLead(body);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "real_estate.manage"))) return NextResponse.json({ error: "Workspace real_estate.manage permission required." }, { status: 403, headers });
 
     if (lead.source_event_id) {
       const { data: prior, error: priorError } = await supabase.from("real_estate_leads").select("*")

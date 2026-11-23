@@ -3,10 +3,12 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { executeAgentTool, getAgentToolByName, getAgentTools } from "@/lib/agents/tool-runtime";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Context = { params: Promise<{ agentId: string }> };
 type ToolCall = { name: string; args: Record<string, unknown> };
 
@@ -70,6 +72,10 @@ export async function GET(_request: NextRequest, context: Context) {
   const a = await auth();
   if ("response" in a) return a.response;
   const { agentId } = await context.params;
+  if (!uuidPattern.test(agentId)) return NextResponse.json({ error: "Invalid agent ID." }, { status: 400, headers });
+  const { data: agent, error: agentError } = await a.supabase.from("agents").select("workspace_id").eq("id", agentId).maybeSingle();
+  if (agentError || !agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
+  if (!(await hasWorkspacePermission(a.supabase, agent.workspace_id, a.user.id, "agents.view"))) return NextResponse.json({ error: "Workspace agents.view permission required." }, { status: 403, headers });
   const { data: runs, error } = await a.supabase.from("agent_runs")
     .select("id,status,input,output,model_provider,model_name,error_code,started_at,finished_at,created_at")
     .eq("agent_id", agentId).order("created_at", { ascending: false }).limit(25);
@@ -81,8 +87,13 @@ export async function POST(request: NextRequest, context: Context) {
   const a = await auth();
   if ("response" in a) return a.response;
   const { agentId } = await context.params;
+  if (!uuidPattern.test(agentId)) return NextResponse.json({ error: "Invalid agent ID." }, { status: 400, headers });
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (contentLength > 16 * 1024) return NextResponse.json({ error: "Agent input exceeds 16 KiB." }, { status: 413, headers });
+  const raw = await request.text();
+  if (Buffer.byteLength(raw, "utf8") > 16 * 1024) return NextResponse.json({ error: "Agent input exceeds 16 KiB." }, { status: 413, headers });
   let body: unknown;
-  try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON." }, { status: 400, headers }); }
+  try { body = JSON.parse(raw); } catch { return NextResponse.json({ error: "Invalid JSON." }, { status: 400, headers }); }
   const input = body && typeof body === "object" && "input" in body && typeof body.input === "string" ? body.input.trim() : "";
   if (!input || input.length > 12000) return NextResponse.json({ error: "Input must be 1–12,000 characters." }, { status: 400, headers });
 
@@ -90,6 +101,7 @@ export async function POST(request: NextRequest, context: Context) {
     .select("id,workspace_id,name,instructions,model_provider,model_name,status,permissions,tool_ids")
     .eq("id", agentId).single();
   if (agentError || !agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
+  if (!(await hasWorkspacePermission(a.supabase, agent.workspace_id, a.user.id, "agents.manage"))) return NextResponse.json({ error: "Workspace agents.manage permission required." }, { status: 403, headers });
   if (agent.model_provider !== "gemini") return NextResponse.json({ error: "Rexnora agents currently run on Gemini only. Update this agent configuration before running." }, { status: 409, headers });
   if (agent.status !== "ready") return NextResponse.json({ error: "Set this agent to Ready before running it." }, { status: 409, headers });
   if (!agent.instructions?.trim()) return NextResponse.json({ error: "Add agent instructions before running." }, { status: 422, headers });

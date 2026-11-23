@@ -8,11 +8,10 @@ on:
       - 'supabase/migrations/**'
       - 'supabase/config.toml'
       - '.github/workflows/migration-replay.yml'
+  # Run the full migration replay on every PR so schema compatibility is
+  # verified even when the PR changes only application code.
   pull_request:
-    paths:
-      - 'supabase/migrations/**'
-      - 'supabase/config.toml'
-      - '.github/workflows/migration-replay.yml'
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:

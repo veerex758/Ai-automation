@@ -7,7 +7,12 @@ import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
-const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
+function privateJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+const maxWorkflowPayloadBytes = 64 * 1024;
 
 function formatUpdatedAt(value: string): string {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
@@ -46,7 +51,7 @@ export async function GET() {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      return NextResponse.json(
+      return privateJson(
         { error: "Authentication required." },
         { status: 401, headers: { "Cache-Control": "private, no-store" } },
       );
@@ -54,7 +59,7 @@ export async function GET() {
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.view"))) {
-      return NextResponse.json({ error: "Workspace workflows.view permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+      return privateJson({ error: "Workspace workflows.view permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
     }
     const { data, error } = await supabase
       .from("workflows")
@@ -63,13 +68,13 @@ export async function GET() {
       .order("updated_at", { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json({
+    return privateJson({
       workspace,
       workflows: (data ?? []).map(presentWorkflow),
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("Failed to load Aivanta workflows:", error);
-    return NextResponse.json(
+    return privateJson(
       { error: "Could not load workflows. Check the Aivanta database configuration and try again." },
       { status: 500, headers: { "Cache-Control": "private, no-store" } },
     );
@@ -81,24 +86,32 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      return NextResponse.json(
+      return privateJson(
         { error: "Authentication required." },
         { status: 401, headers: { "Cache-Control": "private, no-store" } },
       );
     }
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > maxWorkflowPayloadBytes) {
+      return privateJson({ error: "Workflow payload is too large." }, { status: 413, headers: { "Cache-Control": "private, no-store" } });
+    }
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > maxWorkflowPayloadBytes) {
+      return privateJson({ error: "Workflow payload is too large." }, { status: 413, headers: { "Cache-Control": "private, no-store" } });
+    }
     let body: unknown;
     try {
-      body = await request.json();
+      body = JSON.parse(rawBody);
     } catch {
-      return NextResponse.json(
+      return privateJson(
         { error: "Request body must be valid JSON." },
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
     }
 
-    if (!body || typeof body !== "object" || !("name" in body) || typeof body.name !== "string") {
-      return NextResponse.json(
+    if (!body || typeof body !== "object" || Array.isArray(body) || !("name" in body) || typeof body.name !== "string") {
+      return privateJson(
         { error: "A workflow name is required." },
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
@@ -106,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     const name = body.name.trim();
     if (name.length < 1 || name.length > 80) {
-      return NextResponse.json(
+      return privateJson(
         { error: "Workflow names must be between 1 and 80 characters." },
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
@@ -116,15 +129,18 @@ export async function POST(request: NextRequest) {
       ? body.description.trim()
       : "";
     if (description.length > 500) {
-      return NextResponse.json(
+      return privateJson(
         { error: "Workflow descriptions cannot exceed 500 characters." },
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
     }
 
-    const status = "status" in body && typeof body.status === "string" && allowedStatuses.has(body.status)
-      ? body.status
-      : "draft";
+    // New workflows must always be drafts. Activation is a separate guarded PATCH
+    // path that verifies the exact saved version, dry-run, connections and approvals.
+    if ("status" in body && body.status !== "draft") {
+      return privateJson({ error: "New workflows must be created as drafts. Activate only after the required safety checks." }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
+    }
+    const status = "draft";
 
     const definitionResult = "definition" in body
       ? validateDefinition(body.definition)
@@ -139,7 +155,7 @@ export async function POST(request: NextRequest) {
           }],
         });
     if (!definitionResult.definition) {
-      return NextResponse.json(
+      return privateJson(
         { error: definitionResult.error || "Invalid workflow definition." },
         { status: 422, headers: { "Cache-Control": "private, no-store" } },
       );
@@ -163,27 +179,27 @@ export async function POST(request: NextRequest) {
 
     if ("registrySteps" in body) {
       if (!Array.isArray(body.registrySteps) || body.registrySteps.length < 1 || body.registrySteps.length > 30) {
-        return NextResponse.json({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
+        return privateJson({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
       }
       if (rawNodes.length !== definitionResult.definition.nodes.length || !Array.isArray(rawDefinition.edges)) {
-        return NextResponse.json({ error: "Registry workflows must include every canvas node and its explicit connections." }, { status: 422 });
+        return privateJson({ error: "Registry workflows must include every canvas node and its explicit connections." }, { status: 422 });
       }
       const suppliedSteps = body.registrySteps as unknown[];
       const registryById = new Map<string, Record<string, unknown>>();
       for (const item of suppliedSteps) {
         if (!item || typeof item !== "object" || Array.isArray(item)) {
-          return NextResponse.json({ error: "Each registry step must be an object." }, { status: 400 });
+          return privateJson({ error: "Each registry step must be an object." }, { status: 400 });
         }
         const step = item as Record<string, unknown>;
         if (typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || registryById.has(step.id) ||
             typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
             (step.kind !== "trigger" && step.kind !== "action") || !("input" in step)) {
-          return NextResponse.json({ error: "Registry steps must have unique IDs, registered operations, kind, and input." }, { status: 400 });
+          return privateJson({ error: "Registry steps must have unique IDs, registered operations, kind, and input." }, { status: 400 });
         }
         registryById.set(step.id, step);
       }
       if (registryById.size !== rawNodes.length) {
-        return NextResponse.json({ error: "Every canvas node must have exactly one registered execution step." }, { status: 422 });
+        return privateJson({ error: "Every canvas node must have exactly one registered execution step." }, { status: 422 });
       }
       const graphNodes = definitionToSave.nodes instanceof Array
         ? (definitionToSave.nodes as Array<Record<string, unknown>>).map((node) => {
@@ -204,11 +220,11 @@ export async function POST(request: NextRequest) {
           edges: rawDefinition.edges as Parameters<typeof buildRegistrySteps>[0]["edges"],
         });
       } catch (cause) {
-        return NextResponse.json({ error: cause instanceof Error ? cause.message : "The workflow graph is invalid." }, { status: 422 });
+        return privateJson({ error: cause instanceof Error ? cause.message : "The workflow graph is invalid." }, { status: 422 });
       }
       const checked = validateRegisteredSteps(rebuilt);
       if (!checked.steps) {
-        return NextResponse.json({ error: checked.error || "A registered operation failed validation." }, { status: 422 });
+        return privateJson({ error: checked.error || "A registered operation failed validation." }, { status: 422 });
       }
       const mismatched = checked.steps.length !== suppliedSteps.length || checked.steps.some((step) => {
         const expected = registryById.get(step.id);
@@ -216,17 +232,14 @@ export async function POST(request: NextRequest) {
           expected.kind !== step.kind || JSON.stringify(expected.input) !== JSON.stringify(step.input);
       });
       if (mismatched) {
-        return NextResponse.json({ error: "Canvas connections and registered execution steps do not match. Regenerate the draft before saving." }, { status: 422 });
+        return privateJson({ error: "Canvas connections and registered execution steps do not match. Regenerate the draft before saving." }, { status: 422 });
       }
       Object.assign(definitionToSave, { format: "aivanta-registry-v1", steps: checked.steps });
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.create"))) {
-      return NextResponse.json({ error: "Workspace workflows.create permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
-    }
-    if (status === "active" && !(await hasWorkspacePermission(supabase, workspace.id, user.id, "workflows.execute"))) {
-      return NextResponse.json({ error: "Workspace workflows.execute permission required to create an active workflow." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+      return privateJson({ error: "Workspace workflows.create permission required." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
     }
     // The database guard intentionally allows workflow creation only with an
     // empty definition. Persist the validated graph through the audited RPC so
@@ -244,13 +257,13 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (createError?.code === "P0001" && createError.message === "AIVANTA_WORKFLOW_LIMIT_REACHED") {
-      return NextResponse.json({ error: "Workspace active-workflow limit reached. Upgrade your plan to activate more workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+      return privateJson({ error: "Workspace active-workflow limit reached. Upgrade your plan to activate more workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
     }
     if (createError?.code === "P0001" && createError.message === "AIVANTA_ENTERPRISE_LIMITS_NOT_CONFIGURED") {
-      return NextResponse.json({ error: "Enterprise workflow limits must be configured before activating workflows." }, { status: 409, headers: { "Cache-Control": "private, no-store" } });
+      return privateJson({ error: "Enterprise workflow limits must be configured before activating workflows." }, { status: 409, headers: { "Cache-Control": "private, no-store" } });
     }
     if (createError?.code === "P0001" && createError.message === "AIVANTA_SUBSCRIPTION_INACTIVE") {
-      return NextResponse.json({ error: "This workspace subscription is inactive. Update billing before activating workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+      return privateJson({ error: "This workspace subscription is inactive. Update billing before activating workflows." }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
     }
     if (createError) throw createError;
 
@@ -269,7 +282,7 @@ export async function POST(request: NextRequest) {
         .eq("created_by", user.id);
       if (cleanupError) console.error("Failed to clean up an unsaved workflow draft:", cleanupError);
       if (saveError.code === "P0002") {
-        return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404, headers: { "Cache-Control": "private, no-store" } });
+        return privateJson({ error: "Workflow not found or you do not have access to it." }, { status: 404, headers: { "Cache-Control": "private, no-store" } });
       }
       throw saveError;
     }
@@ -279,13 +292,13 @@ export async function POST(request: NextRequest) {
       throw new Error("The database did not confirm that the workflow definition was saved.");
     }
 
-    return NextResponse.json(
+    return privateJson(
       { workflow: presentWorkflow(createdWorkflow), version: saved.saved_version },
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
     console.error("Failed to create Aivanta workflow:", error);
-    return NextResponse.json(
+    return privateJson(
       { error: "Could not save this workflow. Check the Aivanta database configuration and try again." },
       { status: 500, headers: { "Cache-Control": "private, no-store" } },
     );

@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import "./dashboard.css";
 
 type Workflow = { id: string; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused" | "Archived"; runs: string; updated: string; icon: string; tone: string };
+type WorkspaceOption = { id: string; name: string };
+type DashboardMetrics = { workflow_count: number; execution_count: number; agent_count: number; success_rate: number; failed_runs: number; integration_count: number; recent_runs: Array<{ id: string; workflow_id: string; status: string; mode: string; created_at: string }> };
 
 type WorkflowTemplate = {
   id: string;
@@ -92,6 +94,7 @@ const navItems = [
 export default function DashboardPage() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [workflowsError, setWorkflowsError] = useState("");
   const [activeNav, setActiveNav] = useState("Overview");
   const [filter, setFilter] = useState("All workflows");
   const [search, setSearch] = useState("");
@@ -103,6 +106,12 @@ export default function DashboardPage() {
   const [deletingWorkflowId, setDeletingWorkflowId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [workspaceName, setWorkspaceName] = useState("Your workspace");
+  const [workspaceOptions, setWorkspaceOptions] = useState<WorkspaceOption[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
+  const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  const [metricsError, setMetricsError] = useState("");
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const [savingWorkflow, setSavingWorkflow] = useState(false);
   const [setupTemplate, setSetupTemplate] = useState<WorkflowTemplate | null>(null);
@@ -118,13 +127,18 @@ export default function DashboardPage() {
       try {
         const response = await fetch("/api/workflows", { cache: "no-store" });
         const result = await response.json();
+        if (response.status === 401) {
+          router.replace("/login?reason=session-expired&next=%2Fdashboard");
+          return;
+        }
         if (!response.ok) throw new Error(result.error || "Could not load your workflows.");
         if (cancelled) return;
+        setWorkflowsError("");
         setWorkspaceName(result.workspace?.name || "Your workspace");
         setWorkflows(Array.isArray(result.workflows) ? result.workflows : []);
       } catch (caught) {
         if (!cancelled) {
-          setNotice(caught instanceof Error ? caught.message : "Could not load your workflows.");
+          setWorkflowsError(caught instanceof Error ? caught.message : "Could not load your workflows.");
         }
       } finally {
         if (!cancelled) setLoadingWorkflows(false);
@@ -132,7 +146,58 @@ export default function DashboardPage() {
     }
     void loadWorkflows();
     return () => { cancelled = true; };
-  }, []);
+  }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWorkspaceOptions() {
+      try {
+        const response = await fetch("/api/workspaces", { cache: "no-store" });
+        const result = await response.json();
+        if (response.status === 401) {
+          router.replace("/login?reason=session-expired&next=%2Fdashboard");
+          return;
+        }
+        if (!response.ok) throw new Error(result.error || "Could not load workspaces.");
+        if (cancelled) return;
+        const options = Array.isArray(result.workspaces) ? result.workspaces as WorkspaceOption[] : [];
+        setWorkspaceOptions(options);
+        setActiveWorkspaceId(typeof result.active_workspace_id === "string" ? result.active_workspace_id : "");
+        const selected = options.find((workspace) => workspace.id === result.active_workspace_id);
+        if (selected) setWorkspaceName(selected.name);
+      } catch (caught) {
+        if (!cancelled) setNotice(caught instanceof Error ? caught.message : "Could not load workspaces.");
+      }
+    }
+    void loadWorkspaceOptions();
+    return () => { cancelled = true; };
+  }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDashboardMetrics() {
+      try {
+        const response = await fetch("/api/dashboards/metrics", { cache: "no-store" });
+        const result = await response.json();
+        if (response.status === 401) {
+          router.replace("/login?reason=session-expired&next=%2Fdashboard");
+          return;
+        }
+        if (response.status === 403) {
+          if (!cancelled) setMetricsError("Your workspace role does not include dashboard metrics access.");
+          return;
+        }
+        if (!response.ok) throw new Error(result.error || "Could not load dashboard metrics.");
+        if (!cancelled) setDashboardMetrics(result.metrics as DashboardMetrics);
+      } catch (caught) {
+        if (!cancelled) setMetricsError(caught instanceof Error ? caught.message : "Could not load dashboard metrics.");
+      } finally {
+        if (!cancelled) setMetricsLoading(false);
+      }
+    }
+    void loadDashboardMetrics();
+    return () => { cancelled = true; };
+  }, [router]);
 
   const visibleWorkflows = useMemo(() => workflows.filter((item) => {
     const matchesSearch = (item.name + " " + item.description + " " + item.category).toLowerCase().includes(search.toLowerCase());
@@ -273,18 +338,38 @@ export default function DashboardPage() {
   }
 
 
+  async function switchWorkspace(workspaceId: string) {
+    if (!workspaceId || workspaceId === activeWorkspaceId || switchingWorkspace) return;
+    setSwitchingWorkspace(true);
+    setNotice("");
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/switch`, { method: "POST" });
+      const result = await response.json();
+      if (response.status === 401) {
+        router.replace("/login?reason=session-expired&next=%2Fdashboard");
+        return;
+      }
+      if (!response.ok) throw new Error(result.error || "Could not switch workspaces.");
+      window.location.assign("/dashboard");
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "Could not switch workspaces.");
+    } finally {
+      setSwitchingWorkspace(false);
+    }
+  }
+
   return (
     <main className="app-shell dashboard-overview-page">
       <aside className="sidebar">
         <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark">a</span><span>Rexnora<span className="brand-period">.</span></span></Link>
-        <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
+        <div className="workspace-switch"><span className="workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>{switchingWorkspace ? "Switching…" : workspaceOptions.length ? "Current workspace" : "Loading workspaces…"}</small></span><select className="workspace-select" aria-label="Switch workspace" value={activeWorkspaceId} disabled={switchingWorkspace || workspaceOptions.length < 2} onChange={(event) => void switchWorkspace(event.target.value)}><option value="" disabled>Select workspace</option>{workspaceOptions.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
           {navItems.map((item) => <Link key={item.label} href={item.href} className={activeNav === item.label ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
         <button type="button" className="side-link" onClick={openCreateModal}><span className="side-icon">＋</span>Create workflow</button>
-        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
+        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace member</strong><small>Account</small></span><span className="switch-chevron">•••</span></button></div>
       </aside>
 
       <section className="dashboard-main">
@@ -302,25 +387,45 @@ export default function DashboardPage() {
                 <button type="button" onClick={() => openTemplateSetup(template)} disabled={savingWorkflow}>Set up template <span>↗</span></button>
               </article>)}
             </div>
-            <p className="template-note"><span>ⓘ</span> Templates create editable drafts. Live social, email and other integrations are not connected yet.</p>
+            <p className="template-note"><span>ⓘ</span> Templates create editable drafts. Connect providers and review each workflow before activation.</p>
           </section>
 
           {notice && <div className="notice-bar" role="status"><span>ⓘ</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
+          {metricsError && <div className="notice-bar" role="alert"><span>ⓘ</span>{metricsError}</div>}
 
           <div className="stats-grid">
-            <article className="stat-card"><div className="stat-heading">Total workflows <span className="stat-symbol">↗</span></div><div className="stat-number">{workflows.length.toString().padStart(2, "0")}<span className="stat-caption"> in workspace</span></div><div className="stat-bottom"><span className="stat-dot dot-lime" />Your automation library</div></article>
-            <article className="stat-card"><div className="stat-heading">Active workflows <span className="stat-symbol">◉</span></div><div className="stat-number">{workflows.filter((w) => w.status === "Active").length.toString().padStart(2, "0")}<span className="stat-caption"> enabled</span></div><div className="stat-bottom"><span className="stat-dot dot-green" />Ready when connected</div></article>
-            <article className="stat-card"><div className="stat-heading">Tasks processed <span className="stat-symbol">⌁</span></div><div className="stat-number">2,392<span className="stat-caption"> sample data</span></div><div className="stat-bottom"><span className="stat-dot dot-violet" />Illustrative dashboard metric</div></article>
-            <article className="stat-card"><div className="stat-heading">Time returned <span className="stat-symbol">◷</span></div><div className="stat-number">48.5<span className="stat-unit">h</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />Estimated sample data</div></article>
+            <article className="stat-card"><div className="stat-heading">Total workflows <span className="stat-symbol">↗</span></div><div className="stat-number">{loadingWorkflows ? "…" : workflowsError ? "—" : workflows.length.toString().padStart(2, "0")}<span className="stat-caption"> in workspace</span></div><div className="stat-bottom"><span className="stat-dot dot-lime" />Your automation library</div></article>
+            <article className="stat-card"><div className="stat-heading">Active workflows <span className="stat-symbol">◉</span></div><div className="stat-number">{loadingWorkflows ? "…" : workflowsError ? "—" : workflows.filter((w) => w.status === "Active").length.toString().padStart(2, "0")}<span className="stat-caption"> enabled</span></div><div className="stat-bottom"><span className="stat-dot dot-green" />Ready when connected</div></article>
+            <article className="stat-card"><div className="stat-heading">Workflow runs <span className="stat-symbol">⌁</span></div><div className="stat-number">{metricsLoading ? "…" : dashboardMetrics ? dashboardMetrics.execution_count.toLocaleString() : "—"}</div><div className="stat-bottom"><span className="stat-dot dot-violet" />Last 30 days</div></article>
+            <article className="stat-card"><div className="stat-heading">Success rate <span className="stat-symbol">◷</span></div><div className="stat-number">{metricsLoading ? "…" : dashboardMetrics ? dashboardMetrics.success_rate : "—"}<span className="stat-unit">%</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />{dashboardMetrics ? `${dashboardMetrics.failed_runs} failed runs in 30 days` : "Execution outcome data"}</div></article>
           </div>
+
+          <section className="recent-activity-panel" aria-labelledby="recent-activity-title">
+            <div className="recent-activity-heading">
+              <div><h2 id="recent-activity-title">Recent activity</h2><p>Latest workflow runs in the active workspace.</p></div>
+              <Link href="/dashboard/activity">View activity ↗</Link>
+            </div>
+            {metricsLoading && <div className="activity-empty" role="status">Loading recent activity…</div>}
+            {!metricsLoading && metricsError ? <div className="activity-empty" role="alert">{metricsError}</div> : !metricsLoading && dashboardMetrics?.recent_runs?.length ? <div className="activity-list">
+              {dashboardMetrics.recent_runs.map((run) => {
+                const workflowName = workflows.find((workflow) => workflow.id === run.workflow_id)?.name || "Workflow";
+                return <article className="activity-row" key={run.id}>
+                  <span className={"activity-status activity-" + run.status.toLowerCase()}><i /></span>
+                  <span className="activity-copy"><strong>{workflowName}</strong><small>{run.mode === "dry_run" ? "Safe test" : "Live execution"} · {run.status.replaceAll("_", " ")}</small></span>
+                  <time dateTime={run.created_at}>{new Date(run.created_at).toLocaleString()}</time>
+                </article>;
+              })}
+            </div> : !metricsLoading && !metricsError && <div className="activity-empty">No workflow runs recorded in this workspace yet.</div>}
+          </section>
 
           <div className="section-title-row" id="workflows"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>
           <div className="workflow-toolbar"><div className="filter-tabs">{["All workflows", "Active", "Draft", "Paused"].map((item) => <button key={item} className={filter === item ? "filter-tab active-filter" : "filter-tab"} onClick={() => setFilter(item)}>{item}{item === "All workflows" && <span>{workflows.length}</span>}</button>)}</div><label className="search-box"><span>⌕</span><input aria-label="Search workflows" placeholder="Search workflows..." value={search} onChange={(e) => setSearch(e.target.value)} /><kbd>⌘ K</kbd></label></div>
 
           <div className="workflow-table"><div className="table-header"><span>WORKFLOW</span><span>STATUS</span><span>RUNS</span><span>LAST UPDATED</span><span /></div>
             {loadingWorkflows && <div className="empty-state"><span>◷</span><strong>Loading your workflows…</strong><p>Connecting to your Rexnora workspace.</p></div>}
-            {!loadingWorkflows && visibleWorkflows.map((workflow) => <article className="workflow-row" key={workflow.id}><div className="workflow-name-cell"><span className={"workflow-app-icon " + workflow.tone}>{workflow.icon}</span><span className="workflow-name-copy"><strong>{workflow.name}</strong><small>{workflow.description || "No description yet"}</small></span></div><div><span className={"workflow-status status-" + workflow.status.toLowerCase()}><i />{workflow.status}</span></div><span className="run-count">{workflow.runs}</span><span className="updated-time">{workflow.updated}</span><div className="workflow-actions"><button className="row-menu" aria-label={"Workflow actions for " + workflow.name} aria-expanded={openMenuId === workflow.id} onClick={() => setOpenMenuId((current) => current === workflow.id ? null : workflow.id)}>{deletingWorkflowId === workflow.id ? "…" : "•••"}</button>{openMenuId === workflow.id && <div className="workflow-action-menu"><Link href={`/dashboard/workflows/${workflow.id}`} className="builder-action" onClick={() => setOpenMenuId(null)}>Open builder <span>↗</span></Link><button type="button" onClick={() => openEditModal(workflow)}>Edit details</button><button type="button" className="danger-action" onClick={() => void deleteWorkflow(workflow)}>Delete workflow</button></div>}</div></article>)}
-            {!loadingWorkflows && visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
+            {!loadingWorkflows && workflowsError && <div className="empty-state" role="alert"><span>!</span><strong>Could not load workflows</strong><p>{workflowsError}</p><button type="button" onClick={() => window.location.reload()}>Try again</button></div>}
+            {!loadingWorkflows && !workflowsError && visibleWorkflows.map((workflow) => <article className="workflow-row" key={workflow.id}><div className="workflow-name-cell"><span className={"workflow-app-icon " + workflow.tone}>{workflow.icon}</span><span className="workflow-name-copy"><strong>{workflow.name}</strong><small>{workflow.description || "No description yet"}</small></span></div><div><span className={"workflow-status status-" + workflow.status.toLowerCase()}><i />{workflow.status}</span></div><span className="run-count">{workflow.runs}</span><span className="updated-time">{workflow.updated}</span><div className="workflow-actions"><button className="row-menu" aria-label={"Workflow actions for " + workflow.name} aria-expanded={openMenuId === workflow.id} onClick={() => setOpenMenuId((current) => current === workflow.id ? null : workflow.id)}>{deletingWorkflowId === workflow.id ? "…" : "•••"}</button>{openMenuId === workflow.id && <div className="workflow-action-menu"><Link href={`/dashboard/workflows/${workflow.id}`} className="builder-action" onClick={() => setOpenMenuId(null)}>Open builder <span>↗</span></Link><button type="button" onClick={() => openEditModal(workflow)}>Edit details</button><button type="button" className="danger-action" onClick={() => void deleteWorkflow(workflow)}>Delete workflow</button></div>}</div></article>)}
+            {!loadingWorkflows && !workflowsError && visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
           </div>
           <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Rexnora database. Live workflow execution and connected services are still in development.</p></div>
         </div>
