@@ -162,33 +162,51 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         return NextResponse.json({ error: "Run a successful safe test of every registered step in this exact workflow version before activating it." }, { status: 409 });
       }
 
-      const providers = [...new Set(steps.map((step) => getWorkerProvider(step)).filter((provider): provider is string => Boolean(provider)))];
       const googleProducts: Record<string, string> = {
         gmail: "gmail", sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
         google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
       };
-      for (const provider of providers) {
+      for (const step of steps) {
+        const provider = getWorkerProvider(step);
+        if (!provider || provider === "rss_feed") continue;
+        if (!step.connectionId || !uuidPattern.test(step.connectionId)) {
+          return NextResponse.json({
+            error: "Select a verified account for every " + provider + " step before activation.",
+            code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED",
+            stepId: step.id,
+          }, { status: 409 });
+        }
         if (googleProducts[provider]) {
           const { data: connection, error } = await auth.supabase.from("google_connections")
-            .select("id,status").eq("workspace_id", candidate.workspace_id)
-            .eq("product", googleProducts[provider]).eq("status", "connected").limit(1).maybeSingle();
+            .select("id,status,last_test_status")
+            .eq("id", step.connectionId).eq("workspace_id", candidate.workspace_id)
+            .eq("provider", "google").eq("product", googleProducts[provider])
+            .eq("status", "connected").eq("last_test_status", "passed").maybeSingle();
           if (error) throw error;
-          if (!connection) return NextResponse.json({ error: "Connect and verify the " + provider + " integration before activating this workflow." }, { status: 409 });
+          if (!connection) return NextResponse.json({
+            error: "The selected " + provider + " account is not connected, verified, or owned by this workspace.",
+            code: "WORKSPACE_CONNECTION_NOT_VERIFIED",
+            stepId: step.id,
+          }, { status: 409 });
         } else {
           const { data: connection, error } = await auth.supabase.from("workspace_integrations")
-            .select("id,status,last_test_status").eq("workspace_id", candidate.workspace_id)
-            .eq("provider", provider).maybeSingle();
+            .select("id,status,last_test_status")
+            .eq("id", step.connectionId).eq("workspace_id", candidate.workspace_id)
+            .eq("provider", provider).eq("status", "connected").eq("last_test_status", "passed")
+            .maybeSingle();
           if (error) throw error;
-          if (!connection || connection.status !== "connected" || connection.last_test_status !== "passed") {
-            return NextResponse.json({ error: "Connect and successfully test the " + provider + " integration before activating this workflow." }, { status: 409 });
-          }
+          if (!connection) return NextResponse.json({
+            error: "The selected " + provider + " account is not connected, verified, or owned by this workspace.",
+            code: "WORKSPACE_CONNECTION_NOT_VERIFIED",
+            stepId: step.id,
+          }, { status: 409 });
         }
       }
 
       for (const step of steps) {
         const provider = getWorkerProvider(step);
         if (!provider) continue;
-        const { data: approval, error } = await auth.supabase.from("workspace_provider_operation_approvals")
+        const { data: approval, error } = await auth.supabase.from("workspace_provider_operation_approvals").
           .select("decision").eq("workspace_id", candidate.workspace_id)
           .eq("provider", provider).eq("node_id", step.nodeId).eq("operation_id", step.operationId)
           .order("decided_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle();
