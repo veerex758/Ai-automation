@@ -15,6 +15,8 @@ test("password recovery sends a non-enumerating reset response through the safe 
   assert.match(login, /resetPasswordForEmail/);
   assert.match(login, /auth\/callback\?next=\/auth\/update-password/);
   assert.match(login, /If an account exists for that email/);
+  assert.match(login, /auth\.resend/);
+  assert.match(login, /needsConfirmation/);
 });
 
 test("password update requires a valid authenticated recovery session", () => {
