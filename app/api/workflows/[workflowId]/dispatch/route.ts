@@ -56,6 +56,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { data: { user }, error: authError } = await userDb.auth.getUser();
     if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
 
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength > 64 * 1024 || new TextEncoder().encode(await request.clone().text()).byteLength > 64 * 1024) return privateJson({ error: "Dispatch request exceeds 64 KiB." }, { status: 413 });
     let body: unknown;
     try { body = await request.json(); } catch {
       return privateJson({ error: "Request body must be valid JSON." }, { status: 400 });
