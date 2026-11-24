@@ -48,8 +48,9 @@ test("signed webhook ingress queues durable work with a verified workspace actor
 
 test("webhook provisioning encrypts secrets and the builder makes activation explicit", () => {
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
-  assert.match(provision, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(provision, /CODED_SUPABASE_URL/);
+  assert.match(provision, /getAdminSupabaseConfig/);
+  assert.match(provision, /adminConfig\.serviceRoleKey/);
+  assert.match(provision, /adminConfig\.url/
   assert.match(builder, /Activate workflow/);
   assert.match(builder, /JSON\.stringify\(\{ status: "active" \}\)/);
   assert.match(builder, /signingSecret/);
