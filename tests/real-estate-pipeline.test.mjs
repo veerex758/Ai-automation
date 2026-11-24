@@ -173,3 +173,19 @@ test("follow-up worker rechecks timestamped consent before every customer email"
   assert.match(followups, /consent_text,consent_at/);
   assert.match(followups, /!lead\.consent_at \|\| !lead\.consent_text/);
 });
+
+
+test("public and manual intake require recorded channel consent before creating follow-up work", () => {
+  const enumIndex = intake.indexOf("const enumValue=");
+  const preferenceIndex = intake.indexOf("const contactPreference=enumValue");
+  assert.ok(enumIndex >= 0 && preferenceIndex > enumIndex);
+  assert.match(intake, /contactPreference==="whatsapp" && !\/whatsapp\/i\.test\(consentText\)/);
+  assert.match(intake, /!lead\.consent_at\|\|!lead\.consent_text/);
+  assert.match(manualLead, /contactPreference === "whatsapp" && !\/whatsapp\/i\.test\(consentText\)/);
+  assert.match(manualLead, /!lead\.consent_at \|\| !lead\.consent_text/);
+});
+
+test("Playbook policy validation evaluates all IF rules before CRM writes", () => {
+  assert.match(playbookDefinition, /\\.\\.\\.crmActions/);
+  assert.match(playbookDefinition, /Every deterministic Playbook rule must be evaluated before customer communication or CRM writes/);
+});
