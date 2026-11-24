@@ -132,16 +132,23 @@ async function approvedCredentials(
   provider: "gemini" | "resend",
   nodeId: "gemini" | "email",
   operationId: "qualify_real_estate_lead" | "send_email",
+  selectedConnectionId?: string,
+  requireSelectedConnection = false,
 ): Promise<CredentialResult> {
   const mapping = getWorkerOperationMapping({ kind: "action", nodeId, operationId });
   if (!mapping || mapping.provider !== provider) return { ok: false, code: "PROVIDER_OPERATION_NOT_REGISTERED" };
+  if (requireSelectedConnection && !selectedConnectionId) {
+    return { ok: false, code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED" };
+  }
 
-  const [{ data: integration, error: integrationError }, { data: approval, error: approvalError }] = await Promise.all([
-    db.from("workspace_integrations")
-      .select("id,status,last_test_status")
-      .eq("workspace_id", workspaceId)
-      .eq("provider", provider)
-      .maybeSingle(),
+  let integrationQuery = db.from("workspace_integrations")
+    .select("id,status,last_test_status")
+    .eq("workspace_id", workspaceId)
+    .eq("provider", provider);
+  if (selectedConnectionId) integrationQuery = integrationQuery.eq("id", selectedConnectionId);
+
+  const [connectionResult, approvalResult] = await Promise.all([
+    integrationQuery.order("created_at", { ascending: true }).limit(2),
     db.from("workspace_provider_operation_approvals")
       .select("decision")
       .eq("workspace_id", workspaceId)
@@ -153,8 +160,17 @@ async function approvedCredentials(
       .limit(1)
       .maybeSingle(),
   ]);
+  const integrations = connectionResult.data;
+  const integrationError = connectionResult.error;
+  const approval = approvalResult.data;
+  const approvalError = approvalResult.error;
   if (integrationError || approvalError) return { ok: false, code: "PROVIDER_READINESS_LOOKUP_FAILED" };
-  if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed") {
+  if (!integrations?.length) {
+    return { ok: false, code: provider.toUpperCase() + "_CONNECTION_NOT_VERIFIED" };
+  }
+  if (integrations.length > 1) return { ok: false, code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED" };
+  const integration = integrations[0];
+  if (integration.status !== "connected" || integration.last_test_status !== "passed") {
     return { ok: false, code: provider.toUpperCase() + "_CONNECTION_NOT_VERIFIED" };
   }
   if (approval?.decision !== "approved") return { ok: false, code: provider.toUpperCase() + "_OPERATION_NOT_APPROVED" };
@@ -355,8 +371,13 @@ async function sendAgentNotifications(
   claim: PipelineClaim,
   lead: LeadRow,
   qualification: Qualification,
+  selectedConnectionId?: string,
+  requireSelectedConnection = false,
 ) {
-  const configured = await approvedCredentials(db, claim.workspace_id, "resend", "email", "send_email");
+  const configured = await approvedCredentials(
+    db, claim.workspace_id, "resend", "email", "send_email",
+    selectedConnectionId, requireSelectedConnection,
+  );
   if (!configured.ok) return { ok: false as const, blocked: true, code: configured.code };
   const recipients = await workspaceNotificationRecipients(db, claim.workspace_id);
   if (!recipients.length) return { ok: false as const, blocked: true, code: "AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED" };
@@ -465,7 +486,13 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       qualificationDecisionId = gate.decisionId;
     }
 
-    const configured = await approvedCredentials(db, claim.workspace_id, "gemini", "gemini", "qualify_real_estate_lead");
+    const geminiStep = runtime.mode === "playbook"
+      ? runtime.steps?.find((step) => step.nodeId === "gemini" && step.operationId === "qualify_real_estate_lead")
+      : undefined;
+    const configured = await approvedCredentials(
+      db, claim.workspace_id, "gemini", "gemini", "qualify_real_estate_lead",
+      geminiStep?.connectionId, runtime.mode === "playbook",
+    );
     if (!configured.ok) {
       if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures) {
         const gate = await requestOrReadPlaybookDecision({
@@ -613,7 +640,13 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
     }
 
     try {
-      const notification = await sendAgentNotifications(db, claim, { ...lead, ...(qualification ? mergeQualification(lead, qualification) : {}) }, qualification);
+      const emailStep = runtime.mode === "playbook" && emailPolicy
+        ? runtime.steps?.find((step) => step.id === emailPolicy.stepId)
+        : undefined;
+      const notification = await sendAgentNotifications(
+        db, claim, { ...lead, ...(qualification ? mergeQualification(lead, qualification) : {}) },
+        qualification, emailStep?.connectionId, runtime.mode === "playbook",
+      );
       if (!notification.ok) {
         if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures && emailPolicy) {
           const gate = await requestOrReadPlaybookDecision({
