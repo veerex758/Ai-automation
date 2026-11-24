@@ -46,6 +46,7 @@ type LeadRow = {
   agent_notification_status: string;
   agent_notification_accepted_recipient_hashes: unknown;
   agent_notified_at: string | null;
+  assigned_agent_id?: string | null;
 };
 type Qualification = {
   transactionType: "buy" | "rent" | "invest" | "sell" | "unknown";
@@ -129,9 +130,9 @@ function makeNodeContext(credentials: Record<string, Record<string, string>>): N
 async function approvedCredentials(
   db: ServiceClient,
   workspaceId: string,
-  provider: "gemini" | "resend",
-  nodeId: "gemini" | "email",
-  operationId: "qualify_real_estate_lead" | "send_email",
+  provider: "gemini" | "resend" | "whatsapp_business",
+  nodeId: "gemini" | "email" | "whatsapp_business",
+  operationId: "qualify_real_estate_lead" | "send_email" | "send_template",
 ): Promise<CredentialResult> {
   const mapping = getWorkerOperationMapping({ kind: "action", nodeId, operationId });
   if (!mapping || mapping.provider !== provider) return { ok: false, code: "PROVIDER_OPERATION_NOT_REGISTERED" };
@@ -309,6 +310,114 @@ async function ensureQualificationActivity(db: ServiceClient, lead: LeadRow, wor
     details: { score, source: "gemini", numericScore: "deterministic" },
   });
   if (error) throw new Error("PIPELINE_ACTIVITY_WRITE_FAILED");
+}
+
+async function ensureBackOfficeTask(db: ServiceClient, lead: LeadRow, qualification: Qualification) {
+  const score = Number(lead.lead_score) || 0;
+  const dueInMs = score >= 80 ? 60 * 60 * 1000 : score >= 50 ? 24 * 60 * 60 * 1000 : 3 * 24 * 60 * 60 * 1000;
+  const priority = score >= 80 ? "urgent" : score >= 50 ? "high" : "normal";
+  const task = {
+    workspace_id: lead.workspace_id,
+    lead_id: lead.id,
+    assigned_agent_id: lead.assigned_agent_id ?? null,
+    task_type: "new_enquiry_review",
+    title: "Review new property enquiry · " + lead.full_name,
+    description: [
+      "Review the qualification summary and confirm the next action.",
+      "Lead score: " + score + "/100 (" + lead.lead_temperature + ")",
+      "Intent: " + lead.transaction_type + "; property: " + lead.property_type,
+      "Location: " + (lead.preferred_location ?? "Not supplied"),
+      "Qualification: " + qualification.summary,
+      "Missing details: " + (qualification.missingInformation.join(", ") || "None identified"),
+    ].join("\n"),
+    status: "open",
+    priority,
+    due_at: new Date(Date.now() + dueInMs).toISOString(),
+    idempotency_key: "real-estate-new-enquiry-review:" + lead.id,
+  };
+  const { error } = await db.from("real_estate_tasks").upsert(task, {
+    onConflict: "workspace_id,idempotency_key",
+    ignoreDuplicates: true,
+  });
+  if (error) throw new Error("BACK_OFFICE_TASK_WRITE_FAILED");
+}
+
+async function sendCustomerWhatsAppTemplate(
+  db: ServiceClient,
+  claim: PipelineClaim,
+  lead: LeadRow,
+) {
+  if (!lead.consent_to_contact || lead.contact_preference !== "whatsapp") {
+    return { ok: true as const, skipped: true as const };
+  }
+  if (!lead.phone || !/^\\+[1-9]\\d{7,14}$/.test(lead.phone.trim())) {
+    return { ok: false as const, blocked: true as const, code: "WHATSAPP_RECIPIENT_INVALID" };
+  }
+  const configured = await approvedCredentials(
+    db, claim.workspace_id, "whatsapp_business", "whatsapp_business", "send_template",
+  );
+  if (!configured.ok) return { ok: false as const, blocked: true as const, code: configured.code };
+  if (!/^[a-z0-9_]{1,512}$/.test(configured.credentials.templateName ?? "") ||
+      !/^[a-z]{2,3}_[A-Z]{2,3}$/.test(configured.credentials.templateLanguage ?? "")) {
+    return { ok: false as const, blocked: true as const, code: "WHATSAPP_TEMPLATE_CONFIGURATION_REQUIRED" };
+  }
+
+  const idempotencyKey = "real-estate-whatsapp:" + lead.id + ":1";
+  const { data: prior, error: priorError } = await db.from("real_estate_channel_deliveries")
+    .select("id,status,provider_message_id")
+    .eq("workspace_id", claim.workspace_id)
+    .eq("lead_id", lead.id)
+    .eq("channel", "whatsapp")
+    .eq("sequence", 1)
+    .maybeSingle();
+  if (priorError) return { ok: false as const, blocked: true as const, code: "WHATSAPP_DELIVERY_LOOKUP_FAILED" };
+  if (prior?.status === "accepted") return { ok: true as const, skipped: true as const };
+  if (prior) {
+    // WhatsApp Cloud API does not provide a general idempotency key. Never retry
+    // a request whose acceptance is uncertain; an operator must reconcile it.
+    return { ok: false as const, blocked: true as const, code: "WHATSAPP_DELIVERY_REQUIRES_RECONCILIATION" };
+  }
+  const { data: delivery, error: reserveError } = await db.from("real_estate_channel_deliveries")
+    .insert({
+      workspace_id: claim.workspace_id,
+      lead_id: lead.id,
+      channel: "whatsapp",
+      sequence: 1,
+      status: "sending",
+      idempotency_key: idempotencyKey,
+    })
+    .select("id")
+    .single();
+  if (reserveError || !delivery) {
+    return { ok: false as const, blocked: true as const, code: "WHATSAPP_DELIVERY_RESERVATION_FAILED" };
+  }
+  const operation = findOperation("whatsapp_business", "send_template", "action");
+  if (!operation) {
+    await db.from("real_estate_channel_deliveries").update({
+      status: "blocked", last_error_code: "WHATSAPP_OPERATION_NOT_REGISTERED", updated_at: new Date().toISOString(),
+    }).eq("id", delivery.id).eq("workspace_id", claim.workspace_id);
+    return { ok: false as const, blocked: true as const, code: "WHATSAPP_OPERATION_NOT_REGISTERED" };
+  }
+  try {
+    const context = makeNodeContext({ whatsapp_business: configured.credentials });
+    const result = await operation.run(context, { to: lead.phone.trim() }) as { messageId?: unknown };
+    if (typeof result.messageId !== "string" || !result.messageId) throw new Error("WHATSAPP_INVALID_RESPONSE");
+    const { error: updateError } = await db.from("real_estate_channel_deliveries").update({
+      status: "accepted",
+      provider_message_id: result.messageId,
+      accepted_at: new Date().toISOString(),
+      last_error_code: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", delivery.id).eq("workspace_id", claim.workspace_id).eq("status", "sending");
+    if (updateError) throw new Error("WHATSAPP_DELIVERY_LEDGER_UPDATE_FAILED");
+    return { ok: true as const, skipped: false as const };
+  } catch (error) {
+    const code = safeErrorCode(error, "WHATSAPP_DELIVERY_UNKNOWN");
+    await db.from("real_estate_channel_deliveries").update({
+      status: "unknown", last_error_code: code, updated_at: new Date().toISOString(),
+    }).eq("id", delivery.id).eq("workspace_id", claim.workspace_id).eq("status", "sending");
+    return { ok: false as const, blocked: true as const, code: "WHATSAPP_DELIVERY_REQUIRES_RECONCILIATION" };
+  }
 }
 
 async function ensureFollowupDrafts(db: ServiceClient, lead: LeadRow, qualification: Qualification) {
@@ -522,6 +631,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
   try {
     await ensureFollowupDrafts(db, lead, qualification);
     await ensureQualificationActivity(db, lead, claim.workspace_id, Number(lead.lead_score));
+    await ensureBackOfficeTask(db, lead, qualification);
   } catch (error) {
     const code = safeErrorCode(error, "LEAD_PIPELINE_PERSISTENCE_FAILED");
     await retryClaim(db, claim, lead, "pipeline", code, false);
@@ -651,6 +761,57 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       }
       await retryClaim(db, claim, lead, "notification", code, /CONNECTION_NOT_VERIFIED|NOT_APPROVED|CREDENTIALS|EMAIL_NOT_FOUND/.test(code));
       return "failed";
+    }
+  }
+
+  let whatsappSkipped = false;
+  if (lead.consent_to_contact && lead.contact_preference === "whatsapp") {
+    const whatsappPolicy = runtime.mode === "playbook"
+      ? getPlaybookPolicy(runtime, "whatsapp_business", "send_template")
+      : null;
+    if (runtime.mode === "playbook" && (!whatsappPolicy || whatsappPolicy.permission === "never" ||
+        !isPlaybookActionOnSelectedBranch(runtime, whatsappPolicy, ruleResults))) {
+      whatsappSkipped = true;
+      const { error: auditError } = await db.from("real_estate_lead_activities").insert({
+        workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+        activity_type: "lead.whatsapp_not_sent",
+        details: { reason: !whatsappPolicy ? "WHATSAPP_ACTION_NOT_CONFIGURED" : "WHATSAPP_ACTION_NOT_ALLOWED_BY_PLAYBOOK", workflowVersion: runtime.version },
+      });
+      if (auditError) throw new Error("WHATSAPP_SKIP_AUDIT_FAILED");
+    } else {
+      let whatsappDecisionId: string | undefined;
+      if (runtime.mode === "playbook" && whatsappPolicy) {
+        const gate = await requestOrReadPlaybookDecision({
+          db, lead, runtime, type: "action_approval", policy: whatsappPolicy,
+          reason: "The Playbook requires approval before sending the approved WhatsApp template to this customer.",
+          leaseToken: claim.lease_token,
+        });
+        if (gate.state === "pending") return "blocked";
+        if (gate.state === "denied") {
+          await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_WHATSAPP_ACTION_BLOCKED");
+          return "blocked";
+        }
+        whatsappDecisionId = gate.decisionId;
+      }
+      const sent = await sendCustomerWhatsAppTemplate(db, claim, lead);
+      if (!sent.ok) {
+        if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures && whatsappPolicy) {
+          const gate = await requestOrReadPlaybookDecision({
+            db, lead, runtime, type: "provider_failure", policy: whatsappPolicy,
+            nodeId: "whatsapp_business", operationId: "send_template",
+            reason: "WhatsApp delivery is blocked or uncertain: " + sent.code,
+            leaseToken: claim.lease_token,
+          });
+          if (gate.state === "pending") return "blocked";
+          if (gate.state === "denied") {
+            await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_WHATSAPP_PROVIDER_BLOCKED");
+            return "blocked";
+          }
+        }
+        await retryClaim(db, claim, lead, "pipeline", sent.code, true);
+        return "blocked";
+      }
+      await markPlaybookDecisionExecuted(db, lead, whatsappDecisionId);
     }
   }
 
