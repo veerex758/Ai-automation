@@ -24,7 +24,7 @@ test("Decision resolution requires execute permission and uses the atomic servic
 
 test("Inbox approval is not a direct provider execution and explicitly requeues work",()=>{
  assert.match(page,/Approve & resume/);
- assert.match(page,/credentials, consent, connection validation and idempotency/);
+ assert.match(page,/Credentials, consent, connection validation and idempotency/);
  assert.doesNotMatch(action,/send_email|fetch\("https?:/);
 });
 
