@@ -49,10 +49,14 @@ export async function GET() {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  try {
+    const { url, serviceRoleKey } = getAdminSupabaseConfig();
+    return createSupabaseClient(url, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    });
+  } catch {
+    throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
+  }
 }
 
 async function requireWorkspaceAdmin(supabase: Awaited<ReturnType<typeof createClient>>, workspaceId: string, userId: string) {
