@@ -34,7 +34,7 @@ export async function getWorkspacePermissions(
   if (!workspace || (workspace.owner_id !== userId && !member)) {
     return { role: null, customRoleId: null, permissions: {} };
   }
-  const role = workspace.owner_id === userId ? "owner" : member?.role ?? null;
+  const role = workspace.owner_id === userId ? "owner" : member?.role === "owner" ? null : member?.role ?? null;
   if (role === "owner" || role === "admin") {
     return { role, customRoleId: member?.custom_role_id ?? null, permissions: Object.fromEntries(WORKSPACE_PERMISSIONS.map((key) => [key, true])) as WorkspacePermissionMap };
   }
