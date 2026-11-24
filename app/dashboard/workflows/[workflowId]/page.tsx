@@ -15,7 +15,15 @@ type RegistryCatalog = { id: string; name: string; icon?: string; category?: str
 type NodeType = "trigger" | "action" | "condition";
 type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string>; registryNodeId?: string; registryOperationId?: string; registryInput?: Record<string, unknown>; position?: { x: number; y: number } };
 type WorkflowEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
-type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
+type PlaybookDefinition = {
+  schema: "rexnora.playbook";
+  schemaVersion: 1;
+  goal: { industry: "real_estate"; outcome: string };
+  rules: Array<{ id: string; nodeId: string; name: string; rationale: string }>;
+  actionPolicies: Array<{ stepId: string; nodeId: string; operationId: string; permission: "auto" | "ask_first" | "never" }>;
+  review: { confidenceThreshold: number; reviewMissingFields: boolean; reviewWhenNoRuleMatches: boolean; reviewProviderFailures: boolean };
+};
+type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[]; playbook?: PlaybookDefinition };
 type Workflow = { id: string; name: string; description: string; status: string; version: number };
 type WorkflowVersion = { version: number; created_at: string };
 
