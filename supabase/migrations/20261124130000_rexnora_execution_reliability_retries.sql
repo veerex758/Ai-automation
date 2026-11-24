@@ -49,7 +49,7 @@ begin
             and j.created_at < now() - interval '20 hours')
         ))
         or
-        (j.status in ('queued','retry_wait') and j.available_at <= now()
+        (j.status in ('queued','retry_wait','waiting') and j.available_at <= now()
           and j.execution_mode = 'live' and j.max_attempts > 1
           and j.created_at < now() - interval '20 hours')
       )
