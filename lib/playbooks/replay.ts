@@ -26,7 +26,7 @@ function resolveExpression(value: unknown, sample: Record<string, unknown>): { v
   if (!/^[a-zA-Z0-9_.-]{1,200}$/.test(expression)) return { value: undefined, missing: true };
   const path = expression.replace(/^trigger\.payload\./, "").replace(/^lead\./, "");
   const resolved = readPath(sample, path);
-  return { value: resolved, missing: resolved === undefined };
+  return { value: resolved, missing: resolved === undefined || resolved === null || resolved === "" };
 }
 
 function finiteConfidence(lead: Lead): number | null {
