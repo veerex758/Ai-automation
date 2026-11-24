@@ -806,7 +806,7 @@ export default function WorkflowBuilderPage() {
                 {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
               </div>
             </div>
-            <div className="canvas-footnote">Tap a node to select it; dragging also selects it. Use Fit and zoom to inspect the graph. The selected node's settings are below.</div>
+            <div className="canvas-footnote">Tap a node to select it; dragging also selects it. Use Fit and zoom to inspect the graph. The selected node&apos;s settings are below.</div>
           </div>
         </section>
 
@@ -836,7 +836,7 @@ export default function WorkflowBuilderPage() {
             <div className="panel-divider" />
             <section className="graph-connection-editor" aria-label="Node connections">
               <div className="config-section-title">Connections</div>
-              <p className="config-note">Start at this node's output and choose a destination. Regular nodes allow one Next connection; IF nodes allow one True and one False connection.</p>
+              <p className="config-note">Start at this node&apos;s output and choose a destination. Regular nodes allow one Next connection; IF nodes allow one True and one False connection.</p>
                {selectedNode.type === "condition" && <div className="branch-connection-status"><span className={(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "true") ? "branch-connected" : ""}>True: {(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "true") ? "connected" : "not connected"}</span><span className={(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "false") ? "branch-connected" : ""}>False: {(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "false") ? "connected" : "not connected"}</span></div>}
               {(definition.edges ?? []).filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).map((edge) => <div className="graph-edge-row" key={edge.id}><span><b>{edge.label === "next" ? "Next" : edge.label.toUpperCase()}</b> · {definition.nodes.find((node) => node.id === edge.source)?.title} → {definition.nodes.find((node) => node.id === edge.target)?.title}</span><button type="button" aria-label="Remove connection" onClick={() => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: (current.edges ?? []).filter((item) => item.id !== edge.id) })); }}>×</button></div>)}
               {selectedNode.type === "condition" && <><label htmlFor="connection-branch">Branch label</label><select id="connection-branch" value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value as "true" | "false" | "next")}><option value="true">True path</option><option value="false">False path</option></select></>}
