@@ -540,7 +540,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       assert.equal(pending.rowCount, 1);
       assert.equal(pending.rows[0].dispatch_status, "pending");
-      assert.equal(pending.rows[0].error_code, "TEST_FAILURE");
+      assert.equal(pending.rows[0].error_code, "PROVIDER_TRANSIENT_FAILURE");
       assert.equal(pending.rows[0].step_id, "step-a");
       const dispatched = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
       assert.equal(dispatched.rows[0].count, 1);
