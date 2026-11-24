@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const leadIds = (leads ?? []).map((lead) => lead.id);
     if (!leadIds.length) return NextResponse.json({ events: [], leadCount: 0 }, { headers });
 
-    const [activities, followups] = await Promise.all([
+    const [activities, followups, channelDeliveries, inspections, tasks] = await Promise.all([
       supabase.from("real_estate_lead_activities")
         .select("id,lead_id,activity_type,details,created_at")
         .eq("workspace_id", workspace.id).in("lead_id", leadIds)
@@ -40,8 +40,21 @@ export async function GET(request: NextRequest) {
         .select("id,lead_id,sequence,status,due_at,sent_at,last_error_code,attempt_count")
         .eq("workspace_id", workspace.id).in("lead_id", leadIds)
         .order("created_at", { ascending: false }).limit(100),
+      supabase.from("real_estate_channel_deliveries")
+        .select("id,lead_id,channel,status,provider_message_id,last_error_code,created_at,accepted_at")
+        .eq("workspace_id", workspace.id).in("lead_id", leadIds)
+        .order("created_at", { ascending: false }).limit(100),
+      supabase.from("real_estate_inspection_bookings")
+        .select("id,lead_id,property_id,agent_id,start_at,end_at,status,google_event_url,customer_invite_requested,last_error_code,created_at")
+        .eq("workspace_id", workspace.id).in("lead_id", leadIds)
+        .order("created_at", { ascending: false }).limit(100),
+      supabase.from("real_estate_tasks")
+        .select("id,lead_id,title,status,priority,due_at,completed_at,created_at")
+        .eq("workspace_id", workspace.id).in("lead_id", leadIds)
+        .order("created_at", { ascending: false }).limit(200),
     ]);
-    if (activities.error || followups.error) throw activities.error ?? followups.error;
+    const failedQuery = [activities, followups, channelDeliveries, inspections, tasks].find((result) => result.error);
+    if (failedQuery?.error) throw failedQuery.error;
 
     const leadById = new Map((leads ?? []).map((lead) => [lead.id, lead]));
     const events = (activities.data ?? []).map((event) => ({
@@ -63,9 +76,47 @@ export async function GET(request: NextRequest) {
       errorCode: item.last_error_code,
       attempts: item.attempt_count,
     }));
+    const channels = (channelDeliveries.data ?? []).map((item) => ({
+      id: item.id,
+      leadId: item.lead_id,
+      leadName: leadById.get(item.lead_id)?.full_name ?? "Enquiry",
+      channel: item.channel,
+      status: item.status,
+      providerMessageId: item.provider_message_id,
+      errorCode: item.last_error_code,
+      createdAt: item.created_at,
+      acceptedAt: item.accepted_at,
+    }));
+    const bookings = (inspections.data ?? []).map((item) => ({
+      id: item.id,
+      leadId: item.lead_id,
+      leadName: leadById.get(item.lead_id)?.full_name ?? "Enquiry",
+      propertyId: item.property_id,
+      agentId: item.agent_id,
+      startAt: item.start_at,
+      endAt: item.end_at,
+      status: item.status,
+      eventUrl: item.google_event_url,
+      customerInviteRequested: item.customer_invite_requested,
+      errorCode: item.last_error_code,
+    }));
+    const backOfficeTasks = (tasks.data ?? []).map((item) => ({
+      id: item.id,
+      leadId: item.lead_id,
+      leadName: leadById.get(item.lead_id)?.full_name ?? "Enquiry",
+      title: item.title,
+      status: item.status,
+      priority: item.priority,
+      dueAt: item.due_at,
+      completedAt: item.completed_at,
+      createdAt: item.created_at,
+    }));
     return NextResponse.json({
       events,
       delivery,
+      channels,
+      bookings,
+      tasks: backOfficeTasks,
       leadCount: leads?.length ?? 0,
       activityCount: events.length,
     }, { headers });
