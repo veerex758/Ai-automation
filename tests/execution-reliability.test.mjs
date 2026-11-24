@@ -39,8 +39,8 @@ test("live retries are restricted to the explicit safe-operation allowlist", () 
 });
 
 test("worker performs a bounded retry wake rather than unbounded polling", () => {
-  assert.match(worker, /for \(let pass = 0; pass < 3; pass\+\+\)/);
-  assert.match(worker, /pass === 0 \? 5000 : 10000/);
+  assert.match(worker, /for \(let pass = 0; pass < 25 && Date\.now\(\) < deadline; pass\+\+\)/);
+  assert.match(worker, /setTimeout\(resolve, 10_000\)/);
 });
 
 test("database retry classification and Resend idempotency window fail closed", () => {
