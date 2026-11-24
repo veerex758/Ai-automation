@@ -97,6 +97,15 @@ test("public and authenticated lead creation trigger the durable pipeline and re
   assert.match(manualLead, /ensureLeadSideEffects/);
 });
 
+test("both public-form and manual leads bind to the exact active Playbook version", () => {
+  for (const route of [intake, manualLead]) {
+    assert.match(route, /\.eq\("status",\s*"active"\)/);
+    assert.match(route, /schema:\s*"rexnora\.playbook"/);
+    assert.match(route, /workflow_id:\s*activePlaybook\?\.id\s*\?\?\s*null/);
+    assert.match(route, /playbook_version:\s*activePlaybook\?\.version\s*\?\?\s*null/);
+  }
+});
+
 test("scheduled workers are authenticated and remain behind explicit live-execution switches", () => {
   assert.match(pipelineWorker, /timingSafeEqual/);
   assert.match(pipelineWorker, /REAL_ESTATE_PIPELINE_ENABLED/);
