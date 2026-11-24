@@ -116,3 +116,16 @@ test("rejects Playbook rules that have no registered IF evaluator", () => {
   const result = validatePlaybookDefinition(valid, graph, missingEvaluator);
   assert.match(result.error, /backed by one registered IF evaluator/);
 });
+
+
+test("rejects Switch operations until the Playbook replay and worker support them", () => {
+  const switchSteps = [
+    steps[0],
+    steps[1],
+    { id: "route-switch", nodeId: "switch", operationId: "select_route", kind: "action", input: { value: "buy", cases: [{ value: "buy", route: "buy" }] } },
+    steps[2],
+    steps[3],
+  ];
+  const result = validatePlaybookDefinition(valid, graph, switchSteps);
+  assert.match(result.error, /Unsupported action: switch\.select_route/);
+});
