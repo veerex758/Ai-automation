@@ -25,7 +25,7 @@ const PROVIDER_FIELDS: Record<WorkspaceCredentialProvider, readonly string[]> = 
   perplexity: ["apiKey"],
   discord: ["botToken"],
   telegram: ["botToken"],
-  whatsapp_business: ["accessToken", "phoneNumberId"],
+  whatsapp_business: ["accessToken", "phoneNumberId", "templateName", "templateLanguage"],
   sendgrid: ["apiKey", "fromEmail"],
   mailgun: ["apiKey", "domain", "fromEmail"],
   postmark: ["serverToken", "fromEmail"],

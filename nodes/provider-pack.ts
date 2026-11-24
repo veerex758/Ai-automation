@@ -179,6 +179,58 @@ export const providerPack: NodeDefinition[] = [
         if (typeof body.id !== "string") throw new Error("WHATSAPP_INVALID_RESPONSE");
         return { phoneNumberId: body.id, ...(typeof body.display_phone_number === "string" ? { displayPhoneNumber: body.display_phone_number } : {}), ...(typeof body.verified_name === "string" ? { verifiedName: body.verified_name } : {}) };
       },
+    }, {
+      id: "send_template", name: "Send approved template",
+      description: "Sends a Meta-approved WhatsApp message template. Use this for business-initiated messages and whenever the 24-hour customer-service window is closed.",
+      inputSchema: z.object({
+        to: z.string().regex(/^\+[1-9]\d{7,14}$/),
+        templateName: z.string().trim().regex(/^[a-z0-9_]{1,512}$/).optional(),
+        language: z.string().trim().regex(/^[a-z]{2,3}_[A-Z]{2,3}$/).optional(),
+        bodyParameters: z.array(z.string().max(1024)).max(20).default([]),
+      }).strict(),
+      outputSchema: z.object({ messageId: z.string(), templateName: z.string(), language: z.string() }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({
+          to: z.string().regex(/^\+[1-9]\d{7,14}$/),
+          templateName: z.string().trim().regex(/^[a-z0-9_]{1,512}$/).optional(),
+          language: z.string().trim().regex(/^[a-z]{2,3}_[A-Z]{2,3}$/).optional(),
+          bodyParameters: z.array(z.string().max(1024)).max(20).default([]),
+        }).strict().parse(raw);
+        const configuredName = input.templateName ?? ctx.credentials.whatsapp_business?.templateName;
+        const configuredLanguage = input.language ?? ctx.credentials.whatsapp_business?.templateLanguage;
+        if (typeof configuredName !== "string" || !/^[a-z0-9_]{1,512}$/.test(configuredName)) {
+          throw new Error("WHATSAPP_TEMPLATE_CONFIGURATION_REQUIRED");
+        }
+        if (typeof configuredLanguage !== "string" || !/^[a-z]{2,3}_[A-Z]{2,3}$/.test(configuredLanguage)) {
+          throw new Error("WHATSAPP_TEMPLATE_LANGUAGE_REQUIRED");
+        }
+        const token = secret(ctx, "whatsapp_business", "accessToken");
+        const phone = secret(ctx, "whatsapp_business", "phoneNumberId");
+        const template: Record<string, unknown> = {
+          name: configuredName,
+          language: { code: configuredLanguage },
+        };
+        if (input.bodyParameters.length) {
+          template.components = [{
+            type: "body",
+            parameters: input.bodyParameters.map((value) => ({ type: "text", text: value })),
+          }];
+        }
+        const body = await call(ctx, "whatsapp_business", {
+          url: "https://graph.facebook.com/v22.0/" + encodeURIComponent(phone) + "/messages",
+          method: "POST",
+          headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+          body: {
+            messaging_product: "whatsapp",
+            to: input.to.replace(/^\+/, ""),
+            type: "template",
+            template,
+          },
+        });
+        const message = (body.messages as any[] | undefined)?.[0];
+        if (typeof message?.id !== "string") throw new Error("WHATSAPP_INVALID_RESPONSE");
+        return { messageId: message.id, templateName: configuredName, language: configuredLanguage };
+      },
     }],
   }),
   actionNode({
