@@ -4,5 +4,13 @@
       "path": "/api/internal/scheduler",
       "schedule": "0 9 * * *"
     }
-  ]
+  ],
+  "schedules": {
+    "durable-worker-recovery": {
+      "schedule": "*/15 * * * *",
+      "path": "/api/internal/worker",
+      "requestMethod": "POST",
+      "timezone": "UTC"
+    }
+  }
 }
