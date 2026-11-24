@@ -54,9 +54,11 @@ export async function POST(request: NextRequest) {
     const graph = validateDefinition(stored);
     if (!graph.definition) return NextResponse.json({ error: "The saved Playbook graph needs repair before replay.", detail: graph.error }, { status: 422, headers });
     const plan = validateRegisteredSteps(stored.steps);
-    if (!plan.steps) return NextResponse.json({ error: "The saved registered operations need repair before replay.", detail: plan.error }, { status: 422, headers });
-    const checkedPlaybook = validatePlaybookDefinition(stored.playbook, graph.definition, plan.steps);
-    if (!checkedPlaybook.playbook) return NextResponse.json({ error: "The saved Playbook policy needs repair before replay.", detail: checkedPlaybook.error }, { status: 422, headers });
+    const registeredSteps = plan.steps;
+    if (!registeredSteps) return NextResponse.json({ error: "The saved registered operations need repair before replay.", detail: plan.error }, { status: 422, headers });
+    const checkedPlaybook = validatePlaybookDefinition(stored.playbook, graph.definition, registeredSteps);
+    const playbook = checkedPlaybook.playbook;
+    if (!playbook) return NextResponse.json({ error: "The saved Playbook policy needs repair before replay.", detail: checkedPlaybook.error }, { status: 422, headers });
 
     const { data: leads, error: leadsError } = await supabase.from("real_estate_leads")
       .select("id,full_name,source,transaction_type,property_type,preferred_location,budget_min,budget_max,currency,timeframe,readiness,main_concern,lead_score,qualification,raw_enquiry,created_at")
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
     if (leadsError) throw leadsError;
     if (!leads || leads.length !== input.leadIds.length) return NextResponse.json({ error: "One or more selected enquiries are unavailable in this workspace." }, { status: 404, headers });
 
-    const results = leads.map((lead) => replayPlaybookAgainstLead(checkedPlaybook.playbook, plan.steps, lead));
+    const results = leads.map((lead) => replayPlaybookAgainstLead(playbook, registeredSteps, lead));
     return NextResponse.json({
       safePreview: true,
       sideEffects: false,
