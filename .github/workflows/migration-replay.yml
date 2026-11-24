@@ -45,6 +45,19 @@ jobs:
       - name: Run database transaction tests (pgTAP)
         run: supabase test db --local
 
+      - name: Export local Supabase API credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status --output env | sed -n 's/^API_URL=/export API_URL=/p; s/^SERVICE_ROLE_KEY=/export SERVICE_ROLE_KEY=/p')"
+          test -n "${API_URL:-}"
+          test -n "${SERVICE_ROLE_KEY:-}"
+          echo "API_URL=${API_URL}" >> "$GITHUB_ENV"
+          echo "SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}" >> "$GITHUB_ENV"
+
+      - name: Exercise concurrent webhook claims against local Postgres
+        run: node --test tests/billing-webhook-claims.integration.test.mjs
+
       - name: Verify local migration inventory
         shell: bash
         run: |
