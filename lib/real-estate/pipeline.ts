@@ -475,7 +475,11 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
           leaseToken: claim.lease_token,
         });
         if (gate.state === "pending") return "blocked";
-        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_PROVIDER_BLOCKED");
+        if (gate.state === "denied") {
+          await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_PROVIDER_BLOCKED");
+          return "blocked";
+        }
+        await retryClaim(db, claim, lead, "qualification", configured.code, true);
         return "blocked";
       }
       await retryClaim(db, claim, lead, "qualification", configured.code, true);
@@ -503,8 +507,12 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
           leaseToken: claim.lease_token,
         });
         if (gate.state === "pending") return "blocked";
-        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_PROVIDER_BLOCKED");
-        return "blocked";
+        if (gate.state === "denied") {
+          await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_PROVIDER_BLOCKED");
+          return "blocked";
+        }
+        await retryClaim(db, claim, lead, "qualification", code, false);
+        return "failed";
       }
       await retryClaim(db, claim, lead, "qualification", code, false);
       return "failed";
@@ -614,8 +622,12 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
             leaseToken: claim.lease_token,
           });
           if (gate.state === "pending") return "blocked";
-          await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_EMAIL_PROVIDER_BLOCKED");
-          return "blocked";
+          if (gate.state === "denied") {
+            await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_EMAIL_PROVIDER_BLOCKED");
+            return "blocked";
+          }
+          await retryClaim(db, claim, lead, "notification", notification.code, notification.blocked);
+          return notification.blocked ? "blocked" : "failed";
         }
         await retryClaim(db, claim, lead, "notification", notification.code, notification.blocked);
         return notification.blocked ? "blocked" : "failed";
@@ -630,8 +642,12 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
           leaseToken: claim.lease_token,
         });
         if (gate.state === "pending") return "blocked";
-        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_EMAIL_PROVIDER_BLOCKED");
-        return "blocked";
+        if (gate.state === "denied") {
+          await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_EMAIL_PROVIDER_BLOCKED");
+          return "blocked";
+        }
+        await retryClaim(db, claim, lead, "notification", code, /CONNECTION_NOT_VERIFIED|NOT_APPROVED|CREDENTIALS|EMAIL_NOT_FOUND/.test(code));
+        return "failed";
       }
       await retryClaim(db, claim, lead, "notification", code, /CONNECTION_NOT_VERIFIED|NOT_APPROVED|CREDENTIALS|EMAIL_NOT_FOUND/.test(code));
       return "failed";
