@@ -6,12 +6,19 @@ import { scoreRealEstateLead, type RealEstateLeadInput } from "@/lib/real-estate
 import { findOperation } from "@/nodes/registry";
 import { getWorkerOperationMapping } from "@/lib/workflows/worker-operation-map";
 import type { NodeContext } from "@/nodes/types";
+import {
+  getPlaybookPolicy, isPlaybookActionOnSelectedBranch, loadPlaybookRuntime,
+  markPlaybookDecisionExecuted, pausePlaybookLead, requestOrReadPlaybookDecision,
+} from "@/lib/playbooks/runtime";
+import { replayPlaybookAgainstLead } from "@/lib/playbooks/replay";
 
 type ServiceClient = ReturnType<typeof createRealEstateServiceClient>;
 type PipelineClaim = { lead_id: string; workspace_id: string; lease_token: string };
 type LeadRow = {
   id: string;
   workspace_id: string;
+  workflow_id: string | null;
+  playbook_version: number | null;
   full_name: string;
   email: string | null;
   phone: string | null;
@@ -56,6 +63,7 @@ type Qualification = {
   missingInformation: string[];
   suggestedReply: string;
   summary: string;
+  confidence?: number;
   followupMessages: Array<{ subject: string; message: string }>;
   inputTokens?: number;
   outputTokens?: number;
@@ -413,14 +421,63 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
     .maybeSingle();
   if (error || !leadData) throw new Error("PIPELINE_LEAD_LOOKUP_FAILED");
   let lead: LeadRow = leadData;
+  const runtime = await loadPlaybookRuntime(db, lead);
+
+  if (runtime.mode === "invalid") {
+    await pausePlaybookLead(db, lead, claim.lease_token, runtime.reason ?? "PLAYBOOK_VERSION_INVALID");
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.playbook_blocked",
+      details: { workflowId: lead.workflow_id, workflowVersion: lead.playbook_version, reason: runtime.reason ?? "PLAYBOOK_VERSION_INVALID" },
+    });
+    return "blocked";
+  }
+
+  const geminiPolicy = runtime.mode === "playbook"
+    ? getPlaybookPolicy(runtime, "gemini", "qualify_real_estate_lead")
+    : null;
+  if (runtime.mode === "playbook" && !geminiPolicy) {
+    await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_POLICY_MISSING");
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.playbook_blocked",
+      details: { workflowId: runtime.workflowId, workflowVersion: runtime.version, reason: "PLAYBOOK_GEMINI_POLICY_MISSING" },
+    });
+    return "blocked";
+  }
 
   let qualification = lead.qualification_status === "succeeded"
     ? lead.qualification as Qualification
     : null;
-
   if (!qualification) {
+    let qualificationDecisionId: string | undefined;
+    if (runtime.mode === "playbook" && geminiPolicy) {
+      const gate = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "action_approval", policy: geminiPolicy,
+        reason: "The Playbook requires approval before Gemini qualifies this enquiry.",
+        leaseToken: claim.lease_token,
+      });
+      if (gate.state === "pending") return "blocked";
+      if (gate.state === "denied") {
+        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_ACTION_BLOCKED");
+        return "blocked";
+      }
+      qualificationDecisionId = gate.decisionId;
+    }
+
     const configured = await approvedCredentials(db, claim.workspace_id, "gemini", "gemini", "qualify_real_estate_lead");
     if (!configured.ok) {
+      if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures) {
+        const gate = await requestOrReadPlaybookDecision({
+          db, lead, runtime, type: "provider_failure", policy: geminiPolicy,
+          nodeId: "gemini", operationId: "qualify_real_estate_lead",
+          reason: "Gemini qualification is blocked: " + configured.code,
+          leaseToken: claim.lease_token,
+        });
+        if (gate.state === "pending") return "blocked";
+        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_PROVIDER_BLOCKED");
+        return "blocked";
+      }
       await retryClaim(db, claim, lead, "qualification", configured.code, true);
       return "blocked";
     }
@@ -434,9 +491,21 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       qualification = await operation.run(context, { leadData: qualificationInput(lead) }) as Qualification;
       const merged = mergeQualification(lead, qualification);
       await updateClaim(db, claim, merged);
+      await markPlaybookDecisionExecuted(db, lead, qualificationDecisionId);
       lead = { ...lead, ...merged };
     } catch (error) {
       const code = safeErrorCode(error, "GEMINI_QUALIFICATION_FAILED");
+      if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures) {
+        const gate = await requestOrReadPlaybookDecision({
+          db, lead, runtime, type: "provider_failure", policy: geminiPolicy,
+          nodeId: "gemini", operationId: "qualify_real_estate_lead",
+          reason: "Gemini qualification failed: " + code,
+          leaseToken: claim.lease_token,
+        });
+        if (gate.state === "pending") return "blocked";
+        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_GEMINI_PROVIDER_BLOCKED");
+        return "blocked";
+      }
       await retryClaim(db, claim, lead, "qualification", code, false);
       return "failed";
     }
@@ -451,15 +520,119 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
     return "failed";
   }
 
-  if (lead.agent_notification_status !== "accepted") {
+  let ruleResults: Array<{ nodeId: string; route: string | null }> = [];
+  if (runtime.mode === "playbook" && runtime.definition && runtime.steps) {
+    const replay = replayPlaybookAgainstLead(runtime.definition, runtime.steps, lead);
+    ruleResults = replay.rules.map((rule) => ({ nodeId: rule.nodeId, route: rule.route }));
+    const { data: existingEvaluation, error: lookupError } = await db.from("real_estate_lead_activities")
+      .select("id").eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id)
+      .eq("activity_type", "lead.playbook_rules_evaluated")
+      .contains("details", { workflowVersion: runtime.version }).limit(1).maybeSingle();
+    if (lookupError) throw new Error("PLAYBOOK_RULE_AUDIT_LOOKUP_FAILED");
+    if (!existingEvaluation) {
+      const { error: eventError } = await db.from("real_estate_lead_activities").insert({
+        workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+        activity_type: "lead.playbook_rules_evaluated",
+        details: {
+          workflowId: runtime.workflowId,
+          workflowVersion: runtime.version,
+          confidence: replay.confidence,
+          confidenceThreshold: replay.confidenceThreshold,
+          matchedRules: replay.matchedRules,
+          rules: replay.rules.map((rule) => ({ id: rule.id, nodeId: rule.nodeId, name: rule.name, outcome: rule.outcome, reason: rule.reason })),
+          reviewReasons: replay.reviewReasons,
+        },
+      });
+      if (eventError) throw new Error("PLAYBOOK_RULE_AUDIT_WRITE_FAILED");
+    }
+    if (replay.requiresReview) {
+      const gate = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "qualification_review",
+        reason: replay.reviewReasons.join(" ") || "This enquiry needs a human review before the next action.",
+        leaseToken: claim.lease_token,
+      });
+      if (gate.state === "pending") return "blocked";
+      if (gate.state === "denied") {
+        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_QUALIFICATION_REVIEW_REJECTED");
+        return "blocked";
+      }
+      await markPlaybookDecisionExecuted(db, lead, gate.decisionId);
+    }
+  }
+
+  let notificationSkipped = false;
+  let notificationDecisionId: string | undefined;
+  let emailPolicy = runtime.mode === "playbook" ? getPlaybookPolicy(runtime, "email", "send_email") : null;
+  if (runtime.mode === "playbook") {
+    if (!emailPolicy || emailPolicy.permission === "never" ||
+        !isPlaybookActionOnSelectedBranch(runtime, emailPolicy, ruleResults)) {
+      notificationSkipped = true;
+      await updateClaim(db, claim, { agent_notification_status: "not_required", agent_notification_error_code: null });
+      const { data: priorSkip } = await db.from("real_estate_lead_activities").select("id")
+        .eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id)
+        .eq("activity_type", "lead.playbook_action_skipped")
+        .contains("details", { workflowVersion: runtime.version, operationId: "send_email" }).limit(1).maybeSingle();
+      if (!priorSkip) {
+        await db.from("real_estate_lead_activities").insert({
+          workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+          activity_type: "lead.playbook_action_skipped",
+          details: {
+            workflowVersion: runtime.version, stepId: emailPolicy?.stepId ?? null,
+            nodeId: "email", operationId: "send_email",
+            permission: emailPolicy?.permission ?? "not_configured",
+            reason: !emailPolicy ? "No agency email action is configured." :
+              emailPolicy.permission === "never" ? "Action is disabled by Playbook policy." :
+              "The selected deterministic rule branch does not include this action.",
+          },
+        });
+      }
+    }
+  }
+
+  if (!notificationSkipped && lead.agent_notification_status !== "accepted") {
+    if (runtime.mode === "playbook" && emailPolicy) {
+      const gate = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "action_approval", policy: emailPolicy,
+        reason: "The Playbook requires approval before sending the agency notification.",
+        leaseToken: claim.lease_token,
+      });
+      if (gate.state === "pending") return "blocked";
+      if (gate.state === "denied") {
+        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_EMAIL_ACTION_BLOCKED");
+        return "blocked";
+      }
+      notificationDecisionId = gate.decisionId;
+    }
+
     try {
       const notification = await sendAgentNotifications(db, claim, { ...lead, ...(qualification ? mergeQualification(lead, qualification) : {}) }, qualification);
       if (!notification.ok) {
+        if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures && emailPolicy) {
+          const gate = await requestOrReadPlaybookDecision({
+            db, lead, runtime, type: "provider_failure", policy: emailPolicy,
+            reason: "Agency notification is blocked: " + notification.code,
+            leaseToken: claim.lease_token,
+          });
+          if (gate.state === "pending") return "blocked";
+          await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_EMAIL_PROVIDER_BLOCKED");
+          return "blocked";
+        }
         await retryClaim(db, claim, lead, "notification", notification.code, notification.blocked);
         return notification.blocked ? "blocked" : "failed";
       }
+      await markPlaybookDecisionExecuted(db, lead, notificationDecisionId);
     } catch (error) {
       const code = safeErrorCode(error, "AGENT_NOTIFICATION_FAILED");
+      if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures && emailPolicy) {
+        const gate = await requestOrReadPlaybookDecision({
+          db, lead, runtime, type: "provider_failure", policy: emailPolicy,
+          reason: "Agency notification failed: " + code,
+          leaseToken: claim.lease_token,
+        });
+        if (gate.state === "pending") return "blocked";
+        await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_EMAIL_PROVIDER_BLOCKED");
+        return "blocked";
+      }
       await retryClaim(db, claim, lead, "notification", code, /CONNECTION_NOT_VERIFIED|NOT_APPROVED|CREDENTIALS|EMAIL_NOT_FOUND/.test(code));
       return "failed";
     }
@@ -472,9 +645,9 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
     pipeline_lease_until: null,
     pipeline_next_attempt_at: new Date().toISOString(),
     qualification_status: "succeeded",
-    agent_notification_status: "accepted",
+    agent_notification_status: notificationSkipped ? "not_required" : "accepted",
     agent_notification_error_code: null,
-    agent_notified_at: lead.agent_notified_at ?? new Date().toISOString(),
+    agent_notified_at: notificationSkipped ? lead.agent_notified_at : (lead.agent_notified_at ?? new Date().toISOString()),
   });
   return "completed";
 }
