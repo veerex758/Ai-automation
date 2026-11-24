@@ -51,7 +51,7 @@ test("Stripe recurring webhook verifies signature and processes invoice paid, fa
 test("Paystack recurring setup requires authenticated manager and encrypted reusable authorization",()=>{
  assert.match(paystackAuthorize,/canManageWorkspaceBilling/);
  assert.match(paystackAuthorize,/recurring_setup:true/);
- assert.ok(paystackWebhook.includes("recurringAuthorization?.reusable!==true"));
+ assert.match(paystackWebhook,/!recurringAuthorization\?\.authorization_code\|\|recurringAuthorization\.reusable!==true/);
  assert.match(paystackWebhook,/encryptWebhookSecret/);
  assert.match(paystackWebhook,/paystack_authorization_code_enc/);
 });
