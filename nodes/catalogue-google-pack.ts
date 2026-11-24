@@ -85,7 +85,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
     scope: "https://www.googleapis.com/auth/calendar.events.owned",
     description: "Lists events and creates new events on Google Calendars the connected user owns. Requires explicit calendar.events.owned consent.",
     input: z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), timeMin: z.string().datetime().optional(), timeMax: z.string().datetime().optional(), maxResults: z.number().int().min(1).max(100).default(20) }).strict(),
-    output: z.object({ events: z.array(z.object({ id: z.string(), summary: z.string().optional(), start: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict()).max(100) }).strict(),
+    output: z.object({ events: z.array(z.object({ id: z.string(), summary: z.string().optional(), start: z.unknown().optional(), end: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict()).max(100) }).strict(),
     async run(ctx, input) {
       const url = new URL("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId ?? "primary") + "/events");
       url.searchParams.set("maxResults", String(input.maxResults ?? 20));
@@ -93,7 +93,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       if (input.timeMax) url.searchParams.set("timeMax", input.timeMax);
       const body = await get(ctx, "google_calendar", url.toString());
       const events = Array.isArray(body.items) ? body.items.flatMap((item: any) => typeof item?.id === "string"
-        ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
+        ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(item.end !== undefined ? { end: item.end } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
       return { events: events.slice(0, input.maxResults ?? 20) };
     },
     additionalActions: [{
@@ -120,6 +120,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         endDateTime: z.string().datetime({ offset: true }),
         timeZone: z.string().trim().min(1).max(100).optional(),
         attendeeEmails: z.array(z.string().email()).max(25).optional(),
+        eventId: z.string().regex(/^[a-v0-9]{5,1024}$/).optional(),
         sendUpdates: z.enum(["all", "externalOnly", "none"]).default("none"),
       }).strict(),
       outputSchema: z.object({
@@ -140,6 +141,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
           endDateTime: z.string().datetime({ offset: true }),
           timeZone: z.string().trim().min(1).max(100).optional(),
           attendeeEmails: z.array(z.string().email()).max(25).optional(),
+          eventId: z.string().regex(/^[a-v0-9]{5,1024}$/).optional(),
           sendUpdates: z.enum(["all", "externalOnly", "none"]).default("none"),
         }).strict().parse(raw);
         if (Date.parse(input.endDateTime) <= Date.parse(input.startDateTime)) {
@@ -148,6 +150,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         const url = new URL("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId) + "/events");
         url.searchParams.set("sendUpdates", input.sendUpdates);
         const event = {
+          ...(input.eventId ? { id: input.eventId } : {}),
           summary: input.summary,
           ...(input.description ? { description: input.description } : {}),
           ...(input.location ? { location: input.location } : {}),
@@ -155,7 +158,16 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
           end: { dateTime: input.endDateTime, ...(input.timeZone ? { timeZone: input.timeZone } : {}) },
           ...(input.attendeeEmails?.length ? { attendees: input.attendeeEmails.map((email) => ({ email })) } : {}),
         };
-        const body = await post(ctx, "google_calendar", url.toString(), event);
+        let body: Record<string, unknown>;
+        try {
+          body = await post(ctx, "google_calendar", url.toString(), event);
+        } catch (error) {
+          // A deterministic event ID lets a retry reconcile a create whose
+          // response was lost after Google accepted it.
+          const message = error instanceof Error ? error.message : "";
+          if (!input.eventId || !/409|ALREADY_EXISTS|CONFLICT/.test(message)) throw error;
+          body = await get(ctx, "google_calendar", url.toString().replace(/\\/$/, "") + "/" + encodeURIComponent(input.eventId));
+        }
         if (typeof body.id !== "string") throw new Error("GOOGLE_CALENDAR_INVALID_RESPONSE");
         return {
           id: body.id,
