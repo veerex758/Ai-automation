@@ -85,15 +85,17 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
     scope: "https://www.googleapis.com/auth/calendar.events.owned",
     description: "Lists events and creates new events on Google Calendars the connected user owns. Requires explicit calendar.events.owned consent.",
     input: z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), timeMin: z.string().datetime().optional(), timeMax: z.string().datetime().optional(), maxResults: z.number().int().min(1).max(100).default(20) }).strict(),
-    output: z.object({ events: z.array(z.object({ id: z.string(), summary: z.string().optional(), start: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict()).max(100) }).strict(),
+    output: z.object({ events: z.array(z.object({ id: z.string(), summary: z.string().optional(), start: z.unknown().optional(), end: z.unknown().optional(), status: z.string().optional(), transparency: z.string().optional(), htmlLink: z.string().url().optional() }).strict()).max(100) }).strict(),
     async run(ctx, input) {
       const url = new URL("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId ?? "primary") + "/events");
       url.searchParams.set("maxResults", String(input.maxResults ?? 20));
+      url.searchParams.set("singleEvents", "true");
+      url.searchParams.set("orderBy", "startTime");
       if (input.timeMin) url.searchParams.set("timeMin", input.timeMin);
       if (input.timeMax) url.searchParams.set("timeMax", input.timeMax);
       const body = await get(ctx, "google_calendar", url.toString());
       const events = Array.isArray(body.items) ? body.items.flatMap((item: any) => typeof item?.id === "string"
-        ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
+        ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(item.end !== undefined ? { end: item.end } : {}), ...(typeof item.status === "string" ? { status: item.status } : {}), ...(typeof item.transparency === "string" ? { transparency: item.transparency } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
       return { events: events.slice(0, input.maxResults ?? 20) };
     },
     additionalActions: [{
