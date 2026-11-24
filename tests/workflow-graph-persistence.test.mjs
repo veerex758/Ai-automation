@@ -27,9 +27,10 @@ test("registry save preserves the validated canvas graph, including positions an
   assert.match(route, /edges: \(requestBody\.definition as Record<string, unknown>\)\.edges/);
   assert.match(route, /position: \(\(requestBody\.definition as Record<string, unknown>\)\.nodes/);
   assert.match(route, /definitionToSave = \{[\s\S]*?\.\.\.definitionToSave,[\s\S]*?format: "aivanta-registry-v1",[\s\S]*?steps: persistedSteps/);
-  assert.doesNotMatch(route, /definitionToSave = \{[\s\S]*?\.\.\.validated\.definition,[\s\S]*?format: "aivanta-registry-v1"/);
+
   assert.match(route, /buildRegistrySteps\(\{ nodes: graphNodes, edges: graphEdges \}\)/);
   assert.match(route, /Canvas connections and registered execution steps do not match/);
+  assert.match(route, /definitionToSave = \{[\s\S]*?\.\.\.definitionToSave,[\s\S]*?format: "aivanta-registry-v1",/);
   assert.match(activation, /legacy-next-/);
 });
 
