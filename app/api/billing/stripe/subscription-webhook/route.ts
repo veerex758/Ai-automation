@@ -43,11 +43,12 @@ export async function POST(request:Request){
   if(claimError)throw claimError;
   const claim=Array.isArray(claimRows)?claimRows[0]:claimRows;
   if(!claim||typeof claim!=="object")throw new Error("STRIPE_WEBHOOK_CLAIM_INVALID");
-  if(claim.reason==="payload_mismatch"||claim.reason==="event_key_conflict")
+  const claimRecord=claim as Record<string,unknown>;
+  if(claimRecord.reason==="payload_mismatch"||claimRecord.reason==="event_key_conflict")
    return privateJson({error:"Webhook event key conflicts with its stored payload."},{status:409});
-  if(claim.claimed!==true||typeof claim.claim_token!=="string")
+  if(claimRecord.claimed!==true||typeof claimRecord.claim_token!=="string")
    return privateJson({received:true,duplicate:true});
-  claimToken=claim.claim_token;
+  claimToken=claimRecord.claim_token;
   if(event.type==="checkout.session.completed"){
    const session=event.data.object as Stripe.Checkout.Session;
    if(session.mode==="subscription"&&typeof session.subscription==="string"&&session.metadata?.workspace_id&&session.metadata.plan_key){
