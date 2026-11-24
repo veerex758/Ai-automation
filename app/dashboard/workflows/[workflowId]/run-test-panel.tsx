@@ -129,7 +129,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
       setActiveJobId(jobId);
       let finalJob: { status: string; attempts: number; last_error_code?: string | null; cancel_requested_at?: string | null } | null = null;
       let checkpoints: LiveRunResult["checkpoints"] = [];
-      for (let attempt = 0; attempt < 30; attempt++) {
+      for (let attempt = 0; attempt < 60; attempt++) {
         await new Promise(resolve => window.setTimeout(resolve, 1000));
         const statusResponse = await fetch(`/api/workflows/${workflowId}/executions/${jobId}`, { cache: "no-store" });
         const statusData = await statusResponse.json();
