@@ -18,3 +18,7 @@ test("workspace permission resolver grants defaults only to the explicit member 
     "unexpected roles must receive an empty permission map",
   );
 });
+
+test("owner privileges are derived from workspaces.owner_id, not a stale membership role", () => {
+  assert.ok(source.includes('const role = workspace.owner_id === userId ? "owner" : member?.role === "owner" ? null : member?.role ?? null;'));
+});
