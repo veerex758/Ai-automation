@@ -226,7 +226,7 @@ export default function NewPlaybookPage() {
           </section>
 
           <div className="playbook-save-row">
-            <div><strong>Save as a draft</strong><small>Permissions are stored with this version. Activation is deliberately unavailable until the decision controls are enforced by the runtime.</small></div>
+            <div><strong>Save as a draft</strong><small>Permissions are stored with this version. Open the Control Room to test and activate it after the server verifies the saved version, provider connections, permissions and runtime safety gates.</small></div>
             <button className="playbook-primary" type="button" disabled={saving || !outcome.trim() || policies.some((policy) => !policy.permission)} onClick={() => void saveDraft()}>{saving ? "Saving draft…" : "Save Playbook draft"} <span>→</span></button>
           </div>
         </section>}
