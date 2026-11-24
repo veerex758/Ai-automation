@@ -36,3 +36,12 @@ test("Playbook activation is limited to the implemented real-estate runtime and 
   assert.match(activation, /Approve .* in workspace integration permissions/);
   assert.doesNotMatch(activation, /PLAYBOOK_RUNTIME_POLICY_NOT_ENFORCED/);
 });
+
+
+test("activation applies only to the exact workflow version that passed server-side validation", () => {
+  assert.match(activation, /let activationVersion: number \| null = null/);
+  assert.match(activation, /activationVersion = candidate\.version/);
+  assert.match(activation, /updateQuery = updateQuery\.eq\("version", activationVersion\)/);
+  assert.match(activation, /PLAYBOOK_VERSION_CHANGED_DURING_ACTIVATION/);
+  assert.match(activation, /Reload, test and review the latest saved version/);
+});
