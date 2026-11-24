@@ -700,6 +700,10 @@ async function runDurableWorkerPass() {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
   }
+  const { error: finalErrorDispatchError } = await db.rpc("dispatch_pending_execution_error_events", { p_limit: 25 });
+  if (finalErrorDispatchError) {
+    console.warn("Rexnora worker could not flush workflow error events after processing.");
+  }
   return { claimed: data.length, succeeded, retried, deadLettered, leaseLost, cancelled };
 }
 
