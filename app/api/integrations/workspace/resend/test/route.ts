@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
       status: "passed",
       credentialValid: true,
       senderDomainVerified: Boolean(verified),
+      senderDomain: domain,
       senderDomainStatus: typeof match?.status === "string" ? match.status : "not_found",
       message: verified
         ? "Resend API credentials are valid and the sender domain is verified. Production email is ready; no email was sent."
