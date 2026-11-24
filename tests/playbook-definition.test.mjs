@@ -16,9 +16,9 @@ const graph = {
 };
 const steps = [
   { id: "trigger", nodeId: "webhooks", operationId: "receive_event", kind: "trigger", input: {} },
+  { id: "ask-agent", nodeId: "gemini", operationId: "qualify_real_estate_lead", kind: "action", input: { leadData: {} } },
   { id: "if-qualified", nodeId: "if", operationId: "evaluate", kind: "action", input: { value: "{{trigger.payload.score}}", operator: "greater_than", compareTo: 70 } },
   { id: "notify", nodeId: "email", operationId: "send_email", kind: "action", input: { to: "agency@example.com", subject: "New lead", text: "Review" } },
-  { id: "ask-agent", nodeId: "gemini", operationId: "qualify_real_estate_lead", kind: "action", input: { leadData: {} } },
 ];
 const valid = {
   schema: "rexnora.playbook",
@@ -41,7 +41,7 @@ test("accepts a versioned Playbook bound to the exact graph and registered opera
   const result = validatePlaybookDefinition(valid, graph, steps);
   assert.equal(result.error, undefined);
   assert.equal(result.playbook.schema, "rexnora.playbook");
-  assert.equal(result.playbook.actionPolicies[0].permission, "ask_first");
+  assert.equal(result.playbook.actionPolicies.find((policy) => policy.stepId === "notify").permission, "ask_first");
   assert.deepEqual(result.playbook.rules.map((rule) => rule.nodeId), ["if-qualified"]);
 });
 
@@ -86,8 +86,8 @@ test("returns an explicit permission map rather than silently deriving permissio
   const changed = structuredClone(valid);
   changed.actionPolicies[0].permission = "auto";
   const result = validatePlaybookDefinition(changed, graph, steps);
-  assert.equal(result.playbook.actionPolicies[0].permission, "auto");
-  assert.equal(result.playbook.actionPolicies[1].permission, "auto");
+  assert.equal(result.playbook.actionPolicies.find((policy) => policy.stepId === "notify").permission, "auto");
+  assert.equal(result.playbook.actionPolicies.find((policy) => policy.stepId === "ask-agent").permission, "auto");
 });
 
 test("rejects action types outside the real-estate pilot operation set", () => {
@@ -102,4 +102,17 @@ test("requires exactly one supported Gemini qualification action", () => {
   const withoutGemini = steps.filter((step) => step.nodeId !== "gemini");
   const result = validatePlaybookDefinition(valid, graph, withoutGemini);
   assert.match(result.error, /exactly one Gemini lead-qualification action/);
+});
+
+
+test("requires Gemini qualification before rules and rules before agency notification", () => {
+  const invalidOrder = [steps[0], steps[2], steps[1], steps[3]];
+  const result = validatePlaybookDefinition(valid, graph, invalidOrder);
+  assert.match(result.error, /Gemini qualification must precede/);
+});
+
+test("rejects Playbook rules that have no registered IF evaluator", () => {
+  const missingEvaluator = steps.filter((step) => step.id !== "if-qualified");
+  const result = validatePlaybookDefinition(valid, graph, missingEvaluator);
+  assert.match(result.error, /backed by one registered IF evaluator/);
 });
