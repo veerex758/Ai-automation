@@ -1,4 +1,11 @@
-"use client";
+import { redirect } from "next/navigation";
+
+export default function LegacyBuilderRedirect() {
+  redirect("/dashboard/playbooks/new");
+}
+
+/* Legacy linear builder retired; use Playbooks for customer-facing setup. */
+/* "use client"; */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
