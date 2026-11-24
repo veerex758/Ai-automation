@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/20261114072354_aivanta_execution_cancellation.sql", import.meta.url), "utf8");
+const reliabilityMigration = readFileSync(new URL("../supabase/migrations/20261124130000_rexnora_execution_reliability_retries.sql", import.meta.url), "utf8");
 const route = readFileSync(new URL("../app/api/workflows/[workflowId]/executions/[jobId]/route.ts", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const panel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
@@ -28,6 +29,12 @@ test("durable worker stops a cancelled run and records the terminal cancelled st
   assert.match(worker, /EXECUTION_CANCELLED/);
   assert.match(worker, /finish_cancelled_execution_job/);
   assert.match(worker, /cancelled\+\+/);
+});
+
+test("an expired worker lease with a pending cancellation is finalized as cancelled, not reclaimed", () => {
+  assert.match(reliabilityMigration, /cancel_requested_at is not null/);
+  assert.match(reliabilityMigration, /last_error_code = 'EXECUTION_CANCELLED'/);
+  assert.match(reliabilityMigration, /where j\.cancel_requested_at is null/);
 });
 
 test("live execution UI exposes cancellation while a queued or running job is being polled", () => {
