@@ -131,6 +131,7 @@ export default function RealEstateOperationsPage() {
   }, [calendarConnectionId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (window.location.hash === "#tasks") setActiveSection("tasks"); }, []);
 
   async function createBooking(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
