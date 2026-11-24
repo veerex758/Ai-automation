@@ -129,7 +129,7 @@ test("follow-up delivery goes through the registered Resend operation with a sta
 });
 
 test("manual real-estate lead records the selected contact channel in its consent text", () => {
-  assert.match(read("../app/dashboard/real-estate/page.tsx"), /Customer explicitly agreed to follow-up contact by "\\+leadForm\\.contactPreference/);
+  assert.match(read("../app/dashboard/real-estate/page.tsx"), /Customer explicitly agreed to follow-up contact by "\+leadForm\.contactPreference/);
 });
 
 test("public and authenticated lead creation trigger the durable pipeline and repair duplicate side effects", () => {
