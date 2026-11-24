@@ -500,7 +500,7 @@ function resolveTemplateParameter(value: string, lead: LeadRow): string {
   }).slice(0, 1024);
 }
 
-type ExternalActionResult = { state: "completed" | "skipped" | "blocked" | "retry"; code?: string };
+type ExternalActionResult = { state: "completed" | "skipped" | "paused" | "blocked" | "retry"; code?: string };
 
 async function sendWhatsAppTemplate(
   db: ServiceClient,
@@ -546,7 +546,8 @@ async function sendWhatsAppTemplate(
     reason: "The Playbook requires approval before sending this approved WhatsApp template.",
     leaseToken: claim.lease_token,
   });
-  if (gate.state !== "allow") return { state: "blocked", code: "WHATSAPP_ACTION_APPROVAL_REQUIRED" };
+  if (gate.state === "pending") return { state: "paused", code: "WHATSAPP_ACTION_APPROVAL_REQUIRED" };
+  if (gate.state === "denied") return { state: "blocked", code: "WHATSAPP_ACTION_APPROVAL_REJECTED" };
 
   const configured = await approvedCredentials(
     db, claim.workspace_id, "whatsapp_business", "whatsapp_business", "send_template",
@@ -639,7 +640,7 @@ async function sendWhatsAppTemplate(
           reason: "WhatsApp provider outcome is unknown; reconcile the Meta message before any resend. " + code,
           leaseToken: claim.lease_token,
         });
-        if (failureGate.state === "pending") return { state: "blocked", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
+        if (failureGate.state === "pending") return { state: "paused", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
       }
       return { state: "blocked", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
     }
@@ -672,7 +673,7 @@ async function syncRealEstateCrmContact(
       !isPlaybookActionOnSelectedBranch(runtime, searchPolicy, ruleResults) ||
       !isPlaybookActionOnSelectedBranch(runtime, createPolicy, ruleResults)) return { state: "skipped" };
 
-  if (!lead.consent_to_contact || !lead.consent_at || !lead.email) {
+  if (!lead.consent_to_contact || !lead.consent_at || !lead.consent_text || !lead.email) {
     await db.from("real_estate_lead_activities").insert({
       workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
       activity_type: "lead.crm_sync_skipped",
@@ -709,7 +710,8 @@ async function syncRealEstateCrmContact(
     reason: "The Playbook requires approval before searching the selected CRM for this exact email.",
     leaseToken: claim.lease_token,
   });
-  if (searchGate.state !== "allow") return { state: "blocked", code: "CRM_SEARCH_APPROVAL_REQUIRED" };
+  if (searchGate.state === "pending") return { state: "paused", code: "CRM_SEARCH_APPROVAL_REQUIRED" };
+  if (searchGate.state === "denied") return { state: "blocked", code: "CRM_SEARCH_APPROVAL_REJECTED" };
   const searchCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "search_contacts", selectedConnectionId, true);
   if (!searchCredentials.ok) return { state: "blocked", code: searchCredentials.code };
   const searchOperation = findOperation(provider, "search_contacts", "action");
@@ -768,7 +770,8 @@ async function syncRealEstateCrmContact(
       reason: "The prior CRM create may have completed despite a missing response. Exact-email search found no matching contact; approve a single reconciled retry.",
       leaseToken: claim.lease_token,
     });
-    if (recovery.state !== "allow") return { state: "blocked", code: "CRM_CREATE_RECONCILIATION_APPROVAL_REQUIRED" };
+    if (recovery.state === "pending") return { state: "paused", code: "CRM_CREATE_RECONCILIATION_APPROVAL_REQUIRED" };
+    if (recovery.state === "denied") return { state: "blocked", code: "CRM_CREATE_RECONCILIATION_REJECTED" };
   }
 
   const createGate = await requestOrReadPlaybookDecision({
@@ -776,7 +779,8 @@ async function syncRealEstateCrmContact(
     reason: "The Playbook requires approval before creating a new CRM contact.",
     leaseToken: claim.lease_token,
   });
-  if (createGate.state !== "allow") return { state: "blocked", code: "CRM_CREATE_APPROVAL_REQUIRED" };
+  if (createGate.state === "pending") return { state: "paused", code: "CRM_CREATE_APPROVAL_REQUIRED" };
+  if (createGate.state === "denied") return { state: "blocked", code: "CRM_CREATE_APPROVAL_REJECTED" };
 
   const createCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "execute", selectedConnectionId, true);
   if (!createCredentials.ok) return { state: "blocked", code: createCredentials.code };
@@ -786,12 +790,13 @@ async function syncRealEstateCrmContact(
     ? { email: lead.email, ...contactName, ...(lead.phone ? { phone: lead.phone } : {}) }
     : { email: lead.email, ...contactName, ...(lead.phone ? { phone: lead.phone } : {}) };
 
-  await db.from("real_estate_crm_syncs").upsert({
+  const { error: ledgerError } = await db.from("real_estate_crm_syncs").upsert({
     workspace_id: claim.workspace_id, lead_id: lead.id, provider,
     status: "creating", idempotency_key: idempotencyKey,
     attempt_count: Number(prior?.attempt_count ?? 0) + 1,
     max_attempts: Number(prior?.max_attempts ?? 3), last_error_code: null,
   }, { onConflict: "workspace_id,lead_id,provider" });
+  if (ledgerError) return { state: "blocked", code: "CRM_SYNC_LEDGER_CLAIM_FAILED" };
 
   try {
     const created = await createOperation.run(
@@ -825,7 +830,7 @@ async function syncRealEstateCrmContact(
         reason: "CRM contact creation outcome needs reconciliation before another create attempt. " + code,
         leaseToken: claim.lease_token,
       });
-      if (failureGate.state === "pending") return { state: "blocked", code: "CRM_CREATE_OUTCOME_UNKNOWN_REQUIRES_REVIEW" };
+      if (failureGate.state === "pending") return { state: "paused", code: "CRM_CREATE_OUTCOME_UNKNOWN_REQUIRES_REVIEW" };
     }
     return { state: rateLimited ? "retry" : "blocked", code };
   }
@@ -1088,6 +1093,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
 
   if (runtime.mode === "playbook") {
     const whatsapp = await sendWhatsAppTemplate(db, claim, lead, runtime, ruleResults);
+    if (whatsapp.state === "paused") return "blocked";
     if (whatsapp.state === "retry") {
       await retryClaim(db, claim, lead, "pipeline", whatsapp.code ?? "WHATSAPP_RETRYABLE_FAILURE", false);
       return "failed";
@@ -1098,6 +1104,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
     }
 
     const crm = await syncRealEstateCrmContact(db, claim, lead, runtime, ruleResults);
+    if (crm.state === "paused") return "blocked";
     if (crm.state === "retry") {
       await retryClaim(db, claim, lead, "pipeline", crm.code ?? "CRM_SYNC_RETRYABLE_FAILURE", false);
       return "failed";
