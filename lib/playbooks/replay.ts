@@ -99,10 +99,19 @@ export function replayPlaybookAgainstLead(playbook: Playbook, steps: Step[], lea
   });
 
   const confidence = finiteConfidence(lead);
+  const qualification = lead.qualification && typeof lead.qualification === "object" && !Array.isArray(lead.qualification)
+    ? lead.qualification as Record<string, unknown>
+    : {};
+  const missingQualificationFields = Array.isArray(qualification.missingInformation) &&
+    qualification.missingInformation.some((field) => typeof field === "string" && field.trim().length > 0);
   const missingRule = rules.some((rule) => rule.outcome === "needs_review");
   const matchedAny = rules.some((rule) => rule.outcome === "matched");
   const reasons: string[] = [];
-  if (playbook.review.reviewMissingFields && missingRule) reasons.push("A rule needs historical fields that are missing.");
+  if (playbook.review.reviewMissingFields && (missingRule || missingQualificationFields)) {
+    reasons.push(missingQualificationFields
+      ? "Gemini identified required enquiry details that are still missing."
+      : "A rule needs historical fields that are missing.");
+  }
   if (playbook.review.reviewWhenNoRuleMatches && rules.length > 0 && !matchedAny && !missingRule) reasons.push("No business rule matched this enquiry.");
   if (playbook.review.confidenceThreshold > 0 && (confidence === null || confidence < playbook.review.confidenceThreshold)) {
     reasons.push(confidence === null ? "No recorded AI confidence score exists for this historical enquiry." : "Recorded AI confidence is below the configured threshold.");
