@@ -188,7 +188,7 @@ test("public and manual intake require recorded channel consent before creating 
 });
 
 test("Playbook policy validation evaluates all IF rules before CRM writes", () => {
-  assert.match(playbookDefinition, /\\.\\.\\.crmActions/);
+  assert.match(playbookDefinition, /\.{3}crmActions/);
   assert.match(playbookDefinition, /Every deterministic Playbook rule must be evaluated before customer communication or CRM writes/);
 });
 
