@@ -89,10 +89,18 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
 
   for (const node of nodes) {
     const nodeEdges = outgoing.get(node.id) ?? [];
-    if (nodeEdges.length && node.type === "condition") {
-      if (!nodeEdges.some((edge) => edge.label === "true") || !nodeEdges.some((edge) => edge.label === "false")) {
-        throw new Error("Every IF or Switch node with downstream work needs true and false paths.");
+    if (node.type === "condition") {
+      if (nodeEdges.length && (
+        nodeEdges.length !== 2 ||
+        nodeEdges.filter((edge) => edge.label === "true").length !== 1 ||
+        nodeEdges.filter((edge) => edge.label === "false").length !== 1
+      )) {
+        throw new Error("Every IF or Switch node with downstream work needs exactly one true path and one false path.");
       }
+    } else if (nodeEdges.length > 1) {
+      throw new Error("Only IF or Switch nodes can have multiple outgoing connections: " + node.title + ".");
+    } else if (nodeEdges.some((edge) => edge.label !== "next")) {
+      throw new Error("Only IF or Switch nodes can create true/false connections.");
     }
   }
 
