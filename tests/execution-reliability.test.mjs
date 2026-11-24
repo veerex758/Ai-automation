@@ -12,7 +12,6 @@ const migration = readFileSync(
   new URL("../supabase/migrations/20261124130000_rexnora_execution_reliability_retries.sql", import.meta.url),
   "utf8",
 );
-const workerRoute = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
 const privateWorkerSchedule = readFileSync(new URL("../api/worker-sweep.ts", import.meta.url), "utf8");
 const vercelConfig = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
 
