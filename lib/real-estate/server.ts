@@ -20,7 +20,7 @@ export function createFollowupRows(lead: {
   id: string; workspace_id: string; full_name: string; email: string | null;
   preferred_location: string | null; property_type: string; transaction_type: string;
 }, createdAt: Date) {
-  const firstName = lead.full_name.trim().split(/\\s+/)[0] || "there";
+  const firstName = lead.full_name.trim().split(/\s+/)[0] || "there";
   const property = lead.property_type !== "unknown" ? lead.property_type : "property";
   const location = lead.preferred_location ? " in " + lead.preferred_location : "";
   const action = lead.transaction_type === "rent" ? "rent" : lead.transaction_type === "sell" ? "sell" : "buy";
