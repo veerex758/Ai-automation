@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardSidebar from "../../dashboard-sidebar";
-import "./playbooks.css";
+import "../playbooks.css";
 
 type RegistryStep = {
   id: string;
