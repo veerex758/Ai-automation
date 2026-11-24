@@ -138,7 +138,7 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   perplexity: { label: "Perplexity", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   discord: { label: "Discord", fields: [{ name: "botToken", label: "Bot token", type: "password" }] },
   telegram: { label: "Telegram", fields: [{ name: "botToken", label: "Bot token", type: "password" }] },
-  whatsapp_business: { label: "WhatsApp Business", fields: [{ name: "accessToken", label: "System user access token", type: "password" }, { name: "phoneNumberId", label: "Phone number ID", type: "text" }] },
+  whatsapp_business: { label: "WhatsApp Business", fields: [{ name: "accessToken", label: "System user access token", type: "password" }, { name: "phoneNumberId", label: "Phone number ID", type: "text" }, { name: "templateName", label: "Approved template name (optional default)", type: "text" }, { name: "templateLanguage", label: "Template language, e.g. en_US (optional default)", type: "text" }] },
   sendgrid: { label: "SendGrid", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
   mailgun: { label: "Mailgun", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "domain", label: "Sending domain", type: "text" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
   postmark: { label: "Postmark", fields: [{ name: "serverToken", label: "Server token", type: "password" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
