@@ -136,7 +136,11 @@ export async function executeRegisteredWorkflow(args: {
           return { simulated: true as const };
         }
         await args.context.authorizeOperation?.({ nodeId: step.nodeId, operationId: step.operationId, kind: step.kind });
-        const output = await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput);
+        const output = await operation.run({
+          ...args.context,
+          previousOutputs: localOutputs,
+          idempotencyKey: args.context.getIdempotencyKey?.(checkpointStep.id),
+        }, validatedInput);
         const parsed = operation.outputSchema.parse(output);
         await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "succeeded", output: parsed });
         return { simulated: false as const, output: parsed };
