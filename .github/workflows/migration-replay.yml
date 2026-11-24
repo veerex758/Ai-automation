@@ -37,6 +37,15 @@ jobs:
             supabase init
           fi
 
+      - name: Select an isolated local Postgres port
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub runners may have 54322 occupied by another local service.
+          # Keep this disposable migration replay isolated from the default port.
+          sed -i -E 's/^port = 54322$/port = 54382/; s/^shadow_port = 54320$/shadow_port = 54380/' supabase/config.toml
+          grep -E '^(port|shadow_port) = ' supabase/config.toml
+
       - name: Start local Postgres
         run: supabase db start
 
