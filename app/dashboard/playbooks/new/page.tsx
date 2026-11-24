@@ -58,6 +58,7 @@ function permissionLabel(value: ActionPolicy["permission"]) {
 
 export default function NewPlaybookPage() {
   const router = useRouter();
+  const [templateKey, setTemplateKey] = useState("speed-to-lead");
   const [outcome, setOutcome] = useState("Respond to every new property enquiry quickly, qualify intent with Gemini, alert the approved agency inbox, and use WhatsApp only with explicit channel consent.");
   const [draft, setDraft] = useState<GeneratedDraft | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
@@ -78,7 +79,10 @@ export default function NewPlaybookPage() {
       "back-office": "Update the agency back office for each qualified enquiry by searching the connected CRM for an exact match before creating a contact, then prepare an assigned agent follow-up task.",
     };
     const selected = window.location.hash.replace(/^#/, "");
-    if (presets[selected]) setOutcome(presets[selected]);
+    if (presets[selected]) {
+      setTemplateKey(selected);
+      setOutcome(presets[selected]);
+    }
   }, []);
 
   async function generate(event: FormEvent<HTMLFormElement>) {
@@ -89,16 +93,27 @@ export default function NewPlaybookPage() {
     setNotice("");
     setDraft(null);
     try {
+      const templateInstructions = templateKey === "back-office"
+        ? [
+            "Build only the real-estate CRM back-office process: a real-estate enquiry event, exactly one Gemini qualification action, then exactly one exact-email CRM search_contacts action and one CRM execute contact-create action for the same selected CRM provider.",
+            "Use one of Pipedrive, Zoho CRM or Freshsales only. Search by the exact customer email before creating. If an exact match exists, do not create another contact.",
+            "Rexnora creates the internal agent review task in its native Back-office task queue after qualification. Do not add a third-party task provider or invent a task action.",
+            "Keep all CRM writes Ask me first. Return an inactive draft. Never activate or execute anything.",
+          ]
+        : [
+            "Build only the speed-to-lead process: a real-estate enquiry event, exactly one Gemini qualification action, and at most one Resend email action to the agency's explicitly approved alert inbox.",
+            "Include whatsapp_business.send_template only as the separate customer contact action when the customer chose WhatsApp, explicit WhatsApp-specific consent is recorded, and the workspace has a Meta-approved template name and language configured. Never use a free-form WhatsApp text message.",
+            "The native website intake form already creates the enquiry and invokes the real-estate pipeline. Use only a registered trigger supported by Rexnora; do not invent a webhook or a data source. Do not add Calendar booking, CRM sync or long-term nurture actions to this Playbook.",
+            "Keep customer-facing WhatsApp and agency email Ask me first. Gemini qualification may run automatically after the source event and required fields are validated.",
+            "Return an inactive draft. Never activate or execute anything.",
+          ];
       const prompt = [
         "Create ONE real-estate agency Playbook for this selected business outcome: " + outcome.trim(),
-        "Do not combine unrelated automations into one large graph. Keep the registered execution plan at four or fewer action steps.",
-        "For speed-to-lead, use only a verified webhook trigger, Gemini qualification, Resend notification to a literal approved agency inbox, and whatsapp_business.send_template only when the customer explicitly chose WhatsApp, channel-specific consent is recorded, and a Meta-approved template name and language are configured. Never use free-form WhatsApp outreach.",
-        "For property inspection booking, use Google Calendar to inspect the requested time window and create an event only after the customer selects a slot and an agent approves it. Use google_calendar.create_event. Do not infer availability. Do not send attendee invitations unless explicitly approved.",
-        "The buyer/investor nurture is already configured in the native Real Estate follow-up queue. It sends only to consenting email leads at immediate, day 1, day 7, day 30 and day 90, and stops on response, consent withdrawal, takeover or closure. Do not create a second nurture queue in this Playbook.",
-        "For back-office updates, search the selected CRM for an exact contact match before creating a contact, then create an internal task only through a registered connected task provider. Do not create duplicate CRM records.",
-        "Use only registered Rexnora operations. Do not invent integrations, data sources or triggers. The existing real-estate form does not automatically dispatch a Playbook unless a real event connection is configured.",
-        "Gemini may extract structured details; use deterministic IF conditions for business rules. Customer contact, Calendar writes and CRM/task writes must default to Ask me first. Do not auto-approve external side effects.",
-        "Return an inactive draft only. Never activate or execute anything."
+        "Selected template: " + templateKey + ". Do not mix this template with the other real-estate automations.",
+        "Use only the registered Rexnora operations listed in the available node catalogue. Do not invent integrations, node IDs, operations, triggers or input fields.",
+        "Keep the registered execution plan at four or fewer action steps.",
+        ...templateInstructions,
+        "Use deterministic IF conditions only when required by the selected outcome. Any external side effect must be behind its explicit Playbook action permission, a connected and tested workspace account, operation approval and Safe Preview.",
       ].join("\n\n");
       const response = await fetch("/api/ai/generate-workflow", {
         method: "POST",
@@ -161,7 +176,7 @@ export default function NewPlaybookPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify({
-          name: outcome.toLowerCase().includes("inspection") ? "Property inspection booking" : outcome.toLowerCase().includes("back office") ? "Real Estate back-office updates" : "Instant speed-to-lead",
+          name: templateKey === "back-office" ? "Real Estate back-office updates" : "Instant speed-to-lead",
           description: (draft.summary || outcome).slice(0, 500),
           status: "draft",
           definition,
@@ -252,7 +267,7 @@ export default function NewPlaybookPage() {
           </section>
 
           <div className="playbook-save-row">
-            <div><strong>Save as a draft</strong><small>Permissions are stored with this version. Activation is deliberately unavailable until the decision controls are enforced by the runtime.</small></div>
+            <div><strong>Save as a draft</strong><small>Permissions are stored with this version. Activate only after each connected account is selected and verified, every external operation is approved, and Safe Preview passes.</small></div>
             <button className="playbook-primary" type="button" disabled={saving || !outcome.trim() || policies.some((policy) => !policy.permission)} onClick={() => void saveDraft()}>{saving ? "Saving draft…" : "Save Playbook draft"} <span>→</span></button>
           </div>
         </section>}
