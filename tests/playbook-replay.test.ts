@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+// Node runs this source file with native TypeScript stripping; tsc does not emit the imported .ts file.
+// @ts-expect-error Native Node test runner resolves the explicit TypeScript extension.
 import { replayPlaybookAgainstLead } from "../lib/playbooks/replay.ts";
 
-const playbook = {
+const playbook: Parameters<typeof replayPlaybookAgainstLead>[0] = {
   schema: "rexnora.playbook",
   schemaVersion: 1,
   goal: { industry: "real_estate", outcome: "Qualify property enquiries" },
