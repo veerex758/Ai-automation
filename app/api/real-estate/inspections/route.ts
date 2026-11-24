@@ -40,7 +40,7 @@ export async function GET() {
     const auth = await authWorkspace();
     if ("response" in auth) return auth.response;
     const { data, error } = await auth.supabase.from("real_estate_inspection_bookings")
-      .select("id,lead_id,property_id,agent_id,google_connection_id,calendar_id,start_at,end_at,time_zone,status,google_event_id,google_event_url,last_error_code,created_at,approved_at")
+      .select("id,lead_id,property_id,agent_id,google_connection_id,calendar_id,start_at,end_at,time_zone,customer_invite_requested,customer_invite_email,status,google_event_id,google_event_url,last_error_code,created_at,approved_at")
       .eq("workspace_id", auth.workspace.id)
       .order("start_at", { ascending: true })
       .limit(100);
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
     const calendarId = typeof body.calendarId === "string" ? body.calendarId.trim() : "primary";
     const startAt = body.startAt;
     const endAt = body.endAt;
+    const sendCustomerInvite = body.sendCustomerInvite === true;
     const timeZone = body.timeZone;
     const idempotencyKey = body.idempotencyKey;
     if (typeof leadId !== "string" || !uuid.test(leadId) ||
@@ -94,10 +95,13 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: lead, error: leadError } = await auth.supabase.from("real_estate_leads")
-      .select("id,full_name,workspace_id")
+      .select("id,full_name,email,consent_to_contact,contact_preference,workspace_id")
       .eq("id", leadId).eq("workspace_id", auth.workspace.id).maybeSingle();
     if (leadError) throw leadError;
     if (!lead) return NextResponse.json({ error: "Lead not found in this workspace." }, { status: 404, headers });
+    if (sendCustomerInvite && (!lead.email || !lead.consent_to_contact || lead.contact_preference !== "email")) {
+      return NextResponse.json({ error: "Customer invitations require an email address and recorded email-contact consent." }, { status: 400, headers });
+    }
 
     const service = createRealEstateServiceClient();
     const accessToken = await getRealEstateGoogleCalendarAccessToken(service, auth.workspace.id, googleConnectionId);
@@ -119,6 +123,8 @@ export async function POST(request: NextRequest) {
       p_start_at: start.toISOString(),
       p_end_at: end.toISOString(),
       p_time_zone: timeZone,
+      p_send_customer_invite: sendCustomerInvite,
+      p_customer_invite_email: sendCustomerInvite ? lead.email : null,
       p_idempotency_key: idempotencyKey,
       p_requested_by: auth.user.id,
     });
