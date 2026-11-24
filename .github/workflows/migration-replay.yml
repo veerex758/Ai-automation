@@ -54,6 +54,9 @@ jobs:
       - name: Run database transaction tests (pgTAP)
         run: supabase test db --local
 
+      - name: Restart local Supabase API for RPC regression
+        run: supabase start
+
       - name: Export local Supabase API credentials
         shell: bash
         run: |
