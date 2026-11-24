@@ -12,6 +12,7 @@ import {
   markPlaybookDecisionExecuted, pausePlaybookLead, requestOrReadPlaybookDecision,
 } from "@/lib/playbooks/runtime";
 import { replayPlaybookAgainstLead } from "@/lib/playbooks/replay";
+import type { PlaybookRuntime } from "@/lib/playbooks/runtime";
 
 type ServiceClient = ReturnType<typeof createRealEstateServiceClient>;
 type PipelineClaim = { lead_id: string; workspace_id: string; lease_token: string };
@@ -137,6 +138,7 @@ async function approvedCredentials(
   nodeId: string,
   operationId: string,
   requireLiveOptIn = false,
+  selectedConnectionId?: string,
 ): Promise<CredentialResult> {
   const mapping = getWorkerOperationMapping({ kind: "action", nodeId, operationId });
   if (!mapping || mapping.provider !== provider) return { ok: false, code: "PROVIDER_OPERATION_NOT_REGISTERED" };
@@ -144,13 +146,16 @@ async function approvedCredentials(
     return { ok: false, code: provider.toUpperCase() + "_LIVE_INTEGRATION_DISABLED" };
   }
 
+  let integrationQuery = db.from("workspace_integrations")
+    .select("id,status,last_test_status")
+    .eq("workspace_id", workspaceId)
+    .eq("provider", provider)
+    .order("created_at", { ascending: false })
+    .limit(selectedConnectionId ? 1 : 2);
+  if (selectedConnectionId) integrationQuery = integrationQuery.eq("id", selectedConnectionId);
+
   const [{ data: integrations, error: integrationError }, { data: approval, error: approvalError }] = await Promise.all([
-    db.from("workspace_integrations")
-      .select("id,status,last_test_status")
-      .eq("workspace_id", workspaceId)
-      .eq("provider", provider)
-      .order("created_at", { ascending: false })
-      .limit(2),
+    integrationQuery,
     db.from("workspace_provider_operation_approvals")
       .select("decision")
       .eq("workspace_id", workspaceId)
@@ -382,8 +387,10 @@ async function sendAgentNotifications(
   claim: PipelineClaim,
   lead: LeadRow,
   qualification: Qualification,
+  runtime: PlaybookRuntime,
 ) {
-  const configured = await approvedCredentials(db, claim.workspace_id, "resend", "email", "send_email");
+  const selectedConnectionId = runtime.steps?.find((step) => step.nodeId === "email" && step.operationId === "send_email")?.connectionId;
+  const configured = await approvedCredentials(db, claim.workspace_id, "resend", "email", "send_email", false, selectedConnectionId);
   if (!configured.ok) return { ok: false as const, blocked: true, code: configured.code };
   const recipients = await workspaceNotificationRecipients(db, claim.workspace_id);
   if (!recipients.length) return { ok: false as const, blocked: true, code: "AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED" };
@@ -474,7 +481,7 @@ async function sendConsentedWhatsApp(
   if (approval.state === "pending") return "pending";
   if (approval.state === "denied") return "skipped";
 
-  const configured = await approvedCredentials(db, claim.workspace_id, "whatsapp_business", "whatsapp_business", "send_template", true);
+  const configured = await approvedCredentials(db, claim.workspace_id, "whatsapp_business", "whatsapp_business", "send_template", true, runtime.steps?.find((step) => step.nodeId === "whatsapp_business" && step.operationId === "send_template")?.connectionId);
   if (!configured.ok) {
     if (runtime.definition.review.reviewProviderFailures) {
       const review = await requestOrReadPlaybookDecision({
@@ -583,7 +590,7 @@ async function syncConfiguredCrmContact(
   if (searchApproval.state === "pending") return "pending";
   if (searchApproval.state === "denied") return "skipped";
 
-  const searchCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "search_contacts", true);
+  const searchCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "search_contacts", true, runtime.steps?.find((step) => step.nodeId === provider && step.operationId === "search_contacts")?.connectionId);
   if (!searchCredentials.ok) {
     if (runtime.definition.review.reviewProviderFailures) {
       const review = await requestOrReadPlaybookDecision({
@@ -644,7 +651,7 @@ async function syncConfiguredCrmContact(
   if (createApproval.state === "pending") return "pending";
   if (createApproval.state === "denied") return "skipped";
 
-  const createCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "execute", true);
+  const createCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "execute", true, runtime.steps?.find((step) => step.nodeId === provider && step.operationId === "execute")?.connectionId);
   if (!createCredentials.ok) {
     if (runtime.definition.review.reviewProviderFailures) {
       const review = await requestOrReadPlaybookDecision({
@@ -745,7 +752,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       qualificationDecisionId = gate.decisionId;
     }
 
-    const configured = await approvedCredentials(db, claim.workspace_id, "gemini", "gemini", "qualify_real_estate_lead");
+    const configured = await approvedCredentials(db, claim.workspace_id, "gemini", "gemini", "qualify_real_estate_lead", false, runtime.steps?.find((step) => step.nodeId === "gemini" && step.operationId === "qualify_real_estate_lead")?.connectionId);
     if (!configured.ok) {
       if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures) {
         const gate = await requestOrReadPlaybookDecision({
@@ -894,7 +901,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
     }
 
     try {
-      const notification = await sendAgentNotifications(db, claim, { ...lead, ...(qualification ? mergeQualification(lead, qualification) : {}) }, qualification);
+      const notification = await sendAgentNotifications(db, claim, { ...lead, ...(qualification ? mergeQualification(lead, qualification) : {}) }, qualification, runtime);
       if (!notification.ok) {
         if (runtime.mode === "playbook" && runtime.definition?.review.reviewProviderFailures && emailPolicy) {
           const gate = await requestOrReadPlaybookDecision({
