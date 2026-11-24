@@ -8,7 +8,7 @@ test("Vercel Schedules dispatch workflows and recover abandoned workers within H
     schedule: "*/30 * * * *", path: "/api/internal/scheduler", requestMethod: "GET", timezone: "UTC",
   });
   assert.deepEqual(config.schedules["durable-worker-recovery"], {
-    schedule: "0 * * * *", function: "api/worker-sweep", timezone: "UTC",
+    schedule: "*/30 * * * *", function: "api/worker-sweep", timezone: "UTC",
   });
   assert.deepEqual(config.functions["api/worker-sweep.ts"].experimentalTriggers, [
     { type: "schedule/v1beta" },
