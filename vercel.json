@@ -3,15 +3,24 @@
     "workflow-scheduler-tick": {
       "schedule": "*/30 * * * *",
       "path": "/api/internal/scheduler",
-      "requestMethod": "POST",
+      "requestMethod": "GET",
       "timezone": "UTC"
     },
     "durable-worker-recovery": {
       "schedule": "0 * * * *",
-      "path": "/api/internal/worker",
-      "requestMethod": "POST",
+      "function": "api/worker-sweep",
       "timezone": "UTC"
     }
   },
-  "$schema": "https://openapi.vercel.sh/vercel.json"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/worker-sweep.ts": {
+      "maxDuration": 60,
+      "experimentalTriggers": [
+        {
+          "type": "schedule/v1beta"
+        }
+      ]
+    }
+  }
 }
