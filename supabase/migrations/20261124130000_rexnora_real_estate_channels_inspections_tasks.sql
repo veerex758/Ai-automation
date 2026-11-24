@@ -116,6 +116,7 @@ create or replace function public.reserve_real_estate_inspection_booking(
   p_lead_id uuid,
   p_property_id uuid,
   p_agent_id uuid,
+  p_google_connection_id uuid,
   p_calendar_id text,
   p_start_at timestamptz,
   p_end_at timestamptz,
@@ -158,6 +159,15 @@ begin
     raise exception using errcode='P0002', message='Agent is unavailable in workspace';
   end if;
 
+  if not exists(
+    select 1 from public.google_connections gc
+     where gc.id=p_google_connection_id and gc.workspace_id=p_workspace_id
+       and gc.provider='google' and gc.product='calendar'
+       and gc.status='connected' and gc.last_test_status='passed'
+  ) then
+    raise exception using errcode='P0002', message='Google Calendar connection is not verified in workspace';
+  end if;
+
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(p_workspace_id::text || ':' || p_calendar_id, 0)
   );
@@ -184,10 +194,10 @@ begin
   end if;
 
   insert into public.real_estate_inspection_bookings(
-    workspace_id,lead_id,property_id,agent_id,calendar_id,start_at,end_at,time_zone,
+    workspace_id,lead_id,property_id,agent_id,google_connection_id,calendar_id,start_at,end_at,time_zone,
     status,idempotency_key,requested_by
   ) values (
-    p_workspace_id,p_lead_id,p_property_id,p_agent_id,p_calendar_id,p_start_at,p_end_at,p_time_zone,
+    p_workspace_id,p_lead_id,p_property_id,p_agent_id,p_google_connection_id,p_calendar_id,p_start_at,p_end_at,p_time_zone,
     'requested',p_idempotency_key,p_requested_by
   ) returning * into inserted;
 
@@ -195,7 +205,7 @@ begin
 end;
 $$;
 
-revoke all on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,text,uuid) from public,anon,authenticated;
+revoke all on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,text,uuid) from public,anon,authenticated;
 grant execute on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,text,uuid) to service_role;
 
 create or replace function public.begin_real_estate_inspection_booking(
