@@ -66,7 +66,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
       return NextResponse.json({ error: "Workspace workflows.execute permission is required to approve inspections." }, { status: 403, headers });
     }
     const { data, error } = await supabase.from("real_estate_inspection_bookings")
-      .select("id,workspace_id,lead_id,property_id,google_connection_id,calendar_id,start_at,end_at,time_zone,status,google_event_id")
+      .select("id,workspace_id,lead_id,property_id,google_connection_id,calendar_id,start_at,end_at,time_zone,customer_invite_requested,customer_invite_email,status,google_event_id")
       .eq("id", bookingId).eq("workspace_id", workspace.id).maybeSingle();
     if (error) throw error;
     booking = data as Booking | null;
@@ -122,7 +122,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
       return NextResponse.json({ success: true, bookingId, status: "confirmed", eventId, invited: booking.customer_invite_requested, reconciled: true }, { headers });
     }
 
-    if (booking.status === "requested") {
+    if (booking.status === "requested" || booking.status === "unknown" || booking.status === "creating") {
       const { data: begun, error: beginError } = await service.rpc("begin_real_estate_inspection_booking", {
         p_workspace_id: workspace.id,
         p_booking_id: booking.id,
