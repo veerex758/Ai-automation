@@ -250,5 +250,5 @@ begin
 end;
 $$;
 
-revoke all on function public.resolve_real_estate_playbook_decision(uuid,uuid,text) from public, anon, authenticated;
-grant execute on function public.resolve_real_estate_playbook_decision(uuid,uuid,text) to service_role;
+revoke all on function public.resolve_real_estate_playbook_decision(uuid,uuid,text,jsonb) from public, anon, authenticated;
+grant execute on function public.resolve_real_estate_playbook_decision(uuid,uuid,text,jsonb) to service_role;
