@@ -35,6 +35,6 @@ export default function DashboardSidebar({ activePage, workspaceName = "Your wor
         {group.items.map(item => <Link key={item.key} href={item.href} aria-current={activePage === item.key ? "page" : undefined} className={activePage === item.key ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
       </section>)}
     </nav>
-    <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>Build with confidence</strong><p>Describe the outcome, review the workflow, then activate when everything is ready.</p><Link href="/dashboard/builder">Open builder ↗</Link></div></div>
+    <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>Build with confidence</strong><p>Describe the outcome, review the workflow, then activate when everything is ready.</p><Link href="/dashboard/playbooks/new">Create a Playbook ↗</Link></div></div>
   </aside>;
 }
