@@ -15,7 +15,7 @@ test("Outcome Ledger reads only leads and activities bound to this workspace and
 test("Outcome Ledger is read-only and does not mutate activity or delivery history", () => {
   assert.doesNotMatch(api, /\.insert\(|\.update\(|\.delete\(|\.upsert\(/);
   assert.match(page, /read-only/);
-  assert.match(page, /append-only/);
+  assert.match(page, /this view does not mutate lead or delivery records/);
 });
 
 test("Outcome Ledger displays activity explanations and delivery state", () => {
