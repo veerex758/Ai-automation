@@ -149,10 +149,9 @@ async function approvedCredentials(
   let integrationQuery = db.from("workspace_integrations")
     .select("id,status,last_test_status")
     .eq("workspace_id", workspaceId)
-    .eq("provider", provider)
-    .order("created_at", { ascending: false })
-    .limit(selectedConnectionId ? 1 : 2);
+    .eq("provider", provider);
   if (selectedConnectionId) integrationQuery = integrationQuery.eq("id", selectedConnectionId);
+  integrationQuery = integrationQuery.order("created_at", { ascending: false }).limit(selectedConnectionId ? 1 : 2);
 
   const [{ data: integrations, error: integrationError }, { data: approval, error: approvalError }] = await Promise.all([
     integrationQuery,
