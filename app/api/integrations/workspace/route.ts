@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 import { encryptWorkspaceCredentialsV2, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
 
 export const runtime = "nodejs";
@@ -146,6 +147,12 @@ export async function GET(request: NextRequest) {
     if (!(await hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.view"))) {
       return json({ error: "Workspace integrations.view permission required.", code: "INTEGRATION_PERMISSION_DENIED" }, 403);
     }
+    const limited = await enforceDistributedRateLimit(request, {
+      scope: "workspace-integration-list", windowMs: 60_000,
+      ipLimit: 60, userId: user.id, userLimit: 60,
+      workspaceId: workspace.id, workspaceLimit: 180,
+    });
+    if (limited) return limited;
     const { data, error } = await supabase.from("workspace_integrations")
       .select("id,provider,status,display_name,last_tested_at,last_test_status,updated_at")
       .eq("workspace_id", workspace.id).order("provider", { ascending: true });
@@ -201,6 +208,12 @@ export async function POST(request: NextRequest) {
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return json({ error: integrationErrorMessages.INTEGRATION_PERMISSION_DENIED, code: "INTEGRATION_PERMISSION_DENIED" }, 403);
     }
+    const limited = await enforceDistributedRateLimit(request, {
+      scope: "workspace-integration-save", windowMs: 15 * 60_000,
+      ipLimit: 20, userId: user.id, userLimit: 20,
+      workspaceId: workspace.id, workspaceLimit: 60,
+    });
+    if (limited) return limited;
 
     const connectionId = requestedConnectionId ?? randomUUID();
     let encrypted: string;
@@ -251,6 +264,13 @@ export async function DELETE(request: NextRequest) {
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return json({ error: integrationErrorMessages.INTEGRATION_PERMISSION_DENIED, code: "INTEGRATION_PERMISSION_DENIED" }, 403);
     }
+    const limited = await enforceDistributedRateLimit(request, {
+      scope: "workspace-integration-delete", windowMs: 15 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workspace.id, workspaceLimit: 30,
+      resourceId: connectionId, resourceLimit: 5,
+    });
+    if (limited) return limited;
     const db = serviceClient();
     const { data: connection, error: lookupError } = await db.from("workspace_integrations")
       .select("id").eq("id", connectionId).eq("workspace_id", workspace.id).maybeSingle();

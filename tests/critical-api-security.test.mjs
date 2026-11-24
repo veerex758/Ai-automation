@@ -169,3 +169,14 @@ test("workspace integration secret writes and reads preserve tenant-bound v3 sup
   assert.ok(testConnection.includes("workspace.id"));
   assert.ok(worker.includes("workspace_id"));
 });
+
+
+test("workspace integration list, save and disconnect are distributed-rate-limited after authorization", async () => {
+  const route = await read("../app/api/integrations/workspace/route.ts");
+  assert.ok(route.includes('scope: "workspace-integration-list"'));
+  assert.ok(route.includes('scope: "workspace-integration-save"'));
+  assert.ok(route.includes('scope: "workspace-integration-delete"'));
+  assert.ok(route.includes('hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.view")'));
+  assert.ok(route.includes('["owner", "admin"].includes(membership.role)'));
+  assert.ok(route.includes('.eq("id", connectionId).eq("workspace_id", workspace.id)'));
+});
