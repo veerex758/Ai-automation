@@ -72,7 +72,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
     booking = data as Booking | null;
     if (!booking) return NextResponse.json({ error: "Inspection booking not found in this workspace." }, { status: 404, headers });
     if (booking.status === "confirmed" && booking.google_event_id) {
-      return NextResponse.json({ success: true, bookingId, status: "confirmed", eventId: booking.google_event_id, reconciled: true }, { headers });
+      return NextResponse.json({ success: true, bookingId, status: "confirmed", eventId: booking.google_event_id, invited: booking.customer_invite_requested, reconciled: true }, { headers });
     }
     if (!["requested", "creating", "unknown"].includes(booking.status)) {
       return NextResponse.json({ error: "This inspection booking cannot be approved from its current state.", status: booking.status }, { status: 409, headers });
@@ -119,7 +119,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
         updated_at: new Date().toISOString(),
       }).eq("id", booking.id).eq("workspace_id", workspace.id).in("status", ["creating", "unknown", "requested"]);
       if (reconcileError) throw new Error("INSPECTION_RECONCILIATION_WRITE_FAILED");
-      return NextResponse.json({ success: true, bookingId, status: "confirmed", eventId, reconciled: true }, { headers });
+      return NextResponse.json({ success: true, bookingId, status: "confirmed", eventId, invited: booking.customer_invite_requested, reconciled: true }, { headers });
     }
 
     if (booking.status === "requested") {
@@ -188,7 +188,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
         activity_type: "lead.inspection_booked",
         details: { bookingId: booking.id, eventId: created.id, startAt: booking.start_at, endAt: booking.end_at },
       });
-      return NextResponse.json({ success: true, bookingId, status: "confirmed", eventId: created.id, eventUrl: created.htmlLink ?? null }, { headers });
+      return NextResponse.json({ success: true, bookingId, status: "confirmed", eventId: created.id, eventUrl: created.htmlLink ?? null, invited: booking.customer_invite_requested }, { headers });
     } catch (cause) {
       const code = cause instanceof Error && /^[A-Z0-9_]{1,80}$/.test(cause.message)
         ? cause.message : "GOOGLE_CALENDAR_CREATE_UNCERTAIN";
