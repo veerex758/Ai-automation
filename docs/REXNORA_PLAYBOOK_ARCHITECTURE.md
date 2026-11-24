@@ -105,6 +105,7 @@ Only auto, ask_first and never are valid permission values. Missing policy is no
 ## Current implementation boundary
 
 - The durable lead worker executes Gemini qualification, deterministic IF rules and optional Resend agency notification. It records qualification/rule/decision/provider activity and uses the existing consent-aware email follow-up queue.
+- Activation binds to the exact selected Gemini and Resend workspace connections and requires those connections to be freshly verified, their operations approved, the live provider opt-in enabled, and at least one active agency alert recipient approved by a workspace owner/admin. Playbook agency notifications use this existing workspace recipient allowlist rather than the generic workflow email-node recipient list.
 - WhatsApp delivery, Google Calendar appointment creation, and CRM writes are not part of the current live Playbook worker. Their provider operations and template/setup work may exist in a separate draft bundle, but they must not be activated until consent, booking approval, idempotency, retry/reconciliation and Outcome Ledger coverage are implemented and verified.
 - A clean migration replay and code-level tests are necessary but do not replace authenticated staging acceptance or an agency's end-to-end sign-off.
 
