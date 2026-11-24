@@ -335,6 +335,32 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
   });
 
 
+  await t.test("permanent live provider rejection bypasses retries and dead-letters immediately", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const dispatched = await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,3,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [job] = await claim(db, "permanent-error-worker");
+      assert.equal(job.id, dispatched.rows[0].result.job_id);
+      assert.equal(job.max_attempts, 3);
+      const finished = await db.query(
+        "select public.finish_execution_job($1,$2,false,'EMAIL_PROVIDER_REJECTED','email-step','EMAIL_PROVIDER_REJECTED') as status",
+        [job.id, job.lease_token],
+      );
+      assert.equal(finished.rows[0].status, "dead_letter");
+      const state = await db.query(
+        "select status,last_error_code,attempts from public.execution_jobs where id=$1",
+        [job.id],
+      );
+      assert.deepEqual(state.rows[0], {
+        status: "dead_letter", last_error_code: "EMAIL_PROVIDER_REJECTED", attempts: 1,
+      });
+    } finally { db.release(); }
+  });
+
   await t.test("shared rate limiter is atomic and isolates workspaces", async () => {
     await resetFixture();
     const clients = await Promise.all([client(), client(), client()]);
