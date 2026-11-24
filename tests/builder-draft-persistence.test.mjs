@@ -25,6 +25,6 @@ test("draft setup has no browser-local workflow source of truth", () => {
 });
 
 test("Playbook setup never activates or dispatches the generated workflow", () => {
-  assert.doesNotMatch(source, /status:\s*["']active["']/);
+  assert.doesNotMatch(source, /status:\s*["\']active["\']/);
   assert.doesNotMatch(source, /\/activate|\/execute|\/dispatch|\/run\b/);
 });
