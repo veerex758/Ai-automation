@@ -40,7 +40,7 @@ export async function GET() {
     const auth = await authWorkspace();
     if ("response" in auth) return auth.response;
     const { data, error } = await auth.supabase.from("real_estate_inspection_bookings")
-      .select("id,lead_id,property_id,agent_id,google_connection_id,calendar_id,start_at,end_at,time_zone,status,google_event_id,google_event_url,last_error_code,requested_at,created_at,approved_at")
+      .select("id,lead_id,property_id,agent_id,google_connection_id,calendar_id,start_at,end_at,time_zone,status,google_event_id,google_event_url,last_error_code,created_at,approved_at")
       .eq("workspace_id", auth.workspace.id)
       .order("start_at", { ascending: true })
       .limit(100);
@@ -82,11 +82,13 @@ export async function POST(request: NextRequest) {
         !calendarId || calendarId.length > 300) {
       return NextResponse.json({ error: "Provide a valid lead, Google Calendar connection, future slot, timezone and unique request key." }, { status: 400, headers });
     }
+    if (calendarId !== "primary") return NextResponse.json({ error: "This pilot currently books the selected Google account primary calendar only." }, { status: 400, headers });
+
     const start = new Date(startAt);
     const end = new Date(endAt);
     const now = Date.now();
     if (start.getTime() <= now || end.getTime() <= start.getTime() ||
-        end.getTime() - start.getTime() > 3 * 60 * 60 * 1000 ||
+        end.getTime() - start.getTime() < 5 * 60 * 1000 || end.getTime() - start.getTime() > 3 * 60 * 60 * 1000 ||
         start.getTime() > now + 180 * 24 * 60 * 60 * 1000) {
       return NextResponse.json({ error: "Inspection must be in the next 180 days and last between 1 minute and 3 hours." }, { status: 400, headers });
     }
