@@ -13,6 +13,7 @@ const migration = readFileSync(
   "utf8",
 );
 const privateWorkerSchedule = readFileSync(new URL("../api/worker-sweep.ts", import.meta.url), "utf8");
+const packageConfig = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const vercelConfig = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
 
 test("each persisted workflow step receives a stable per-job idempotency key", () => {
@@ -67,5 +68,8 @@ test("scheduled worker recovery is recurring and environment-gated", () => {
   assert.equal(vercelConfig.schedules["durable-worker-recovery"].path, "/api/internal/worker");
   assert.equal(vercelConfig.schedules["durable-worker-recovery"].requestMethod, "POST");
   assert.match(privateWorkerSchedule, /AIVANTA_DURABLE_WORKER_SCHEDULE_ENABLED !== "true"/);
+  assert.match(privateWorkerSchedule, /handleSchedule/);
+  assert.match(privateWorkerSchedule, /export const POST/);
   assert.match(privateWorkerSchedule, /runDurableWorker\(\)/);
+  assert.equal(packageConfig.dependencies["@vercel/schedules"], "0.0.3");
 });
