@@ -12,6 +12,10 @@ const followups = read("../lib/real-estate/followups.ts");
 const followupsRoute = read("../app/api/cron/real-estate-followups/route.ts");
 const pipelineWorker = read("../app/api/cron/real-estate-pipeline/route.ts");
 const emailNode = read("../nodes/email.ts");
+const inspectionApproval = read("../app/api/real-estate/inspections/[bookingId]/approve/route.ts");
+const inspectionRequest = read("../app/api/real-estate/inspections/route.ts");
+const pilotMigration = read("../supabase/migrations/20261124130000_rexnora_real_estate_channels_inspections_tasks.sql");
+
 
 test("real-estate service client skips empty Supabase placeholders and falls back to integration keys", () => {
   assert.match(
@@ -138,4 +142,25 @@ test("duplicate public intake acknowledgements do not disclose an existing lead 
   const duplicateBranch = intake.slice(start, end);
   assert.match(duplicateBranch, /return NextResponse\.json\(\{accepted:true,duplicate:true\}/);
   assert.doesNotMatch(duplicateBranch, /full_name:prior\.full_name|lead_score:prior\.lead_score|lead_temperature:prior\.lead_temperature|pipeline\},\{status:200/);
+});
+
+
+test("real-estate follow-up and CRM name parsing split actual whitespace", () => {
+  assert.match(serviceClient, /split\\(\\/\\\\s\\+\\/\\)/);
+  assert.match(pipeline, /split\\(\\/\\\\s\\+\\/\\)/);
+});
+
+test("inspection approval loads recorded invitation consent and serializes retries", () => {
+  assert.match(inspectionApproval, /customer_invite_requested,customer_invite_email/);
+  assert.match(inspectionApproval, /booking\\.status === "requested" \\|\\| booking\\.status === "unknown" \\|\\| booking\\.status === "creating"/);
+  assert.match(inspectionApproval, /sendUpdates: booking\\.customer_invite_requested \\? "all" : "none"/);
+  assert.match(pilotMigration, /booking_row\\.status = 'creating' and booking_row\\.updated_at > now\\(\\) - interval '5 minutes'/);
+  assert.match(pilotMigration, /booking_row\\.status not in \\('requested','unknown','creating'\\)/);
+});
+
+test("inspection requests enforce a five-minute minimum and safe workspace RPC grants", () => {
+  assert.match(inspectionRequest, /end\\.getTime\\(\\) - start\\.getTime\\(\\) < 5 \\* 60 \\* 1000/);
+  assert.match(pilotMigration, /alter table public\\.real_estate_inspection_bookings enable row level security/);
+  assert.match(pilotMigration, /revoke all on function public\\.reserve_real_estate_inspection_booking\\([\\s\\S]*?from public,anon,authenticated/);
+  assert.match(pilotMigration, /grant execute on function public\\.reserve_real_estate_inspection_booking\\([\\s\\S]*?to service_role/);
 });
