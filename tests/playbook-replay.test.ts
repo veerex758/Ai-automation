@@ -5,8 +5,6 @@ import assert from "node:assert/strict";
 import { replayPlaybookAgainstLead } from "../lib/playbooks/replay.ts";
 
 const playbook: Parameters<typeof replayPlaybookAgainstLead>[0] = {
-  schema: "rexnora.playbook",
-  schemaVersion: 1,
   goal: { industry: "real_estate", outcome: "Qualify property enquiries" },
   rules: [{ id: "budget-qualified", nodeId: "condition-budget", name: "Budget qualified", rationale: "Budget meets the target." }],
   actionPolicies: [
