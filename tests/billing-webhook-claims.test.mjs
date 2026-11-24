@@ -31,7 +31,7 @@ test("only the current claim token can complete or release a webhook event", () 
   for (const providerBlock of migration.split("create or replace function public.release_billing_webhook_event")) {
     assert.match(providerBlock, /claim_token = p_claim_token/i);
   }
-  assert.match(migration, /set processed_at = now\(\), claim_token = null, claim_expires_at = null/i);
+  assert.match(migration, /set processed_at = pg_catalog\.now\(\), claim_token = null, claim_expires_at = null/i);
   assert.match(migration, /set claim_token = null, claim_expires_at = null, processing_error = v_error_code/i);
   assert.match(migration, /revoke all on function public\.claim_billing_webhook_event[\s\S]*from public, anon, authenticated/i);
   assert.match(migration, /grant execute on function public\.claim_billing_webhook_event[\s\S]*to service_role/i);
