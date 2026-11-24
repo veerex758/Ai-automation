@@ -568,7 +568,54 @@ test("all 20 provider-pack adapters resolve to an exact, opt-in live gate", () =
   assert.equal(providerPackLiveId({ kind: "action", nodeId: "discord", operationId: "get_channel" }), "discord");
   assert.equal(providerPackLiveId({ kind: "action", nodeId: "telegram", operationId: "get_chat" }), "telegram");
   assert.equal(providerPackLiveId({ kind: "action", nodeId: "whatsapp_business", operationId: "get_phone_number" }), "whatsapp_business");
+  assert.equal(providerPackLiveId({ kind: "action", nodeId: "whatsapp_business", operationId: "send_template" }), "whatsapp_business");
   assert.equal(providerPackLiveId({ kind: "action", nodeId: "discord", operationId: "delete_everything" }), null);
+});
+
+test("WhatsApp Business sends an approved template outside the customer-service window", async () => {
+  const operation = findOperation("whatsapp_business", "send_template", "action");
+  assert.ok(operation);
+  let request: any;
+  const result = await operation.run({
+    credentials: { whatsapp_business: {
+      accessToken: "wa-template-token",
+      phoneNumberId: "555000111",
+      templateName: "real_estate_new_enquiry",
+      templateLanguage: "en_US",
+    } },
+    logger: { info() {}, error() {} },
+    http: { async request(args: any) {
+      request = args;
+      return { status: 200, body: { messages: [{ id: "wamid.template-1" }] } };
+    } },
+    previousOutputs: {},
+  }, { to: "+2348012345678", bodyParameters: ["Ada", "Lagos"] });
+  assert.equal(request.method, "POST");
+  assert.equal(new URL(request.url).hostname, "graph.facebook.com");
+  assert.equal(request.headers.Authorization, "Bearer wa-template-token");
+  assert.equal(request.body.messaging_product, "whatsapp");
+  assert.equal(request.body.to, "2348012345678");
+  assert.equal(request.body.type, "template");
+  assert.deepEqual(request.body.template, {
+    name: "real_estate_new_enquiry",
+    language: { code: "en_US" },
+    components: [{ type: "body", parameters: [{ type: "text", text: "Ada" }, { type: "text", text: "Lagos" }] }],
+  });
+  assert.equal(request.retries, 0);
+  assert.deepEqual(result, { messageId: "wamid.template-1", templateName: "real_estate_new_enquiry", language: "en_US" });
+});
+
+test("WhatsApp template sending fails before network access without an approved-template configuration", async () => {
+  const operation = findOperation("whatsapp_business", "send_template", "action");
+  assert.ok(operation);
+  let calls = 0;
+  await assert.rejects(() => operation.run({
+    credentials: { whatsapp_business: { accessToken: "wa-token", phoneNumberId: "555000111" } },
+    logger: { info() {}, error() {} },
+    http: { async request() { calls++; throw new Error("must not send"); } },
+    previousOutputs: {},
+  }, { to: "+2348012345678" }), /WHATSAPP_TEMPLATE_CONFIGURATION_REQUIRED/);
+  assert.equal(calls, 0);
 });
 
 const providerSpecificCases: Array<{
