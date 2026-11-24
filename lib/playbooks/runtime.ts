@@ -161,6 +161,12 @@ export async function requestOrReadPlaybookDecision(args: {
     pipeline_status: "blocked",
     pipeline_next_attempt_at: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString(),
     pipeline_last_error_code: "PLAYBOOK_APPROVAL_REQUIRED",
+    pipeline_lease_token: null,
+    pipeline_lease_until: null,
+    ...(args.type === "action_approval" && nodeId === "gemini" ? { qualification_status: "blocked" } : {}),
+    ...(args.type === "action_approval" && nodeId === "email" ? { agent_notification_status: "blocked" } : {}),
+    ...(args.type === "provider_failure" && nodeId === "gemini" ? { qualification_status: "blocked" } : {}),
+    ...(args.type === "provider_failure" && nodeId === "email" ? { agent_notification_status: "blocked" } : {}),
   }).eq("id", lead.id).eq("workspace_id", lead.workspace_id).eq("pipeline_lease_token", args.leaseToken).select("id").maybeSingle();
   if (pauseError || !paused) throw new Error("PLAYBOOK_APPROVAL_PAUSE_FAILED");
   return { state: "pending", decisionId: decision.id };
