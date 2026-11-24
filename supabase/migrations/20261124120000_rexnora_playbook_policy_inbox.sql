@@ -68,7 +68,8 @@ grant all on public.real_estate_playbook_decisions to service_role;
 create or replace function public.resolve_real_estate_playbook_decision(
   p_decision_id uuid,
   p_actor_user_id uuid,
-  p_decision text
+  p_decision text,
+  p_corrections jsonb default '{}'::jsonb
 )
 returns table (
   result_status text,
@@ -87,10 +88,19 @@ declare
   lead_row public.real_estate_leads%rowtype;
   workflow_row public.workflows%rowtype;
   next_status text;
+  correction_key text;
 begin
   if p_decision not in ('approved','rejected') or p_actor_user_id is null then
     raise exception using errcode='22023', message='Invalid Playbook decision';
   end if;
+  if p_corrections is null or pg_catalog.jsonb_typeof(p_corrections) <> 'object' then
+    raise exception using errcode='22023', message='Corrections must be an object';
+  end if;
+  for correction_key in select pg_catalog.jsonb_object_keys(p_corrections) loop
+    if correction_key not in ('transaction_type','property_type','preferred_location','budget_min','budget_max','timeframe','readiness','main_concern') then
+      raise exception using errcode='22023', message='Unsupported lead correction field';
+    end if;
+  end loop;
 
   select * into decision_row
     from public.real_estate_playbook_decisions
@@ -99,6 +109,10 @@ begin
   if not found then
     return query select 'not_found'::text, null::text, null::uuid, null::uuid, null::integer, null::uuid;
     return;
+  end if;
+
+  if p_corrections <> '{}'::jsonb and (p_decision <> 'approved' or decision_row.decision_type <> 'qualification_review') then
+    raise exception using errcode='22023', message='Only approved qualification reviews can include corrections';
   end if;
 
   if decision_row.status <> 'pending' then
@@ -147,6 +161,36 @@ begin
     return;
   end if;
 
+  if p_corrections ? 'transaction_type' and (pg_catalog.jsonb_typeof(p_corrections->'transaction_type') <> 'string' or p_corrections->>'transaction_type' not in ('buy','rent','invest','sell','unknown')) then
+    raise exception using errcode='22023', message='Invalid transaction type correction';
+  end if;
+  if p_corrections ? 'property_type' and (pg_catalog.jsonb_typeof(p_corrections->'property_type') <> 'string' or p_corrections->>'property_type' not in ('apartment','house','land','commercial','other','unknown')) then
+    raise exception using errcode='22023', message='Invalid property type correction';
+  end if;
+  if p_corrections ? 'timeframe' and (pg_catalog.jsonb_typeof(p_corrections->'timeframe') <> 'string' or p_corrections->>'timeframe' not in ('urgent','within_30_days','one_to_three_months','over_three_months','unknown')) then
+    raise exception using errcode='22023', message='Invalid timeframe correction';
+  end if;
+  if p_corrections ? 'readiness' and (pg_catalog.jsonb_typeof(p_corrections->'readiness') <> 'string' or p_corrections->>'readiness' not in ('cash_ready','pre_approved','financing_needed','researching','unknown')) then
+    raise exception using errcode='22023', message='Invalid readiness correction';
+  end if;
+  if p_corrections ? 'preferred_location' and (pg_catalog.jsonb_typeof(p_corrections->'preferred_location') <> 'string' or length(trim(p_corrections->>'preferred_location')) not between 1 and 200) then
+    raise exception using errcode='22023', message='Invalid location correction';
+  end if;
+  if p_corrections ? 'main_concern' and (pg_catalog.jsonb_typeof(p_corrections->'main_concern') <> 'string' or length(trim(p_corrections->>'main_concern')) > 500) then
+    raise exception using errcode='22023', message='Invalid main concern correction';
+  end if;
+  if p_corrections ? 'budget_min' and (pg_catalog.jsonb_typeof(p_corrections->'budget_min') <> 'number' or (p_corrections->>'budget_min')::numeric < 0 or (p_corrections->>'budget_min')::numeric > 999999999999.99) then
+    raise exception using errcode='22023', message='Invalid minimum budget correction';
+  end if;
+  if p_corrections ? 'budget_max' and (pg_catalog.jsonb_typeof(p_corrections->'budget_max') <> 'number' or (p_corrections->>'budget_max')::numeric < 0 or (p_corrections->>'budget_max')::numeric > 999999999999.99) then
+    raise exception using errcode='22023', message='Invalid maximum budget correction';
+  end if;
+  if coalesce((p_corrections->>'budget_min')::numeric, lead_row.budget_min) is not null
+     and coalesce((p_corrections->>'budget_max')::numeric, lead_row.budget_max) is not null
+     and coalesce((p_corrections->>'budget_max')::numeric, lead_row.budget_max) < coalesce((p_corrections->>'budget_min')::numeric, lead_row.budget_min) then
+    raise exception using errcode='22023', message='Maximum budget cannot be lower than minimum budget';
+  end if;
+
   next_status := p_decision;
   update public.real_estate_playbook_decisions
      set status=next_status, decided_by=p_actor_user_id, decided_at=now()
@@ -154,7 +198,16 @@ begin
 
   if p_decision = 'approved' then
     update public.real_estate_leads
-       set pipeline_status='pending',
+       set transaction_type=case when p_corrections ? 'transaction_type' then p_corrections->>'transaction_type' else transaction_type end,
+           property_type=case when p_corrections ? 'property_type' then p_corrections->>'property_type' else property_type end,
+           preferred_location=case when p_corrections ? 'preferred_location' then p_corrections->>'preferred_location' else preferred_location end,
+           budget_min=case when p_corrections ? 'budget_min' then (p_corrections->>'budget_min')::numeric else budget_min end,
+           budget_max=case when p_corrections ? 'budget_max' then (p_corrections->>'budget_max')::numeric else budget_max end,
+           timeframe=case when p_corrections ? 'timeframe' then p_corrections->>'timeframe' else timeframe end,
+           readiness=case when p_corrections ? 'readiness' then p_corrections->>'readiness' else readiness end,
+           main_concern=case when p_corrections ? 'main_concern' then p_corrections->>'main_concern' else main_concern end,
+           qualification=case when p_corrections <> '{}'::jsonb then qualification || pg_catalog.jsonb_build_object('manualCorrections',p_corrections) else qualification end,
+           pipeline_status='pending',
            pipeline_next_attempt_at=now(),
            pipeline_last_error_code=null,
            qualification_status=case
@@ -187,7 +240,8 @@ begin
       'workflowVersion', decision_row.workflow_version,
       'stepId', decision_row.step_id,
       'nodeId', decision_row.node_id,
-      'operationId', decision_row.operation_id
+      'operationId', decision_row.operation_id,
+      'corrections', case when p_decision='approved' then p_corrections else '{}'::jsonb end
     )
   );
 
