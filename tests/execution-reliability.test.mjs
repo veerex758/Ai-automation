@@ -12,6 +12,8 @@ const migration = readFileSync(
   new URL("../supabase/migrations/20261124130000_rexnora_execution_reliability_retries.sql", import.meta.url),
   "utf8",
 );
+const workerRoute = readFileSync(new URL("../app/api/internal/worker/route.ts", import.meta.url), "utf8");
+const vercelConfig = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
 
 test("each persisted workflow step receives a stable per-job idempotency key", () => {
   assert.match(nodeTypes, /idempotencyKey\?: string/);
@@ -54,4 +56,12 @@ test("expired leased jobs with a cancellation request are cancelled, never recla
   assert.match(migration, /status = 'running' and lease_until < now\(\)[\s\S]*?cancel_requested_at is not null/);
   assert.match(migration, /status = 'cancelled'[\s\S]*?last_error_code = 'EXECUTION_CANCELLED'/);
   assert.match(migration, /where j\.cancel_requested_at is null/);
+});
+
+test("scheduled worker recovery is recurring and environment-gated", () => {
+  assert.equal(vercelConfig.schedules["durable-worker-recovery"].schedule, "*/15 * * * *");
+  assert.equal(vercelConfig.schedules["durable-worker-recovery"].path, "/api/internal/worker");
+  assert.equal(vercelConfig.schedules["durable-worker-recovery"].requestMethod, "POST");
+  assert.match(workerRoute, /AIVANTA_DURABLE_WORKER_SCHEDULE_ENABLED !== "true"/);
+  assert.match(workerRoute, /CRON_SECRET/);
 });
