@@ -556,7 +556,7 @@ async function createHubSpotContact(
   if (!configured.ok) return { ok: false as const, blocked: true as const, code: configured.code };
   const operation = findOperation("hubspot", "create_contact", "action");
   if (!operation) return { ok: false as const, blocked: true as const, code: "HUBSPOT_CREATE_OPERATION_NOT_REGISTERED" };
-  const parts = lead.full_name.trim().split(/\\s+/);
+  const parts = lead.full_name.trim().split(/\s+/);
   const context = makeNodeContext({ hubspot: configured.credentials });
   const result = await operation.run(context, {
     email: lead.email.trim().toLowerCase(),
