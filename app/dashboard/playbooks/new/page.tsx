@@ -96,7 +96,7 @@ export default function NewPlaybookPage() {
         "For property inspection booking, use Google Calendar to inspect the requested time window and create an event only after the customer selects a slot and an agent approves it. Use google_calendar.create_event. Do not infer availability. Do not send attendee invitations unless explicitly approved.",
         "The buyer/investor nurture is already configured in the native Real Estate follow-up queue. It sends only to consenting email leads at immediate, day 1, day 7, day 30 and day 90, and stops on response, consent withdrawal, takeover or closure. Do not create a second nurture queue in this Playbook.",
         "For back-office updates, search the selected CRM for an exact contact match before creating a contact, then create an internal task only through a registered connected task provider. Do not create duplicate CRM records.",
-        "Use only registered Rexnora operations. Do not invent integrations, data sources or triggers. The existing real-estate form does not automatically dispatch a Playbook unless a real event connection is configured.",
+        "Use registered Rexnora operations only. Do not invent integrations, data sources or triggers. The existing real-estate form does not automatically dispatch a Playbook unless a real event connection is configured.",
         "Gemini may extract structured details; use deterministic IF conditions for business rules. Customer contact, Calendar writes and CRM/task writes must default to Ask me first. Do not auto-approve external side effects.",
         "Return an inactive draft only. Never activate or execute anything."
       ].join("\n\n");
