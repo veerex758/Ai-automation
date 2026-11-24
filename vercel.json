@@ -7,10 +7,11 @@
   ],
   "schedules": {
     "durable-worker-recovery": {
-      "schedule": "*/15 * * * *",
+      "schedule": "*/30 * * * *",
       "path": "/api/internal/worker",
       "requestMethod": "POST",
       "timezone": "UTC"
     }
-  }
+  },
+  "$schema": "https://openapi.vercel.sh/vercel.json"
 }
