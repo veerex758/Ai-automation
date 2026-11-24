@@ -7,9 +7,9 @@ import DashboardSidebar from "./dashboard-sidebar";
 type Section = "integrations" | "templates" | "analytics" | "activity" | "billing" | "settings";
 const templates = [
   {name:"Instant Speed-to-Lead & Qualification",category:"Real estate · 01",description:"Start with a verified enquiry event, qualify with Gemini, alert an approved agency inbox, and send WhatsApp only with explicit WhatsApp consent and an approved message template.",href:"/dashboard/playbooks/new#speed-to-lead"},
-  {name:"Property Inspection & Calendar Booking",category:"Real estate · 02",description:"Check the connected agent calendar, request confirmation of a selected slot, then create the event only after approval.",href:"/dashboard/playbooks/new#inspection-booking"},
+  {name:"Property Inspection & Calendar Booking",category:"Real estate · 02",description:"Check the connected agent calendar, request confirmation of a selected slot, then create the event only after approval.",href:"/dashboard/real-estate/operations"},
   {name:"90-Day Buyer & Investor Follow-Up",category:"Real estate · 03",description:"Manage the native five-step email nurture queue at immediate, day 1, day 7, day 30 and day 90. Customer response, consent withdrawal or agent takeover stops future sends.",href:"/dashboard/real-estate#followups"},
-  {name:"Real Estate Back-Office Automation",category:"Real estate · 04",description:"Prepare a CRM search-before-create path and an internal follow-up task from the qualified enquiry. External writes remain approval-gated.",href:"/dashboard/playbooks/new#back-office"},
+  {name:"Real Estate Back-Office Automation",category:"Real estate · 04",description:"Prepare a CRM search-before-create path and an internal follow-up task from the qualified enquiry. External writes remain approval-gated.",href:"/dashboard/real-estate/operations#tasks"},
   {name:"Lead Capture & Welcome Email",category:"Lead capture",description:"Start from a website form, record lead details, and prepare a welcome message.",href:"/dashboard#quick-start-title"},
   {name:"Support Ticket Triage",category:"Customer support",description:"Check incoming requests and prepare a support follow-up task.",href:"/dashboard#quick-start-title"},
   {name:"Content Approval",category:"Content",description:"Create a simple review flow for submitted content.",href:"/dashboard#quick-start-title"},
