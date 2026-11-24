@@ -58,13 +58,14 @@ begin
     ) on conflict (event_key) do nothing;
 
     update public.billing_recurring_events e
-       set claim_token = gen_random_uuid(),
+       set payload_hash = case when e.payload_hash ~ '^[a-f0-9]{64}$' then e.payload_hash else p_payload_hash end,
+           claim_token = gen_random_uuid(),
            claim_expires_at = v_now + make_interval(secs => p_lease_seconds),
            processing_error = null
      where e.event_key = p_event_key
        and e.provider = p_provider
        and e.event_type = p_event_type
-       and e.payload_hash = p_payload_hash
+       and (e.payload_hash = p_payload_hash or e.payload_hash !~ '^[a-f0-9]{64}$')
        and e.processed_at is null
        and (e.claim_token is null or e.claim_expires_at is null or e.claim_expires_at <= v_now)
     returning e.claim_token into v_token;
@@ -74,8 +75,8 @@ begin
     else
       select case
         when e.provider <> p_provider or e.event_type <> p_event_type then 'event_key_conflict'
-        when e.payload_hash <> p_payload_hash then 'payload_mismatch'
         when e.processed_at is not null then 'completed'
+        when e.payload_hash ~ '^[a-f0-9]{64}$' and e.payload_hash <> p_payload_hash then 'payload_mismatch'
         when e.claim_token is not null and e.claim_expires_at > v_now then 'in_progress'
         else 'unavailable'
       end into v_reason
