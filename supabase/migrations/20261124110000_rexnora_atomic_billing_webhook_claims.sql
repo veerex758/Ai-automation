@@ -39,7 +39,7 @@ declare
   v_reason text;
   v_now timestamptz := pg_catalog.now();
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is null or p_provider not in ('stripe','paystack')
@@ -135,7 +135,7 @@ security invoker
 set search_path = ''
 as $$
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is null or p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
@@ -174,7 +174,7 @@ declare
   v_error_code text := case when p_error_code ~ '^[A-Z0-9_]{1,80}$'
     then p_error_code else 'PROCESSING_FAILED' end;
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is null or p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
