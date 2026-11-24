@@ -10,7 +10,7 @@ This is the first customer-facing industry template built on Rexnora's workspace
 - Lead scoring is calculated in application code from explainable factors. Gemini does not choose the numeric score.
 - Agent assignment verifies that the agent is in the same workspace.
 - Property matching only returns active listings marked available whose price and location are stored and whose availability was verified within the last seven days.
-- Follow-up checkpoints are persisted for immediately, 1 hour, 24 hours, 3 days and 7 days, only for a consenting customer who selected email and supplied an email address.
+- Follow-up checkpoints are persisted for immediately, 1 day, 7 days, 30 days and 90 days, only for a consenting customer who selected email and supplied an email address.
 - Follow-ups stop when consent is withdrawn, the customer responds, an agent takes over or the lead is won/lost.
 - The cron dispatcher uses an atomic database claim/lease and Resend idempotency keys. Each attempt and provider acceptance is persisted.
 
@@ -50,11 +50,12 @@ The worker is safe to invoke more than once: leads and follow-up rows are claime
 
 ## Current deliberate boundaries
 
-- WhatsApp delivery is not enabled. The data model records the requested contact preference, but the automated follow-up queue currently sends email only.
-- Google Sheets export and Google Calendar viewing appointments are not part of this pilot slice.
+- The registered WhatsApp Business adapter now supports approved-template sends with optional workspace defaults and explicit live-operation approval. The native real-estate pipeline still does not dispatch WhatsApp follow-ups: a channel-specific consent check and durable send ledger are required before enabling customer messaging. The automated nurture queue remains email-only.
+- Google Calendar now has a registered `create_event` operation using the `calendar.events.owned` scope, with invitee notifications off by default. The native real-estate screen does not yet offer appointment-slot availability, booking confirmation or an appointment ledger; do not advertise automated inspection booking as complete. Google Sheets remains read-only in the current contract.
 - Public intake and authenticated lead creation enqueue and invoke the durable Gemini qualification pipeline. Gemini output, deterministic score, summary, suggested reply, activity and status are persisted under a workspace-scoped lease. The complete behavior still needs an authenticated staging acceptance run with a verified Gemini connection and approved operation.
-- The five-step follow-up sequence is generated from the structured Gemini qualification response and persisted only for customers who explicitly consented to email follow-ups and supplied an email address. Delivery remains blocked until a verified Resend connection and approved operation exist.
+- The five-step, 90-day follow-up sequence is generated from the structured Gemini qualification response and persisted only for customers who explicitly consented to email follow-ups and supplied an email address. Steps are scheduled immediately, after 1 day, 7 days, 30 days and 90 days. Delivery remains blocked until a verified Resend connection and approved operation exist.
 - Resend API acceptance is recorded. Delivery, bounce, open and click states require a configured Resend event webhook before they can be reported as provider-confirmed delivery.
+- Back-office visibility currently includes workspace-scoped lead/property records, assignment, lead activities, match history and agency email alerts. CRM writes and inspection-event persistence are not yet wired into the real-estate pipeline, even though generic CRM provider actions are available in the integration catalogue.
 - Customer privacy notice, retention schedule, agency approval and live provider acceptance must be completed before real customer onboarding.
 
 ## Acceptance checks to run

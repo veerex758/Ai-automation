@@ -55,6 +55,7 @@ export default function RealEstatePage(){
   finally{setLoading(false);}
  },[]);
  useEffect(()=>{void load()},[load]);
+ useEffect(()=>{if(window.location.hash==="#followups")setTab("followups")},[]);
 
  const visibleLeads=useMemo(()=>leads.filter(lead=>(lead.full_name+" "+(lead.email??"")+" "+(lead.preferred_location??"")).toLowerCase().includes(search.toLowerCase())&&(statusFilter==="all"||lead.status===statusFilter)),[leads,search,statusFilter]);
  async function showLead(lead:Lead){
@@ -77,7 +78,7 @@ export default function RealEstatePage(){
  async function createLead(event:FormEvent<HTMLFormElement>){
   event.preventDefault();setBusy(true);setError("");setNotice("");
   try{
-   const body={...leadForm,budgetMin:leadForm.budgetMin===""?null:Number(leadForm.budgetMin),budgetMax:leadForm.budgetMax===""?null:Number(leadForm.budgetMax),source:"manual",consentText:leadForm.consentToContact?"Customer explicitly agreed to receive email follow-ups.":null};
+   const body={...leadForm,budgetMin:leadForm.budgetMin===""?null:Number(leadForm.budgetMin),budgetMax:leadForm.budgetMax===""?null:Number(leadForm.budgetMax),source:"manual",consentText:leadForm.consentToContact?"Customer explicitly agreed to follow-up contact by "+leadForm.contactPreference+".":null};
    await requestJson("/api/real-estate/leads",{method:"POST",body:JSON.stringify(body)});
    setLeadForm(blankLead);setShowLeadForm(false);setNotice("Lead created.");await load();
   }catch(cause){setError(cause instanceof Error?cause.message:"Lead creation failed.");}
@@ -135,7 +136,7 @@ export default function RealEstatePage(){
   <section className="dashboard-main">
    <header className="dashboard-topbar"><div className="breadcrumbs">Workspace / <strong>Real Estate</strong></div><span className="environment-badge">Lead engine</span></header>
    <div className="dashboard-content re-content">
-    <div className="re-heading"><div><div className="dash-eyebrow">REAL ESTATE WORKSPACE</div><h1>Lead Management</h1><p>Capture enquiries, prioritize serious prospects and keep every agent action visible.</p></div><button className="re-primary" onClick={()=>{setShowLeadForm(true);setShowPropertyForm(false);setShowIntakeForm(false)}}>＋ Add lead</button></div>
+    <div className="re-heading"><div><div className="dash-eyebrow">REAL ESTATE WORKSPACE</div><h1>Lead Management</h1><p>Capture enquiries, prioritize serious prospects and keep every agent action visible.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><a className="re-secondary" href="/dashboard/real-estate/operations">Operations</a><button className="re-primary" onClick={()=>{setShowLeadForm(true);setShowPropertyForm(false);setShowIntakeForm(false)}}>＋ Add lead</button></div></div>
     {error&&<div className="re-alert re-error" role="alert">{error}</div>}
     {notice&&<div className="re-alert" role="status">{notice}<button onClick={()=>setNotice("")} aria-label="Dismiss message">×</button></div>}
     {oneTimeKey&&<section className="re-key-card"><div><strong>New website intake key — shown once</strong><p>Save this key securely. It will not be displayed again.</p></div><div className="re-key-value"><span>{oneTimeKey.publicKey}</span><button onClick={()=>void copy(oneTimeKey.publicKey)}>Copy key</button></div><div className="re-key-value"><span>{oneTimeKey.endpoint}</span><button onClick={()=>void copy(window.location.origin+oneTimeKey.endpoint)}>Copy endpoint</button></div><button className="re-link" onClick={()=>setOneTimeKey(null)}>Dismiss</button></section>}
@@ -174,9 +175,9 @@ export default function RealEstatePage(){
     </section>}
 
     {tab==="followups"&&<section className="re-panel">
-     <div className="re-panel-head"><div><h2>Follow-up sequence</h2><p>Only customers who explicitly consented to email follow-up enter this queue.</p></div><span className="re-muted-tag">Email only</span></div>
+     <div className="re-panel-head"><div><h2>Follow-up sequence</h2><p>Long-term nurture for consenting email leads. Sending stops when a customer responds, withdraws consent, or an agent takes over.</p></div><span className="re-muted-tag">Email only</span></div>
      <div className="re-table-wrap"><table className="re-table"><thead><tr><th>Customer</th><th>Sequence</th><th>Due at</th><th>State</th><th>Attempts</th><th>Provider result</th></tr></thead><tbody>
-      {followups.map(f=><tr key={f.id}><td><strong>{f.lead?.full_name??"Unknown lead"}</strong><small>{f.lead?.email??""}</small></td><td>{["Immediately","1 hour","24 hours","3 days","7 days"][f.sequence-1]??("Step "+f.sequence)}</td><td>{dateLabel(f.due_at)}</td><td><span className={"re-status "+f.status}>{label(f.status)}</span></td><td>{f.attempt_count}/{f.max_attempts}</td><td>{f.last_error_code??(f.sent_at?"Accepted "+dateLabel(f.sent_at):"—")}</td></tr>)}
+      {followups.map(f=><tr key={f.id}><td><strong>{f.lead?.full_name??"Unknown lead"}</strong><small>{f.lead?.email??""}</small></td><td>{["Immediately","1 day","7 days","30 days","90 days"][f.sequence-1]??("Step "+f.sequence)}</td><td>{dateLabel(f.due_at)}</td><td><span className={"re-status "+f.status}>{label(f.status)}</span></td><td>{f.attempt_count}/{f.max_attempts}</td><td>{f.last_error_code??(f.sent_at?"Accepted "+dateLabel(f.sent_at):"—")}</td></tr>)}
       {!loading&&!followups.length&&<tr><td colSpan={6} className="re-empty">No follow-ups scheduled.</td></tr>}
      </tbody></table></div>
      <p className="re-footnote">Live delivery remains off until workspace Resend is tested and approved, the server feature switches are enabled, and a scheduler invokes the follow-up worker at least every five minutes. Provider acceptance is not the same as confirmed delivery.</p>

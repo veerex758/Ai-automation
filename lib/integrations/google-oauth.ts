@@ -10,7 +10,7 @@ export const GOOGLE_PRODUCTS = {
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   },
   drive: { label: "Google Drive", scopes: ["https://www.googleapis.com/auth/drive.readonly"] },
-  calendar: { label: "Google Calendar", scopes: ["https://www.googleapis.com/auth/calendar.readonly"] },
+  calendar: { label: "Google Calendar", scopes: ["https://www.googleapis.com/auth/calendar.events.owned"] },
   docs: { label: "Google Docs", scopes: ["https://www.googleapis.com/auth/documents.readonly"] },
   forms: { label: "Google Forms", scopes: ["https://www.googleapis.com/auth/forms.body.readonly"] },
   youtube: { label: "YouTube", scopes: ["https://www.googleapis.com/auth/youtube.readonly"] },
@@ -26,8 +26,8 @@ const GOOGLE_IDENTITY_SCOPES = new Set([
 ]);
 
 /**
- * If Google returns a granted-scope list, require the product's exact read-only
- * scope and allow only the minimal identity scopes requested by Aivanta.
+ * If Google returns a granted-scope list, require the product's exact scope and allow only
+ * the minimal identity scopes requested by Rexnora.
  * Google may omit the scope field when the grant matches the requested scopes;
  * in that case, the authorization request remains the boundary because
  * include_granted_scopes=false.
