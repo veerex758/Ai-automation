@@ -6,14 +6,14 @@ This migration introduces a server-owned PostgreSQL queue for Aivanta workflow e
 - **Persistent dispatch:** one server-side transaction serializes each workspace/idempotency key, creates the run and job together, snapshots the exact workflow version/definition, and returns the existing job for duplicate delivery.
 - **Worker claims:** claims use row locks with `SKIP LOCKED`, per-attempt lease tokens, and bounded leases. Expired running leases can be reclaimed.
 - **Checkpoints:** one durable checkpoint per job/step records status and bounded input/output metadata. This phase records progress but does not yet resume the dry-run executor from a checkpoint; retries re-evaluate the side-effect-free workflow.
-- **Retries:** transient failures are rescheduled with capped exponential backoff.
+- **Retries:** only classified transient failures are rescheduled with capped exponential backoff. Permanent validation, authorization, configuration and provider-rejection errors go directly to dead letter.
 - **Dead letters:** jobs reaching their attempt limit are copied to a separate dead-letter table with a stable error code.
 - **Monitoring data:** job status, attempt count, availability, lease, worker ID, and safe error code are queryable by trusted server-side operators.
 
 ## Worker endpoint
-Deploy the Next.js application with a server-only `CRON_SECRET` (or `AIVANTA_WORKER_SECRET`) and Supabase service key. Invoke `POST /api/internal/worker` with `Authorization: Bearer <secret>`. The worker claims and processes one job per tick so a slow live workflow cannot strand other jobs with already-consumed attempts.
+Deploy the Next.js application with a server-only `CRON_SECRET` (or `AIVANTA_WORKER_SECRET`) and Supabase service key. Invoke `POST /api/internal/worker` with `Authorization: Bearer <secret>`. The worker claims one job per pass. A dispatch wake performs at most three bounded passes, waiting 5 seconds and then 10 seconds for eligible retries; it never polls indefinitely.
 
-The worker executes legacy workflows and registry workflows in dry-run mode. Registry-format jobs may execute live registered actions only when the dispatch request explicitly sets mode=live and AIVANTA_LIVE_EXECUTION_ENABLED=true. Live jobs are limited to one attempt: if the worker loses its lease or a provider outcome becomes uncertain, the job is not automatically replayed. The legacy synchronous Resend route remains separate.
+The worker executes legacy workflows and registry workflows in dry-run mode. Registry-format jobs may execute live registered actions only when the dispatch request explicitly sets mode=live and AIVANTA_LIVE_EXECUTION_ENABLED=true. Live retries are operation-allowlisted. A workflow containing Resend email plus only approved deterministic transforms and Gemini qualification/generation may receive up to three attempts. Resend receives a stable per-job/per-step Idempotency-Key, so a retry after an uncertain email response does not send the same email twice. Gemini can be called again if a crash happens before its checkpoint is persisted, which may incur another model usage charge. Other provider write operations remain single-attempt and are dead-lettered when their outcome is uncertain.
 
 ## Verification gates before production
 1. Apply the migration to an isolated development database only after the migration-history reconciliation PR is merged and clean replay succeeds.
@@ -30,8 +30,8 @@ The worker executes legacy workflows and registry workflows in dry-run mode. Reg
 ## Operational limits
 - Authenticated manual dispatch schedules an immediate server-side worker wake-up after the dispatch response. The /api/internal/worker endpoint remains available to an external scheduler for queued scheduled jobs, recovery, and maintenance; this repository does not provision a continuously running process.
 - Queue tables and RPCs are service-role only.
-- Dispatch creation and successful run finalization are transactional and lease-checked. A job can be safely retried only if its actions are side-effect-free or individually idempotent. Provider actions remain out of scope for this worker until reconciliation semantics are implemented.
-- Dead-letter replay UI and operator controls are a follow-up.
+- Dispatch creation and successful run finalization are transactional and lease-checked. A pending cancellation wins over an expired lease: the claim RPC finalizes the job as cancelled instead of issuing a new lease. Only provider actions with a verified idempotency contract are eligible for automatic live retry; unknown operations fail closed. Other uncertain live outcomes require provider reconciliation before a new execution.
+- Dead-letter operator recovery remains dry-run-only; live dead letters cannot be replayed automatically.
 
 
 
@@ -43,9 +43,9 @@ The worker executes legacy workflows and registry workflows in dry-run mode. Reg
 - Credentials are saved per workspace through /api/integrations/workspace. Only workspace owners/admins can add or replace them. The browser receives connection metadata only; encrypted values are stored in workspace_integration_secrets.
 - AIVANTA_CREDENTIALS_ENCRYPTION_KEY must be a base64-encoded 32-byte key. The encrypted credential envelope uses AES-256-GCM and version v1.
 - Live dispatch requires an authenticated user, an active workflow, an idempotency key, and AIVANTA_LIVE_EXECUTION_ENABLED=true. Email recipients must also be literal addresses on AIVANTA_LIVE_EMAIL_RECIPIENTS.
-- Live jobs are forced to max_attempts=1, and registry-format live workflows are limited to four actions to keep execution within the 120-second lease. The worker writes a started checkpoint before each action and a completion checkpoint after the action. An expired lease is never replayed automatically because the provider may already have accepted the request.
+- Live jobs default to one attempt. The server requests up to three only when every action is in the explicit retry-safe allowlist and the workflow contains Resend email; the database caps live attempts at three. A stable key `rexnora:<job-id>:<step-id>` is sent to Resend for every email step, including loop iterations. Automatic live retries stop 20 hours after job creation, leaving a safety margin inside Resend's 24-hour idempotency retention. Other provider writes remain single-attempt. The worker writes a started checkpoint before each action and a completion checkpoint after the action; successful checkpoints are skipped on retry.
 - The authenticated dispatch route wakes the worker with Next.js after() after the queue transaction commits. The queue remains the source of truth if that wake-up fails; the job stays queued.
-- Webhook-triggered live queue execution remains disabled. Scheduled and durable webhook dispatchers continue to use the seven-argument compatibility RPC and are dry-run only.
+- Signed webhook ingress can queue live execution only when `AIVANTA_LIVE_EXECUTION_ENABLED=true` and `AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED=true`; it applies the same retry-safe operation allowlist. The internal scheduler still uses its dry-run compatibility path and must not be represented as live scheduled execution.
 - The new migrations are additive and must be applied only after the base queue/integration migrations are merged and clean replay passes. Do not enable live execution before authenticated staging verification of credential save, dispatch, worker, and run history.
 
 ## PostgreSQL failure-injection coverage
