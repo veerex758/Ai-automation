@@ -72,7 +72,7 @@ test("saving or re-testing credentials invalidates the selected connection befor
   assert.match(saveRouteSource, /p_connection_id: connectionId/);
   assert.match(saveRouteSource, /p_create_new: requestedConnectionId === undefined/);
   assert.match(connectionMigrationSource, /set status\s*=\s*'needs_attention'[\s\S]*last_test_status\s*=\s*null/i);
-  assert.match(connectionMigrationSource, /where id = p_connection_id[\s\S]*and workspace_id = p_workspace_id[\s\S]*and provider = p_provider/i);
+  assert.match(connectionMigrationSource, /where wi\.id = p_connection_id[\s\S]*and wi\.workspace_id = p_workspace_id[\s\S]*and wi\.provider = p_provider/i);
   assert.match(connectionTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
   assert.match(resendTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
 });
