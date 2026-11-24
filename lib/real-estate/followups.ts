@@ -74,18 +74,17 @@ async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, cla
 
   const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
     .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
-  if (secretError || !secret || secret.encryption_version !== "v1") {
+  if (secretError || !secret || !["v1", "v2"].includes(secret.encryption_version)) {
     await finish(db, claim, false, null, "RESEND_CREDENTIALS_UNAVAILABLE", false);
     return "blocked";
   }
 
   let credentials: ReturnType<typeof decryptWorkspaceCredentials>["resend"];
+  const associatedData = secret.encryption_version === "v2"
+    ? claim.workspace_id + ":resend:" + integration.id
+    : claim.workspace_id + ":resend";
   try {
-    credentials = decryptWorkspaceCredentials(
-      secret.encrypted_credentials,
-      undefined,
-      claim.workspace_id + ":resend",
-    ).resend;
+    credentials = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData).resend;
   } catch {
     await finish(db, claim, false, null, "RESEND_CREDENTIALS_DECRYPT_FAILED", false);
     return "blocked";
