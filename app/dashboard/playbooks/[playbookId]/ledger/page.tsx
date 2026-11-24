@@ -52,7 +52,7 @@ export default function PlaybookOutcomeLedgerPage() {
         <div className="playbook-heading">
           <div className="playbook-eyebrow">REXNORA PLAYBOOKS · OUTCOME LEDGER</div>
           <h1>What happened to each enquiry?</h1>
-          <p>A workspace-scoped record of qualification, provider delivery, inspection bookings, internal tasks and follow-up outcomes. Entries are read-only.</p>
+          <p>A workspace-scoped record of qualification, provider delivery, inspection bookings, internal tasks and follow-up outcomes. Activity audit events are append-only; delivery and task status records update as work progresses.</p>
         </div>
         <div className="playbook-alert">Provider requests and customer notifications are recorded separately from internal activity. A queued or accepted status is not a guarantee that the customer has responded.</div>
         {loading && <div className="playbook-panel">Loading outcome history…</div>}
