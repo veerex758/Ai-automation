@@ -9,6 +9,7 @@ const baseIntegrationSchema = readFileSync(new URL("../supabase/migrations/20261
 const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../nodes/workflow-runner.ts", import.meta.url), "utf8");
 const connectionsPage = readFileSync(new URL("../app/dashboard/connections/page.tsx", import.meta.url), "utf8");
+const adminConfig = readFileSync(new URL("../lib/supabase/admin.ts", import.meta.url), "utf8");
 
 test("standard integration disconnect is origin-checked, bounded and transaction-backed", () => {
   const handler = workspaceRoute.slice(workspaceRoute.indexOf("export async function DELETE"));
@@ -31,6 +32,8 @@ test("Google disconnect deletes local credentials transactionally before best-ef
   assert.match(handler, /rpc\("revoke_google_connection"/);
   assert.ok(handler.indexOf('rpc("revoke_google_connection"') < handler.indexOf('https://oauth2.googleapis.com/revoke'));
   assert.match(handler, /remoteRevoked/);
+  assert.match(googleRoute, /getAdminSupabaseConfig\(\)/);
+  assert.match(adminConfig, /fix\/atomic-billing-claims-integration-revoke-20261124/);
   assert.match(revokeMigration, /delete from public\.google_connections/i);
   assert.match(revokeMigration, /revoke all on function public\.revoke_google_connection[\s\S]*from public, anon, authenticated/i);
 });
