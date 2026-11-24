@@ -97,8 +97,8 @@ async function dispatchTick(request: NextRequest) {
     return response;
   };
   if (process.env.AIVANTA_WORKFLOW_SCHEDULER_ENABLED !== "true") {
-    logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: "rejected", statusCode: 503, errorCode: "SCHEDULER_DISABLED" }, console.warn);
-    return jsonResponse({ error: "Workflow scheduler is disabled in this environment." }, { status: 503 });
+    logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: "disabled", statusCode: 200 });
+    return jsonResponse({ disabled: true, claimed: 0, queued: 0, failed: 0 });
   }
   if (!isAuthorized(request)) {
     const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_SCHEDULER_SECRET;
