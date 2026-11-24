@@ -7,7 +7,7 @@ import "./agents.css";
 type Agent = { id: string; name: string; description: string; instructions: string; model_provider: string; model_name: string; tool_ids: string[]; status: string; updated_at: string };
 type Activity = { id: string; agent_id: string; event_type: string; details: Record<string, unknown>; created_at: string };
 type Run = { id: string; status: string; input: string; output: string | null; error_code: string | null; created_at: string };
-type AgentForm = { name: string; description: string; instructions: string; model_provider: "gemini" | "openai"; model_name: string; tool_ids: string[]; status: "draft" | "ready" | "paused" };
+type AgentForm = { name: string; description: string; instructions: string; model_provider: "gemini"; model_name: string; tool_ids: string[]; status: "draft" | "ready" | "paused" };
 const blank: AgentForm = { name: "", description: "", instructions: "", model_provider: "gemini", model_name: "gemini-2.5-flash", tool_ids: [], status: "draft" };
 
 export default function AgentsPage() {
@@ -52,7 +52,7 @@ export default function AgentsPage() {
 
   function selectAgent(agent: Agent) {
     setSelected(agent); setCreating(false); setInput(""); setOutput("");
-    setForm({ name: agent.name, description: agent.description, instructions: agent.instructions, model_provider: agent.model_provider as "gemini" | "openai", model_name: agent.model_name, tool_ids: agent.tool_ids ?? [], status: agent.status as AgentForm["status"] });
+    setForm({ name: agent.name, description: agent.description, instructions: agent.instructions, model_provider: "gemini", model_name: agent.model_provider === "gemini" ? agent.model_name : "gemini-2.5-flash", tool_ids: agent.tool_ids ?? [], status: agent.status as AgentForm["status"] });
     void loadRuns(agent.id);
   }
 
@@ -117,6 +117,7 @@ export default function AgentsPage() {
 
   const statusFilter = filter;
   const filteredAgents = agents.filter(agent => (agent.name + " " + agent.description).toLowerCase().includes(search.toLowerCase()) && (statusFilter === "all" || agent.status === statusFilter));
+  const selectedToolTrace = selected ? activity.filter(item => item.agent_id === selected.id && (item.event_type === "agent.tool_executed" || item.event_type === "agent.tool_failed")).slice(0, 20) : [];
 
   return <main className="app-shell agents-shell">
     <DashboardSidebar activePage="agents" />
@@ -138,14 +139,14 @@ export default function AgentsPage() {
               <label>Agent name<input value={form.name} maxLength={80} onChange={e => setForm({...form,name:e.target.value})} placeholder="Lead qualification"/></label>
               <label>Description<input value={form.description} maxLength={500} onChange={e => setForm({...form,description:e.target.value})} placeholder="What should this agent help with?"/></label>
               <label>Instructions<textarea rows={6} maxLength={12000} value={form.instructions} onChange={e => setForm({...form,instructions:e.target.value})} placeholder="Role, goals, constraints, tone, and when to ask a human."/></label>
-              <div className="agent-form-row"><label>Provider<select value={form.model_provider} onChange={e => setForm({...form,model_provider:e.target.value as AgentForm["model_provider"],model_name:e.target.value === "openai" ? "gpt-4o-mini" : "gemini-2.5-flash"})}><option value="gemini">Gemini</option><option value="openai">OpenAI</option></select></label><label>Model<input value={form.model_name} onChange={e => setForm({...form,model_name:e.target.value})}/></label></div>
+              <div className="agent-form-row"><label>AI provider<input value="Google Gemini" readOnly aria-readonly="true"/></label><label>Model<input value={form.model_name} onChange={e => setForm({...form,model_name:e.target.value})}/></label></div>
               <label>Lifecycle<select value={form.status} onChange={e => setForm({...form,status:e.target.value as AgentForm["status"]})}><option value="draft">Draft</option><option value="ready">Ready (model-only)</option><option value="paused">Paused</option></select></label>
               <label>Read-only tools<input value={form.tool_ids.join(", ")} onChange={e => setForm({...form,tool_ids:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)})} placeholder="workflow.list, workflow.get, integrations.list"/></label>
               <div className="agent-boundary"><strong>Execution boundary</strong><p>Ready agents can use the approved read-only workspace tools: workflow.list, workflow.get, and integrations.list. Tool calls are permission-checked and audited. External actions, writes, workflow activation, and message sending remain disabled.</p></div>
               <div className="agent-actions"><button type="button" disabled={busy} onClick={() => void save()}>{busy ? "Working…" : "Save agent"}</button>{selected && <><button type="button" className="secondary" disabled={busy} onClick={() => void test()}>Test configuration</button><button type="button" className="danger" disabled={busy} onClick={() => void remove()}>Delete</button></>}</div>
             </> : <p className="agent-empty">Select an agent from your library or create a new one.</p>}
           </section>
-          {selected && <section className="agent-editor agent-run-panel"><h2>Run agent</h2><p>Read-only tools only · no writes or external actions.</p><label>Prompt<textarea rows={4} value={input} onChange={e => setInput(e.target.value)} placeholder="Give the agent a task or question…"/></label><button type="button" disabled={busy || !input.trim() || selected.status !== "ready"} onClick={() => void run()}>{busy ? "Running…" : "Run agent"}</button>{output && <pre className="agent-run-output">{output}</pre>}<h3>Recent runs</h3>{runs.length ? runs.map(run => <div className="activity-row" key={run.id}><span>{run.status} · {run.error_code ?? run.output?.slice(0,90) ?? run.input.slice(0,60)}</span><small>{new Date(run.created_at).toLocaleString()}</small></div>) : <p className="agent-empty">No runs yet.</p>}</section>}
+          {selected && <section className="agent-editor agent-run-panel"><h2>Run agent</h2><p>Read-only tools only · no writes or external actions.</p><label>Prompt<textarea rows={4} value={input} onChange={e => setInput(e.target.value)} placeholder="Give the agent a task or question…"/></label><button type="button" disabled={busy || !input.trim() || selected.status !== "ready"} onClick={() => void run()}>{busy ? "Running…" : "Run agent"}</button>{output && <pre className="agent-run-output">{output}</pre>}<h3>Recent runs</h3>{runs.length ? runs.map(run => <div className="activity-row" key={run.id}><span>{run.status} · {run.error_code ?? run.output?.slice(0,90) ?? run.input.slice(0,60)}</span><small>{new Date(run.created_at).toLocaleString()}</small></div>) : <p className="agent-empty">No runs yet.</p>}<h3>Tool-call trace</h3>{selectedToolTrace.length ? selectedToolTrace.map(item => <div className="activity-row" key={item.id}><span>{String(item.details.tool_id ?? "unknown tool")} · {String(item.details.outcome ?? "recorded")}{typeof item.details.duration_ms === "number" ? ` · ${item.details.duration_ms} ms` : ""}</span><small>{typeof item.details.run_id === "string" ? `Run ${item.details.run_id.slice(0,8)} · ` : ""}{new Date(item.created_at).toLocaleString()}</small></div>) : <p className="agent-empty">No tool calls recorded for this agent.</p>}</section>}
         </div>
         <section className="agent-activity"><h2>Recent activity</h2>{activity.length ? activity.slice(0,15).map(item => <div className="activity-row" key={item.id}><span>{item.event_type.replace("agent.","").replaceAll("_"," ")}</span><small>{new Date(item.created_at).toLocaleString()}</small></div>) : <p>No agent activity recorded.</p>}</section>
         <p className="agent-runtime-note">Agent tool execution is limited to workspace-scoped read operations. External actions require a separate reviewed approval system and are not enabled.</p>
