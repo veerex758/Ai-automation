@@ -5,6 +5,7 @@ import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-es
 import { scoreRealEstateLead, type RealEstateLeadInput } from "@/lib/real-estate/lead-scoring";
 import { findOperation } from "@/nodes/registry";
 import { getWorkerOperationMapping } from "@/lib/workflows/worker-operation-map";
+import { isProviderLiveEnabled } from "@/lib/workflows/provider-live-gates";
 import type { NodeContext } from "@/nodes/types";
 import {
   getPlaybookPolicy, isPlaybookActionOnSelectedBranch, loadPlaybookRuntime,
@@ -130,12 +131,16 @@ function makeNodeContext(credentials: Record<string, Record<string, string>>): N
 async function approvedCredentials(
   db: ServiceClient,
   workspaceId: string,
-  provider: "gemini" | "resend" | "whatsapp_business",
-  nodeId: "gemini" | "email" | "whatsapp_business",
-  operationId: "qualify_real_estate_lead" | "send_email" | "send_template",
+  provider: "gemini" | "resend" | "whatsapp_business" | "hubspot",
+  nodeId: "gemini" | "email" | "whatsapp_business" | "hubspot",
+  operationId: "qualify_real_estate_lead" | "send_email" | "send_template" | "search_contacts" | "create_contact",
 ): Promise<CredentialResult> {
   const mapping = getWorkerOperationMapping({ kind: "action", nodeId, operationId });
   if (!mapping || mapping.provider !== provider) return { ok: false, code: "PROVIDER_OPERATION_NOT_REGISTERED" };
+  if ((provider === "whatsapp_business" || provider === "hubspot") &&
+      !isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS)) {
+    return { ok: false, code: provider.toUpperCase() + "_LIVE_INTEGRATION_DISABLED" };
+  }
 
   const [{ data: integration, error: integrationError }, { data: approval, error: approvalError }] = await Promise.all([
     db.from("workspace_integrations")
@@ -521,6 +526,37 @@ async function sendAgentNotifications(
   return { ok: true as const };
 }
 
+async function syncHubSpotContact(
+  db: ServiceClient,
+  workspaceId: string,
+  lead: LeadRow,
+) {
+  if (!lead.email) return { ok: true as const, skipped: true as const, code: "LEAD_EMAIL_REQUIRED" };
+  const configured = await approvedCredentials(db, workspaceId, "hubspot", "hubspot", "search_contacts");
+  if (!configured.ok) return { ok: false as const, blocked: true as const, code: configured.code };
+  const search = findOperation("hubspot", "search_contacts", "action");
+  const create = findOperation("hubspot", "create_contact", "action");
+  if (!search || !create) return { ok: false as const, blocked: true as const, code: "HUBSPOT_OPERATION_NOT_REGISTERED" };
+  const context = makeNodeContext({ hubspot: configured.credentials });
+  const found = await search.run(context, { email: lead.email.trim().toLowerCase() }) as {
+    contacts?: Array<{ contactId: string }>;
+  };
+  if (Array.isArray(found.contacts) && found.contacts.length > 0) {
+    return { ok: true as const, skipped: true as const, code: "HUBSPOT_CONTACT_ALREADY_EXISTS" };
+  }
+  const parts = lead.full_name.trim().split(/\\s+/);
+  const created = await create.run(context, {
+    email: lead.email.trim().toLowerCase(),
+    firstName: parts[0] || "Property",
+    lastName: parts.slice(1).join(" ") || undefined,
+    phone: lead.phone ?? undefined,
+  }) as { contactId?: unknown };
+  if (typeof created.contactId !== "string" || !created.contactId) {
+    throw new Error("HUBSPOT_INVALID_RESPONSE");
+  }
+  return { ok: true as const, skipped: false as const, contactId: created.contactId };
+}
+
 async function processClaim(db: ServiceClient, claim: PipelineClaim) {
   const { data: leadData, error } = await db.from("real_estate_leads")
     .select("*")
@@ -675,6 +711,55 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
         return "blocked";
       }
       await markPlaybookDecisionExecuted(db, lead, gate.decisionId);
+    }
+  }
+
+  if (runtime.mode === "playbook") {
+    const hubspotSearchPolicy = getPlaybookPolicy(runtime, "hubspot", "search_contacts");
+    const hubspotCreatePolicy = getPlaybookPolicy(runtime, "hubspot", "create_contact");
+    if (hubspotSearchPolicy && hubspotCreatePolicy &&
+        hubspotSearchPolicy.permission !== "never" && hubspotCreatePolicy.permission !== "never" &&
+        isPlaybookActionOnSelectedBranch(runtime, hubspotSearchPolicy, ruleResults) &&
+        isPlaybookActionOnSelectedBranch(runtime, hubspotCreatePolicy, ruleResults)) {
+      for (const policy of [hubspotSearchPolicy, hubspotCreatePolicy]) {
+        if (policy.permission === "ask_first") {
+          const gate = await requestOrReadPlaybookDecision({
+            db, lead, runtime, type: "action_approval", policy,
+            reason: "The Playbook requires approval before searching or creating this HubSpot contact.",
+            leaseToken: claim.lease_token,
+          });
+          if (gate.state === "pending") return "blocked";
+          if (gate.state === "denied") {
+            await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_HUBSPOT_ACTION_BLOCKED");
+            return "blocked";
+          }
+          await markPlaybookDecisionExecuted(db, lead, gate.decisionId);
+        }
+      }
+      const crmResult = await syncHubSpotContact(db, claim.workspace_id, lead);
+      if (!crmResult.ok) {
+        if (runtime.definition?.review.reviewProviderFailures) {
+          const gate = await requestOrReadPlaybookDecision({
+            db, lead, runtime, type: "provider_failure", policy: hubspotSearchPolicy,
+            nodeId: "hubspot", operationId: "search_contacts",
+            reason: "HubSpot back-office sync is blocked: " + crmResult.code,
+            leaseToken: claim.lease_token,
+          });
+          if (gate.state === "pending") return "blocked";
+          if (gate.state === "denied") {
+            await pausePlaybookLead(db, lead, claim.lease_token, "PLAYBOOK_HUBSPOT_PROVIDER_BLOCKED");
+            return "blocked";
+          }
+        }
+        await retryClaim(db, claim, lead, "pipeline", crmResult.code, true);
+        return "blocked";
+      }
+      const { error: crmAuditError } = await db.from("real_estate_lead_activities").insert({
+        workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+        activity_type: crmResult.skipped ? "lead.crm_contact_verified" : "lead.crm_contact_created",
+        details: { provider: "hubspot", outcome: crmResult.code ?? "created" },
+      });
+      if (crmAuditError) throw new Error("CRM_SYNC_AUDIT_WRITE_FAILED");
     }
   }
 
