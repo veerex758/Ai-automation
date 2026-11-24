@@ -8,7 +8,7 @@ type Playbook = {
   actionPolicies: PlaybookPolicy[];
   review: { confidenceThreshold: number; reviewMissingFields: boolean; reviewWhenNoRuleMatches: boolean; reviewProviderFailures: boolean };
 };
-type Step = { id: string; nodeId: string; operationId: string; kind: string; input: Record<string, unknown>; branch?: { fromStepId: string; route: string } };
+type Step = { id: string; nodeId: string; operationId: string; kind: string; input: Record<string, unknown>; branchPaths?: Array<Array<{ fromStepId: string; route: string }>> };
 type Lead = Record<string, unknown> & { id: string; qualification?: unknown; raw_enquiry?: unknown };
 
 function readPath(value: unknown, path: string): unknown {
@@ -110,9 +110,11 @@ export function replayPlaybookAgainstLead(playbook: Playbook, steps: Step[], lea
 
   const actions = playbook.actionPolicies.map((policy) => {
     const step = steps.find((candidate) => candidate.id === policy.stepId);
-    const branch = step?.branch;
-    const selectedRule = branch ? rules.find((rule) => rule.nodeId === branch.fromStepId) : null;
-    const branchSelected = !branch || selectedRule?.route === branch.route;
+    const branchPaths = step?.branchPaths;
+    const branchSelected = !branchPaths?.length || branchPaths.some((path) => path.every((condition) => {
+      const selectedRule = rules.find((rule) => rule.nodeId === condition.fromStepId);
+      return selectedRule?.route === condition.route;
+    }));
     return {
       stepId: policy.stepId,
       nodeId: policy.nodeId,
