@@ -28,13 +28,13 @@ jobs:
       - name: Set up Node.js for the concurrent RPC regression
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
+          node-version: 22
 
       - name: Install application dependencies
-        run: npm ci
+        run: npm install
 
       - name: Install Supabase CLI
+        id: install_supabase_cli
         uses: supabase/setup-cli@v3
         with:
           version: 2.84.2
@@ -76,5 +76,5 @@ jobs:
           supabase migration list --local
 
       - name: Stop disposable local Supabase project
-        if: always()
+        if: always() && steps.install_supabase_cli.outcome == 'success'
         run: supabase stop --no-backup
