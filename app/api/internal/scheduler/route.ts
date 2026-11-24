@@ -182,8 +182,8 @@ async function dispatchTick(request: NextRequest) {
         }
       }
 
-      // Atomically enqueue the immutable active workflow snapshot. The worker
-      // performs a side-effect-free dry-run and owns retries/dead-letter handling.
+      // Atomically enqueue the immutable active workflow snapshot. Live mode is
+      // opt-in and validated against the same operation/connection policy as manual dispatch.
       const scheduledFor = new Date(claim.scheduled_for).toISOString();
       if (registrySchedule) {
         scheduledInput = {
