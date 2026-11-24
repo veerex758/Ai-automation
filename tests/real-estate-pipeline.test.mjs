@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const pipeline = read("../lib/real-estate/pipeline.ts");
 const migration = read("../supabase/migrations/20261120104000_real_estate_pipeline_delivery.sql");
+const pilotMigration = read("../supabase/migrations/20261124170000_rexnora_real_estate_crm_and_whatsapp_retries.sql");
+const playbookDefinition = read("../lib/playbooks/definition.cjs");
 const intake = read("../app/api/real-estate/intake/[publicKey]/route.ts");
 const manualLead = read("../app/api/real-estate/leads/route.ts");
 const serviceClient = read("../lib/real-estate/server.ts");
@@ -79,7 +81,7 @@ test("numeric scores are calculated by the deterministic scorer, not Gemini temp
 });
 
 test("AI follow-up drafts are persisted only for email leads with recorded consent", () => {
-  assert.match(pipeline, /!lead\.consent_to_contact \|\| lead\.contact_preference !== "email" \|\| !lead\.email/);
+  assert.match(pipeline, /!lead\.consent_to_contact \|\| !lead\.consent_at \|\| !lead\.consent_text \|\| lead\.contact_preference !== "email" \|\| !lead\.email/);
   assert.match(pipeline, /qualification\.followupMessages\[index\]/);
   assert.match(pipeline, /eq\("status", "pending"\)/);
 });
@@ -132,4 +134,42 @@ test("duplicate public intake acknowledgements do not disclose an existing lead 
   const duplicateBranch = intake.slice(start, end);
   assert.match(duplicateBranch, /return NextResponse\.json\(\{accepted:true,duplicate:true\}/);
   assert.doesNotMatch(duplicateBranch, /full_name:prior\.full_name|lead_score:prior\.lead_score|lead_temperature:prior\.lead_temperature|pipeline\},\{status:200/);
+});
+
+
+test("WhatsApp live dispatch requires channel-specific consent, an approved template and a durable no-blind-resend ledger", () => {
+  assert.match(playbookDefinition, /whatsapp_business.*send_template/);
+  assert.match(pipeline, /isProviderLiveEnabled\("whatsapp_business"/);
+  assert.match(pipeline, /!\/whatsapp\/i\.test\(lead\.consent_text\)/);
+  assert.match(pipeline, /contact_preference !== "whatsapp"/);
+  assert.match(pipeline, /real_estate_channel_deliveries/);
+  assert.match(pipeline, /existing\?\.status === "unknown" \|\| existing\?\.status === "sending"/);
+  assert.match(pipeline, /RATE_LIMITED/);
+  assert.match(pilotMigration, /attempt_count smallint not null default 0/);
+});
+
+test("CRM sync searches exact email before creating and stops on uncertain or ambiguous outcomes", () => {
+  const searchIndex = pipeline.indexOf("searchOperation.run(");
+  const createIndex = pipeline.indexOf("createOperation.run(");
+  assert.ok(searchIndex > 0 && createIndex > searchIndex);
+  assert.match(playbookDefinition, /pipedrive.*search_contacts.*execute/);
+  assert.match(playbookDefinition, /zoho_crm.*search_contacts.*execute/);
+  assert.match(playbookDefinition, /freshsales.*search_contacts.*execute/);
+  assert.match(pipeline, /CRM_SEARCH_RESULT_NEEDS_REVIEW/);
+  assert.match(pipeline, /prior\.status === "unknown"/);
+  assert.match(pipeline, /real_estate_crm_syncs/);
+  assert.match(pilotMigration, /create table if not exists public\.real_estate_crm_syncs/);
+});
+
+test("back-office task and CRM/WhatsApp outcomes are recorded with durable pipeline side effects", () => {
+  assert.match(pipeline, /ensureBackOfficeTask\(db, lead\)/);
+  assert.match(pipeline, /lead\.back_office_task_created/);
+  assert.match(pipeline, /lead\.crm_contact_created/);
+  assert.match(pipeline, /lead\.whatsapp_template_accepted/);
+  assert.match(pipeline, /status: "accepted"/);
+});
+
+test("follow-up worker rechecks timestamped consent before every customer email", () => {
+  assert.match(followups, /consent_text,consent_at/);
+  assert.match(followups, /!lead\.consent_at \|\| !lead\.consent_text/);
 });
