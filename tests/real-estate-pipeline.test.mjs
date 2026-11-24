@@ -29,6 +29,16 @@ test("lead pipeline requires a tested workspace connection and an operation-spec
   assert.match(pipeline, /decryptWorkspaceCredentials/);
 });
 
+test("Playbook execution uses the exact provider account selected and checked at activation", () => {
+  assert.match(pipeline, /selectedConnectionId/);
+  assert.match(pipeline, /integrationQuery = integrationQuery\.eq\("id", selectedConnectionId\)/);
+  assert.match(pipeline, /requireSelectedConnection && !selectedConnectionId/);
+  assert.match(pipeline, /geminiStep\?\.connectionId/);
+  assert.match(pipeline, /emailStep\?\.connectionId/);
+  assert.match(pipeline, /runtime\.mode === "playbook"/);
+});
+
+
 test("Gemini qualification receives no direct contact identifiers and redacts contact details in free text", () => {
   const start = pipeline.indexOf("function qualificationInput(");
   const end = pipeline.indexOf("\nfunction mergeQualification(", start);
