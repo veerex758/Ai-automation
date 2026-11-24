@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
       return json({ error: "Workspace integrations.view permission required.", code: "INTEGRATION_PERMISSION_DENIED" }, 403);
     }
     const { data, error } = await supabase.from("workspace_integrations")
-      .select("id,provider,status,display_name,last_tested_at,last_test_status,updated_at")
+      .select("id,provider,status,display_name,last_tested_at,last_test_status,updated_at,metadata")
       .eq("workspace_id", workspace.id).order("provider", { ascending: true });
     if (error) throw error;
     const recipient = request.nextUrl.searchParams.get("recipient")?.trim().toLowerCase() ?? "";

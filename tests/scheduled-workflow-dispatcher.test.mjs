@@ -15,8 +15,8 @@ test("protects the scheduler endpoint with a timing-safe server secret check", (
   assert.ok(route.includes("timingSafeEqual"));
   assert.ok(route.includes("process.env.CRON_SECRET"));
   assert.ok(route.includes('request.headers.get("authorization")'));
-  assert.ok(route.includes("SUPABASE_SECRET_KEY"));
-  assert.ok(route.includes("SUPABASE_SERVICE_ROLE_KEY"));
+  assert.ok(route.includes("getAdminSupabaseConfig"));
+  assert.ok(route.includes("config.serviceRoleKey"));
 });
 
 test("durably queues scheduled work for the dry-run worker", () => {

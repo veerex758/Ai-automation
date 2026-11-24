@@ -13,6 +13,7 @@ export function getAdminSupabaseConfig() {
     && [
       "integration/saas-core-stage3-realestate-20261123",
       "feat/core-app-completion-20261123",
+      "fix/resend-connection-domain-status",
     ].includes(process.env.VERCEL_GIT_COMMIT_REF ?? "");
   const url = isPreview
     ? process.env.NEXT_PUBLIC_SUPABASE_URL
