@@ -687,12 +687,43 @@ async function syncConfiguredCrmContact(
     await markPlaybookDecisionExecuted(db, lead, createApproval.decisionId);
     return "created";
   } catch (error) {
-    // The next attempt always searches again before creating. That is the
-    // recovery path when the CRM accepted a write but the response was lost.
+    // A CRM may accept the create request and lose its response. Re-read by
+    // exact email once before leaving the action for manual review. Do not
+    // automatically issue a second create when the first result is ambiguous.
     const code = safeErrorCode(error, "CRM_CONTACT_CREATE_FAILED");
+    let recoveredContact: { contactId: string } | null = null;
+    try {
+      const retrySearch = await searchOperation.run(
+        makeNodeContext({ [provider]: searchCredentials.credentials }),
+        { email: lead.email },
+      ) as { contacts?: Array<{ contactId: string; email?: string }> };
+      const matches = (retrySearch.contacts ?? []).filter((contact) =>
+        typeof contact.email === "string" && contact.email.trim().toLowerCase() === lead.email!.trim().toLowerCase()
+      );
+      if (matches.length === 1) recoveredContact = { contactId: matches[0].contactId };
+    } catch {
+      // An unavailable reconciliation read leaves a review task, never a second create.
+    }
+    if (recoveredContact) {
+      await db.from("real_estate_lead_activities").insert({
+        workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+        activity_type: "lead.crm_contact_created_reconciled",
+        details: { provider, contactId: recoveredContact.contactId, originalErrorCode: code },
+      });
+      await markPlaybookDecisionExecuted(db, lead, createApproval.decisionId);
+      return "created";
+    }
+    await db.from("real_estate_tasks").upsert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, assigned_agent_id: lead.assigned_agent_id,
+      task_type: "crm_review", title: "Review CRM contact synchronisation",
+      description: "Rexnora could not confirm whether the CRM accepted the contact create request. Search the CRM by exact email before creating or editing a record.",
+      status: "open", priority: "high", due_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      idempotency_key: "lead:" + lead.id + ":crm:" + provider + ":review:v1",
+      created_by: null,
+    }, { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true });
     await db.from("real_estate_lead_activities").insert({
       workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
-      activity_type: "lead.crm_contact_create_failed", details: { provider, errorCode: code },
+      activity_type: "lead.crm_contact_create_failed", details: { provider, errorCode: code, manualReviewRequired: true },
     });
     return "skipped";
   }
