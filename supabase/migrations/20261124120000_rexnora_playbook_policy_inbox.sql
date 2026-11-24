@@ -8,6 +8,10 @@ create index if not exists real_estate_leads_playbook_binding_idx
   on public.real_estate_leads(workspace_id, workflow_id, playbook_version, created_at desc)
   where workflow_id is not null and playbook_version is not null;
 
+-- Composite target required by the workspace-paired Playbook decision foreign key.
+create unique index if not exists real_estate_leads_id_workspace_unique_idx
+  on public.real_estate_leads(id, workspace_id);
+
 create unique index if not exists workflows_id_workspace_unique_idx
   on public.workflows(id, workspace_id);
 
