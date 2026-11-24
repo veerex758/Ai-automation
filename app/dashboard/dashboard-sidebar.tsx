@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type ActivePage = "overview" | "workflows" | "builder" | "assistant" | "agents" | "templates" | "integrations" | "connections" | "analytics" | "activity" | "billing" | "settings" | "realestate";
+type ActivePage = "overview" | "workflows" | "playbooks" | "agents" | "templates" | "integrations" | "connections" | "analytics" | "activity" | "billing" | "settings" | "realestate";
 
 const groups = [
   { label: "WORKSPACE", items: [
