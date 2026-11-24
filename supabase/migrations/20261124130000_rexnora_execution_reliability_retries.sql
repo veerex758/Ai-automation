@@ -213,12 +213,13 @@ create or replace function public.dispatch_workflow_execution(
 ) returns jsonb
 language plpgsql security definer set search_path = ''
 as $$
-declare existing_job public.execution_jobs%rowtype;
-declare workflow_row public.workflows%rowtype;
-declare new_run_id uuid;
-declare new_job_id uuid;
-declare effective_attempts integer;
-declare event_source text;
+declare
+  existing_job public.execution_jobs%rowtype;
+  workflow_row public.workflows%rowtype;
+  new_run_id uuid;
+  new_job_id uuid;
+  effective_attempts integer;
+  event_source text;
 begin
   event_source := p_payload->>'source';
   if p_workspace_id is null or p_workflow_id is null or p_workflow_version is null
