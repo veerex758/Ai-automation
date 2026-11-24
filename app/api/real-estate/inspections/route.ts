@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     if (start.getTime() <= now || end.getTime() <= start.getTime() ||
         end.getTime() - start.getTime() < 5 * 60 * 1000 || end.getTime() - start.getTime() > 3 * 60 * 60 * 1000 ||
         start.getTime() > now + 180 * 24 * 60 * 60 * 1000) {
-      return NextResponse.json({ error: "Inspection must be in the next 180 days and last between 1 minute and 3 hours." }, { status: 400, headers });
+      return NextResponse.json({ error: "Inspection must be in the next 180 days and last between 5 minutes and 3 hours." }, { status: 400, headers });
     }
 
     const { data: lead, error: leadError } = await auth.supabase.from("real_estate_leads")
