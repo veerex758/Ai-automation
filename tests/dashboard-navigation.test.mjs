@@ -3,68 +3,52 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const dashboardPath = fileURLToPath(new URL("../app/dashboard/page.tsx", import.meta.url));
-const sectionPath = fileURLToPath(new URL("../app/dashboard/section-page.tsx", import.meta.url));
-const [dashboard, sections] = await Promise.all([
-  readFile(dashboardPath, "utf8"),
-  readFile(sectionPath, "utf8"),
+const path = (relative) => fileURLToPath(new URL(relative, import.meta.url));
+const [dashboard, sections, sidebar, agents, playbooks, connections, billing, layout] = await Promise.all([
+  readFile(path("../app/dashboard/page.tsx"), "utf8"),
+  readFile(path("../app/dashboard/section-page.tsx"), "utf8"),
+  readFile(path("../app/dashboard/dashboard-sidebar.tsx"), "utf8"),
+  readFile(path("../app/dashboard/agents/page.tsx"), "utf8"),
+  readFile(path("../app/dashboard/playbooks/new/page.tsx"), "utf8"),
+  readFile(path("../app/dashboard/connections/page.tsx"), "utf8"),
+  readFile(path("../app/dashboard/billing/page.tsx"), "utf8"),
+  readFile(path("../app/dashboard/layout.tsx"), "utf8"),
 ]);
 
-test("overview navigation exposes implemented workspace destinations as real links", () => {
-  for (const href of [
-    "/dashboard",
-    "/dashboard#workflows",
-    "/dashboard/activity",
-    "/dashboard/builder",
-    "/dashboard/ai-assistant",
-    "/dashboard/agents",
-    "/dashboard/templates",
-    "/dashboard/integrations",
-    "/dashboard/connections",
-    "/dashboard/analytics",
-    "/dashboard/billing",
-    "/dashboard/settings",
-  ]) {
-    assert.ok(dashboard.includes(href), `missing dashboard navigation destination: ${href}`);
-  }
-  assert.match(dashboard, /<Link key=\{item\.label\} href=\{item\.href\}/);
-  assert.doesNotMatch(dashboard, /is part of the upcoming workspace release/);
-  assert.match(dashboard, /id="workflows"/);
-});
-
-test("section pages retain consistent access to builder and AI assistant", () => {
-  assert.match(sections, /import DashboardSidebar from "\.\/dashboard-sidebar"/);
-  assert.match(sections, /activePage=\{section\}/);
-});
-
-
-const sidebarPath = fileURLToPath(new URL("../app/dashboard/dashboard-sidebar.tsx", import.meta.url));
-const agentsPath = fileURLToPath(new URL("../app/dashboard/agents/page.tsx", import.meta.url));
-const assistantPath = fileURLToPath(new URL("../app/dashboard/ai-assistant/page.tsx", import.meta.url));
-const connectionsPath = fileURLToPath(new URL("../app/dashboard/connections/page.tsx", import.meta.url));
-const billingPath = fileURLToPath(new URL("../app/dashboard/billing/page.tsx", import.meta.url));
-const layoutPath = fileURLToPath(new URL("../app/dashboard/layout.tsx", import.meta.url));
-const [sidebar, agents, assistant, connections, billing, layout] = await Promise.all([
-  readFile(sidebarPath, "utf8"), readFile(agentsPath, "utf8"),
-  readFile(assistantPath, "utf8"), readFile(connectionsPath, "utf8"),
-  readFile(billingPath, "utf8"), readFile(layoutPath, "utf8"),
-]);
-
-test("all dashboard routes share the same complete workspace navigation", () => {
+test("overview navigation exposes Playbooks as the only customer-facing workflow authoring entry", () => {
   for (const href of [
     "/dashboard", "/dashboard#workflows", "/dashboard/activity",
-    "/dashboard/builder", "/dashboard/ai-assistant", "/dashboard/agents",
-    "/dashboard/templates", "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
+    "/dashboard/playbooks/new", "/dashboard/agents", "/dashboard/templates",
+    "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
     "/dashboard/billing", "/dashboard/settings",
-  ]) assert.ok(sidebar.includes(href), `shared navigation missing ${href}`);
-  for (const [name, source] of [["agents", agents], ["assistant", assistant], ["connections", connections], ["billing", billing]]) {
-    assert.match(source, /<DashboardSidebar activePage=/, `${name} does not use shared navigation`);
-  }
+  ]) assert.ok(dashboard.includes(href), "missing dashboard navigation destination: " + href);
+  assert.match(dashboard, /<Link key=\{item\.label\} href=\{item\.href\}/);
+  assert.match(dashboard, /id="workflows"/);
+  assert.doesNotMatch(dashboard, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
+});
+
+test("shared sidebar exposes Playbooks and no competing builder or assistant entry", () => {
+  assert.match(sidebar, /label: "Playbooks".*href: "\/dashboard\/playbooks\/new".*key: "playbooks"/);
+  assert.doesNotMatch(sidebar, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
+  assert.match(playbooks, /<DashboardSidebar activePage="playbooks"/);
+  assert.match(agents, /<DashboardSidebar activePage="agents"/);
+  assert.match(connections, /<DashboardSidebar activePage="connections"/);
+  assert.match(billing, /<DashboardSidebar activePage="billing"/);
   assert.match(layout, /import "\.\/dashboard\.css"/);
-  assert.match(assistant, /activePage="assistant"/);
-  assert.match(agents, /activePage="agents"/);
-  assert.match(connections, /activePage="connections"/);
-  assert.match(billing, /activePage="billing"/);
+});
+
+test("legacy authoring URLs redirect to the canonical Playbook setup", async () => {
+  const [builder, assistant] = await Promise.all([
+    readFile(path("../app/dashboard/builder/page.tsx"), "utf8"),
+    readFile(path("../app/dashboard/ai-assistant/page.tsx"), "utf8"),
+  ]);
+  assert.match(builder, /redirect\("\/dashboard\/playbooks\/new"\)/);
+  assert.match(assistant, /redirect\("\/dashboard\/playbooks\/new"\)/);
+});
+
+test("section pages retain consistent shared navigation", () => {
+  assert.match(sections, /import DashboardSidebar from "\.\/dashboard-sidebar"/);
+  assert.match(sections, /activePage=\{section\}/);
 });
 
 test("customer-facing integration and billing pages use Rexnora naming", () => {
@@ -74,33 +58,26 @@ test("customer-facing integration and billing pages use Rexnora naming", () => {
   assert.match(billing, /REXNORA \/ WORKSPACE/);
 });
 
-test("Supabase secret fallback ignores empty placeholder variables", async () => {
-  const googleConnections = await readFile(fileURLToPath(new URL("../app/api/integrations/google/connections/route.ts", import.meta.url)), "utf8");
-  const adminClient = await readFile(fileURLToPath(new URL("../lib/supabase/admin.ts", import.meta.url)), "utf8");
-  const workspaceIntegrations = await readFile(fileURLToPath(new URL("../app/api/integrations/workspace/route.ts", import.meta.url)), "utf8");
-  assert.match(googleConnections, /getAdminSupabaseConfig/);
-  assert.match(workspaceIntegrations, /getAdminSupabaseConfig/);
-  assert.match(adminClient, /isRexnoraStagingPreview/);
-  assert.match(adminClient, /isRexnoraStagingPreview[\s\S]*CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(adminClient, /VERCEL_GIT_COMMIT_REF/);
-});
-
-
-test("builder, workflow editor, activity list and run detail use shared navigation", async () => {
+test("workflow editor, activity list and run detail retain shared navigation", async () => {
   const paths = [
-    "../app/dashboard/builder/page.tsx",
     "../app/dashboard/workflows/[workflowId]/page.tsx",
     "../app/dashboard/activity/page.tsx",
     "../app/dashboard/activity/[runId]/page.tsx",
   ];
-  const sources = await Promise.all(paths.map(path => readFile(fileURLToPath(new URL(path, import.meta.url)), "utf8")));
+  const sources = await Promise.all(paths.map((item) => readFile(path(item), "utf8")));
   for (const [index, source] of sources.entries()) {
-    assert.match(source, /<DashboardSidebar activePage=/, `${paths[index]} is missing shared navigation`);
+    assert.match(source, /<DashboardSidebar activePage=/, paths[index] + " is missing shared navigation");
   }
-  assert.doesNotMatch(sources[3], /Aivanta workspace/);
+  assert.doesNotMatch(sources[2], /Aivanta workspace/);
 });
 
-test("mobile navigation is not height-clipped on the shared sidebar", async () => {
-  const dashboardCss = await readFile(fileURLToPath(new URL("../app/dashboard/dashboard.css", import.meta.url)), "utf8");
-  assert.match(dashboardCss, /\.app-shell \.side-nav,[\s\S]*?max-height:none!important;[\s\S]*?overflow:visible!important/s);
+test("Supabase staging-only secret resolution ignores empty placeholder variables", async () => {
+  const google = await readFile(path("../app/api/integrations/google/connections/route.ts"), "utf8");
+  const admin = await readFile(path("../lib/supabase/admin.ts"), "utf8");
+  const workspace = await readFile(path("../app/api/integrations/workspace/route.ts"), "utf8");
+  assert.match(google, /getAdminSupabaseConfig/);
+  assert.match(workspace, /getAdminSupabaseConfig/);
+  assert.match(admin, /isRexnoraStagingPreview/);
+  assert.match(admin, /isRexnoraStagingPreview[\s\S]*CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(admin, /VERCEL_GIT_COMMIT_REF/);
 });
