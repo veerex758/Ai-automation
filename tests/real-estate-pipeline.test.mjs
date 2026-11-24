@@ -146,8 +146,8 @@ test("duplicate public intake acknowledgements do not disclose an existing lead 
 
 
 test("real-estate follow-up and CRM name parsing split actual whitespace", () => {
-  assert.match(serviceClient, /split\\(\\/\\\\s\\+\\/\\)/);
-  assert.match(pipeline, /split\\(\\/\\\\s\\+\\/\\)/);
+  assert.ok(serviceClient.includes("split(/\\s+/)"));
+  assert.ok(pipeline.includes("split(/\\s+/)"));
 });
 
 test("inspection approval loads recorded invitation consent and serializes retries", () => {
