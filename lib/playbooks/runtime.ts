@@ -1,4 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
+import { createRealEstateServiceClient } from "@/lib/real-estate/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import playbookDefinition from "@/lib/playbooks/definition.cjs";
@@ -32,7 +33,7 @@ export type PlaybookLeadBinding = {
   playbook_version?: number | null;
 };
 
-type Db = SupabaseClient;
+type Db = ReturnType<typeof createRealEstateServiceClient>;
 
 export async function loadPlaybookRuntime(db: Db, lead: PlaybookLeadBinding): Promise<PlaybookRuntime> {
   if (!lead.workflow_id || !lead.playbook_version) return { mode: "legacy" };
@@ -98,7 +99,8 @@ export async function requestOrReadPlaybookDecision(args: {
   if (runtime.mode !== "playbook" || !runtime.workflowId || !runtime.version) return { state: "denied" };
   const permission = args.policy?.permission ?? (args.type === "qualification_review" ? "ask_first" : null);
   if (permission === "never") return { state: "denied" };
-  if (permission === "auto") return { state: "allow" };
+  if (args.type === "action_approval" && permission === "auto") return { state: "allow" };
+  if (args.type !== "action_approval" && args.type !== "qualification_review" && args.type !== "provider_failure") return { state: "denied" };
   const stepId = args.policy?.stepId ?? null;
   const nodeId = args.policy?.nodeId ?? args.nodeId ?? null;
   const operationId = args.policy?.operationId ?? args.operationId ?? null;
