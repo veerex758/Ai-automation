@@ -113,6 +113,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       description: "Creates a calendar event on a calendar the connected Google account owns. Invitee notifications default to off and must be deliberately enabled.",
       inputSchema: z.object({
         calendarId: z.string().trim().min(1).max(300).default("primary"),
+        eventId: z.string().regex(/^[a-v0-9]{5,1024}$/).optional(),
         summary: z.string().trim().min(1).max(200),
         description: z.string().max(10000).optional(),
         location: z.string().trim().max(500).optional(),
@@ -129,6 +130,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       async run(ctx, raw) {
         const input = z.object({
           calendarId: z.string().trim().min(1).max(300).default("primary"),
+        eventId: z.string().regex(/^[a-v0-9]{5,1024}$/).optional(),
           summary: z.string().trim().min(1).max(200),
           description: z.string().max(10000).optional(),
           location: z.string().trim().max(500).optional(),
@@ -142,6 +144,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         const url = new URL("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId) + "/events");
         url.searchParams.set("sendUpdates", input.sendUpdates);
         const event = {
+          ...(input.eventId ? { id: input.eventId } : {}),
           summary: input.summary,
           ...(input.description ? { description: input.description } : {}),
           ...(input.location ? { location: input.location } : {}),
