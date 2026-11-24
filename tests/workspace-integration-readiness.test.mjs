@@ -11,7 +11,7 @@ test("saving a connection targets exactly one account and revokes previous verif
   assert.ok(route.includes("save_workspace_integration_connection"));
   assert.ok(route.includes("p_connection_id: connectionId"));
   assert.ok(route.includes("p_create_new: requestedConnectionId === undefined"));
-  assert.ok(route.includes("connectionId && !uuidPattern.test(connectionId)"));
+  assert.ok(route.includes("if (requestedConnectionId && !/^[0-9a-f]{8}-"));
 });
 
 test("worker refuses implicit defaults and requires a connected, freshly tested selected account", () => {
