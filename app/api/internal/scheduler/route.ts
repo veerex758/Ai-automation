@@ -1,15 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { nextCronOccurrence } from "@/lib/workflows/cron";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 import { callSchedulerRpc } from "@/lib/observability/scheduler-rpc.cjs";
+import { durableLiveRetryAttempts, runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const claimLimit = 10;
 const leaseSeconds = 300;
@@ -94,6 +96,10 @@ async function dispatchTick(request: NextRequest) {
     response.headers.set("Cache-Control", "no-store");
     return response;
   };
+  if (process.env.AIVANTA_WORKFLOW_SCHEDULER_ENABLED !== "true") {
+    logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: "rejected", statusCode: 503, errorCode: "SCHEDULER_DISABLED" }, console.warn);
+    return jsonResponse({ error: "Workflow scheduler is disabled in this environment." }, { status: 503 });
+  }
   if (!isAuthorized(request)) {
     const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_SCHEDULER_SECRET;
     logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: "rejected", statusCode: secret ? 401 : 503, errorCode: secret ? "SCHEDULER_UNAUTHORIZED" : "SCHEDULER_AUTH_NOT_CONFIGURED" }, console.warn);
@@ -140,7 +146,10 @@ async function dispatchTick(request: NextRequest) {
       if (typeof scheduleConfig?.created_by !== "string") throw new Error("SCHEDULE_CREATOR_NOT_FOUND");
       const rawDefinition = claim.definition as Record<string, unknown> | null;
       let registrySchedule = false;
+      let registrySteps: ReturnType<typeof validateRegisteredSteps>["steps"] = undefined;
       let scheduledInput: Record<string, unknown> = {};
+      const executionMode = process.env.AIVANTA_SCHEDULED_LIVE_EXECUTION_ENABLED === "true" &&
+        process.env.AIVANTA_LIVE_EXECUTION_ENABLED === "true" ? "live" : "dry_run";
       if (rawDefinition?.format === "aivanta-registry-v1") {
         const registry = validateRegisteredSteps(rawDefinition.steps);
         if (!registry.steps || registry.steps[0]?.nodeId !== "schedule" || registry.steps[0]?.operationId !== "scheduled") {
@@ -152,7 +161,19 @@ async function dispatchTick(request: NextRequest) {
           throw new Error(failureCode);
         }
         registrySchedule = true;
+        registrySteps = registry.steps;
+        if (executionMode === "live") {
+          const livePolicyError = validateDurableLiveSteps(registry.steps);
+          if (livePolicyError) {
+            failureCode = livePolicyError;
+            throw new Error(failureCode);
+          }
+        }
       } else {
+        if (executionMode === "live") {
+          failureCode = "SCHEDULED_LIVE_REGISTRY_REQUIRED";
+          throw new Error(failureCode);
+        }
         const validated = validateDefinition(claim.definition);
         if (!validated.definition || validated.definition.nodes[0]?.type !== "trigger" ||
             validated.definition.nodes[0]?.settings.event !== "schedule") {
@@ -182,7 +203,8 @@ async function dispatchTick(request: NextRequest) {
           p_created_by: scheduleConfig.created_by,
           p_idempotency_key: idempotencyKey,
           p_payload: { input: scheduledInput, source: "schedule", scheduleId: claim.schedule_id, scheduledFor },
-          p_max_attempts: 5,
+          p_max_attempts: executionMode === "live" && registrySteps ? durableLiveRetryAttempts(registrySteps) : 5,
+          p_execution_mode: executionMode,
         },
       );
       if (dispatchError || !dispatch || typeof dispatch !== "object" ||
@@ -214,6 +236,22 @@ async function dispatchTick(request: NextRequest) {
       failed += 1;
       logOperationalEvent({ event: "scheduled_workflow", requestId, route: "/api/internal/scheduler", outcome: "failure", statusCode: 500, errorCode: failureCode }, console.error);
     }
+  }
+
+  if (queued > 0) {
+    after(async () => {
+      try {
+        const workerResult = await runDurableWorker();
+        logOperationalEvent({
+          event: "scheduler_worker_wake", requestId, route: "/api/internal/scheduler",
+          outcome: workerResult.deadLettered > 0 ? "failure" : "success",
+          statusCode: 200, claimed: workerResult.claimed, succeeded: workerResult.succeeded,
+          retried: workerResult.retried, deadLettered: workerResult.deadLettered,
+        });
+      } catch {
+        logOperationalEvent({ event: "scheduler_worker_wake", requestId, route: "/api/internal/scheduler", outcome: "failure", statusCode: 500, errorCode: "SCHEDULED_WORKER_WAKE_FAILED" }, console.error);
+      }
+    });
   }
 
   logOperationalEvent({ event: "scheduler_tick", requestId, route: "/api/internal/scheduler", outcome: failed > 0 ? "failure" : "success", statusCode: 200, durationMs: Math.max(0, Date.now() - startedAt), claimed: claims.length, succeeded: queued, failed });
