@@ -132,6 +132,19 @@ export async function POST(request: NextRequest) {
         edges.push({ id: edge.id, source: edge.source, target: edge.target, label: edge.label as "next" | "true" | "false" });
       }
       const outgoing = new Map([...ids].map((id) => [id, edges.filter((edge) => edge.source === id)]));
+      // Reject malformed topology before it reaches the canvas. Only registered
+      // IF operations may branch; regular triggers/actions have one Next edge.
+      for (const step of registrySteps as Array<{ id: string; nodeId: string; operationId: string }>) {
+        const nodeEdges = outgoing.get(step.id) ?? [];
+        const isCondition = step.nodeId === "if" && step.operationId === "evaluate";
+        if (!isCondition && (nodeEdges.length > 1 || nodeEdges.some((edge) => edge.label !== "next"))) {
+          return jsonResponse({ error: "The generated graph branches from a regular step. Only IF nodes may create True and False paths. Generate the draft again." }, { status: 422 });
+        }
+        if (isCondition && nodeEdges.length > 0 &&
+            (nodeEdges.length !== 2 || nodeEdges.filter((edge) => edge.label === "true").length !== 1 || nodeEdges.filter((edge) => edge.label === "false").length !== 1)) {
+          return jsonResponse({ error: "The generated IF node must have exactly one True path and one False path." }, { status: 422 });
+        }
+      }
       const visited = new Set<string>();
       const queue = [String((registrySteps[0] as { id: string }).id)];
       while (queue.length) {
