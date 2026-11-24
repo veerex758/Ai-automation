@@ -571,6 +571,44 @@ test("all 20 provider-pack adapters resolve to an exact, opt-in live gate", () =
   assert.equal(providerPackLiveId({ kind: "action", nodeId: "discord", operationId: "delete_everything" }), null);
 });
 
+test("WhatsApp Business sends an approved message template and validates the E.164 recipient", async () => {
+  const operation = findOperation("whatsapp_business", "send_template", "action");
+  assert.ok(operation);
+  let request: any;
+  const result = await operation.run({
+    credentials: { whatsapp_business: {
+      accessToken: "wa-template-token", phoneNumberId: "555000111",
+      templateName: "real_estate_new_enquiry", templateLanguage: "en_US",
+    } },
+    logger: { info() {}, error() {} },
+    http: { async request(args: any) {
+      request = args;
+      return { status: 200, body: { messages: [{ id: "wamid.template-1" }] } };
+    } },
+    previousOutputs: {},
+  }, { to: "+2348012345678", bodyParameters: ["Ada", "Lagos"] });
+  assert.equal(request.method, "POST");
+  assert.equal(request.body.to, "2348012345678");
+  assert.equal(request.body.type, "template");
+  assert.equal(request.body.template.name, "real_estate_new_enquiry");
+  assert.equal(request.body.template.language.code, "en_US");
+  assert.deepEqual(request.body.template.components[0].parameters.map((item: any) => item.text), ["Ada", "Lagos"]);
+  assert.equal(request.retries, 0);
+  assert.equal(result.messageId, "wamid.template-1");
+
+  let calls = 0;
+  await assert.rejects(() => operation.run({
+    credentials: { whatsapp_business: {
+      accessToken: "wa-template-token", phoneNumberId: "555000111",
+      templateName: "real_estate_new_enquiry", templateLanguage: "en_US",
+    } },
+    logger: { info() {}, error() {} },
+    http: { async request() { calls++; throw new Error("must not send"); } },
+    previousOutputs: {},
+  }, { to: "2348012345678" }), /invalid_string|Expected/);
+  assert.equal(calls, 0);
+});
+
 const providerSpecificCases: Array<{
   id: string;
   input: Record<string, unknown>;
