@@ -219,6 +219,34 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
   return null;
 }
 
+
+/**
+ * Live retries are opt-in by operation. Resend is the only currently enabled
+ * external write because it honors Idempotency-Key for 24 hours. Gemini may be
+ * repeated on a pre-checkpoint crash (and can incur another model charge), but
+ * it does not create a customer-facing side effect. Unknown operations fail closed.
+ */
+const RETRY_SAFE_LIVE_OPERATIONS = new Set([
+  "email.send_email",
+  "gemini.qualify_real_estate_lead", "gemini.generate_text",
+  "if.evaluate", "switch.select_route", "merge.merge_inputs",
+  "set_fields.merge_fields", "json_parse.parse", "filter.filter_items",
+  "aggregate.calculate", "date_time.current_time", "loop.iterate", "wait.delay",
+  "deduplicate.unique", "sort.sort_items", "split_batches.split",
+  "crypto_hash.hash", "template.render", "csv_parse.parse",
+  "csv_stringify.stringify", "markdown_html.convert", "text_transform.transform",
+  "regex.match", "array_ops.operate", "object_ops.operate", "math.calculate",
+  "uuid.generate", "base64.convert", "date_add.add", "date_format.format",
+  "rate_limiter.check", "json_encode.encode",
+]);
+
+export function durableLiveRetryAttempts(steps: RegisteredWorkflowStep[]): number {
+  if (!Array.isArray(steps) || !steps.some((step) =>
+    step.kind === "action" && step.nodeId === "email" && step.operationId === "send_email")) return 1;
+  return steps.every((step) => step.kind === "trigger" ||
+    RETRY_SAFE_LIVE_OPERATIONS.has(step.nodeId + "." + step.operationId)) ? 3 : 1;
+}
+
 function safeWebhookTriggerOutput(job: Job): Record<string, unknown> {
   const input = isRecord(job.payload?.input) ? job.payload.input : {};
   return {
@@ -255,6 +283,7 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
   return {
     credentials,
     signal: leaseState.controller.signal,
+    getIdempotencyKey: (stepId: string) => `rexnora:${job.id}:${stepId}`,
     logger: {
       info(message, meta) { console.info("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
       error(message, meta) { console.error("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
