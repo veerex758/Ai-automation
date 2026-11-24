@@ -137,7 +137,7 @@ begin
      or p_calendar_id is null or length(p_calendar_id) < 1 or length(p_calendar_id) > 300
      or p_time_zone is null or length(p_time_zone) < 1 or length(p_time_zone) > 100
      or p_idempotency_key is null or length(p_idempotency_key) < 8 or length(p_idempotency_key) > 240
-     or p_start_at <= now() or p_end_at <= p_start_at
+     or p_start_at <= now() or p_end_at < p_start_at + interval '5 minutes'
      or p_end_at > p_start_at + interval '3 hours'
      or p_start_at > now() + interval '180 days' then
     raise exception using errcode='22023', message='Invalid inspection booking request';
