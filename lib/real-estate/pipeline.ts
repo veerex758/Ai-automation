@@ -334,7 +334,7 @@ async function ensureQualificationActivity(db: ServiceClient, lead: LeadRow, wor
 }
 
 async function ensureFollowupDrafts(db: ServiceClient, lead: LeadRow, qualification: Qualification) {
-  if (!lead.consent_to_contact || lead.contact_preference !== "email" || !lead.email) return;
+  if (!lead.consent_to_contact || !lead.consent_at || !lead.consent_text || lead.contact_preference !== "email" || !lead.email) return;
   const rows = createFollowupRows(lead as Parameters<typeof createFollowupRows>[0], new Date(lead.created_at))
     .map((row, index) => ({
       ...row,
