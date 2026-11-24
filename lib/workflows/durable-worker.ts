@@ -307,7 +307,11 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
       if (leaseState.lost || leaseState.controller.signal.aborted) throw new Error("EXECUTION_LEASE_LOST");
       const { data: cancellation, error: cancellationError } = await db.from("execution_jobs")
         .select("cancel_requested_at").eq("id", job.id).eq("lease_token", job.lease_token).maybeSingle();
-      if (cancellationError) throw new Error("EXECUTION_LEASE_CHECK_FAILED");
+      if (cancellationError) {
+        leaseState.lost = true;
+        leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
+        throw new Error("EXECUTION_LEASE_LOST");
+      }
       if (cancellation?.cancel_requested_at) {
         leaseState.cancelled = true;
         leaseState.controller.abort(new Error("EXECUTION_CANCELLED"));
@@ -678,7 +682,11 @@ async function runDurableWorkerPass() {
       succeeded++;
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
-      if (outcome === "EXECUTION_CANCELLED") {
+      if (leaseState.lost || outcome === "EXECUTION_LEASE_LOST" || outcome === "EXECUTION_LEASE_CHECK_FAILED") {
+        // A worker that cannot prove it still owns the lease must not finalize
+        // or retry itself. The database lease expiry is the recovery authority.
+        leaseLost++;
+      } else if (outcome === "EXECUTION_CANCELLED") {
         const { data: cancelledResult, error: cancelError } = await db.rpc("finish_cancelled_execution_job", {
           p_job_id: job.id, p_lease_token: job.lease_token,
         });
