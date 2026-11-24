@@ -266,7 +266,7 @@ export default function RealEstateOperationsPage() {
             </form>}
           </section>
           <section className="re-panel">
-            <div className="re-panel-head"><div><h2>Inspection bookings</h2><p>Approve a reserved slot to create the Google Calendar event. Failed/unknown requests can be retried using the same event ID.</p></div><button className="re-secondary" onClick={() => void load()} disabled={loading}>Refresh</button></div>
+            <div className="re-panel-head"><div><h2>Inspection bookings</h2><p>Approve a reserved slot to create the Google Calendar event. Unknown outcomes can be safely reconciled using the same event ID. A definite failure needs a new booking after the underlying issue is fixed.</p></div><button className="re-secondary" onClick={() => void load()} disabled={loading}>Refresh</button></div>
             <div className="re-table-wrap"><table className="re-table"><thead><tr><th>Customer</th><th>Inspection time</th><th>Calendar</th><th>Status</th><th>Action</th></tr></thead><tbody>
               {bookings.map((booking) => <tr key={booking.id}>
                 <td><strong>{booking.lead?.full_name ?? "Unknown lead"}</strong><small>{booking.lead?.email ?? "No email"}</small></td>
