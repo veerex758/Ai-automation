@@ -12,6 +12,7 @@ export const POST = handleSchedule(async (metadata) => {
   const result = await runDurableWorker();
   console.info("Rexnora durable worker sweep", {
     scheduleName: metadata.name,
+    executionId: metadata.executionId,
     scheduledAt: metadata.scheduledAt.toISOString(),
     ...result,
   });
