@@ -6,6 +6,8 @@ import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { getWorkerProvider } from "@/lib/workflows/worker-operation-map";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
+const { validatePlaybookDefinition } = playbookDefinition;
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
@@ -114,14 +116,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
 
       let steps: RegisteredWorkflowStep[];
       const stored = candidate.definition as Record<string, unknown> | null;
-      // Playbook action permissions are metadata until the durable worker enforces
-      // every policy and records approval decisions. The generic workflow activator
-      // must not bypass that missing enforcement layer.
+      // Playbook actions are authorized by the real-estate pipeline, where each
+      // step policy is re-checked alongside lead consent, provider approval and
+      // the durable decision ledger. They must never use the generic executor.
       if (stored?.playbook !== undefined) {
-        return NextResponse.json({
-          error: "This Playbook cannot be activated yet. Its action permissions and Decision Inbox must be enforced by the durable runtime first.",
-          code: "PLAYBOOK_RUNTIME_POLICY_NOT_ENFORCED",
-        }, { status: 409 });
+        const graph = validateDefinition(candidate.definition);
+        if (!graph.definition) return NextResponse.json({ error: graph.error || "Playbook graph is invalid." }, { status: 422 });
+        const checkedPlaybook = validatePlaybookDefinition(stored.playbook, graph.definition, steps);
+        if (!checkedPlaybook.playbook) return NextResponse.json({
+          error: checkedPlaybook.error || "Playbook permissions do not match registered operations.",
+          code: "PLAYBOOK_POLICY_INVALID",
+        }, { status: 422 });
       }
       if (stored?.format === "aivanta-registry-v1") {
         const checked = validateRegisteredSteps(stored.steps);
