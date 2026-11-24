@@ -226,7 +226,7 @@ end;
 $$;
 
 revoke all on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,boolean,text,text,uuid) from public,anon,authenticated;
-grant execute on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,text,uuid) to service_role;
+grant execute on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,boolean,text,text,uuid) to service_role;
 
 create or replace function public.begin_real_estate_inspection_booking(
   p_workspace_id uuid,
