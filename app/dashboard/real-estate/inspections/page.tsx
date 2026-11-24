@@ -5,7 +5,7 @@ import Link from "next/link";
 import DashboardSidebar from "../../dashboard-sidebar";
 import "../real-estate.css";
 
-type Lead = { id: string; full_name: string; email: string | null; phone: string | null };
+type Lead = { id: string; full_name: string; email: string | null; phone: string | null; consent_to_contact: boolean; contact_preference: string };
 type Property = { id: string; reference: string; title: string; location: string; availability_status: string };
 type Agent = { id: string; name: string; status: string };
 type GoogleConnection = { id: string; product: string; account_email: string; status: string; last_test_status: string | null; scopes: string[] };
@@ -19,6 +19,8 @@ type Booking = {
   start_at: string;
   end_at: string;
   time_zone: string;
+  customer_invite_requested: boolean;
+  customer_invite_email: string | null;
   status: string;
   google_event_id: string | null;
   google_event_url: string | null;
@@ -50,7 +52,8 @@ export default function RealEstateInspectionsPage() {
   const [propertyId, setPropertyId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [googleConnectionId, setGoogleConnectionId] = useState("");
-  const [calendarId, setCalendarId] = useState("primary");
+  const [calendarId] = useState("primary");
+  const [sendCustomerInvite, setSendCustomerInvite] = useState(false);
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [timeZone, setTimeZone] = useState("Africa/Lagos");
@@ -98,6 +101,7 @@ export default function RealEstateInspectionsPage() {
         method: "POST",
         body: JSON.stringify({
           leadId,
+          sendCustomerInvite,
           propertyId: propertyId || null,
           agentId: agentId || null,
           googleConnectionId,
@@ -109,7 +113,7 @@ export default function RealEstateInspectionsPage() {
         }),
       });
       setNotice("Inspection slot reserved for agency approval. No calendar event or invitation has been created yet.");
-      setStartAt(""); setEndAt("");
+      setStartAt(""); setEndAt(""); setSendCustomerInvite(false);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Inspection request failed.");
@@ -187,8 +191,8 @@ export default function RealEstateInspectionsPage() {
                   {connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.account_email}</option>)}
                 </select>
               </label>
-              <label>Calendar ID
-                <input required maxLength={300} value={calendarId} onChange={(event) => setCalendarId(event.target.value)} />
+              <label>Calendar
+                <input value={calendarId} readOnly aria-readonly="true" />
               </label>
               <label>Time zone
                 <input required maxLength={100} value={timeZone} onChange={(event) => setTimeZone(event.target.value)} />
@@ -198,6 +202,18 @@ export default function RealEstateInspectionsPage() {
               </label>
               <label>End time
                 <input type="datetime-local" required value={endAt} onChange={(event) => setEndAt(event.target.value)} />
+              </label>
+              <label className="re-checkbox-field">
+                <span>Customer invitation (optional)</span>
+                <input
+                  type="checkbox"
+                  checked={sendCustomerInvite}
+                  disabled={!leads.find((lead) => lead.id === leadId)?.email ||
+                    !leads.find((lead) => lead.id === leadId)?.consent_to_contact ||
+                    leads.find((lead) => lead.id === leadId)?.contact_preference !== "email"}
+                  onChange={(event) => setSendCustomerInvite(event.target.checked)}
+                />
+                <small>Send an email calendar invite only when this lead has recorded email-contact consent</small>
               </label>
             </div>
             <div className="re-form-actions"><button className="re-primary" disabled={busy || loading || connections.length === 0 || !leadId}>{busy ? "Checking calendar…" : "Check availability & reserve slot"}</button></div>
@@ -221,7 +237,7 @@ export default function RealEstateInspectionsPage() {
                   <td>{property?.title ?? "Not selected"}</td>
                   <td>{agent?.name ?? "Unassigned"}</td>
                   <td>{dateLabel(booking.start_at)}<small>to {dateLabel(booking.end_at)} · {booking.time_zone}</small></td>
-                  <td>{connection?.account_email ?? booking.calendar_id}</td>
+                  <td>{connection?.account_email ?? booking.calendar_id}<small>{booking.customer_invite_requested ? "Customer invite requested" : "No customer invite"}</small></td>
                   <td><span className={"re-status " + booking.status}>{statusLabel(booking.status)}</span><small>{booking.last_error_code ?? ""}</small></td>
                   <td>{booking.google_event_url
                     ? <a href={booking.google_event_url} target="_blank" rel="noreferrer">Open event ↗</a>
