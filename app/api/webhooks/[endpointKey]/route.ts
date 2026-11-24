@@ -4,7 +4,7 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { runDurableWorker } from "@/lib/workflows/durable-worker";
 import { decryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
 import { verifyWebhookSignature } from "@/lib/webhooks/verify-signature";
-import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
+import { durableLiveRetryAttempts, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 export const runtime = "nodejs";
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       p_created_by: null,
       p_idempotency_key: "webhook:" + endpoint.id + ":" + eventKey,
       p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id, payloadSha256 },
-      p_max_attempts: 1,
+      p_max_attempts: durableLiveRetryAttempts(steps),
       p_execution_mode: "live",
     });
     const queued = dispatch as Record<string, unknown> | null;
