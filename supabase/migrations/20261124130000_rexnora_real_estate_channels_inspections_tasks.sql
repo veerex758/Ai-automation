@@ -64,7 +64,7 @@ create table if not exists public.real_estate_inspection_bookings (
 create index if not exists real_estate_inspection_bookings_google_connection_idx
   on public.real_estate_inspection_bookings(workspace_id,google_connection_id,status);
 create index if not exists real_estate_inspection_bookings_workspace_time_idx
-  on public.real_estate_inspection_bookings(workspace_id,calendar_id,start_at,end_at)
+  on public.real_estate_inspection_bookings(workspace_id,google_connection_id,calendar_id,start_at,end_at)
   where status in ('requested','creating','confirmed','unknown');
 create index if not exists real_estate_inspection_bookings_lead_idx
   on public.real_estate_inspection_bookings(workspace_id,lead_id,created_at desc);
@@ -169,7 +169,7 @@ begin
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(p_workspace_id::text || ':' || p_calendar_id, 0)
+    pg_catalog.hashtextextended(p_workspace_id::text || ':' || p_google_connection_id::text || ':' || p_calendar_id, 0)
   );
 
   select * into prior from public.real_estate_inspection_bookings
@@ -187,7 +187,7 @@ begin
 
   if exists(
     select 1 from public.real_estate_inspection_bookings b
-     where b.workspace_id=p_workspace_id and b.calendar_id=p_calendar_id
+     where b.workspace_id=p_workspace_id and b.google_connection_id=p_google_connection_id and b.calendar_id=p_calendar_id
        and b.status in ('requested','creating','confirmed','unknown')
        and b.start_at < p_end_at and b.end_at > p_start_at
   ) then
@@ -236,11 +236,11 @@ begin
     return;
   end if;
   perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(booking_row.workspace_id::text || ':' || booking_row.calendar_id, 0)
+    pg_catalog.hashtextextended(booking_row.workspace_id::text || ':' || booking_row.google_connection_id::text || ':' || booking_row.calendar_id, 0)
   );
   if exists(
     select 1 from public.real_estate_inspection_bookings b
-     where b.workspace_id=booking_row.workspace_id and b.calendar_id=booking_row.calendar_id
+     where b.workspace_id=booking_row.workspace_id and b.google_connection_id=booking_row.google_connection_id and b.calendar_id=booking_row.calendar_id
        and b.id<>booking_row.id
        and b.status in ('requested','creating','confirmed','unknown')
        and b.start_at < booking_row.end_at and b.end_at > booking_row.start_at
