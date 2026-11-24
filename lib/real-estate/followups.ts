@@ -39,10 +39,10 @@ async function finish(
 
 async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, claim: Claim) {
   const { data: lead, error: leadError } = await db.from("real_estate_leads")
-    .select("id,full_name,email,contact_preference,consent_to_contact,customer_responded_at,agent_takeover_at,status,last_contacted_at,workflow_id,playbook_version")
+    .select("id,full_name,email,contact_preference,consent_to_contact,consent_text,consent_at,customer_responded_at,agent_takeover_at,status,last_contacted_at,workflow_id,playbook_version")
     .eq("id", claim.lead_id).eq("workspace_id", claim.workspace_id).maybeSingle();
   if (leadError) throw new Error("FOLLOWUP_LEAD_LOOKUP_FAILED");
-  if (!lead || !lead.consent_to_contact || lead.contact_preference !== "email" || !lead.email ||
+  if (!lead || !lead.consent_to_contact || !lead.consent_at || !lead.consent_text || lead.contact_preference !== "email" || !lead.email ||
     lead.customer_responded_at || lead.agent_takeover_at || ["won", "lost"].includes(lead.status)) {
     const { error } = await db.from("real_estate_followups")
       .update({ status: "cancelled", lease_token: null, lease_until: null, last_error_code: "FOLLOWUP_STOP_CONDITION" })
