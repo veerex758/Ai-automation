@@ -90,6 +90,58 @@ test("Google Calendar get_event safely encodes calendar and event identifiers", 
   assert.deepEqual(result, { id: "event-1", summary: "Planning", start: { dateTime: "2026-11-07T10:00:00Z" }, end: { dateTime: "2026-11-07T10:30:00Z" } });
 });
 
+test("Google Calendar create_event inserts a bounded event with no invite emails by default", async () => {
+  let request: any;
+  const operation = findOperation("google_calendar", "create_event", "action");
+  assert.ok(operation);
+  const result = await operation.run({
+    credentials: { google_calendar: { accessToken: "calendar-write-token" } }, logger,
+    http: { async request(args: any) {
+      request = args;
+      return { status: 200, body: {
+        id: "inspection-event-1",
+        summary: "Property inspection · RE-104",
+        status: "confirmed",
+        start: { dateTime: "2026-11-27T10:00:00+01:00", timeZone: "Africa/Lagos" },
+        end: { dateTime: "2026-11-27T10:45:00+01:00", timeZone: "Africa/Lagos" },
+        htmlLink: "https://calendar.google.com/calendar/event?eid=inspection-event-1",
+      } };
+    } },
+    previousOutputs: {},
+  }, {
+    calendarId: "primary",
+    summary: "Property inspection · RE-104",
+    description: "Inspection requested by an opted-in buyer.",
+    location: "Victoria Island, Lagos",
+    startDateTime: "2026-11-27T10:00:00+01:00",
+    endDateTime: "2026-11-27T10:45:00+01:00",
+    timeZone: "Africa/Lagos",
+    attendeeEmails: ["agent@example.test"],
+  });
+  assert.equal(request.method, "POST");
+  const requestedUrl = new URL(request.url);
+  assert.equal(requestedUrl.searchParams.get("sendUpdates"), "none");
+  assert.match(requestedUrl.pathname, /calendars\/primary\/events$/);
+  assert.equal(request.headers.Authorization, "Bearer calendar-write-token");
+  assert.deepEqual(request.body.start, { dateTime: "2026-11-27T10:00:00+01:00", timeZone: "Africa/Lagos" });
+  assert.deepEqual(request.body.end, { dateTime: "2026-11-27T10:45:00+01:00", timeZone: "Africa/Lagos" });
+  assert.deepEqual(request.body.attendees, [{ email: "agent@example.test" }]);
+  assert.equal(request.retries, 0);
+  assert.equal(result.id, "inspection-event-1");
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.htmlLink, "https://calendar.google.com/calendar/event?eid=inspection-event-1");
+
+  await assert.rejects(() => operation.run({
+    credentials: { google_calendar: { accessToken: "calendar-write-token" } }, logger,
+    http: { async request() { throw new Error("invalid time range must not hit Google"); } },
+    previousOutputs: {},
+  }, {
+    summary: "Invalid time",
+    startDateTime: "2026-11-27T11:00:00+01:00",
+    endDateTime: "2026-11-27T10:00:00+01:00",
+  }), /GOOGLE_CALENDAR_TIME_RANGE_INVALID/);
+});
+
 test("Discord get_channel reads only bounded channel metadata", async () => {
   let request: any;
   const operation = findOperation("discord", "get_channel", "action");
