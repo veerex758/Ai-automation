@@ -22,7 +22,7 @@ test("MySQL and MongoDB credential migration adds only the intended provider val
   assert.match(permissionHelper, /"integrations.manage"/);
   assert.match(connectionMigration, /create or replace function public\.save_workspace_database_credentials/);
   assert.match(connectionMigration, /security invoker/i);
-  assert.match(connectionMigration, /revoke all on function public\.save_workspace_database_credentials[\s\S]*from public, anon, authenticated/i);
+  assert.match(connectionMigration, /revoke all on function public\.save_workspace_database_credentials[\s\S]*from public,\s*anon,\s*authenticated/i);
   assert.match(connectionMigration, /grant execute on function public\.save_workspace_database_credentials[\s\S]*to service_role/i);
   assert.match(workspaceRoute, /save_workspace_integration_connection/);
   assert.match(workspaceRoute, /p_provider: provider/);
