@@ -112,13 +112,13 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       id: "get_event", name: "Get event",
       description: "Retrieves one event from a calendar owned by the connected user.",
       inputSchema: z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), eventId: z.string().trim().min(1).max(300) }).strict(),
-      outputSchema: z.object({ id: z.string(), summary: z.string().optional(), description: z.string().max(10000).optional(), status: z.string().optional(), start: z.unknown().optional(), end: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict(),
+      outputSchema: z.object({ id: z.string(), summary: z.string().optional(), description: z.string().max(10000).optional(), status: z.string().optional(), start: z.unknown().optional(), end: z.unknown().optional(), attendees: z.array(z.object({ email: z.string().email().optional() }).passthrough()).optional(), htmlLink: z.string().url().optional() }).strict(),
       async run(ctx, raw) {
         const input = z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), eventId: z.string().trim().min(1).max(300) }).strict().parse(raw);
         const url = "https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId) + "/events/" + encodeURIComponent(input.eventId);
         const body = await get(ctx, "google_calendar", url);
         if (typeof body.id !== "string") throw new Error("GOOGLE_CALENDAR_INVALID_RESPONSE");
-        return { id: body.id, ...(typeof body.summary === "string" ? { summary: body.summary } : {}), ...(typeof body.description === "string" ? { description: body.description.slice(0, 10000) } : {}), ...(typeof body.status === "string" ? { status: body.status } : {}), ...(body.start !== undefined ? { start: body.start } : {}), ...(body.end !== undefined ? { end: body.end } : {}), ...(typeof body.htmlLink === "string" ? { htmlLink: body.htmlLink } : {}) };
+        return { id: body.id, ...(typeof body.summary === "string" ? { summary: body.summary } : {}), ...(typeof body.description === "string" ? { description: body.description.slice(0, 10000) } : {}), ...(typeof body.status === "string" ? { status: body.status } : {}), ...(body.start !== undefined ? { start: body.start } : {}), ...(body.end !== undefined ? { end: body.end } : {}), ...(Array.isArray(body.attendees) ? { attendees: body.attendees.flatMap((item: any) => typeof item?.email === "string" ? [{ email: item.email }] : []) } : {}), ...(typeof body.htmlLink === "string" ? { htmlLink: body.htmlLink } : {}) };
       },
     }, {
       id: "create_event", name: "Create event",
