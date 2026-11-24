@@ -274,6 +274,32 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     } finally { replacement.release(); }
   });
 
+  await t.test("waiting jobs resume without consuming another retry attempt", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const created = await dispatch(db, crypto.randomUUID(), 3);
+      const [first] = await claim(db, "pause-worker", 1, 30);
+      assert.equal(first.id, created.job_id);
+      assert.equal(first.attempts, 1);
+      const paused = await db.query(
+        "select public.pause_execution_job($1,$2,1) as paused",
+        [first.id, first.lease_token],
+      );
+      assert.equal(paused.rows[0].paused, true);
+      await db.query("update public.execution_jobs set available_at=now()-interval '1 second' where id=$1", [first.id]);
+      const [resumed] = await claim(db, "resume-worker", 1, 30);
+      assert.equal(resumed.id, first.id);
+      assert.equal(resumed.status, "running");
+      assert.equal(resumed.attempts, 1);
+      const finished = await db.query(
+        "select public.finish_execution_job($1,$2,true,null,null,null) as status",
+        [resumed.id, resumed.lease_token],
+      );
+      assert.equal(finished.rows[0].status, "succeeded");
+    } finally { db.release(); }
+  });
+
   await t.test("cancellation requested on a leased job wins over expired-lease recovery", async () => {
     await resetFixture();
     const db = await client();
