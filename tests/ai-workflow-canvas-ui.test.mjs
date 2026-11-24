@@ -32,7 +32,7 @@ test("review thresholds and exception paths are explicit before draft save", () 
   assert.match(page, /reviewMissingFields/);
   assert.match(page, /reviewWhenNoRuleMatches/);
   assert.match(page, /reviewProviderFailures/);
-  assert.match(page, /reviewMissingFields: true/);
+  assert.match(page, /useState\(true\)/);
 });
 
 test("setup creates an inactive Playbook draft and never activates or executes it", () => {
