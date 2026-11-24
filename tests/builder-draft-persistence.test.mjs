@@ -5,19 +5,19 @@ import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
 
 test("Playbook setup saves the validated graph and policy envelope as one inactive draft", () => {
-  assert.match(source, /fetch\("\/api/ai/generate-workflow"/);
-  assert.match(source, /fetch\("/api/workflows"/);
-  assert.match(source, /status: "draft"/);
-  assert.match(source, /const definition = \{ \.\.\.draft\.definition, playbook \}/);
-  assert.match(source, /registrySteps: draft\.registrySteps/);
-  assert.match(source, /router\.push\("\/dashboard\/playbooks\//);
+  assert.ok(source.includes('fetch("/api/ai/generate-workflow"'));
+  assert.ok(source.includes('fetch("/api/workflows"'));
+  assert.ok(source.includes('status: "draft"'));
+  assert.ok(source.includes("const definition = { ...draft.definition, playbook }"));
+  assert.ok(source.includes("registrySteps: draft.registrySteps"));
+  assert.ok(source.includes('router.push("/dashboard/playbooks/"'));
 });
 
 test("permission settings are explicit and no missing permission is converted to auto", () => {
-  assert.match(source, /permission: step\.nodeId === "gemini" \? "auto" as const : "ask_first" as const/);
-  assert.match(source, /actionPolicies: policies/);
-  assert.match(source, /ask_first/);
-  assert.match(source, /never/);
+  assert.ok(source.includes('permission: step.nodeId === "gemini" ? "auto" as const : "ask_first" as const'));
+  assert.ok(source.includes("actionPolicies: policies"));
+  assert.ok(source.includes('"ask_first"'));
+  assert.ok(source.includes('"never"'));
 });
 
 test("draft setup has no browser-local workflow source of truth", () => {
