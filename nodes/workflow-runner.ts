@@ -136,10 +136,13 @@ export async function executeRegisteredWorkflow(args: {
           await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated" });
           return { simulated: true as const };
         }
-        await args.context.authorizeOperation?.({ nodeId: step.nodeId, operationId: step.operationId, kind: step.kind });
-        // Credentials are looked up immediately before each operation so two
-        // nodes using the same provider may safely select different accounts.
+        // Resolve the exact account first, then re-check that it is still
+        // connected and verified immediately before the provider handler runs.
         await args.context.resolveStepCredentials?.({
+          nodeId: step.nodeId, operationId: step.operationId, kind: step.kind,
+          ...(step.connectionId ? { connectionId: step.connectionId } : {}),
+        });
+        await args.context.authorizeOperation?.({
           nodeId: step.nodeId, operationId: step.operationId, kind: step.kind,
           ...(step.connectionId ? { connectionId: step.connectionId } : {}),
         });
