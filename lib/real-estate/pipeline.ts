@@ -704,6 +704,9 @@ async function syncRealEstateCrmContact(
   if (priorError) return { state: "blocked", code: "CRM_SYNC_LOOKUP_FAILED" };
   if (prior?.status === "created" || prior?.status === "matched") return { state: "completed" };
   if (prior?.status === "blocked") return { state: "blocked", code: prior.last_error_code ?? "CRM_SYNC_BLOCKED" };
+  if (prior?.status === "failed" && Number(prior.attempt_count) >= Number(prior.max_attempts)) {
+    return { state: "blocked", code: prior.last_error_code ?? "CRM_SYNC_RETRY_LIMIT_REACHED" };
+  }
 
   const searchGate = await requestOrReadPlaybookDecision({
     db, lead, runtime, type: "action_approval", policy: searchPolicy,
@@ -724,12 +727,34 @@ async function syncRealEstateCrmContact(
       makeNodeContext({ [provider]: searchCredentials.credentials }),
       { email: lead.email },
     ) as { contacts?: Array<{ contactId: string; email?: string }> };
-    matches = Array.isArray(searchResult.contacts)
-      ? searchResult.contacts.filter((item) => item && typeof item.contactId === "string" &&
-          typeof item.email === "string" && item.email.toLowerCase() === String(lead.email).toLowerCase())
+    const candidates = Array.isArray(searchResult.contacts)
+      ? searchResult.contacts.filter((item) => item && typeof item.contactId === "string")
       : [];
+    matches = candidates.filter((item) =>
+      typeof item.email === "string" && item.email.toLowerCase() === String(lead.email).toLowerCase()
+    );
+    if (candidates.length > matches.length) {
+      await db.from("real_estate_crm_syncs").upsert({
+        workspace_id: claim.workspace_id, lead_id: lead.id, provider,
+        status: "unknown", idempotency_key: idempotencyKey, last_error_code: "CRM_SEARCH_RESULT_NEEDS_REVIEW",
+      }, { onConflict: "workspace_id,lead_id,provider" });
+      await db.from("real_estate_lead_activities").insert({
+        workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+        activity_type: "lead.crm_sync_needs_review",
+        details: { provider, reason: "CRM search returned records that could not be verified by exact email; automatic create is disabled." },
+      });
+      const review = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "provider_failure", policy: createPolicy,
+        reason: "The CRM search returned a possible match without an exact verified email. Resolve the duplicate/identity check before creating another contact.",
+        leaseToken: claim.lease_token,
+      });
+      return review.state === "pending"
+        ? { state: "paused", code: "CRM_SEARCH_RESULT_NEEDS_REVIEW" }
+        : { state: "blocked", code: "CRM_SEARCH_RESULT_NEEDS_REVIEW" };
+    }
   } catch (error) {
     const code = safeErrorCode(error, "CRM_SEARCH_FAILED");
+    if (/RATE_LIMITED|_HTTP_5\\d\\d/.test(code)) return { state: "retry", code };
     return { state: "blocked", code };
   }
 
@@ -820,11 +845,12 @@ async function syncRealEstateCrmContact(
   } catch (error) {
     const code = safeErrorCode(error, "CRM_CREATE_OUTCOME_UNKNOWN");
     const rateLimited = /RATE_LIMITED/.test(code);
+    const definiteClientReject = /_HTTP_4\\d\\d/.test(code) && !/_HTTP_429/.test(code);
     await db.from("real_estate_crm_syncs").update({
-      status: rateLimited ? "failed" : "unknown",
+      status: rateLimited ? "failed" : definiteClientReject ? "blocked" : "unknown",
       last_error_code: code,
     }).eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("provider", provider);
-    if (!rateLimited && runtime.definition?.review.reviewProviderFailures) {
+    if (!rateLimited && !definiteClientReject) {
       const failureGate = await requestOrReadPlaybookDecision({
         db, lead, runtime, type: "provider_failure", policy: createPolicy,
         reason: "CRM contact creation outcome needs reconciliation before another create attempt. " + code,
