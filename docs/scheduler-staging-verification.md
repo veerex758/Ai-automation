@@ -16,7 +16,7 @@ A successful scheduler tick means the immutable active workflow version was dura
 - First enable the scheduler and worker flags in the approved staging environment with scheduled live execution disabled. Verify due schedule claims, queue dispatch, worker wake, run history, retry state and next-run advancement.
 - Test live scheduled execution only with an agency-approved test workflow and recipient. Enable `AIVANTA_SCHEDULED_LIVE_EXECUTION_ENABLED` only after the manual and signed-webhook gates pass.
 - Legacy workflow definitions remain dry-run-only for scheduled execution. Live scheduled execution requires the registered workflow format and the normal live-operation allowlist.
-- Vercel Schedules run every 30 minutes for schedule dispatch and hourly for abandoned-lease recovery. Together this uses 2,160 runs per 30-day month per environment; even Production plus Preview remains below the 5,000 monthly Hobby allowance. Static schedules are active in Production and inactive in Preview by default; enable the Preview schedules only for the approved staging acceptance window.
+- Vercel Schedules run every 30 minutes for schedule dispatch and hourly for abandoned-lease recovery. Together this uses 2,880 runs per 30-day month in Production, below the 5,000 monthly Hobby allowance. Static schedules are active in Production and inactive in Preview by default; enabling Preview for a two-hour staging acceptance window adds at most eight runs.
 - Do not call the scheduler production-ready until real staging schedule claims and the corresponding run trace have been inspected.
 
 ## Required server configuration
