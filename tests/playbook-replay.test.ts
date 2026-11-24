@@ -90,3 +90,17 @@ test("canonical corrected lead fields override stale raw enquiry values", () => 
   assert.equal(result.rules[0].outcome, "not_matched");
   assert.equal(result.rules[0].route, "false");
 });
+
+
+test("replay requires human review when Gemini identifies missing enquiry fields", () => {
+  const result = replayPlaybookAgainstLead({
+    ...playbook,
+    rules: [],
+  }, [], {
+    id: "lead-7",
+    full_name: "Incomplete Qualification",
+    qualification: { confidence: 0.94, missingInformation: ["budget", "preferred location"] },
+  });
+  assert.equal(result.requiresReview, true);
+  assert.ok(result.reviewReasons.some((reason) => /Gemini identified required enquiry details/i.test(reason)));
+});
