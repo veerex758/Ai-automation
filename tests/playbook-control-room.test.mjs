@@ -27,7 +27,7 @@ test("Control Room exposes activation only through the server-side workflow gate
   assert.match(page, /Activation is checked server-side/);
   assert.match(page, /Pause Playbook/);
   assert.match(page, /Activate Playbook/);
-  assert.match(page, /No external action can run from this page/);
+  assert.match(page, /External actions still pass the Playbook policy and review gates/);
 });
 
 test("Control Room links to the real-estate lead workspace and optional advanced graph", () => {
