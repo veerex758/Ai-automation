@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const page = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../app/dashboard/playbooks/playbooks.css", import.meta.url), "utf8");
+const controlRoom = readFileSync(new URL("../app/dashboard/playbooks/[playbookId]/page.tsx", import.meta.url), "utf8");
 
 test("Playbook authoring starts with a business outcome instead of a canvas", () => {
   assert.match(page, /What outcome should Rexnora handle/);
@@ -35,13 +36,16 @@ test("review thresholds and exception paths are explicit before draft save", () 
   assert.match(page, /useState\(true\)/);
 });
 
-test("setup creates an inactive Playbook draft and never activates or executes it", () => {
+test("setup creates an inactive draft and routes guarded activation through the Control Room", () => {
   assert.match(page, /status: "draft"/);
   assert.match(page, /const definition = \{ \.\.\.draft\.definition, playbook \}/);
   assert.match(page, /registrySteps: draft\.registrySteps/);
   assert.match(page, /Save Playbook draft/);
-  assert.match(page, /Activation is deliberately unavailable/);
+  assert.match(page, /Open the Control Room to test and activate it after the server verifies/);
   assert.doesNotMatch(page, /status: "active"|\/activate|\/execute|\/dispatch/);
+  assert.match(controlRoom, /Activate Playbook/);
+  assert.match(controlRoom, /method: "PATCH"/);
+  assert.match(controlRoom, /Activation is checked server-side/);
 });
 
 test("Playbook setup layout adapts to phone screens", () => {
