@@ -25,8 +25,14 @@ test("workflow definition PATCH preserves an existing Playbook and refuses stale
   assert.match(route, /definitionToSave = \{ \.\.\.definitionToSave, playbook: savedPlaybook \}/);
 });
 
-test("generic workflow activation fails closed for Playbooks until runtime policy enforcement exists", () => {
+test("Playbook activation is limited to the implemented real-estate runtime and all server gates", () => {
   assert.match(activation, /stored\?\.playbook !== undefined/);
-  assert.match(activation, /PLAYBOOK_RUNTIME_POLICY_NOT_ENFORCED/);
-  assert.match(activation, /status: 409/);
+  assert.match(activation, /validatePlaybookDefinition/);
+  assert.match(activation, /REAL_ESTATE_PIPELINE_ENABLED/);
+  assert.match(activation, /PLAYBOOK_POLICY_INVALID/);
+  assert.match(activation, /validateDurableLiveSteps/);
+  assert.match(activation, /Run a successful test of this exact saved workflow version/);
+  assert.match(activation, /WORKSPACE_CONNECTION_NOT_VERIFIED/);
+  assert.match(activation, /Approve .* in workspace integration permissions/);
+  assert.doesNotMatch(activation, /PLAYBOOK_RUNTIME_POLICY_NOT_ENFORCED/);
 });
