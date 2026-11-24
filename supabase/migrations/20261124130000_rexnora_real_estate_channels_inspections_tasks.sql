@@ -249,7 +249,11 @@ begin
     return query select 'not_found'::text,p_booking_id;
     return;
   end if;
-  if booking_row.status <> 'requested' then
+  if booking_row.status = 'creating' and booking_row.updated_at > now() - interval '5 minutes' then
+    return query select 'in_progress'::text,booking_row.id;
+    return;
+  end if;
+  if booking_row.status not in ('requested','unknown','creating') then
     return query select booking_row.status,booking_row.id;
     return;
   end if;
