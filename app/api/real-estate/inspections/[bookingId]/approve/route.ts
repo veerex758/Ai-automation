@@ -26,6 +26,8 @@ type Booking = {
   start_at: string;
   end_at: string;
   time_zone: string;
+  customer_invite_requested: boolean;
+  customer_invite_email: string | null;
   status: string;
   google_event_id: string | null;
 };
@@ -41,7 +43,10 @@ function eventMatches(event: { start?: unknown; end?: unknown; description?: unk
   const end = event.end && typeof event.end === "object" ? event.end as Record<string, unknown> : {};
   const startValue = typeof start.dateTime === "string" ? start.dateTime : typeof start.date === "string" ? start.date : null;
   const endValue = typeof end.dateTime === "string" ? end.dateTime : typeof end.date === "string" ? end.date : null;
-  if (!startValue || !endValue || typeof event.description !== "string" ||
+  const attendees = Array.isArray((event as Record<string, unknown>).attendees) ? (event as Record<string, unknown>).attendees as Array<Record<string, unknown>> : [];
+  const attendeeMatches = !booking.customer_invite_requested || attendees.some((attendee) =>
+    typeof attendee.email === "string" && attendee.email.toLowerCase() === booking.customer_invite_email?.toLowerCase());
+  if (!startValue || !endValue || !attendeeMatches || typeof event.description !== "string" ||
       !event.description.includes("Rexnora inspection booking " + booking.id)) return false;
   return Math.abs(Date.parse(startValue) - Date.parse(booking.start_at)) < 1000 &&
     Math.abs(Date.parse(endValue) - Date.parse(booking.end_at)) < 1000;
@@ -167,7 +172,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
         startDateTime: new Date(booking.start_at).toISOString(),
         endDateTime: new Date(booking.end_at).toISOString(),
         timeZone: booking.time_zone,
-        sendUpdates: "none",
+        sendUpdates: booking.customer_invite_requested ? "all" : "none",
       }) as { id?: string; htmlLink?: string };
       if (created.id !== eventId) throw new Error("GOOGLE_CALENDAR_CREATED_EVENT_ID_MISMATCH");
       const { error: saveError } = await service.from("real_estate_inspection_bookings").update({
