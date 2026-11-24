@@ -33,6 +33,8 @@ export default function PlaybookControlRoomPage() {
   const [data, setData] = useState<DefinitionResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusNotice, setStatusNotice] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -62,6 +64,34 @@ export default function PlaybookControlRoomPage() {
   const playbook = data?.definition?.playbook;
   const nodes = data?.definition?.nodes ?? [];
 
+  async function changeStatus() {
+    if (!workflow || updatingStatus || !["draft", "paused", "active"].includes(workflow.status)) return;
+    const nextStatus = workflow.status === "active" ? "paused" : "active";
+    setUpdatingStatus(true);
+    setError("");
+    setStatusNotice("");
+    try {
+      const response = await fetch("/api/workflows/" + encodeURIComponent(playbookId), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error || "The Playbook status could not be changed.");
+      setData((current) => current?.workflow ? {
+        ...current,
+        workflow: { ...current.workflow, status: nextStatus },
+      } : current);
+      setStatusNotice(nextStatus === "active"
+        ? "Playbook activated. New real-estate intake will be bound to this saved version; verify actual processing in the Outcome Ledger."
+        : "Playbook paused. New enquiries will no longer be assigned to this Playbook.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The Playbook status could not be changed.");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
+
   return <main className="app-shell playbook-shell">
     <DashboardSidebar activePage="playbooks" />
     <section className="dashboard-main">
@@ -84,8 +114,9 @@ export default function PlaybookControlRoomPage() {
 
         {!loading && !error && playbook && workflow && <>
           <div className="playbook-alert" role="status">
-            This Playbook is saved as a draft. Activation is locked until the durable runtime enforces its action permissions and the Decision Inbox. No external action can run from this page.
+            Activation is checked server-side against the supported Gemini and Resend runtime, the saved version, a successful test run, verified provider connections and operation approvals. External actions still pass the Playbook policy and review gates.
           </div>
+          {statusNotice && <div className="playbook-alert" role="status">{statusNotice}</div>}
 
           <div className="playbook-steps">
             <div className="playbook-step active"><span>{workflow.status === "active" ? "●" : "D"}</span><div><strong>Playbook status</strong><small>{workflow.status === "active" ? "Active version · policy gate still applies" : "Draft · not running"}</small></div></div>
@@ -108,7 +139,7 @@ export default function PlaybookControlRoomPage() {
           </section>
 
           <section className="playbook-panel">
-            <div className="playbook-panel-heading"><span>02</span><div><h2>Action permissions</h2><p>Stored policy for each action. The server currently blocks Playbook activation until the worker enforces these policies.</p></div></div>
+            <div className="playbook-panel-heading"><span>02</span><div><h2>Action permissions</h2><p>The durable worker checks these exact permissions against the active workflow version immediately before provider work.</p></div></div>
             {playbook.actionPolicies.map((policy) => <article className="playbook-action-card" key={policy.stepId}>
               <div className="playbook-action-copy"><strong>{nodes.find((node) => node.id === policy.stepId)?.title || policy.operationId}</strong><small>{policy.nodeId} · {policy.operationId}</small></div>
               <span className="playbook-draft-tag">{permissionCopy[policy.permission]}</span>
@@ -130,6 +161,9 @@ export default function PlaybookControlRoomPage() {
           <div className="playbook-save-row">
             <div><strong>Next: verify real enquiries</strong><small>Review leads and qualification results in the real-estate workspace. Advanced graph editing is available for technical inspection only.</small></div>
             <div className="playbook-actions">
+              {workflow.status !== "archived" && <button className="playbook-primary" type="button" disabled={updatingStatus} onClick={() => void changeStatus()}>
+                {updatingStatus ? "Saving…" : workflow.status === "active" ? "Pause Playbook" : "Activate Playbook"}
+              </button>}
               <Link className="playbook-secondary-link" href="/dashboard/real-estate">Open leads</Link>
               <Link className="playbook-secondary-link" href={"/dashboard/playbooks/" + encodeURIComponent(playbookId) + "/preview"}>Safe Preview</Link>
               <Link className="playbook-secondary-link" href={"/dashboard/playbooks/" + encodeURIComponent(playbookId) + "/inbox"}>Decision Inbox</Link>
