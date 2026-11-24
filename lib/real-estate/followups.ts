@@ -3,6 +3,7 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 import { findOperation } from "@/nodes/registry";
 import type { NodeContext } from "@/nodes/types";
 import { createRealEstateServiceClient } from "@/lib/real-estate/server";
+import { loadPlaybookRuntime } from "@/lib/playbooks/runtime";
 
 type Claim = {
   id: string;
@@ -38,7 +39,7 @@ async function finish(
 
 async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, claim: Claim) {
   const { data: lead, error: leadError } = await db.from("real_estate_leads")
-    .select("id,full_name,email,contact_preference,consent_to_contact,customer_responded_at,agent_takeover_at,status,last_contacted_at")
+    .select("id,full_name,email,contact_preference,consent_to_contact,customer_responded_at,agent_takeover_at,status,last_contacted_at,workflow_id,playbook_version")
     .eq("id", claim.lead_id).eq("workspace_id", claim.workspace_id).maybeSingle();
   if (leadError) throw new Error("FOLLOWUP_LEAD_LOOKUP_FAILED");
   if (!lead || !lead.consent_to_contact || lead.contact_preference !== "email" || !lead.email ||
@@ -54,20 +55,39 @@ async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, cla
     return "blocked";
   }
 
+  const runtime = await loadPlaybookRuntime(db, {
+    id: lead.id,
+    workspace_id: claim.workspace_id,
+    workflow_id: lead.workflow_id,
+    playbook_version: lead.playbook_version,
+  });
+  if (runtime.mode === "invalid") {
+    await finish(db, claim, false, null, runtime.reason ?? "FOLLOWUP_PLAYBOOK_INVALID", false);
+    return "blocked";
+  }
+  const selectedConnectionId = runtime.mode === "playbook"
+    ? runtime.steps?.find((step) => step.nodeId === "email" && step.operationId === "send_email")?.connectionId
+    : undefined;
+  let integrationQuery = db.from("workspace_integrations").select("id,status,last_test_status")
+    .eq("workspace_id", claim.workspace_id).eq("provider", "resend");
+  if (selectedConnectionId) integrationQuery = integrationQuery.eq("id", selectedConnectionId);
   const [
-    { data: integration, error: integrationError },
+    { data: integrations, error: integrationError },
     { data: approval, error: approvalError },
   ] = await Promise.all([
-    db.from("workspace_integrations").select("id,status,last_test_status")
-      .eq("workspace_id", claim.workspace_id).eq("provider", "resend").maybeSingle(),
+    integrationQuery.order("created_at", { ascending: false }).limit(selectedConnectionId ? 1 : 2),
     db.from("workspace_provider_operation_approvals").select("decision")
       .eq("workspace_id", claim.workspace_id).eq("provider", "resend")
       .eq("node_id", "email").eq("operation_id", "send_email")
       .order("decided_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (integrationError || approvalError) throw new Error("FOLLOWUP_PROVIDER_CHECK_FAILED");
-  if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed" ||
-    approval?.decision !== "approved") {
+  if (!integrations?.length || integrations.length !== 1) {
+    await finish(db, claim, false, null, integrations?.length ? "WORKSPACE_CONNECTION_SELECTION_REQUIRED" : "RESEND_CONNECTION_OR_APPROVAL_REQUIRED", false);
+    return "blocked";
+  }
+  const integration = integrations[0];
+  if (integration.status !== "connected" || integration.last_test_status !== "passed" || approval?.decision !== "approved") {
     await finish(db, claim, false, null, "RESEND_CONNECTION_OR_APPROVAL_REQUIRED", false);
     return "blocked";
   }
