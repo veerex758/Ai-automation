@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
         senderDomain: domain,
         senderDomainStatus: typeof match?.status === "string" ? match.status : "not_found",
         credentialCheck: "passed",
+        productionReady: Boolean(verified),
       },
     }).eq("id", integration.id);
     if (updateError) throw updateError;
@@ -143,8 +144,8 @@ export async function POST(request: NextRequest) {
       senderDomainVerified: Boolean(verified),
       senderDomainStatus: typeof match?.status === "string" ? match.status : "not_found",
       message: verified
-        ? "Resend authenticated successfully and the sender domain is verified. No email was sent."
-        : "Resend authenticated successfully, but the sender domain is not verified or was not found. No email was sent.",
+        ? "Resend API credentials are valid and the sender domain is verified. Production email is ready; no email was sent."
+        : "Resend API credentials are valid. Your test email can work, but production email remains blocked until you verify a sender domain. No email was sent.",
     });
   } catch {
     if (integrationId) {
