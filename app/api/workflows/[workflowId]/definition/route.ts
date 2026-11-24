@@ -186,7 +186,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
     }
     const requestBody = body as Record<string, unknown>;
-    const rawDefinition = requestBody.definition as Record<string, unknown>;
+    const rawDefinition = requestBody.definition && typeof requestBody.definition === "object" && !Array.isArray(requestBody.definition)
+      ? requestBody.definition as Record<string, unknown>
+      : {};
     const { data: existingWorkflow, error: existingWorkflowError } = await supabase.from("workflows")
       .select("definition").eq("id", workflowId).maybeSingle();
     if (existingWorkflowError) throw existingWorkflowError;
