@@ -37,7 +37,8 @@ test("Stripe recurring webhook verifies signature and processes invoice paid, fa
  assert.match(stripeWebhook,/invoice\.paid/);
  assert.match(stripeWebhook,/invoice\.payment_failed/);
  assert.match(stripeWebhook,/customer\.subscription\.deleted/);
- assert.match(stripeWebhook,/billing_recurring_events/);
+ assert.match(stripeWebhook,/claim_billing_webhook_event/);
+ assert.match(stripeWebhook,/complete_billing_webhook_event/);
  assert.match(stripeWebhook,/settle_workspace_payment/);
  assert.match(stripeWebhook,/invoice\.parent/);
  assert.match(stripeWebhook,/parent\.type!=="subscription_details"/);
@@ -50,7 +51,7 @@ test("Stripe recurring webhook verifies signature and processes invoice paid, fa
 test("Paystack recurring setup requires authenticated manager and encrypted reusable authorization",()=>{
  assert.match(paystackAuthorize,/canManageWorkspaceBilling/);
  assert.match(paystackAuthorize,/recurring_setup:true/);
- assert.match(paystackWebhook,/authorization\.reusable!==true/);
+ assert.ok(paystackWebhook.includes("recurringAuthorization?.reusable!==true"));
  assert.match(paystackWebhook,/encryptWebhookSecret/);
  assert.match(paystackWebhook,/paystack_authorization_code_enc/);
 });
