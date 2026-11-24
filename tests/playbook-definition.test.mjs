@@ -89,3 +89,17 @@ test("returns an explicit permission map rather than silently deriving permissio
   assert.equal(result.playbook.actionPolicies[0].permission, "auto");
   assert.equal(result.playbook.actionPolicies[1].permission, "auto");
 });
+
+test("rejects action types outside the real-estate pilot operation set", () => {
+  const unsupportedSteps = steps.map((step) =>
+    step.nodeId === "email" ? { ...step, operationId: "delete_record" } : step
+  );
+  const result = validatePlaybookDefinition(valid, graph, unsupportedSteps);
+  assert.match(result.error, /supports only Gemini lead qualification/);
+});
+
+test("requires exactly one supported Gemini qualification action", () => {
+  const withoutGemini = steps.filter((step) => step.nodeId !== "gemini");
+  const result = validatePlaybookDefinition(valid, graph, withoutGemini);
+  assert.match(result.error, /exactly one Gemini lead-qualification action/);
+});
