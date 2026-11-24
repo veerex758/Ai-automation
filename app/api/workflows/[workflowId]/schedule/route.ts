@@ -4,6 +4,7 @@ import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { nextCronOccurrence, validateCronExpression } from "@/lib/workflows/cron";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 function privateJson(body: unknown, init?: ResponseInit) {
@@ -29,6 +30,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!workflow) return privateJson({ error: "Workflow not found or access denied." }, { status: 404 });
     if (!(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.execute"))) return privateJson({ error: "Workspace workflows.execute permission required." }, { status: 403 });
     if (workflow.status !== "active") return privateJson({ error: "Activate the workflow before scheduling it." }, { status: 409 });
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "workflow-schedule-write", windowMs: 5 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workflow.workspace_id, workspaceLimit: 30,
+      resourceId: workflowId, resourceLimit: 5,
+    });
+    if (rateLimit) return rateLimit;
     const rawDefinition = workflow.definition as Record<string, unknown> | null;
     if (rawDefinition?.format === "aivanta-registry-v1") {
       const registry = validateRegisteredSteps(rawDefinition.steps);
@@ -86,8 +94,21 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return privateJson({ error: "Authentication required." }, { status: 401 });
+    const { data: workflow, error: workflowError } = await supabase.from("workflows")
+      .select("id,workspace_id").eq("id", workflowId).maybeSingle();
+    if (workflowError) throw workflowError;
+    if (!workflow || !(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.execute"))) {
+      return privateJson({ error: "Workspace workflows.execute permission required." }, { status: 403 });
+    }
+    const rateLimit = await enforceDistributedRateLimit(_request, {
+      scope: "workflow-schedule-delete", windowMs: 5 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workflow.workspace_id, workspaceLimit: 30,
+      resourceId: workflowId, resourceLimit: 5,
+    });
+    if (rateLimit) return rateLimit;
     const { data, error } = await supabase.from("workflow_schedules")
-      .update({ enabled: false }).eq("workflow_id", workflowId).select("id").maybeSingle();
+      .update({ enabled: false }).eq("workflow_id", workflowId).eq("workspace_id", workflow.workspace_id).select("id").maybeSingle();
     if (error) throw error;
     if (!data) return privateJson({ error: "Schedule not found or currently leased by the scheduler." }, { status: 409 });
     return privateJson({ success: true, enabled: false });

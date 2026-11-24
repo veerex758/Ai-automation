@@ -4,6 +4,7 @@ import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 import {getOrCreateDefaultWorkspace,getWorkspaceRole,canManageWorkspaceBilling} from "@/lib/supabase/workspace";
 import {getPaidPlan} from "@/lib/billing/paystack";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const CONSENT_TERMS_VERSION="rexnora-recurring-v1";
@@ -41,6 +42,11 @@ export async function POST(request:Request){
    return privateJson({error:"Stripe recurring price does not match the approved plan amount and interval."},{status:409});
   const workspace=await getOrCreateDefaultWorkspace(supabase),role=await getWorkspaceRole(supabase,workspace.id,user.id);
   if(!canManageWorkspaceBilling(role))return privateJson({error:"Workspace billing permission required."},{status:403});
+  const limited=await enforceDistributedRateLimit(request,{
+   scope:"stripe-subscription-checkout",windowMs:60*60_000,ipLimit:5,userId:user.id,userLimit:3,
+   workspaceId:workspace.id,workspaceLimit:5,
+  });
+  if(limited)return limited;
   const {data:consent,error:consentError}=await admin.from("billing_recurring_consents").insert({
    workspace_id:workspace.id,user_id:user.id,provider:"stripe",plan_slug:plan.slug,
    amount_minor:plan.amountMinor,currency:plan.currency,interval:plan.interval,

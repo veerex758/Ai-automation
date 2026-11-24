@@ -7,6 +7,7 @@ import { decryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
 import { verifyWebhookSignature } from "@/lib/webhooks/verify-signature";
 import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +71,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       return jsonError("Invalid webhook endpoint.", 404);
     }
 
+    const ingressLimit = await enforceDistributedRateLimit(request, {
+      scope: "signed-webhook-ingress", windowMs: 60_000, ipLimit: 60,
+    });
+    if (ingressLimit) return ingressLimit;
     const rawBody = await readBoundedBody(request);
     if (!rawBody) return jsonError("Webhook payload exceeds the 256 KiB limit.", 413);
     const eventId = request.headers.get("x-aivanta-event-id")?.trim() ?? "";
@@ -109,6 +114,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     });
     signingSecret = "";
     if (!verification.ok) return jsonError("Webhook signature is missing, invalid, or stale.", 401);
+    const signedIngressLimit = await enforceDistributedRateLimit(request, {
+      scope: "signed-webhook-authenticated", windowMs: 60 * 60_000,
+      workspaceId: endpoint.workspace_id, workspaceLimit: 500,
+      resourceId: endpoint.workflow_id, resourceLimit: 100,
+    });
+    if (signedIngressLimit) return signedIngressLimit;
 
     const { data: workflow, error: workflowError } = await db.from("workflows")
       .select("id,workspace_id,version,definition,status")
@@ -140,12 +151,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
     const livePolicyError = validateDurableLiveSteps(steps);
     if (livePolicyError) return jsonError("This workflow is not approved for live webhook execution.", 403);
 
-    const hourAgo = new Date(Date.now() - 3600000).toISOString();
-    const { count: hourlyRuns, error: usageError } = await db.from("workflow_runs")
-      .select("id", { count: "exact", head: true })
-      .eq("workflow_id", workflow.id).eq("mode", "live").gte("created_at", hourAgo);
-    if (usageError) throw usageError;
-    if ((hourlyRuns ?? 0) >= 100) return jsonError("This workflow reached its hourly usage limit. Try again later.", 429);
+
 
     const eventInput = { eventId, eventType, receivedAt: new Date().toISOString(), payload: payloadValue };
     if (Buffer.byteLength(JSON.stringify(eventInput), "utf8") > 12000) {

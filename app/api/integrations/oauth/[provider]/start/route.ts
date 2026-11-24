@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { createOAuthState, createProviderAuthorizeUrl, PROVIDER_OAUTH_CONFIG } from "@/lib/integrations/provider-oauth";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return NextResponse.json({ error: "Only workspace owners and admins can connect provider accounts." }, { status: 403 });
     }
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "provider-oauth-start", windowMs: 15 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workspace.id, workspaceLimit: 30,
+      resourceId: provider, resourceLimit: 10,
+    });
+    if (rateLimit) return rateLimit;
     const connectionId = request.nextUrl.searchParams.get("connectionId") ?? undefined;
     if (connectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
       return NextResponse.json({ error: "The connection ID is invalid." }, { status: 400 });

@@ -122,9 +122,9 @@ async function workspaceCredentials(
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
       .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw new Error("WORKSPACE_CREDENTIAL_LOOKUP_FAILED");
-    if (!secret || !["v1", "v2"].includes(secret.encryption_version)) throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
+    if (!secret || !["v1", "v2", "v3"].includes(secret.encryption_version)) throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
     let decrypted: WorkspaceCredentials;
-    const associatedData = secret.encryption_version === "v2" ? `${workspaceId}:${provider}:${integration.id}` : `${workspaceId}:${provider}`;
+    const associatedData = ["v2", "v3"].includes(secret.encryption_version) ? `${workspaceId}:${provider}:${integration.id}` : `${workspaceId}:${provider}`;
     try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData); }
     catch { throw new Error("WORKSPACE_CREDENTIALS_DECRYPT_FAILED"); }
     if (!decrypted[provider]) throw new Error("WORKSPACE_CREDENTIAL_PROVIDER_MISMATCH");

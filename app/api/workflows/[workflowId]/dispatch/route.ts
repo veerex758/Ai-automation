@@ -6,6 +6,7 @@ import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { findOperation } from "@/nodes/registry";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 function privateJson(body: unknown, init?: ResponseInit) {
@@ -82,6 +83,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (workflowError) throw workflowError;
     if (!workflow) return privateJson({ error: "Workflow not found or access denied." }, { status: 404 });
     if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return privateJson({ error: "Workspace workflows.execute permission required." }, { status: 403 });
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "workflow-execution-dispatch", windowMs: 5 * 60_000,
+      ipLimit: 30, userId: user.id, userLimit: 30,
+      workspaceId: workflow.workspace_id, workspaceLimit: 100,
+      resourceId: workflow.id, resourceLimit: 20,
+    });
+    if (rateLimit) return rateLimit;
     if (workflow.status !== "active") return privateJson({ error: "Only active workflows can be dispatched." }, { status: 409 });
     const registryFormat = isRecord(workflow.definition) && workflow.definition.format === "aivanta-registry-v1";
     if (registryFormat) {

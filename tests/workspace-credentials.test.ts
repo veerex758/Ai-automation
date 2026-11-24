@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { decryptWorkspaceCredentials, encryptWorkspaceCredentials, encryptWorkspaceCredentialsV2 } from "../lib/integrations/workspace-credentials";
+import { decryptWorkspaceCredentials, encryptWorkspaceCredentials, encryptWorkspaceCredentialsV2, encryptWorkspaceCredentialsV3, parseWorkspaceCredentialKeyring } from "../lib/integrations/workspace-credentials";
 
 const key = randomBytes(32).toString("base64");
 
@@ -244,4 +244,61 @@ test("v2 credentials are cryptographically bound to workspace, provider and conn
  assert.throws(()=>decryptWorkspaceCredentials(envelope,key,"workspace-a:resend:22222222-2222-4222-8222-222222222222"));
  assert.throws(()=>decryptWorkspaceCredentials(envelope,key,"workspace-b:resend:11111111-1111-4111-8111-111111111111"));
  assert.throws(()=>decryptWorkspaceCredentials(envelope,key));
+});
+
+
+test("workspace credential v3 binds key ID, workspace context, and authenticated ciphertext", () => {
+  const previousKey = randomBytes(32).toString("base64");
+  const activeKey = randomBytes(32).toString("base64");
+  const oldKeyring = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING;
+  const aad = "workspace-v3:resend:connection-1";
+  const credentials = { resend: { apiKey: "resend-v3-secret", fromEmail: "ops@example.test" } };
+  process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING = JSON.stringify({
+    activeKeyId: "key-current",
+    keys: { "key-current": activeKey, "key-previous": previousKey },
+  });
+  try {
+    const envelope = encryptWorkspaceCredentialsV3(credentials, aad);
+    assert.match(envelope, /^v3\.key-current\./);
+    assert.deepEqual(decryptWorkspaceCredentials(envelope, undefined, aad), credentials);
+    assert.throws(() => decryptWorkspaceCredentials(envelope, undefined, "another-workspace"));
+    const pieces = envelope.split(".");
+    pieces[4] = Buffer.from("tampered").toString("base64url");
+    assert.throws(() => decryptWorkspaceCredentials(pieces.join("."), undefined, aad));
+    const rotated = encryptWorkspaceCredentialsV3(credentials, aad, JSON.stringify({
+      activeKeyId: "key-previous",
+      keys: { "key-current": activeKey, "key-previous": previousKey },
+    }));
+    assert.match(rotated, /^v3\.key-previous\./);
+    assert.deepEqual(decryptWorkspaceCredentials(rotated, undefined, aad), credentials);
+    assert.throws(() => decryptWorkspaceCredentials(rotated, undefined, "wrong-tenant"));
+    const renamedKey = rotated.replace("v3.key-previous.", "v3.key-current.");
+    assert.throws(() => decryptWorkspaceCredentials(renamedKey, undefined, aad));
+  } finally {
+    if (oldKeyring === undefined) delete process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING;
+    else process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING = oldKeyring;
+  }
+});
+
+test("connection writer switches to v3 when a valid keyring is configured", () => {
+  const oldKeyring = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING;
+  const oldLegacyKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
+  process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY = key;
+  process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING = JSON.stringify({ activeKeyId: "active", keys: { active: key } });
+  try {
+    const envelope = encryptWorkspaceCredentialsV2({ openai: { apiKey: "new-write-secret" } }, "workspace-a:openai:connection-a");
+    assert.match(envelope, /^v3\.active\./);
+    assert.deepEqual(decryptWorkspaceCredentials(envelope, undefined, "workspace-a:openai:connection-a"), { openai: { apiKey: "new-write-secret" } });
+  } finally {
+    if (oldLegacyKey === undefined) delete process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
+    else process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY = oldLegacyKey;
+    if (oldKeyring === undefined) delete process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING;
+    else process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING = oldKeyring;
+  }
+});
+
+test("credential keyring rejects malformed JSON, weak keys, and missing active key", () => {
+  assert.throws(() => parseWorkspaceCredentialKeyring("{"));
+  assert.throws(() => parseWorkspaceCredentialKeyring(JSON.stringify({ activeKeyId: "missing", keys: { other: key } })));
+  assert.throws(() => parseWorkspaceCredentialKeyring(JSON.stringify({ activeKeyId: "active", keys: { active: randomBytes(16).toString("base64") } })));
 });

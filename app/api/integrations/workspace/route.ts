@@ -62,6 +62,8 @@ const integrationErrorMessages: Record<string, string> = {
   INTEGRATION_DATABASE_NOT_CONFIGURED: "Integration database access is not configured on this server.",
   WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED: "Workspace credential encryption is not configured on this server.",
   WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID: "Workspace credential encryption configuration is invalid.",
+  WORKSPACE_CREDENTIAL_KEYRING_INVALID: "Workspace credential keyring configuration is invalid.",
+  WORKSPACE_CREDENTIAL_KEYRING_ACTIVE_KEY_MISSING: "The active workspace credential key is unavailable.",
   WORKSPACE_CREDENTIALS_INVALID: "Credential fields are invalid for this provider.",
   INTEGRATION_REQUEST_INVALID: "The integration request is invalid.",
   INTEGRATION_PROVIDER_UNSUPPORTED: "This integration provider is not supported.",
@@ -85,6 +87,8 @@ const integrationErrorStatuses: Record<string, number> = {
   INTEGRATION_DATABASE_NOT_CONFIGURED: 503,
   WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED: 503,
   WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID: 503,
+  WORKSPACE_CREDENTIAL_KEYRING_INVALID: 503,
+  WORKSPACE_CREDENTIAL_KEYRING_ACTIVE_KEY_MISSING: 503,
   WORKSPACE_CREDENTIALS_INVALID: 400,
   INTEGRATION_REQUEST_INVALID: 400,
   INTEGRATION_PROVIDER_UNSUPPORTED: 400,
@@ -204,7 +208,7 @@ export async function POST(request: NextRequest) {
       encrypted = encryptWorkspaceCredentialsV2({ [provider]: body.credentials as Record<string, string> }, `${workspace.id}:${provider}:${connectionId}`);
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
-      const safeCode = ["WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED", "WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID", "WORKSPACE_CREDENTIALS_INVALID"].includes(code)
+      const safeCode = ["WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED", "WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID", "WORKSPACE_CREDENTIAL_KEYRING_INVALID", "WORKSPACE_CREDENTIAL_KEYRING_ACTIVE_KEY_MISSING", "WORKSPACE_CREDENTIALS_INVALID"].includes(code)
         ? code : "WORKSPACE_CREDENTIALS_INVALID";
       const status = integrationErrorStatuses[safeCode];
       return json({ error: integrationErrorMessages[safeCode], code: safeCode }, status);

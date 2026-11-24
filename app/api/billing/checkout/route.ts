@@ -3,6 +3,7 @@ import { getOrCreateDefaultWorkspace, getWorkspaceRole, canManageWorkspaceBillin
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createPaymentReference, getPaidPlan } from "@/lib/billing/paystack";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
@@ -17,6 +18,12 @@ export async function POST(request: Request) {
     const workspace = await getOrCreateDefaultWorkspace(client);
     const role = await getWorkspaceRole(client, workspace.id, user.id);
     if (!canManageWorkspaceBilling(role)) return NextResponse.json({ error: "Workspace owner or admin access required for billing changes." }, { status: 403 });
+    const limited = await enforceDistributedRateLimit(request, {
+      scope: "paystack-checkout", windowMs: 15 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 5,
+      workspaceId: workspace.id, workspaceLimit: 10,
+    });
+    if (limited) return limited;
     const reference = createPaymentReference(), admin = createAdminClient();
     const { error: insertError } = await admin.from("billing_payments").insert({ workspace_id: workspace.id, user_id: user.id, reference, plan_slug: plan.slug, amount_minor: plan.amountMinor, currency: plan.currency, status: "pending" });
     if (insertError) throw insertError;

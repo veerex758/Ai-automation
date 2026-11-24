@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createRealEstateServiceClient, createFollowupRows } from "@/lib/real-estate/server";
 import { scoreRealEstateLead, type RealEstateLeadInput } from "@/lib/real-estate/lead-scoring";
 import { processRealEstateLeadPipeline } from "@/lib/real-estate/pipeline";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 export const maxDuration=60;
@@ -59,6 +60,16 @@ export async function POST(request:NextRequest,context:Context){
   const {db,form}=await findForm(publicKey);if(!form||!form.enabled)return NextResponse.json({error:"Intake form is disabled or unavailable."},{status:404});
   const origin=request.headers.get("origin"),headers=originHeaders(origin,form);
   if(!origin||!form.allowed_origins.includes(origin))return NextResponse.json({error:"This website origin is not allowed to submit to this form."},{status:403,headers});
+  const ipLimit=await enforceDistributedRateLimit(request,{
+   scope:"real-estate-public-intake",windowMs:60_000,ipLimit:10,
+  });
+  if(ipLimit)return ipLimit;
+  const tenantLimit=await enforceDistributedRateLimit(request,{
+   scope:"real-estate-public-intake-hourly",windowMs:60*60_000,
+   workspaceId:form.workspace_id,workspaceLimit:100,
+   resourceId:form.id,resourceLimit:20,
+  });
+  if(tenantLimit)return tenantLimit;
   const raw=await request.text();if(Buffer.byteLength(raw,"utf8")>16000)return NextResponse.json({error:"Enquiry exceeds 16 KiB."},{status:413,headers});
   let body:unknown;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Enquiry must be valid JSON."},{status:400,headers});}
   if(!isRecord(body))return NextResponse.json({error:"Enquiry must be a JSON object."},{status:400,headers});

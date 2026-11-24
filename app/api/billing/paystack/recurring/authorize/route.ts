@@ -3,6 +3,7 @@ import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 import {getOrCreateDefaultWorkspace,getWorkspaceRole,canManageWorkspaceBilling} from "@/lib/supabase/workspace";
 import {createPaymentReference,getPaidPlan} from "@/lib/billing/paystack";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 export const runtime="nodejs";
 const CONSENT_TERMS_VERSION="rexnora-recurring-v1";
 function privateJson(body: unknown, init?: ResponseInit) {
@@ -31,6 +32,11 @@ export async function POST(request:Request){
   if(!secret)return privateJson({error:"Paystack is not configured."},{status:503});
   const workspace=await getOrCreateDefaultWorkspace(supabase),role=await getWorkspaceRole(supabase,workspace.id,user.id);
   if(!canManageWorkspaceBilling(role))return privateJson({error:"Workspace billing permission required."},{status:403});
+  const limited=await enforceDistributedRateLimit(request,{
+   scope:"paystack-recurring-authorize",windowMs:60*60_000,ipLimit:5,userId:user.id,userLimit:3,
+   workspaceId:workspace.id,workspaceLimit:5,
+  });
+  if(limited)return limited;
   const admin=createAdminClient(),reference=createPaymentReference();
   const {data:consent,error:consentError}=await admin.from("billing_recurring_consents").insert({
    workspace_id:workspace.id,user_id:user.id,provider:"paystack",plan_slug:plan.slug,

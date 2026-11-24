@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as adminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getMarketplacePaymentProvider } from "@/lib/marketplace/payments/provider-registry";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 const headers = { "Cache-Control": "private, no-store" };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export async function POST(req: NextRequest) {
@@ -9,6 +10,10 @@ export async function POST(req: NextRequest) {
   if (process.env.AIVANTA_MARKETPLACE_CHECKOUT_ENABLED !== "true") return NextResponse.json({error:"Marketplace checkout is not enabled."},{status:503,headers});
   const session=await createClient();const {data:{user},error:authError}=await session.auth.getUser();
   if(authError||!user||!user.email)return NextResponse.json({error:"Sign in with an email address to purchase."},{status:401,headers});
+  const limited=await enforceDistributedRateLimit(req,{
+   scope:"marketplace-product-checkout",windowMs:60*60_000,ipLimit:10,userId:user.id,userLimit:5,
+  });
+  if(limited)return limited;
   const raw=await req.text();if(new TextEncoder().encode(raw).byteLength>4096)return NextResponse.json({error:"Request too large."},{status:413,headers});
   let body:unknown;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers})}
   if(!body||typeof body!=="object"||Array.isArray(body))return NextResponse.json({error:"Invalid request."},{status:400,headers});

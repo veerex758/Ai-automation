@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission } from "@/lib/supabase/permissions";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export async function GET(_request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
   try {
     const { workflowId } = await context.params;
     if (!uuidPattern.test(workflowId)) {
@@ -18,13 +20,19 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
 
     const { data: workflow, error: workflowError } = await supabase
       .from("workflows")
-      .select("id")
+      .select("id, workspace_id")
       .eq("id", workflowId)
       .maybeSingle();
     if (workflowError) throw workflowError;
-    if (!workflow) {
+    if (!workflow || !(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.view"))) {
       return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     }
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "workflow-version-history", windowMs: 60_000,
+      ipLimit: 30, userId: user.id, userLimit: 30,
+      workspaceId: workflow.workspace_id, workspaceLimit: 120,
+    });
+    if (rateLimit) return rateLimit;
 
     const { data, error } = await supabase
       .from("workflow_versions")
@@ -54,6 +62,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (authError || !user) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
+    const { data: workflow, error: workflowError } = await supabase.from("workflows")
+      .select("id, workspace_id").eq("id", workflowId).maybeSingle();
+    if (workflowError) throw workflowError;
+    if (!workflow || !(await hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.edit"))) {
+      return NextResponse.json({ error: "Workspace workflows.edit permission required." }, { status: 403 });
+    }
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "workflow-version-restore", windowMs: 5 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workflow.workspace_id, workspaceLimit: 30,
+      resourceId: workflowId, resourceLimit: 5,
+    });
+    if (rateLimit) return rateLimit;
 
     let body: unknown;
     try { body = await request.json(); } catch {

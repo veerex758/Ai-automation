@@ -3,6 +3,7 @@ import {NextResponse} from "next/server";
 import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 import {hasWorkspacePermission} from "@/lib/supabase/permissions";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,6 +30,12 @@ export async function GET(_request:Request,ctx:Ctx){
 export async function POST(request:Request,ctx:Ctx){
  const {workspaceId}=await ctx.params;const a=await authorize(workspaceId);if("response"in a)return a.response;
  try{
+  const limited=await enforceDistributedRateLimit(request,{
+   scope:"workspace-invitation-create",windowMs:60*60_000,ipLimit:10,
+   userId:a.user.id,userLimit:10,workspaceId:a.workspace.id,workspaceLimit:20,
+  });
+  if(limited)return limited;
+  
   const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>2048)return NextResponse.json({error:"Request too large."},{status:413,headers});
   let body:Record<string,unknown>;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Invalid JSON."},{status:400,headers});}
   const email=typeof body.email==="string"?body.email.trim().toLowerCase():"";
@@ -61,6 +68,11 @@ export async function POST(request:Request,ctx:Ctx){
 
 export async function DELETE(request:Request,ctx:Ctx){
  const {workspaceId}=await ctx.params;const a=await authorize(workspaceId);if("response"in a)return a.response;
+ const limited=await enforceDistributedRateLimit(request,{
+  scope:"workspace-invitation-revoke",windowMs:60*60_000,ipLimit:10,
+  userId:a.user.id,userLimit:10,workspaceId:a.workspace.id,workspaceLimit:30,
+ });
+ if(limited)return limited;
  const invitationId=new URL(request.url).searchParams.get("invitation_id");
  if(!invitationId)return NextResponse.json({error:"Invitation id is required."},{status:400,headers});
  try{

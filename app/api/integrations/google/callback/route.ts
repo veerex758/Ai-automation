@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { decryptGoogleCredentials, encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
 import { GOOGLE_PRODUCTS, getGoogleOAuthConfig, hasOnlyApprovedGoogleScopes, isGoogleProduct } from "@/lib/integrations/google-oauth";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,21 @@ export async function GET(request: NextRequest) {
     if (userError || !user) return clearCookies(connectionsUrl(request, "sign_in_required"));
     if (user.id !== initiatingUserId) return clearCookies(connectionsUrl(request, "user_changed"));
 
+    // Resolve and authorize the tenant before exchanging one-time OAuth codes
+    // or making provider requests.
+    const workspace = await getOrCreateDefaultWorkspace(supabase);
+    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
+      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
+    if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
+      return clearCookies(connectionsUrl(request, "permission_denied"));
+    }
+    const limited = await enforceDistributedRateLimit(request, {
+      scope: "google-oauth-callback", windowMs: 15 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workspace.id, workspaceLimit: 20,
+    });
+    if (limited) return clearCookies(connectionsUrl(request, "temporarily_limited"));
+
     const config = getGoogleOAuthConfig();
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -108,12 +124,6 @@ export async function GET(request: NextRequest) {
       return clearCookies(connectionsUrl(request, "profile_failed"));
     }
 
-    const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
-      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
-    if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
-      return clearCookies(connectionsUrl(request, "permission_denied"));
-    }
     let adminConfig: ReturnType<typeof getAdminSupabaseConfig>;
     try { adminConfig = getAdminSupabaseConfig(); }
     catch { return clearCookies(connectionsUrl(request, "server_not_configured")); }

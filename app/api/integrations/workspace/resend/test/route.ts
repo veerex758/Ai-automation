@@ -4,6 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,13 @@ export async function POST(request: NextRequest) {
       return json({ error: "Only workspace owners and admins can test integrations." }, 403);
     }
 
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "resend-connection-test", windowMs: 5 * 60_000,
+      ipLimit: 8, userId: user.id, userLimit: 8,
+      workspaceId: workspace.id, workspaceLimit: 20,
+      resourceId: requestedConnectionId, resourceLimit: 3,
+    });
+    if (rateLimit) return rateLimit;
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
       .select("id,display_name").eq("id", requestedConnectionId).eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
@@ -62,11 +70,11 @@ export async function POST(request: NextRequest) {
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
       .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
-    if (!secret?.encrypted_credentials || !["v1", "v2"].includes(secret.encryption_version)) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
+    if (!secret?.encrypted_credentials || !["v1", "v2", "v3"].includes(secret.encryption_version)) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
 
     let credentials: Record<string, string>;
     try {
-      const associatedData = secret.encryption_version === "v2" ? `${workspace.id}:resend:${integration.id}` : `${workspace.id}:resend`;
+      const associatedData = ["v2", "v3"].includes(secret.encryption_version) ? `${workspace.id}:resend:${integration.id}` : `${workspace.id}:resend`;
       const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData);
       credentials = decrypted.resend;
     } catch {

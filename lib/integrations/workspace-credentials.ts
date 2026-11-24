@@ -123,43 +123,141 @@ function validateCredentials(value: unknown): WorkspaceCredentials {
   return result;
 }
 
+
 function encryptCredentialEnvelope(version: "v1" | "v2", credentials: WorkspaceCredentials, encodedKey: string | undefined, associatedData?: string): string {
- if (!encodedKey) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
- if (version === "v2" && (!associatedData || !associatedData.trim())) throw new Error("WORKSPACE_CREDENTIAL_ASSOCIATED_DATA_REQUIRED");
- const validated = validateCredentials(credentials);
- const plaintext = Buffer.from(JSON.stringify(validated), "utf8");
- if (plaintext.length > MAX_CREDENTIAL_BYTES) throw new Error("WORKSPACE_CREDENTIALS_TOO_LARGE");
- const key = Buffer.from(encodedKey, "base64");
- if (key.length !== KEY_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID");
- const iv = randomBytes(12);
- const cipher = createCipheriv("aes-256-gcm", key, iv);
- if (associatedData) cipher.setAAD(Buffer.from(associatedData, "utf8"));
- const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
- return [version, iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(".");
+  if (!encodedKey) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
+  if (version === "v2" && (!associatedData || !associatedData.trim())) throw new Error("WORKSPACE_CREDENTIAL_ASSOCIATED_DATA_REQUIRED");
+  const validated = validateCredentials(credentials);
+  const plaintext = Buffer.from(JSON.stringify(validated), "utf8");
+  if (plaintext.length > MAX_CREDENTIAL_BYTES) throw new Error("WORKSPACE_CREDENTIALS_TOO_LARGE");
+  const key = Buffer.from(encodedKey, "base64");
+  if (key.length !== KEY_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID");
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  if (associatedData) cipher.setAAD(Buffer.from(associatedData, "utf8"));
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return [version, iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(".");
 }
+
 export function encryptWorkspaceCredentials(credentials: WorkspaceCredentials, encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY, associatedData?: string): string {
- return encryptCredentialEnvelope("v1", credentials, encodedKey, associatedData);
+  return encryptCredentialEnvelope("v1", credentials, encodedKey, associatedData);
 }
-export function encryptWorkspaceCredentialsV2(credentials: WorkspaceCredentials, associatedData: string, encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY): string {
- return encryptCredentialEnvelope("v2", credentials, encodedKey, associatedData);
+
+export type WorkspaceCredentialKeyring = {
+  activeKeyId: string;
+  keys: Record<string, Buffer>;
+};
+
+export function parseWorkspaceCredentialKeyring(
+  raw = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING,
+): WorkspaceCredentialKeyring | null {
+  if (!raw) return null;
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { throw new Error("WORKSPACE_CREDENTIAL_KEYRING_INVALID"); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("WORKSPACE_CREDENTIAL_KEYRING_INVALID");
+  const candidate = parsed as Record<string, unknown>;
+  if (typeof candidate.activeKeyId !== "string" ||
+      !/^[A-Za-z0-9_-]{1,64}$/.test(candidate.activeKeyId) ||
+      !candidate.keys || typeof candidate.keys !== "object" || Array.isArray(candidate.keys)) {
+    throw new Error("WORKSPACE_CREDENTIAL_KEYRING_INVALID");
+  }
+  const entries = Object.entries(candidate.keys as Record<string, unknown>);
+  if (entries.length < 1 || entries.length > 16) throw new Error("WORKSPACE_CREDENTIAL_KEYRING_INVALID");
+  const keys = Object.create(null) as Record<string, Buffer>;
+  const seenKeyMaterial = new Set<string>();
+  for (const [keyId, encoded] of entries) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(keyId) || typeof encoded !== "string") throw new Error("WORKSPACE_CREDENTIAL_KEYRING_INVALID");
+    const key = Buffer.from(encoded, "base64");
+    if (key.length !== KEY_BYTES || key.toString("base64") !== encoded) throw new Error("WORKSPACE_CREDENTIAL_KEYRING_INVALID");
+    const fingerprint = key.toString("hex");
+    if (seenKeyMaterial.has(fingerprint)) throw new Error("WORKSPACE_CREDENTIAL_KEYRING_DUPLICATE_KEY");
+    seenKeyMaterial.add(fingerprint);
+    keys[keyId] = key;
+  }
+  if (!Object.hasOwn(keys, candidate.activeKeyId)) throw new Error("WORKSPACE_CREDENTIAL_KEYRING_ACTIVE_KEY_MISSING");
+  return { activeKeyId: candidate.activeKeyId, keys };
 }
-export function decryptWorkspaceCredentials(envelope: string, encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY, associatedData?: string): WorkspaceCredentials {
- if (!encodedKey) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
- const key = Buffer.from(encodedKey, "base64");
- if (key.length !== KEY_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID");
- if (typeof envelope !== "string" || envelope.length > MAX_CREDENTIAL_BYTES * 2) throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
- const [version, ivValue, tagValue, encryptedValue, extra] = envelope.split(".");
- if ((version !== "v1" && version !== "v2") || !ivValue || !tagValue || !encryptedValue || extra) throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
- if (version === "v2" && (!associatedData || !associatedData.trim())) throw new Error("WORKSPACE_CREDENTIAL_ASSOCIATED_DATA_REQUIRED");
- const iv = Buffer.from(ivValue, "base64url");
- const tag = Buffer.from(tagValue, "base64url");
- const ciphertext = Buffer.from(encryptedValue, "base64url");
- if (iv.length !== 12 || tag.length !== 16 || ciphertext.length < 1 || ciphertext.length > MAX_CREDENTIAL_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
- const decipher = createDecipheriv("aes-256-gcm", key, iv);
- if (associatedData) decipher.setAAD(Buffer.from(associatedData, "utf8"));
- decipher.setAuthTag(tag);
- const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
- let parsed: unknown;
- try { parsed = JSON.parse(plaintext.toString("utf8")); } catch { throw new Error("WORKSPACE_CREDENTIALS_INVALID"); }
- return validateCredentials(parsed);
+
+export function getActiveWorkspaceCredentialKeyId(): string | null {
+  return parseWorkspaceCredentialKeyring()?.activeKeyId ?? null;
+}
+
+export function encryptWorkspaceCredentialsV3(
+  credentials: WorkspaceCredentials,
+  associatedData: string,
+  rawKeyring = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING,
+): string {
+  if (!associatedData || !associatedData.trim()) throw new Error("WORKSPACE_CREDENTIAL_ASSOCIATED_DATA_REQUIRED");
+  const keyring = parseWorkspaceCredentialKeyring(rawKeyring);
+  if (!keyring) throw new Error("WORKSPACE_CREDENTIAL_KEYRING_NOT_CONFIGURED");
+  const plaintext = Buffer.from(JSON.stringify(validateCredentials(credentials)), "utf8");
+  if (plaintext.length > MAX_CREDENTIAL_BYTES) throw new Error("WORKSPACE_CREDENTIALS_TOO_LARGE");
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", keyring.keys[keyring.activeKeyId], iv);
+  cipher.setAAD(Buffer.from(associatedData + "\u0000v3\u0000" + keyring.activeKeyId, "utf8"));
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return ["v3", keyring.activeKeyId, iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(".");
+}
+
+/** New writes use v3 when the dual-key keyring is configured; otherwise keep v2 compatibility. */
+export function encryptWorkspaceCredentialsV2(
+  credentials: WorkspaceCredentials,
+  associatedData: string,
+  encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY,
+): string {
+  if (process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEYRING) {
+    return encryptWorkspaceCredentialsV3(credentials, associatedData);
+  }
+  return encryptCredentialEnvelope("v2", credentials, encodedKey, associatedData);
+}
+
+export function decryptWorkspaceCredentials(
+  envelope: string,
+  encodedKey = process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY,
+  associatedData?: string,
+): WorkspaceCredentials {
+  if (typeof envelope !== "string" || envelope.length > MAX_CREDENTIAL_BYTES * 2) throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
+  const parts = envelope.split(".");
+  const version = parts[0];
+
+  if (version === "v3") {
+    const [, keyId, ivValue, tagValue, encryptedValue, extra] = parts;
+    if (parts.length !== 5 || !keyId || !/^[A-Za-z0-9_-]{1,64}$/.test(keyId) || !ivValue || !tagValue || !encryptedValue || extra) {
+      throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
+    }
+    if (!associatedData || !associatedData.trim()) throw new Error("WORKSPACE_CREDENTIAL_ASSOCIATED_DATA_REQUIRED");
+    const keyring = parseWorkspaceCredentialKeyring();
+    const key = keyring?.keys[keyId];
+    if (!key) throw new Error("WORKSPACE_CREDENTIAL_KEY_VERSION_UNAVAILABLE");
+    const iv = Buffer.from(ivValue, "base64url"), tag = Buffer.from(tagValue, "base64url"), ciphertext = Buffer.from(encryptedValue, "base64url");
+    if (iv.length !== 12 || tag.length !== 16 || ciphertext.length < 1 || ciphertext.length > MAX_CREDENTIAL_BYTES) {
+      throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
+    }
+    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAAD(Buffer.from(associatedData + "\u0000v3\u0000" + keyId, "utf8"));
+    decipher.setAuthTag(tag);
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    let parsed: unknown;
+    try { parsed = JSON.parse(plaintext.toString("utf8")); } catch { throw new Error("WORKSPACE_CREDENTIALS_INVALID"); }
+    return validateCredentials(parsed);
+  }
+
+  if (version !== "v1" && version !== "v2") throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
+  if (!encodedKey) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
+  const key = Buffer.from(encodedKey, "base64");
+  if (key.length !== KEY_BYTES) throw new Error("WORKSPACE_CREDENTIAL_ENCRYPTION_KEY_INVALID");
+  const [, ivValue, tagValue, encryptedValue, extra] = parts;
+  if (!ivValue || !tagValue || !encryptedValue || extra) throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
+  if (version === "v2" && (!associatedData || !associatedData.trim())) throw new Error("WORKSPACE_CREDENTIAL_ASSOCIATED_DATA_REQUIRED");
+  const iv = Buffer.from(ivValue, "base64url"), tag = Buffer.from(tagValue, "base64url"), ciphertext = Buffer.from(encryptedValue, "base64url");
+  if (iv.length !== 12 || tag.length !== 16 || ciphertext.length < 1 || ciphertext.length > MAX_CREDENTIAL_BYTES) {
+    throw new Error("WORKSPACE_CREDENTIAL_ENVELOPE_INVALID");
+  }
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  if (associatedData) decipher.setAAD(Buffer.from(associatedData, "utf8"));
+  decipher.setAuthTag(tag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  let parsed: unknown;
+  try { parsed = JSON.parse(plaintext.toString("utf8")); } catch { throw new Error("WORKSPACE_CREDENTIALS_INVALID"); }
+  return validateCredentials(parsed);
 }

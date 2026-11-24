@@ -65,3 +65,12 @@ Many existing tests are source-contract assertions. They are useful guardrails b
 ## Safety boundary observed
 
 No connected Supabase migration, credential, Vercel environment variable, production deployment, provider send, billing action or customer data was changed during this review.
+
+
+## Follow-up implementation on the security branch
+
+The follow-up adds a key-ID-bearing v3 AES-256-GCM envelope for workspace integration credentials, with workspace/provider/connection AAD. v1/v2 remain readable through the legacy key. New writes switch to v3 only after a valid keyring is configured. A dry-run-first rotation utility creates ciphertext-only backups and supports explicit restore.
+
+A shared database-backed API limiter adds atomic upsert windows, hashed identifiers, RLS and service-role-only execution. It is wired into AI generation, integration write/delete/test flows, Google and provider OAuth starts, Resend setup test-email, signed webhook ingress and public real-estate intake. The non-atomic webhook hourly count gate is removed in favour of an atomic workflow/resource bucket.
+
+This is not a security sign-off. The migration has not been applied to any connected Supabase project. Do not configure the keyring or run rotation before applying the migration to the intended environment and retaining old keys for rollback. Google OAuth token encryption and webhook signing-secret encryption use separate stores/keys and are outside this rotation utility. Authenticated two-workspace staging proof and full release-gate CI remain outstanding.
