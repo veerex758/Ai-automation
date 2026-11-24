@@ -55,6 +55,7 @@ export default function RealEstatePage(){
   finally{setLoading(false);}
  },[]);
  useEffect(()=>{void load()},[load]);
+ useEffect(()=>{if(window.location.hash==="#followups")setTab("followups")},[]);
 
  const visibleLeads=useMemo(()=>leads.filter(lead=>(lead.full_name+" "+(lead.email??"")+" "+(lead.preferred_location??"")).toLowerCase().includes(search.toLowerCase())&&(statusFilter==="all"||lead.status===statusFilter)),[leads,search,statusFilter]);
  async function showLead(lead:Lead){
