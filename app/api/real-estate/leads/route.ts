@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     const search = (params.get("q") ?? "").trim().slice(0, 100);
     const limit = Math.max(1, Math.min(100, Number(params.get("limit") ?? 50) || 50));
     const offset = Math.max(0, Math.min(100000, Number(params.get("offset") ?? 0) || 0));
-    let query = supabase.from("real_estate_leads").select("id,source,full_name,email,phone,transaction_type,property_type,preferred_location,budget_min,budget_max,currency,timeframe,readiness,lead_score,score_factors,lead_temperature,status,assigned_agent_id,consent_to_contact,customer_responded_at,agent_takeover_at,created_at,updated_at", { count: "exact" })
+    let query = supabase.from("real_estate_leads").select("id,source,full_name,email,phone,transaction_type,property_type,preferred_location,budget_min,budget_max,currency,timeframe,readiness,lead_score,score_factors,lead_temperature,status,assigned_agent_id,consent_to_contact,contact_preference,customer_responded_at,agent_takeover_at,created_at,updated_at", { count: "exact" })
       .eq("workspace_id", workspace.id).order("lead_score", { ascending: false }).order("created_at", { ascending: false }).range(offset, offset + limit - 1);
     if (status && ["new","qualified","contacted","viewing_scheduled","negotiation","won","lost"].includes(status)) query = query.eq("status", status);
     if (search) query = query.ilike("full_name", "%" + search.replace(/[%_]/g, "\\$&") + "%");
