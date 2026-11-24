@@ -666,7 +666,7 @@ export default function WorkflowBuilderPage() {
 
   return (
     <main className="builder-shell" onClick={(event) => { const link = (event.target as HTMLElement).closest("a.side-link"); if (isDirty && link && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>
-        <DashboardSidebar activePage="builder" />
+        <DashboardSidebar activePage="playbooks" />
       <section className="workflow-builder-main">
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
