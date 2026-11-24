@@ -231,13 +231,13 @@ const RETRY_SAFE_LIVE_OPERATIONS = new Set([
   "gemini.qualify_real_estate_lead", "gemini.generate_text",
   "if.evaluate", "switch.select_route", "merge.merge_inputs",
   "set_fields.merge_fields", "json_parse.parse", "filter.filter_items",
-  "aggregate.calculate", "date_time.current_time", "loop.iterate", "wait.delay",
+  "aggregate.calculate", "date_time.current_time", "loop.iterate",
   "deduplicate.unique", "sort.sort_items", "split_batches.split",
   "crypto_hash.hash", "template.render", "csv_parse.parse",
   "csv_stringify.stringify", "markdown_html.convert", "text_transform.transform",
   "regex.match", "array_ops.operate", "object_ops.operate", "math.calculate",
   "uuid.generate", "base64.convert", "date_add.add", "date_format.format",
-  "rate_limiter.check", "json_encode.encode",
+  "json_encode.encode",
 ]);
 
 export function durableLiveRetryAttempts(steps: RegisteredWorkflowStep[]): number {
