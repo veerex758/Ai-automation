@@ -276,3 +276,180 @@
 .workflow-builder-main .node-connector,.workflow-builder-main .node-endpoint{color:#8BB8FF!important}
 .workflow-builder-main .node-connector{background:#354052!important}
 .workflow-builder-main .node-connector span{background:#0F141D!important}
+
+
+/* Interactive graph navigation: zoom controls, drag-to-pan and touch-safe canvas. */
+.workflow-builder-main .graph-canvas{
+  position:relative;
+  overflow:hidden!important;
+  min-height:680px;
+  touch-action:none;
+  cursor:grab;
+  overscroll-behavior:contain;
+}
+.workflow-builder-main .graph-canvas-panning{cursor:grabbing}
+.workflow-builder-main .graph-canvas .graph-grid{pointer-events:none}
+.workflow-builder-main .graph-layout{
+  position:absolute;
+  top:0;
+  left:0;
+  margin:0;
+  min-width:0;
+  will-change:transform;
+}
+.workflow-builder-main .graph-viewport-controls{
+  position:absolute;
+  z-index:8;
+  top:12px;
+  right:12px;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  padding:5px;
+  border:1px solid #354052;
+  border-radius:10px;
+  background:rgba(17,23,34,.94);
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+  color:#E2E8F0;
+  cursor:default;
+}
+.workflow-builder-main .graph-viewport-controls button{
+  min-width:31px;
+  height:30px;
+  padding:0 8px;
+  border:1px solid #354052;
+  border-radius:7px;
+  background:#1A2433;
+  color:#E2E8F0;
+  font:700 12px 'DM Sans',sans-serif;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.workflow-builder-main .graph-viewport-controls button:hover{
+  background:#24334A;
+  border-color:#4B6B99;
+}
+.workflow-builder-main .graph-viewport-controls button:focus-visible{
+  outline:2px solid #8BB8FF;
+  outline-offset:2px;
+}
+.workflow-builder-main .graph-viewport-controls span{
+  min-width:43px;
+  text-align:center;
+  color:#CBD5E1;
+  font:600 10px 'DM Sans',sans-serif;
+  font-variant-numeric:tabular-nums;
+}
+.workflow-builder-main .graph-node-provider{
+  color:#8BB8FF;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.02em;
+}
+.workflow-builder-main .graph-edge-true path{stroke:#65C18C!important}
+.workflow-builder-main .graph-edge-false path{stroke:#E49A83!important}
+.workflow-builder-main .graph-edge-true text{fill:#8BE0AB!important}
+.workflow-builder-main .graph-edge-false text{fill:#F2B39F!important}
+.workflow-builder-main .graph-node{touch-action:none}
+@media(max-width:720px){
+  .workflow-builder-main .graph-canvas{min-height:570px}
+  .workflow-builder-main .graph-viewport-controls{top:8px;right:8px;gap:3px;padding:4px}
+  .workflow-builder-main .graph-viewport-controls button{min-width:29px;height:28px;padding:0 6px;font-size:11px}
+  .workflow-builder-main .graph-viewport-controls span{min-width:37px;font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .workflow-builder-main .graph-layout{will-change:auto}
+}
+
+/* n8n-inspired workflow graph: branded square nodes, direct ports and labels. */
+.workflow-builder-main .graph-node{
+  width:160px!important; min-height:116px!important; height:auto!important;
+  padding:0!important; border:0!important; border-radius:0!important;
+  background:transparent!important; box-shadow:none!important;
+  display:flex!important; flex-direction:column!important; align-items:center!important;
+  justify-content:flex-start!important; gap:8px!important; color:#F8FAFC!important;
+  text-align:center!important; transform:translate(-50%,-50%)!important;
+  cursor:grab!important; overflow:visible!important; user-select:none; touch-action:none;
+}
+.workflow-builder-main .graph-node:hover,.workflow-builder-main .graph-node:active{
+  background:transparent!important; box-shadow:none!important;
+}
+.workflow-builder-main .graph-node-face{
+  position:relative; width:80px; height:80px; flex:0 0 80px; display:grid; place-items:center;
+  border:1px solid #3B4658; border-radius:17px; background:#F8FAFC;
+  box-shadow:0 9px 24px rgba(0,0,0,.28),0 1px 2px rgba(0,0,0,.2);
+  transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease;
+}
+.workflow-builder-main .graph-node-selected .graph-node-face,
+.workflow-builder-main .graph-node-connecting .graph-node-face{
+  border:2px solid #60A5FA; box-shadow:0 0 0 4px rgba(59,130,246,.18),0 12px 28px rgba(0,0,0,.34);
+  transform:translateY(-1px);
+}
+.workflow-builder-main .graph-node-condition .graph-node-face{background:#F1ECFF;border-color:#9A82DB}
+.workflow-builder-main .graph-node-brand{width:56px;height:56px;display:grid;place-items:center;pointer-events:none}
+.workflow-builder-main .graph-node-brand img{display:block;width:49px;height:49px;max-width:100%;max-height:100%;object-fit:contain}
+.workflow-builder-main .graph-node-primitive{
+  display:grid;place-items:center;width:54px;height:54px;border-radius:12px;
+  color:#243247;font:700 31px/1 'DM Sans',sans-serif;letter-spacing:-.07em;
+}
+.workflow-builder-main .graph-node-primitive-trigger{color:#D69A22}
+.workflow-builder-main .graph-node-primitive-action{color:#385C91}
+.workflow-builder-main .graph-node-primitive-branch{color:#7657BC}
+.workflow-builder-main .graph-node-copy{
+  width:160px;min-height:29px;display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-start;gap:3px;padding:0 3px;pointer-events:none;
+}
+.workflow-builder-main .graph-node-operation{
+  display:block;max-width:100%;color:#F1F5F9!important;font-size:10.5px!important;
+  font-weight:650!important;line-height:1.28!important;text-align:center;overflow-wrap:anywhere;
+  text-shadow:0 1px 3px rgba(0,0,0,.7);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden;
+}
+.workflow-builder-main .graph-node-provider{
+  display:block;max-width:100%;color:#8FA3BD!important;font-size:8px!important;
+  font-weight:650!important;line-height:1.2!important;letter-spacing:.07em;text-transform:uppercase;
+  text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:none!important;
+}
+.workflow-builder-main .graph-node-port{
+  position:absolute!important;z-index:5;top:50%!important;width:12px!important;height:12px!important;
+  min-width:12px!important;min-height:12px!important;padding:0!important;margin:0!important;
+  border:2px solid #EAF2FF!important;border-radius:50%!important;background:#3B82F6!important;
+  box-shadow:0 0 0 2px #101722,0 0 0 3px #6686B3!important;transform:translateY(-50%);
+  cursor:crosshair!important;touch-action:manipulation;
+}
+.workflow-builder-main .graph-port-in{left:-7px!important;right:auto!important}
+.workflow-builder-main .graph-port-out{right:-7px!important;left:auto!important}
+.workflow-builder-main .graph-node-condition .graph-port-out{background:#A78BFA!important;box-shadow:0 0 0 2px #101722,0 0 0 3px #A78BFA!important}
+.workflow-builder-main .graph-node-port:hover,.workflow-builder-main .graph-node-port:focus-visible{
+  width:16px!important;height:16px!important;min-width:16px!important;min-height:16px!important;
+  outline:2px solid #BFDBFE!important;outline-offset:3px;
+}
+.workflow-builder-main .graph-node:focus-visible{outline:2px solid #60A5FA!important;outline-offset:5px;border-radius:16px}
+.workflow-builder-main .graph-edge path{
+  fill:none;stroke:#8BB8FF!important;stroke-width:2.5!important;stroke-linecap:round;
+  marker-end:url(#graph-arrow);filter:drop-shadow(0 1px 2px rgba(0,0,0,.28));
+}
+.workflow-builder-main .graph-edge-true path{stroke:#67D5A1!important;marker-end:url(#graph-arrow-true)}
+.workflow-builder-main .graph-edge-false path{stroke:#F0AD79!important;stroke-dasharray:7 5;marker-end:url(#graph-arrow-false)}
+.workflow-builder-main .graph-edge-branch-label{
+  font:800 9px 'DM Sans',sans-serif!important;letter-spacing:.09em;fill:#D7E5F8!important;
+  text-anchor:middle;paint-order:stroke;stroke:#0F141D!important;stroke-width:7px;stroke-linejoin:round;
+}
+.workflow-builder-main .graph-edge-true .graph-edge-branch-label{fill:#82E9B7!important}
+.workflow-builder-main .graph-edge-false .graph-edge-branch-label{fill:#FFC49D!important}
+.workflow-builder-main .graph-edges{overflow:visible;pointer-events:none}
+@media(max-width:720px){
+  .workflow-builder-main .graph-node{width:146px!important;min-height:110px!important;gap:7px!important}
+  .workflow-builder-main .graph-node-face{width:72px;height:72px;flex-basis:72px;border-radius:15px}
+  .workflow-builder-main .graph-node-brand{width:50px;height:50px}
+  .workflow-builder-main .graph-node-brand img{width:44px;height:44px}
+  .workflow-builder-main .graph-node-primitive{width:48px;height:48px;font-size:28px}
+  .workflow-builder-main .graph-node-copy{width:146px}
+  .workflow-builder-main .graph-node-operation{font-size:10px!important}
+}
+@media(prefers-reduced-motion:reduce){.workflow-builder-main .graph-node-face{transition:none}}
+
+.workflow-builder-main .graph-node-primitive svg{width:39px;height:39px;display:block}
+.workflow-builder-main .graph-node-code-mark{
+  color:#28384D;font:800 23px/1 'DM Sans',sans-serif;letter-spacing:-.08em
+}

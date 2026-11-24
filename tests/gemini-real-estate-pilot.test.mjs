@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 
 const node = readFileSync("nodes/gemini.ts", "utf8");
 const activation = readFileSync("app/api/workflows/[workflowId]/route.ts", "utf8");
-const registryRun = readFileSync("app/api/workflows/[workflowId]/registry-run/route.ts", "utf8");
+const runs = readFileSync("app/api/workflows/[workflowId]/runs/route.ts", "utf8");
+const durableWorker = readFileSync("lib/workflows/durable-worker.ts", "utf8");
+const dispatch = readFileSync("app/api/workflows/[workflowId]/dispatch/route.ts", "utf8");
 const webhook = readFileSync("app/api/webhooks/[endpointKey]/route.ts", "utf8");
 const provision = readFileSync("app/api/workflows/[workflowId]/webhook/route.ts", "utf8");
 const builder = readFileSync("app/dashboard/workflows/[workflowId]/page.tsx", "utf8");
@@ -19,27 +21,31 @@ test("Gemini lead qualification is a registered structured operation and does no
   assert.match(node, /responseJsonSchema: leadJsonSchema/);
 });
 
-test("activation is explicit, constrained to the supported three-step pilot, and requires an exact-version successful dry-run", () => {
+test("activation validates any saved registry graph and gates live execution by version, connections, and approvals", () => {
   assert.match(activation, /updates\.status === "active"/);
-  assert.match(activation, /definition\.steps\.length !== 3/);
-  assert.match(activation, /steps\[1\].*nodeId === "gemini"/s);
-  assert.match(activation, /steps\[2\].*nodeId === "email"/s);
-  assert.match(activation, /GEMINI_API_KEY/);
-  assert.match(activation, /RESEND_API_KEY/);
-  assert.match(activation, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
+  assert.match(activation, /validateRegisteredSteps\(stored\.steps\)/);
+  assert.match(activation, /validateDurableLiveSteps\(steps\)/);
   assert.match(activation, /workflow_version", candidate\.version/);
   assert.match(activation, /mode", "dry_run"/);
   assert.match(activation, /status", "succeeded"/);
+  assert.match(activation, /workspace_integrations/);
+  assert.match(activation, /google_connections/);
+  assert.match(activation, /workspace_provider_operation_approvals/);
+  assert.doesNotMatch(activation, /definition\.steps\.length !== 3/);
+  assert.doesNotMatch(activation, /qualify_real_estate_lead/);
 });
 
-test("manual and signed-webhook live paths allow only the explicit Gemini qualification operation", () => {
-  for (const source of [registryRun, webhook]) {
-    assert.match(source, /nodeId === "gemini".*operationId === "qualify_real_estate_lead"/s);
-    assert.match(source, /GEMINI_API_KEY/);
-    assert.match(source, /AIVANTA_LIVE_EXECUTION_ENABLED/);
-    assert.match(source, /AIVANTA_LIVE_EMAIL_RECIPIENTS/);
-  }
-  assert.match(webhook, /hourlyRuns/);
+test("Gemini lead qualification uses the registered durable execution path while signed webhooks remain gated", () => {
+  assert.match(runs, /validateRegisteredSteps\(storedDefinition\.steps\)/);
+  assert.match(runs, /executeRegisteredWorkflow\([\s\S]*dryRun: true/);
+  assert.match(durableWorker, /getWorkerProvider\(step\)/);
+  assert.match(durableWorker, /WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED/);
+  assert.match(dispatch, /validateDurableLiveSteps\(registrySteps\)/);
+  assert.match(dispatch, /p_execution_mode: executionMode/);
+  assert.match(webhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true"/);
+  assert.match(webhook, /validateDurableLiveSteps\(steps\)/);
+  assert.match(webhook, /p_execution_mode: "live"/);
+  assert.match(webhook, /webhookVerified: true/);
 });
 
 test("webhook signing secrets remain server-side and CODED Supabase service credentials are supported", () => {

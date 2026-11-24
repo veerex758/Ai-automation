@@ -23,6 +23,30 @@ const utilityIndexesMigration = await readFile(
   new URL("../supabase/migrations/20261105045900_aivanta_utility_execution_indexes.sql", import.meta.url),
   "utf8",
 );
+const cancellationMigration = await readFile(
+  new URL("../supabase/migrations/20261114072354_aivanta_execution_cancellation.sql", import.meta.url),
+  "utf8",
+);
+const webhookQueueMigration = await readFile(
+  new URL("../supabase/migrations/20261114072358_aivanta_durable_webhook_live_queue.sql", import.meta.url),
+  "utf8",
+);
+const workflowRunCancellationMigration = await readFile(
+  new URL("../supabase/migrations/20261114072907_aivanta_workflow_run_cancellation_status.sql", import.meta.url),
+  "utf8",
+);
+const runtimeReconciliationMigration = await readFile(
+  new URL("../supabase/migrations/20261114074228_aivanta_staging_runtime_reconciliation.sql", import.meta.url),
+  "utf8",
+);
+const reliabilityMigration = await readFile(
+  new URL("../supabase/migrations/20261124130000_rexnora_execution_reliability_retries.sql", import.meta.url),
+  "utf8",
+);
+const deadLetterRecoveryMigration = await readFile(
+  new URL("../supabase/migrations/20261117190000_rexnora_dry_run_dead_letter_recovery.sql", import.meta.url),
+  "utf8",
+);
 const ids = {
   workspace: "10000000-0000-4000-8000-000000000001",
   workflow: "20000000-0000-4000-8000-000000000001",
@@ -82,14 +106,28 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
   const setup = await client();
   try {
     await setup.query(`
+      drop table if exists public.execution_dead_letter_recoveries cascade;
       drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade;
+      drop table if exists public.workspace_integration_secrets, public.workspace_integrations, public.workspace_members, public.google_connections cascade;
       drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade;
       do $$ begin
         if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
         if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
         if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role nologin bypassrls; end if;
       end $$;
-      create table public.workspaces (id uuid primary key);
+      create table public.workspaces (id uuid primary key, owner_id uuid);
+      create table public.workspace_members (workspace_id uuid, user_id uuid, role text);
+      create table public.google_connections (id uuid primary key default gen_random_uuid(), workspace_id uuid, product text);
+      create table public.workspace_integrations (
+        id uuid primary key default gen_random_uuid(), workspace_id uuid not null,
+        provider text not null, status text not null, display_name text not null,
+        created_by uuid not null, updated_at timestamptz not null default now(),
+        unique (workspace_id, provider)
+      );
+      create table public.workspace_integration_secrets (
+        integration_id uuid primary key, encrypted_credentials text not null,
+        encryption_version text not null, updated_at timestamptz not null default now()
+      );
       create table public.workflows (
         id uuid primary key, workspace_id uuid not null references public.workspaces(id),
         version integer not null, status text not null,
@@ -106,7 +144,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       grant usage on schema public to anon, authenticated, service_role;
     `);
-    await setup.query("insert into public.workspaces values ($1),($2)", [ids.workspace, ids.workspaceOther]);
+    await setup.query("insert into public.workspaces (id,owner_id) values ($1,$3),($2,$3)", [ids.workspace, ids.workspaceOther, ids.user]);
     await setup.query(
       "insert into public.workflows (id,workspace_id,version,status,definition,created_by) values ($1,$2,1,'active',$3::jsonb,$4),($5,$2,1,'active',$3::jsonb,$4)",
       [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] }), ids.user, ids.workflowOther],
@@ -115,13 +153,19 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     await setup.query(liveModeMigration);
     await setup.query(utilityMigration);
     await setup.query(utilityIndexesMigration);
+    await setup.query(cancellationMigration);
+    await setup.query(webhookQueueMigration);
+    await setup.query(workflowRunCancellationMigration);
+    await setup.query(runtimeReconciliationMigration);
+    await setup.query(deadLetterRecoveryMigration);
+    await setup.query(reliabilityMigration);
     ready = true;
   } finally {
     setup.release();
   }
 
 
-  await t.test("live dispatch is explicit, single-attempt, and the legacy RPC stays dry-run", async () => {
+  await t.test("live dispatch caps explicitly approved retries and the legacy RPC stays dry-run", async () => {
     await resetFixture();
     const db = await client();
     try {
@@ -138,7 +182,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       const liveResult = live.rows[0].result;
       const liveJob = await db.query("select execution_mode,max_attempts from public.execution_jobs where id=$1", [liveResult.job_id]);
       assert.equal(liveJob.rows[0].execution_mode, "live");
-      assert.equal(liveJob.rows[0].max_attempts, 1);
+      assert.equal(liveJob.rows[0].max_attempts, 3, "trusted live dispatch may request at most three attempts");
     } finally { db.release(); }
   });
 
@@ -230,6 +274,58 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     } finally { replacement.release(); }
   });
 
+  await t.test("waiting jobs resume without consuming another retry attempt", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const created = await dispatch(db, crypto.randomUUID(), 3);
+      const [first] = await claim(db, "pause-worker", 1, 30);
+      assert.equal(first.id, created.job_id);
+      assert.equal(first.attempts, 1);
+      const paused = await db.query(
+        "select public.pause_execution_job($1,$2,1) as paused",
+        [first.id, first.lease_token],
+      );
+      assert.equal(paused.rows[0].paused, true);
+      await db.query("update public.execution_jobs set available_at=now()-interval '1 second' where id=$1", [first.id]);
+      const [resumed] = await claim(db, "resume-worker", 1, 30);
+      assert.equal(resumed.id, first.id);
+      assert.equal(resumed.status, "running");
+      assert.equal(resumed.attempts, 1);
+      const finished = await db.query(
+        "select public.finish_execution_job($1,$2,true,null,null,null) as status",
+        [resumed.id, resumed.lease_token],
+      );
+      assert.equal(finished.rows[0].status, "succeeded");
+    } finally { db.release(); }
+  });
+
+  await t.test("cancellation requested on a leased job wins over expired-lease recovery", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const created = await dispatch(db, crypto.randomUUID(), 3);
+      const [leased] = await claim(db, "cancelled-worker", 1, 30);
+      assert.equal(leased.id, created.job_id);
+      const requested = await db.query(
+        "select public.cancel_execution_job($1,$2,$3) as status",
+        [leased.id, ids.workspace, ids.workflow],
+      );
+      assert.equal(requested.rows[0].status, "cancellation_requested");
+      await db.query(
+        "update public.execution_jobs set lease_until=now()-interval '1 second' where id=$1",
+        [leased.id],
+      );
+      const reclaimed = await claim(db, "replacement-after-cancel", 1, 30);
+      assert.equal(reclaimed.length, 0);
+      const state = await db.query(
+        "select j.status job_status,r.status run_status from public.execution_jobs j join public.workflow_runs r on r.id=j.run_id where j.id=$1",
+        [leased.id],
+      );
+      assert.deepEqual(state.rows[0], { job_status: "cancelled", run_status: "cancelled" });
+    } finally { db.release(); }
+  });
+
   await t.test("retry exhaustion atomically dead-letters and fails the run", async () => {
     await resetFixture();
     const db = await client();
@@ -239,7 +335,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       const [first] = await claim(db, "retry-worker-1", 1, 30);
       assert.equal(first.id, created.job_id);
       const firstFinish = await db.query(
-        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE') as status",
+        "select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null) as status",
         [first.id, first.lease_token],
       );
       assert.equal(firstFinish.rows[0].status, "retry_wait");
@@ -247,7 +343,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       const [second] = await claim(db, "retry-worker-2", 1, 30);
       assert.equal(second.attempts, 2);
       const secondFinish = await db.query(
-        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE') as status",
+        "select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null) as status",
         [second.id, second.lease_token],
       );
       assert.equal(secondFinish.rows[0].status, "dead_letter");
@@ -259,11 +355,70 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         where j.id=$1
       `, [first.id]);
       assert.deepEqual(state.rows[0], {
-        job_status: "dead_letter", error_code: "TEST_FAILURE", run_status: "failed",
+        job_status: "dead_letter", error_code: "PROVIDER_TRANSIENT_FAILURE", run_status: "failed",
       });
     } finally { db.release(); }
   });
 
+
+  await t.test("transient live provider failure retries the same idempotent job and can then succeed", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const dispatched = await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,3,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [first] = await claim(db, "transient-provider-worker");
+      assert.equal(first.id, dispatched.rows[0].result.job_id);
+      assert.equal(first.attempts, 1);
+      const retry = await db.query(
+        "select public.finish_execution_job($1,$2,false,'EMAIL_RATE_LIMITED','email-step','EMAIL_RATE_LIMITED') as status",
+        [first.id, first.lease_token],
+      );
+      assert.equal(retry.rows[0].status, "retry_wait");
+      await db.query("update public.execution_jobs set available_at=now()-interval '1 second' where id=$1", [first.id]);
+      const [second] = await claim(db, "transient-provider-retry-worker");
+      assert.equal(second.id, first.id);
+      assert.equal(second.attempts, 2);
+      const completed = await db.query(
+        "select public.finish_execution_job($1,$2,true,null,null,null) as status",
+        [second.id, second.lease_token],
+      );
+      assert.equal(completed.rows[0].status, "succeeded");
+      const state = await db.query(
+        "select j.status job_status,j.attempts,r.status run_status from public.execution_jobs j join public.workflow_runs r on r.id=j.run_id where j.id=$1",
+        [first.id],
+      );
+      assert.deepEqual(state.rows[0], { job_status: "succeeded", attempts: 2, run_status: "succeeded" });
+    } finally { db.release(); }
+  });
+
+  await t.test("permanent live provider rejection bypasses retries and dead-letters immediately", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const dispatched = await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,3,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [job] = await claim(db, "permanent-error-worker");
+      assert.equal(job.id, dispatched.rows[0].result.job_id);
+      assert.equal(job.max_attempts, 3);
+      const finished = await db.query(
+        "select public.finish_execution_job($1,$2,false,'EMAIL_PROVIDER_REJECTED','email-step','EMAIL_PROVIDER_REJECTED') as status",
+        [job.id, job.lease_token],
+      );
+      assert.equal(finished.rows[0].status, "dead_letter");
+      const state = await db.query(
+        "select status,last_error_code,attempts from public.execution_jobs where id=$1",
+        [job.id],
+      );
+      assert.deepEqual(state.rows[0], {
+        status: "dead_letter", last_error_code: "EMAIL_PROVIDER_REJECTED", attempts: 1,
+      });
+    } finally { db.release(); }
+  });
 
   await t.test("shared rate limiter is atomic and isolates workspaces", async () => {
     await resetFixture();
@@ -375,7 +530,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       const [job] = await claim(db, "outbox-source-worker");
       const finished = await db.query(
-        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE','step-a','TEST_FAILURE') as result",
+        "select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE','step-a','PROVIDER_TRANSIENT_FAILURE') as result",
         [job.id, job.lease_token],
       );
       assert.equal(finished.rows[0].result, "dead_letter");
@@ -385,7 +540,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       assert.equal(pending.rowCount, 1);
       assert.equal(pending.rows[0].dispatch_status, "pending");
-      assert.equal(pending.rows[0].error_code, "TEST_FAILURE");
+      assert.equal(pending.rows[0].error_code, "PROVIDER_TRANSIENT_FAILURE");
       assert.equal(pending.rows[0].step_id, "step-a");
       const dispatched = await db.query("select public.dispatch_pending_execution_error_events(10) as count");
       assert.equal(dispatched.rows[0].count, 1);
@@ -474,6 +629,91 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     }
   });
 
+  await t.test("dead-letter recovery creates a new idempotent dry-run from the original immutable snapshot", async () => {
+    await resetFixture();
+    const db = await client();
+    const requestId = crypto.randomUUID();
+    try {
+      const originalDefinition = { version: 1, nodes: [{ id: "saved-snapshot", type: "trigger" }] };
+      const originalPayload = { source: "manual", input: { safeFixture: true } };
+      // Start with a clean workspace fixture, then dispatch the exact saved definition.
+      await resetFixture();
+      await db.query("update public.workflows set definition=$1::jsonb where id=$2",
+        [JSON.stringify(originalDefinition), ids.workflow]);
+      const snapshotDispatch = await dispatch(db, crypto.randomUUID(), 2);
+      await db.query("update public.execution_jobs set payload=$1::jsonb where id=$2",
+        [JSON.stringify(originalPayload), snapshotDispatch.job_id]);
+      const [first] = await claim(db, "recovery-worker-1");
+      assert.equal(first.id, snapshotDispatch.job_id);
+      await db.query("select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null)",
+        [first.id, first.lease_token]);
+      await db.query("update public.execution_jobs set available_at=now()-interval '1 second' where id=$1", [first.id]);
+      const [second] = await claim(db, "recovery-worker-2");
+      await db.query("select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null)",
+        [second.id, second.lease_token]);
+
+      const dead = await db.query("select id from public.execution_dead_letters where original_job_id=$1", [first.id]);
+      assert.equal(dead.rowCount, 1);
+      const createRecovery = () => db.query(
+        "select public.create_dead_letter_dry_run_recovery($1,$2,$3,$4) as result",
+        [dead.rows[0].id, ids.workspace, ids.user, requestId],
+      );
+      const created = (await createRecovery()).rows[0].result;
+      assert.equal(created.mode, "dry_run");
+      assert.equal(created.duplicate, false);
+      const duplicate = (await createRecovery()).rows[0].result;
+      assert.equal(duplicate.job_id, created.job_id);
+      assert.equal(duplicate.run_id, created.run_id);
+      assert.equal(duplicate.duplicate, true);
+
+      const recoveredJob = await db.query(
+        "select execution_mode,status,attempts,max_attempts,workflow_definition,payload from public.execution_jobs where id=$1",
+        [created.job_id],
+      );
+      assert.deepEqual(recoveredJob.rows[0], {
+        execution_mode: "dry_run", status: "queued", attempts: 0, max_attempts: 2,
+        workflow_definition: originalDefinition, payload: originalPayload,
+      });
+      const recoveredRun = await db.query(
+        "select mode,status,created_by from public.workflow_runs where id=$1",
+        [created.run_id],
+      );
+      assert.deepEqual(recoveredRun.rows[0], { mode: "dry_run", status: "running", created_by: ids.user });
+      const audit = await db.query(
+        "select count(*)::integer as count from public.execution_dead_letter_recoveries where dead_letter_id=$1",
+        [dead.rows[0].id],
+      );
+      assert.equal(audit.rows[0].count, 1);
+      const original = await db.query("select status from public.execution_jobs where id=$1", [first.id]);
+      assert.equal(original.rows[0].status, "dead_letter");
+    } finally { db.release(); }
+  });
+
+  await t.test("operator recovery refuses a dead-lettered live job", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const key = crypto.randomUUID();
+      const live = await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,5,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, key],
+      );
+      const [job] = await claim(db, "live-recovery-worker");
+      assert.equal(job.id, live.rows[0].result.job_id);
+      await db.query("select public.finish_execution_job($1,$2,false,'UNCERTAIN_PROVIDER_OUTCOME',null,null)",
+        [job.id, job.lease_token]);
+      const dead = await db.query("select id from public.execution_dead_letters where original_job_id=$1", [job.id]);
+      assert.equal(dead.rowCount, 1);
+      await assert.rejects(
+        db.query(
+          "select public.create_dead_letter_dry_run_recovery($1,$2,$3,$4)",
+          [dead.rows[0].id, ids.workspace, ids.user, crypto.randomUUID()],
+        ),
+        (error) => error.code === "22023",
+      );
+    } finally { db.release(); }
+  });
+
   await t.test("browser roles cannot read queue tables or execute privileged RPCs", async () => {
     await resetFixture();
     const db = await client();
@@ -487,6 +727,12 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       await db.query("reset role");
       await db.query("set role authenticated");
       await assert.rejects(db.query("select * from public.execution_checkpoints"), /permission denied/);
+      await assert.rejects(db.query("select * from public.execution_dead_letter_recoveries"), /permission denied/);
+      await assert.rejects(
+        db.query("select public.create_dead_letter_dry_run_recovery($1,$2,$3,$4)",
+          ["40000000-0000-4000-8000-000000000001", ids.workspace, ids.user, crypto.randomUUID()]),
+        /permission denied/,
+      );
       await assert.rejects(
         db.query("select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,3)",
           [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()]),
@@ -504,7 +750,9 @@ test.after(async () => {
     if (ready) {
       const db = await pool.connect();
       try {
+        await db.query("drop table if exists public.execution_dead_letter_recoveries cascade");
         await db.query("drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade");
+        await db.query("drop table if exists public.workspace_integration_secrets, public.workspace_integrations, public.workspace_members, public.google_connections cascade");
         await db.query("drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade");
         await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer)");
         await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer,text)");

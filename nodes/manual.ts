@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { NodeDefinition } from "./types";
 
 const inputSchema = z.object({}).passthrough();
-const outputSchema = z.object({ started: z.literal(true) }).strict();
+const outputSchema = z.object({ started: z.literal(true), payload: z.unknown().optional() }).strict();
 
 /** Manual trigger used to bridge the existing version-1 workflow builder to the node registry. */
 export const manualNode: NodeDefinition = {
@@ -13,8 +13,8 @@ export const manualNode: NodeDefinition = {
     description: "Starts a workflow from an explicit user action. Does not create a schedule or webhook subscription.",
     inputSchema, outputSchema,
     async run(_ctx, rawInput) {
-      inputSchema.parse(rawInput);
-      return outputSchema.parse({ started: true });
+      const input = inputSchema.parse(rawInput);
+      return outputSchema.parse({ started: true, ...(Object.keys(input).length ? { payload: input } : {}) });
     },
   }],
   actions: [],

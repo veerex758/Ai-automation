@@ -1,37 +1,28 @@
 # Aivanta node inventory — source of truth
 
-This inventory separates executable workflow definitions from the provider directory. These are different counts and must not be reported as one total.
+This document distinguishes the executable workflow registry from the user-facing provider directory. They are separate inventories and must not be conflated.
 
 ## Authoritative counts
 
 | Inventory | Count | Meaning |
 |---|---:|---|
-| Native executable registry | 118 | Definitions in `nodes/registry.ts`; these are the only nodes exposed to the AI planner and execution validator |
-| Provider directory | 100 | User-facing integrations/providers listed in `nodes/provider-catalog.ts` |
-| Provider directory mapped to native implementations | 98 | Directory entries whose `registryId` resolves to a native registry definition |
-| Provider directory not yet mapped | 2 | Directory entries with no native implementation; displayed as `coming_soon` |
-| Internal utility-pack nodes | 20 | Executable utility definitions included in the 118-node registry but not represented as separate provider-directory entries |
-| Provider-pack nodes | 20 | Executable provider adapters included in the 118-node registry |
-| Catalogue AI provider nodes | 4 | ElevenLabs, Stability AI, Hugging Face and Pinecone; each has a schema-backed action |
-| CRM and messaging catalogue nodes | 8 | Microsoft Teams, Salesforce, Pipedrive, Zoho CRM, Freshsales, Close, Apollo and Intercom |
-| Google read-only catalogue nodes | 6 | Drive, Calendar, Docs, Forms, YouTube and Contacts |
-| Productivity/developer catalogue nodes | 9 | Jira, Asana, Trello, ClickUp, Monday.com, Todoist, Airtable, Bitbucket and Netlify |
-| Commerce/support catalogue nodes | 10 | WooCommerce, PayPal, Paddle, Lemon Squeezy, Square, Razorpay, Zoom, Cal.com, Twilio Voice and DocuSign |
-| Social/marketing catalogue nodes | 7 | X/Twitter, LinkedIn, Facebook Pages, Instagram, TikTok, Mailchimp and Typeform |
-| Database/storage catalogue nodes | 7 | Supabase, PostgreSQL, Redis (Upstash REST), Firebase/Firestore, Dropbox, AWS S3 and Cloudflare R2 |
-| Still catalogue-only | 2 | MySQL and MongoDB; native drivers and lockfile updates are still required |
+| Native executable registry | **122** | Definitions exposed by `getExecutableNodeCatalog()`; used by workflow validation, AI planning and execution |
+| Provider directory | **100** | User-facing provider entries exposed by `getPublicNodeCatalog()` |
+| Provider entries with registered implementations | **100** | Every provider-directory entry resolves to a registered implementation |
+| Coming-soon provider entries | **0** | No provider-directory entry is currently marked coming soon |
 
-The 118 native definitions are composed of 27 core, integration and data definitions, 20 utility-pack definitions, 20 provider-pack definitions, 4 catalogue AI provider definitions, 8 CRM/messaging catalogue provider definitions, 6 Google read-only provider definitions, 9 productivity/developer provider definitions, 10 commerce/support provider definitions, 7 social/marketing provider definitions, and 7 database/storage provider definitions.
+The native count and provider-directory parity are asserted by `tests/provider-catalog.test.ts`. The operation-level parity gate is `tests/worker-operation-parity.test.ts`, which requires every registered trigger/action to have exactly one worker mapping.
 
-## Resolving the former “73 nodes” figure
+The registry includes core triggers and logic/data primitives, internal utility nodes, provider packs, and provider catalogue adapters. Avoid publishing old family-level subtotals unless they have been regenerated from the current registry; earlier category tables became stale as nodes were added.
 
-The repository source at the audited revision did not contain a 73-entry executable registry. After this provider batch, the authoritative count is 118 executable definitions and 100 provider-directory entries. The former 73 figure is therefore not a valid implementation count and must not be used for progress reporting. The 118-node count now includes 51 additional provider implementations added after the original 67-node audit. The old 73 figure was never a reliable registry count.
+## Database adapters
 
-Do not add placeholder nodes merely to make the old number match. A node counts as executable only when it is registered in `nodes/registry.ts` with validated input/output schemas and a server-side handler.
+MySQL and MongoDB have registered native adapters in `nodes/sql-document-databases.ts`. The Database service integration workflow exercises both against authenticated TLS database containers. This proves driver-level integration against test services, not that every workspace has valid production credentials or permissions.
 
 ## Reporting rules
 
-- Say **118 executable nodes** when referring to the native workflow registry.
-- Say **100 directory entries: 98 mapped, 2 coming soon** when referring to the provider directory.
-- Do not describe all 98 mapped providers as live-production-ready. Registration and schema-backed handlers do not by themselves prove credentials, provider contracts, live-action authorization, or successful real-service execution.
-- Keep these counts protected by `tests/provider-catalog.test.ts`.
+- Say **122 executable nodes** for the native workflow registry.
+- Say **100 provider-directory entries; 100 registered; 0 coming soon** for the provider directory.
+- Do not describe all 100 providers as live-production-verified. Registration, schemas, worker mappings and database-container integration tests do not prove OAuth consent, credentials, provider-side permissions, or successful authenticated staging execution.
+- Use `tests/worker-operation-parity.test.ts` as the operation-to-worker parity gate.
+- Treat provider live enablement, workspace connection readiness and per-operation approval as separate release gates.

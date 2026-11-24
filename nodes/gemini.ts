@@ -44,11 +44,21 @@ const leadJsonSchema = {
   propertyOrdering: ["fullName", "email", "phone", "propertyType", "location", "budget", "timeframe", "temperature", "reason", "missingInformation", "suggestedReply", "summary"],
 };
 
+
+async function requestGemini(ctx: NodeContext, args: Parameters<NodeContext["http"]["request"]>[0]) {
+  try {
+    return await ctx.http.request(args);
+  } catch (error) {
+    if (ctx.signal?.aborted) throw ctx.signal.reason ?? error;
+    throw new Error("GEMINI_PROVIDER_TRANSIENT_FAILURE");
+  }
+}
+
 async function qualifyLead(ctx: NodeContext, rawInput: unknown) {
   const input = leadInputSchema.parse(rawInput);
   const apiKey = ctx.credentials.gemini?.apiKey;
   if (!apiKey) throw new Error("GEMINI_CONNECTION_REQUIRED");
-  const response = await ctx.http.request({
+  const response = await requestGemini(ctx, {
     url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
     method: "POST",
     headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
@@ -61,7 +71,9 @@ async function qualifyLead(ctx: NodeContext, rawInput: unknown) {
   });
   if (response.status < 200 || response.status >= 300) {
     ctx.logger.error("Gemini lead qualification failed", { status: response.status });
-    throw new Error(response.status === 429 ? "GEMINI_RATE_LIMITED" : "GEMINI_REQUEST_FAILED");
+    if (response.status === 429) throw new Error("GEMINI_RATE_LIMITED");
+    if (response.status === 408 || response.status >= 500) throw new Error("GEMINI_PROVIDER_TRANSIENT_FAILURE");
+    throw new Error("GEMINI_PROVIDER_REJECTED");
   }
   const body = response.body as { candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }>; usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown } };
   const text = body?.candidates?.[0]?.content?.parts?.map((part) => typeof part.text === "string" ? part.text : "").join("") ?? "";

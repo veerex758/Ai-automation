@@ -1,8 +1,26 @@
 {
-  "crons": [
-    {
+  "schedules": {
+    "workflow-scheduler-tick": {
+      "schedule": "*/30 * * * *",
       "path": "/api/internal/scheduler",
-      "schedule": "0 9 * * *"
+      "requestMethod": "GET",
+      "timezone": "UTC"
+    },
+    "durable-worker-recovery": {
+      "schedule": "*/30 * * * *",
+      "function": "api/worker-sweep",
+      "timezone": "UTC"
     }
-  ]
+  },
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/worker-sweep.ts": {
+      "maxDuration": 60,
+      "experimentalTriggers": [
+        {
+          "type": "schedule/v1beta"
+        }
+      ]
+    }
+  }
 }

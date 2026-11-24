@@ -13,6 +13,12 @@ export type NodeContext = {
     request(args: { url: string; method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: unknown; timeoutMs?: number; retries?: number }): Promise<{ status: number; body: unknown }>;
   };
   previousOutputs: Readonly<Record<string, unknown>>;
+  /** Aborted when the durable worker loses its lease. */
+  signal?: AbortSignal;
+  /** Stable per-job/per-step provider key used only by adapters that support idempotent writes. */
+  idempotencyKey?: string;
+  /** Derives a stable provider key from a persisted checkpoint step ID. */
+  getIdempotencyKey?: (stepId: string) => string;
   /** Worker-side authorization hook, called immediately before every live provider handler. */
   authorizeOperation?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action" }) => Promise<void>;
   webhook?: { verified: boolean };

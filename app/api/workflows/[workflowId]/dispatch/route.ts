@@ -2,11 +2,12 @@ import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
+import { durableLiveRetryAttempts, runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { findOperation } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!workflow) return NextResponse.json({ error: "Workflow not found or access denied." }, { status: 404 });
     if (workflow.status !== "active") return NextResponse.json({ error: "Only active workflows can be dispatched." }, { status: 409 });
     const registryFormat = isRecord(workflow.definition) && workflow.definition.format === "aivanta-registry-v1";
+    let maxAttempts = executionMode === "live" ? 1 : 5;
     if (registryFormat) {
       if (!isRegistryDefinition(workflow.definition)) {
         return NextResponse.json({ error: "Registry workflow definition is invalid." }, { status: 422 });
@@ -84,6 +86,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         if (livePolicyError) {
           return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
         }
+        maxAttempts = durableLiveRetryAttempts(registrySteps);
       }
     } else {
       const validated = validateDefinition(workflow.definition);
@@ -103,6 +106,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
           return NextResponse.json({ error: "The email recipient must be a literal address on the server allowlist." }, { status: 403 });
         }
+        maxAttempts = 3;
       }
     }
 
@@ -114,7 +118,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       p_created_by: user.id,
       p_idempotency_key: idempotencyKey,
       p_payload: { input },
-      p_max_attempts: executionMode === "live" ? 1 : 5,
+      p_max_attempts: maxAttempts,
       p_execution_mode: executionMode,
     });
     if (error || !data || typeof data !== "object") throw error ?? new Error("DISPATCH_RESULT_INVALID");

@@ -2,9 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("Vercel cron targets the protected scheduler route at a conservative daily cadence", async () => {
+test("Vercel Schedules dispatch workflows and recover abandoned workers within Hobby limits", async () => {
   const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8"));
-  assert.deepEqual(config.crons, [{ path: "/api/internal/scheduler", schedule: "0 9 * * *" }]);
+  assert.deepEqual(config.schedules["workflow-scheduler-tick"], {
+    schedule: "*/30 * * * *", path: "/api/internal/scheduler", requestMethod: "GET", timezone: "UTC",
+  });
+  assert.deepEqual(config.schedules["durable-worker-recovery"], {
+    schedule: "*/30 * * * *", function: "api/worker-sweep", timezone: "UTC",
+  });
+  assert.deepEqual(config.functions["api/worker-sweep.ts"].experimentalTriggers, [
+    { type: "schedule/v1beta" },
+  ]);
+  assert.equal(config.crons, undefined);
 });
 
 test("scheduler endpoint requires a server-only bearer secret and never runs provider actions directly", async () => {
