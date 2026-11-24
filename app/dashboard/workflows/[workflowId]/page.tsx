@@ -235,6 +235,8 @@ export default function WorkflowBuilderPage() {
 
   function beginNodeDrag(event: ReactPointerEvent<HTMLDivElement>, node: WorkflowNode, index: number) {
     if ((event.target as HTMLElement).closest("button")) return;
+    // Select on pointer-down so a touch drag also opens this node's inspector.
+    setSelectedId(node.id);
     const point = nodePosition(node, index);
     dragState.current = { id: node.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: point.x, originY: point.y, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -253,24 +255,51 @@ export default function WorkflowBuilderPage() {
   function endNodeDrag(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragState.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!drag.moved) setSelectedId(drag.id);
-    else setNotice("Node position updated. Save your changes to keep this layout.");
+    // Pointer capture can suppress click after drag; keep the dragged node selected.
+    setSelectedId(drag.id);
+    if (drag.moved) setNotice("Node moved. Its settings are open below; save to keep the new position.");
     dragState.current = null;
   }
 
   function connectNodes(source: string, target: string, label: "true" | "false" | "next") {
-    if (source === target) return;
-    const duplicate = (definition.edges ?? []).some((edge) => edge.source === source && edge.target === target && edge.label === label);
-    if (duplicate) { setNotice("Those nodes are already connected."); setConnectingFrom(null); return; }
+    if (source === target) {
+      setNotice("A node cannot connect to itself.");
+      setConnectingFrom(null);
+      return;
+    }
     const sourceNode = definition.nodes.find((node) => node.id === source);
-    if (!sourceNode || (label !== "next" && sourceNode.type !== "condition")) return;
+    if (!sourceNode) {
+      setNotice("The source node no longer exists. Select it again.");
+      setConnectingFrom(null);
+      return;
+    }
+    const outgoing = (definition.edges ?? []).filter((edge) => edge.source === source);
+    const duplicate = outgoing.some((edge) => edge.target === target && edge.label === label);
+    if (duplicate) {
+      setNotice("Those nodes are already connected.");
+      setConnectingFrom(null);
+      return;
+    }
+    if (sourceNode.type === "condition") {
+      if (label === "next") {
+        setNotice("Choose the True or False branch before connecting an IF node.");
+        setConnectingFrom(null);
+        return;
+      }
+      if (outgoing.length >= 2 || outgoing.some((edge) => edge.label === label)) {
+        setNotice("An IF node can have one True destination and one False destination. Remove or edit an existing branch first.");
+        setConnectingFrom(null);
+        return;
+      }
+    } else if (label !== "next" || outgoing.length >= 1) {
+      setNotice("This node already has its single Next connection. Only IF nodes can split into two paths.");
+      setConnectingFrom(null);
+      return;
+    }
     draftRevision.current += 1;
     setValidation(null);
     setDefinition((current) => ({
       ...current,
-      // Branch destinations should be positioned from the condition's
-      // output lane. Clearing an old fixed coordinate lets nodePosition
-      // derive the correct upper/lower branch location from the new edge.
       nodes: current.nodes.map((node) => node.id !== target || label === "next"
         ? node
         : { ...node, position: undefined }),
@@ -278,6 +307,34 @@ export default function WorkflowBuilderPage() {
     }));
     setConnectingFrom(null);
     setNotice("Connection added. Save your changes when ready.");
+  }
+
+  function startConnectionFrom(nodeId: string) {
+    const sourceNode = definition.nodes.find((node) => node.id === nodeId);
+    if (!sourceNode) return;
+    const outgoing = (definition.edges ?? []).filter((edge) => edge.source === nodeId);
+    let label: "true" | "false" | "next" = "next";
+    if (sourceNode.type === "condition") {
+      if (!outgoing.some((edge) => edge.label === "true")) label = "true";
+      else if (!outgoing.some((edge) => edge.label === "false")) label = "false";
+      else {
+        setSelectedId(nodeId);
+        setConnectingFrom(null);
+        setNotice("Both IF branches are already connected. Edit or remove a branch before adding another.");
+        return;
+      }
+    } else if (outgoing.length) {
+      setSelectedId(nodeId);
+      setConnectingFrom(null);
+      setNotice("This node already has its Next connection. Only IF nodes can split into two paths.");
+      return;
+    }
+    setSelectedId(nodeId);
+    setConnectionLabel(label);
+    setConnectingFrom(nodeId);
+    setNotice(sourceNode.type === "condition"
+      ? `Connecting the ${label.toUpperCase()} branch. Select a destination node's input handle, or use Connect to node below.`
+      : "Select a destination node's input handle, or use Connect to node below.");
   }
 
   function updateSelected(updates: Partial<Pick<WorkflowNode, "title" | "description">>) {
@@ -715,7 +772,10 @@ export default function WorkflowBuilderPage() {
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (!connectingFrom) { setNotice("Choose an output handle first."); return; }
+                          if (!connectingFrom) {
+                            setNotice("Start from the output handle on the right side of a source node, then choose this node as the destination.");
+                            return;
+                          }
                           connectNodes(connectingFrom, node.id, connectionLabel);
                         }}
                       />
@@ -733,11 +793,7 @@ export default function WorkflowBuilderPage() {
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          setSelectedId(node.id);
-                          setConnectingFrom(node.id);
-                          setNotice(node.type === "condition"
-                            ? "Choose True or False in the connection editor, then select a destination input handle."
-                            : "Select a destination input handle.");
+                          startConnectionFrom(node.id);
                         }}
                       />
                     </div>
@@ -750,12 +806,16 @@ export default function WorkflowBuilderPage() {
                 {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
               </div>
             </div>
-            <div className="canvas-footnote">Use the safe test panel to evaluate conditions and inspect simulated step results. External actions remain disabled.</div>
+            <div className="canvas-footnote">Tap a node to select it; dragging also selects it. Use Fit and zoom to inspect the graph. The selected node's settings are below.</div>
           </div>
         </section>
 
-        <aside className="builder-panel">
-          <div className="panel-header"><div><span className="panel-kicker">CONFIGURATION</span><h2>Step settings</h2></div><span className="panel-sliders">☷</span></div>
+        <div className="builder-mobile-edit-shortcut">
+          <span>{selectedNode ? `Selected: ${selectedNode.title}` : "No node selected"}</span>
+          <button type="button" disabled={!selectedNode} onClick={() => document.getElementById("node-settings-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Edit selected node</button>
+        </div>
+        <aside className="builder-panel" id="node-settings-panel">
+          <div className="panel-header"><div><span className="panel-kicker">CONFIGURATION</span><h2>{selectedNode ? `Edit: ${selectedNode.title}` : "Step settings"}</h2><p className="panel-selected-hint">{selectedNode ? "Selected node · changes apply only to this step" : "Select a node on the canvas to edit it."}</p></div><span className="panel-sliders">☷</span></div>
           {selectedNode ? <div className="panel-content">
             <div className={`selected-type type-${selectedNode.type}`}><span>{nodeMeta[selectedNode.type].icon}</span><div><strong>{nodeMeta[selectedNode.type].label}</strong><small>{nodeMeta[selectedNode.type].help}</small></div></div>
             <label htmlFor="step-title">Step name</label><input id="step-title" maxLength={80} value={selectedNode.title} onChange={(event) => updateSelected({ title: event.target.value })} />
@@ -776,10 +836,11 @@ export default function WorkflowBuilderPage() {
             <div className="panel-divider" />
             <section className="graph-connection-editor" aria-label="Node connections">
               <div className="config-section-title">Connections</div>
-              <p className="config-note">Connect this node to another node. Conditions can create true and false paths.</p>
+              <p className="config-note">Start at this node's output and choose a destination. Regular nodes allow one Next connection; IF nodes allow one True and one False connection.</p>
+               {selectedNode.type === "condition" && <div className="branch-connection-status"><span className={(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "true") ? "branch-connected" : ""}>True: {(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "true") ? "connected" : "not connected"}</span><span className={(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "false") ? "branch-connected" : ""}>False: {(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "false") ? "connected" : "not connected"}</span></div>}
               {(definition.edges ?? []).filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).map((edge) => <div className="graph-edge-row" key={edge.id}><span><b>{edge.label === "next" ? "Next" : edge.label.toUpperCase()}</b> · {definition.nodes.find((node) => node.id === edge.source)?.title} → {definition.nodes.find((node) => node.id === edge.target)?.title}</span><button type="button" aria-label="Remove connection" onClick={() => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: (current.edges ?? []).filter((item) => item.id !== edge.id) })); }}>×</button></div>)}
               {selectedNode.type === "condition" && <><label htmlFor="connection-branch">Branch label</label><select id="connection-branch" value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value as "true" | "false" | "next")}><option value="true">True path</option><option value="false">False path</option></select></>}
-              <button type="button" className="builder-validate" onClick={() => { setConnectingFrom(selectedNode.id); setConnectionLabel(selectedNode.type === "condition" ? connectionLabel : "next"); setNotice("Select an input handle on the destination node."); }}>Start connection from this node</button>
+              <button type="button" className="builder-validate" onClick={() => startConnectionFrom(selectedNode.id)}>Start connection from this node</button>
               <label htmlFor="connect-target">Connect to node</label>
               <select id="connect-target" defaultValue="" onChange={(event) => { const target = event.target.value; if (target) connectNodes(selectedNode.id, target, selectedNode.type === "condition" ? connectionLabel : "next"); event.currentTarget.value = ""; }}>
                 <option value="">Choose destination…</option>{definition.nodes.filter((node) => node.id !== selectedNode.id).map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}
