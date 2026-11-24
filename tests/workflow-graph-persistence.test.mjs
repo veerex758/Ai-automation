@@ -31,6 +31,7 @@ test("registry save preserves the validated canvas graph, including positions an
   assert.match(route, /buildRegistrySteps\(\{ nodes: graphNodes, edges: graphEdges \}\)/);
   assert.match(route, /Canvas connections and registered execution steps do not match/);
   assert.match(route, /definitionToSave = \{[\s\S]*?\.\.\.definitionToSave,[\s\S]*?format: "aivanta-registry-v1",/);
+  assert.match(route, /definitionToSave = \{[\s\S]*?\.\.\.definitionToSave,[\s\S]*?format: "aivanta-registry-v1",/);
   assert.match(activation, /legacy-next-/);
 });
 
@@ -92,12 +93,9 @@ test("workflow reload exposes the exact saved version and the builder updates it
   assert.match(builder, /workflow\?\.version/);
 });
 
-test("AI Assistant draft creation preserves the editable graph and validated registry plan", () => {
+test("legacy AI Assistant redirects into the canonical Playbook creation flow", () => {
+  assert.match(assistant, /redirect\("\/dashboard\/playbooks\/new"\)/);
   assert.ok(createRoute.includes("buildRegistrySteps("));
   assert.ok(createRoute.includes("validateRegisteredSteps(rebuilt)"));
   assert.ok(createRoute.includes("Canvas connections and registered execution steps do not match"));
-  assert.ok(createRoute.includes("edges: rawDefinition.edges"));
-  assert.ok(createRoute.includes('format: "aivanta-registry-v1", steps: checked.steps'));
-  assert.ok(assistant.includes("/dashboard/workflows/"));
-  assert.ok(!assistant.includes("/dashboard/connections?workflowId="));
 });
