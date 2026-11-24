@@ -196,7 +196,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   return isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS);
 }
 
-export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): string | null {
+export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[], options: { skipEmailRecipientAllowlist?: boolean } = {}): string | null {
   if (!Array.isArray(steps) || steps.length < 1 || steps.length > 30 ||
       steps.filter((step) => step.kind === "action").length > MAX_LIVE_ACTION_STEPS) {
     return "LIVE_WORKFLOW_STEP_LIMIT_EXCEEDED";
@@ -214,9 +214,11 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
   const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
   const allowedEmailRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
     .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-  for (const step of emailSteps) {
-    const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
-    if (!to || to.includes("{{") || !allowedEmailRecipients.has(to)) return "LIVE_EMAIL_RECIPIENT_NOT_ALLOWED";
+  if (!options.skipEmailRecipientAllowlist) {
+    for (const step of emailSteps) {
+      const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
+      if (!to || to.includes("{{") || !allowedEmailRecipients.has(to)) return "LIVE_EMAIL_RECIPIENT_NOT_ALLOWED";
+    }
   }
 
   const voiceSteps = steps.filter((step) => step.nodeId === "twilio_voice" && step.operationId === "execute");
