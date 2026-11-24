@@ -80,7 +80,6 @@ begin
         when e.claim_token is not null and e.claim_expires_at > v_now then 'in_progress'
         else 'unavailable'
       end into v_reason
-      end into v_reason
       from public.billing_recurring_events e
       where e.event_key = p_event_key;
     end if;
