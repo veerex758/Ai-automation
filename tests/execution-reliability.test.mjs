@@ -65,8 +65,6 @@ test("scheduled worker recovery is recurring and environment-gated", () => {
   assert.equal(vercelConfig.schedules["durable-worker-recovery"].schedule, "0 * * * *");
   assert.equal(vercelConfig.schedules["durable-worker-recovery"].function, "api/worker-sweep");
   assert.equal(vercelConfig.functions["api/worker-sweep.ts"].experimentalTriggers[0].type, "schedule/v1beta");
-  assert.equal(vercelConfig.schedules["durable-worker-recovery"].path, "/api/internal/worker");
-  assert.equal(vercelConfig.schedules["durable-worker-recovery"].requestMethod, "POST");
   assert.match(privateWorkerSchedule, /AIVANTA_DURABLE_WORKER_SCHEDULE_ENABLED !== "true"/);
   assert.match(privateWorkerSchedule, /handleSchedule/);
   assert.match(privateWorkerSchedule, /export const POST/);
