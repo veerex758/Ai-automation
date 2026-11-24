@@ -254,13 +254,8 @@ export async function DELETE(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required.", code: "AUTHENTICATION_REQUIRED" }, 401);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
-      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
-    if (membershipError) throw new Error("INTEGRATION_MEMBERSHIP_CHECK_FAILED");
-    if (!(workspace.owner_id === user.id || (membership && ["owner", "admin"].includes(membership.role)))) {
-      return json({ error: integrationErrorMessages.INTEGRATION_PERMISSION_DENIED, code: "INTEGRATION_PERMISSION_DENIED" }, 403);
-    }
-
+    // The service-role RPC rechecks owner/admin membership and deletes the
+    // connection plus encrypted secret in one database transaction.
     const db = serviceClient();
     const { data, error } = await db.rpc("revoke_workspace_integration_connection", {
       p_workspace_id: workspace.id,
