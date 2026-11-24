@@ -122,6 +122,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
       booking = { ...booking, status: "creating" };
     }
 
+    if (booking.calendar_id !== "primary") throw new Error("INSPECTION_CALENDAR_NOT_SUPPORTED");
     const availability = await assertRealEstateCalendarSlotAvailable(
       calendarContext, booking.calendar_id, booking.start_at, booking.end_at, eventId,
     );
