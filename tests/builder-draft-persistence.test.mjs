@@ -2,59 +2,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync(new URL("../app/dashboard/builder/page.tsx", import.meta.url), "utf8");
+const source = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
 
-test("starter workflow actions map to configured catalog actions before first save", () => {
-  assert.match(source, /actionId: "internal\.create_task", settings: \{ message: "Review the new lead details/);
-  assert.match(source, /actionId: "internal\.create_task", settings: \{ message: "Assign an owner/);
-  assert.match(source, /settings: \{ event: "webhook" \}/);
-});
-
-test("builder saves a validated draft to the authenticated workflow APIs", () => {
-  assert.match(source, /fetch\("\/api\/workflows",\s*\{[\s\S]*?method: "POST"/);
-  assert.match(source, /fetch\(`\/api\/workflows\/\$\{workflowId\}\/definition`,\s*\{[\s\S]*?method: "PATCH"/);
-  assert.match(source, /if \(!validationResult\.valid\)/);
+test("Playbook setup saves the validated graph and policy envelope as one inactive draft", () => {
+  assert.match(source, /fetch\("\/api/ai/generate-workflow"/);
+  assert.match(source, /fetch\("/api/workflows"/);
   assert.match(source, /status: "draft"/);
-  assert.match(source, /It has not been activated or executed/);
+  assert.match(source, /const definition = \{ \.\.\.draft\.definition, playbook \}/);
+  assert.match(source, /registrySteps: draft\.registrySteps/);
+  assert.match(source, /router\.push\("\/dashboard\/playbooks\//);
 });
 
-test("saving a draft again reuses the created workflow instead of duplicating it", () => {
-  assert.match(source, /const \[savedWorkflowId, setSavedWorkflowId\] = useState<string \| null>\(null\)/);
-  assert.match(source, /let workflowId = savedWorkflowId;[\s\S]*?if \(!workflowId\)/);
-  assert.match(source, /setSavedWorkflowId\(workflowId\)/);
+test("permission settings are explicit and no missing permission is converted to auto", () => {
+  assert.match(source, /permission: step\.nodeId === "gemini" \? "auto" as const : "ask_first" as const/);
+  assert.match(source, /actionPolicies: policies/);
+  assert.match(source, /ask_first/);
+  assert.match(source, /never/);
 });
 
-test("dashboard cache is updated only after the server confirms the definition save", () => {
-  const serverSave = source.indexOf('const saveResponse = await fetch(`/api/workflows/${workflowId}/definition`');
-  const successCheck = source.indexOf('if (!saveResponse.ok || !saved.success)', serverSave);
-  const cacheWrite = source.indexOf('window.localStorage.setItem("aivanta-workflows"', serverSave);
-  assert.ok(serverSave >= 0, "definition save API call exists");
-  assert.ok(successCheck > serverSave, "server response is checked");
-  assert.ok(cacheWrite > successCheck, "local cache is written only after successful server save");
+test("draft setup has no browser-local workflow source of truth", () => {
+  assert.doesNotMatch(source, /localStorage|sessionStorage/);
 });
 
-test("draft persistence never requests activation or execution", () => {
-  const saveStart = source.indexOf("async function saveDraft()");
-  const saveEnd = source.indexOf("\n  const currentStep", saveStart);
-  const saveBody = source.slice(saveStart, saveEnd);
-  assert.doesNotMatch(saveBody, /status:\s*["']active["']/);
-  assert.doesNotMatch(saveBody, /\/activate|\/execute|\/run\b/);
-});
-
-test("save button exposes a pending state to prevent repeated submissions", () => {
-  assert.match(source, /if \(savingDraft\) return/);
-  assert.match(source, /disabled=\{savingDraft\}/);
-  assert.match(source, /savingDraft \? "Saving…" : "Save draft"/);
-});
-
-test("draft save blocks missing or invalid action configuration before calling persistence APIs", () => {
-  const saveStart = source.indexOf("async function saveDraft()");
-  const saveEnd = source.indexOf("\n  const currentStep", saveStart);
-  const saveBody = source.slice(saveStart, saveEnd);
-  assert.match(source, /function getActionConfigurationIssues\(\): string\[\]/);
-  assert.match(saveBody, /const actionIssues = getActionConfigurationIssues\(\)/);
-  assert.match(saveBody, /if \(actionIssues.length \|\| registryIssues.length\)/);
-  assert.match(saveBody, /if \(!aiRegistrySteps && catalogLoading\)/);
-  assert.match(saveBody, /if \(!aiRegistrySteps && catalogError\)/);
-  assert.ok(saveBody.indexOf("getActionConfigurationIssues()") < saveBody.indexOf('fetch("/api/workflows"'));
+test("Playbook setup never activates or dispatches the generated workflow", () => {
+  assert.doesNotMatch(source, /status:\s*["']active["']/);
+  assert.doesNotMatch(source, /\/activate|\/execute|\/dispatch|\/run\b/);
 });
