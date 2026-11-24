@@ -366,7 +366,7 @@ async function persistCheckpoint(
   if (error) throw new Error("CHECKPOINT_WRITE_FAILED");
 }
 
-export async function runDurableWorker() {
+async function runDurableWorkerPass() {
   let db: DbClient;
   try { db = client(); } catch {
     throw new Error("WORKER_DATABASE_NOT_CONFIGURED");
@@ -701,4 +701,26 @@ export async function runDurableWorker() {
     }
   }
   return { claimed: data.length, succeeded, retried, deadLettered, leaseLost, cancelled };
+}
+
+/**
+ * Keep short, bounded transient retries inside the dispatch wake-up. The
+ * database remains authoritative: if this function is interrupted, leases and
+ * retry_wait state are recovered by the next worker tick. 5s/10s matches the
+ * database backoff for attempts 1 and 2; no unbounded polling is performed.
+ */
+export async function runDurableWorker() {
+  const total = { claimed: 0, succeeded: 0, retried: 0, deadLettered: 0, leaseLost: 0, cancelled: 0 };
+  for (let pass = 0; pass < 3; pass++) {
+    const result = await runDurableWorkerPass();
+    total.claimed += result.claimed;
+    total.succeeded += result.succeeded;
+    total.retried += result.retried;
+    total.deadLettered += result.deadLettered;
+    total.leaseLost += result.leaseLost;
+    total.cancelled += result.cancelled;
+    if (result.retried === 0 || pass === 2) break;
+    await new Promise((resolve) => setTimeout(resolve, pass === 0 ? 5000 : 10000));
+  }
+  return total;
 }
