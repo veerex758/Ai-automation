@@ -132,6 +132,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const { data: activePlaybooks, error: activePlaybookError } = await supabase.from("workflows")
+      .select("id,version").eq("workspace_id", workspace.id).eq("status", "active")
+      .contains("definition", { playbook: { schema: "rexnora.playbook", schemaVersion: 1 } }).limit(2);
+    if (activePlaybookError) throw activePlaybookError;
+    if ((activePlaybooks ?? []).length > 1) throw new Error("MULTIPLE_ACTIVE_PLAYBOOKS_FOR_WORKSPACE");
+    const activePlaybook = activePlaybooks?.[0] ?? null;
+
     const score = scoreRealEstateLead({
       transactionType: lead.transaction_type, propertyType: lead.property_type,
       preferredLocation: lead.preferred_location, budgetMin: lead.budget_min, budgetMax: lead.budget_max,
@@ -139,6 +146,8 @@ export async function POST(request: NextRequest) {
     });
     const { data: created, error } = await supabase.from("real_estate_leads").insert({
       ...lead, workspace_id: workspace.id, created_by: user.id,
+      workflow_id: activePlaybook?.id ?? null,
+      playbook_version: activePlaybook?.version ?? null,
       lead_score: score.score, lead_temperature: score.temperature, score_factors: score.factors,
     }).select("*").single();
     if (error?.code === "23505" && lead.source_event_id) {
