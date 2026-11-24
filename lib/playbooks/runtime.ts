@@ -7,7 +7,7 @@ import playbookDefinition from "@/lib/playbooks/definition.cjs";
 const { validatePlaybookDefinition } = playbookDefinition;
 type Permission = "auto" | "ask_first" | "never";
 type DecisionType = "action_approval" | "qualification_review" | "provider_failure";
-type RegisteredStep = { id: string; nodeId: string; operationId: string; kind: string; input: Record<string, unknown>; branch?: { fromStepId: string; route: string } };
+type RegisteredStep = { id: string; nodeId: string; operationId: string; kind: string; input: Record<string, unknown>; branchPaths?: Array<Array<{ fromStepId: string; route: string }>> };
 type Policy = { stepId: string; nodeId: string; operationId: string; permission: Permission };
 type Playbook = {
   schema: "rexnora.playbook";
@@ -79,9 +79,11 @@ export function isPlaybookActionOnSelectedBranch(
 ): boolean {
   if (runtime.mode !== "playbook") return false;
   const step = runtime.steps?.find((candidate) => candidate.id === policy.stepId);
-  if (!step?.branch) return true;
-  const selected = ruleResults.find((rule) => rule.nodeId === step.branch?.fromStepId);
-  return selected?.route === step.branch.route;
+  if (!step?.branchPaths?.length) return true;
+  return step.branchPaths.some((path) => path.every((condition) => {
+    const selected = ruleResults.find((rule) => rule.nodeId === condition.fromStepId);
+    return selected?.route === condition.route;
+  }));
 }
 
 export async function requestOrReadPlaybookDecision(args: {
