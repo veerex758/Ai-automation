@@ -62,7 +62,7 @@ test("expired leased jobs with a cancellation request are cancelled, never recla
 test("scheduled worker recovery is recurring and environment-gated", () => {
   assert.equal(vercelConfig.schedules["workflow-scheduler-tick"].schedule, "*/30 * * * *");
   assert.equal(vercelConfig.schedules["workflow-scheduler-tick"].path, "/api/internal/scheduler");
-  assert.equal(vercelConfig.schedules["durable-worker-recovery"].schedule, "0 * * * *");
+  assert.equal(vercelConfig.schedules["durable-worker-recovery"].schedule, "*/30 * * * *");
   assert.equal(vercelConfig.schedules["durable-worker-recovery"].function, "api/worker-sweep");
   assert.equal(vercelConfig.functions["api/worker-sweep.ts"].experimentalTriggers[0].type, "schedule/v1beta");
   assert.match(privateWorkerSchedule, /AIVANTA_DURABLE_WORKER_SCHEDULE_ENABLED !== "true"/);
