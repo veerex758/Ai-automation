@@ -89,7 +89,9 @@ begin
       and (j.status = 'waiting' or j.attempts < j.max_attempts)
       and not (j.execution_mode = 'live' and j.max_attempts > 1
         and j.created_at < now() - interval '20 hours')
-    order by j.available_at, j.created_at
+    order by
+    case when j.status = 'retry_wait' then 0 when j.status = 'running' then 1 else 2 end,
+    j.available_at, j.created_at
     for update skip locked
     limit p_limit
   )
