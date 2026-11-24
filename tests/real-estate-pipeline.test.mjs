@@ -38,7 +38,6 @@ test("Playbook execution uses the exact provider account selected and checked at
   assert.match(pipeline, /runtime\.mode === "playbook"/);
 });
 
-
 test("Gemini qualification receives no direct contact identifiers and redacts contact details in free text", () => {
   const start = pipeline.indexOf("function qualificationInput(");
   const end = pipeline.indexOf("\nfunction mergeQualification(", start);
@@ -78,6 +77,35 @@ test("numeric scores are calculated by the deterministic scorer, not Gemini temp
   assert.doesNotMatch(pipeline, /lead_score:\s*qualification\.temperature/);
 });
 
+test("real-estate template gallery exposes four distinct automation setup paths", () => {
+  const gallery = read("../app/dashboard/section-page.tsx");
+  const playbookSetup = read("../app/dashboard/playbooks/new/page.tsx");
+  const realEstatePage = read("../app/dashboard/real-estate/page.tsx");
+  for (const [name, href] of [
+    ["Instant Speed-to-Lead & Qualification", "#speed-to-lead"],
+    ["Property Inspection & Calendar Booking", "#inspection-booking"],
+    ["90-Day Buyer & Investor Follow-Up", "/dashboard/real-estate#followups"],
+    ["Real Estate Back-Office Automation", "#back-office"],
+  ]) {
+    assert.ok(gallery.includes(name), "missing template " + name);
+    assert.ok(gallery.includes(href), "missing template destination " + href);
+  }
+  assert.match(playbookSetup, /whatsapp_business\.send_template/);
+  assert.match(playbookSetup, /google_calendar\.create_event/);
+  assert.match(playbookSetup, /exact match before creating a contact/);
+  assert.match(realEstatePage, /window\.location\.hash==="#followups"/);
+});
+
+test("real-estate nurture is spread across 90 days using the existing five-step queue", () => {
+  const scoring = read("../lib/real-estate/lead-scoring.ts");
+  assert.match(scoring, /sequence: 1, ms: 0, delayLabel: "Immediately"/);
+  assert.match(scoring, /sequence: 2, ms: 1 \* 24 \* 60 \* 60 \* 1000, delayLabel: "1 day"/);
+  assert.match(scoring, /sequence: 3, ms: 7 \* 24 \* 60 \* 60 \* 1000, delayLabel: "7 days"/);
+  assert.match(scoring, /sequence: 4, ms: 30 \* 24 \* 60 \* 60 \* 1000, delayLabel: "30 days"/);
+  assert.match(scoring, /sequence: 5, ms: 90 \* 24 \* 60 \* 60 \* 1000, delayLabel: "90 days"/);
+  assert.match(read("../app/dashboard/real-estate/page.tsx"), /"Immediately","1 day","7 days","30 days","90 days"/);
+});
+
 test("AI follow-up drafts are persisted only for email leads with recorded consent", () => {
   assert.match(pipeline, /!lead\.consent_to_contact \|\| lead\.contact_preference !== "email" \|\| !lead\.email/);
   assert.match(pipeline, /qualification\.followupMessages\[index\]/);
@@ -100,20 +128,15 @@ test("follow-up delivery goes through the registered Resend operation with a sta
   assert.match(emailNode, /EMAIL_PROVIDER_UNAVAILABLE/);
 });
 
+test("manual real-estate lead records the selected contact channel in its consent text", () => {
+  assert.match(read("../app/dashboard/real-estate/page.tsx"), /Customer explicitly agreed to follow-up contact by \+leadForm\.contactPreference/);
+});
+
 test("public and authenticated lead creation trigger the durable pipeline and repair duplicate side effects", () => {
   assert.match(intake, /processRealEstateLeadPipeline/);
   assert.match(intake, /ensurePublicLeadSideEffects/);
   assert.match(manualLead, /processRealEstateLeadPipeline/);
   assert.match(manualLead, /ensureLeadSideEffects/);
-});
-
-test("both public-form and manual leads bind to the exact active Playbook version", () => {
-  for (const route of [intake, manualLead]) {
-    assert.match(route, /\.eq\("status",\s*"active"\)/);
-    assert.match(route, /schema:\s*"rexnora\.playbook"/);
-    assert.match(route, /workflow_id:\s*activePlaybook\?\.id\s*\?\?\s*null/);
-    assert.match(route, /playbook_version:\s*activePlaybook\?\.version\s*\?\?\s*null/);
-  }
 });
 
 test("scheduled workers are authenticated and remain behind explicit live-execution switches", () => {
@@ -133,3 +156,13 @@ test("duplicate public intake acknowledgements do not disclose an existing lead 
   assert.match(duplicateBranch, /return NextResponse\.json\(\{accepted:true,duplicate:true\}/);
   assert.doesNotMatch(duplicateBranch, /full_name:prior\.full_name|lead_score:prior\.lead_score|lead_temperature:prior\.lead_temperature|pipeline\},\{status:200/);
 });
+
+test("both public-form and manual leads bind to the exact active Playbook version", () => {
+  for (const route of [intake, manualLead]) {
+    assert.match(route, /\.eq\("status",\s*"active"\)/);
+    assert.match(route, /schema:\s*"rexnora\.playbook"/);
+    assert.match(route, /workflow_id:\s*activePlaybook\?\.id\s*\?\?\s*null/);
+    assert.match(route, /playbook_version:\s*activePlaybook\?\.version\s*\?\?\s*null/);
+  }
+});
+
