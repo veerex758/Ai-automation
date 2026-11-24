@@ -68,7 +68,9 @@ export default function NewPlaybookPage() {
     try {
       const prompt = [
         "Create a real-estate agency Playbook for this business outcome: " + outcome.trim(),
-        "Only use registered Rexnora operations. Do not invent integrations, tools, data sources or delivery channels.",
+        "For this first real-estate pilot, use only webhooks.receive_event or manual.start as the trigger, Gemini qualify_real_estate_lead for qualification, IF evaluate for rules, and optionally email send_email for the agency alert.",
+        "Do not use Switch, WhatsApp, Google Calendar, CRM writes, or any other provider/action in this first Playbook. Those operations are not enabled in this pilot runtime.",
+        "Do not invent integrations, tools, data sources or delivery channels. Use registered Rexnora operations only.",
         "Gemini may extract and classify enquiry details into structured fields. Use deterministic IF conditions for explicit business rules.",
         "Only use Resend to notify a specifically approved agency inbox. Do not contact the property enquiry customer unless a separate consent-aware process is explicitly represented.",
         "Keep the graph simple and connected. Include a supported intake trigger, qualification where available, explicit IF branches for the stated rules, and an agency notification only if a supported registered operation exists.",
