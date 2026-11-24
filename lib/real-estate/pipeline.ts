@@ -439,6 +439,123 @@ async function sendAgentNotifications(
   return { ok: true as const };
 }
 
+async function sendConsentedWhatsApp(
+  db: ServiceClient,
+  claim: PipelineClaim,
+  lead: LeadRow,
+  runtime: Awaited<ReturnType<typeof loadPlaybookRuntime>>,
+  ruleResults: Array<{ nodeId: string; route: string | null }>,
+): Promise<"sent" | "skipped" | "pending"> {
+  if (runtime.mode !== "playbook") return "skipped";
+  const policy = getPlaybookPolicy(runtime, "whatsapp_business", "send_template");
+  if (!policy || policy.permission === "never" || !isPlaybookActionOnSelectedBranch(runtime, policy, ruleResults)) {
+    return "skipped";
+  }
+
+  const consentText = (lead.consent_text ?? "").toLowerCase();
+  const consentRecorded = lead.consent_to_contact === true &&
+    lead.contact_preference === "whatsapp" &&
+    Boolean(lead.consent_at && Number.isFinite(Date.parse(lead.consent_at))) &&
+    /whatsapp/.test(consentText);
+  if (!consentRecorded || !lead.phone || !/^\+[1-9]\d{7,14}$/.test(lead.phone)) {
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: lead.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_skipped",
+      details: { reason: "WHATSAPP_CHANNEL_CONSENT_REQUIRED", channel: lead.contact_preference },
+    });
+    return "skipped";
+  }
+
+  const approval = await requestOrReadPlaybookDecision({
+    db, lead, runtime, type: "action_approval", policy,
+    reason: "The Playbook requires approval before sending the approved WhatsApp template to this consenting customer.",
+    leaseToken: claim.lease_token,
+  });
+  if (approval.state === "pending") return "pending";
+  if (approval.state === "denied") return "skipped";
+
+  const configured = await approvedCredentials(db, claim.workspace_id, "whatsapp_business", "whatsapp_business", "send_template", true);
+  if (!configured.ok) {
+    if (runtime.definition.review.reviewProviderFailures) {
+      const review = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "provider_failure", policy,
+        nodeId: "whatsapp_business", operationId: "send_template",
+        reason: "WhatsApp delivery is blocked until the provider connection and operation approval are verified: " + configured.code,
+        leaseToken: claim.lease_token,
+      });
+      if (review.state === "pending") return "pending";
+    }
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: lead.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_blocked",
+      details: { reason: configured.code, channel: "whatsapp" },
+    });
+    return "skipped";
+  }
+
+  const idempotencyKey = "real-estate:" + lead.id + ":whatsapp:welcome:v1";
+  const { data: delivery, error: deliveryError } = await db.from("real_estate_channel_deliveries").insert({
+    workspace_id: claim.workspace_id,
+    lead_id: lead.id,
+    channel: "whatsapp",
+    sequence: 1,
+    status: "sending",
+    idempotency_key: idempotencyKey,
+  }).select("id,status").single();
+  if (deliveryError?.code === "23505") {
+    const { data: prior, error: priorError } = await db.from("real_estate_channel_deliveries")
+      .select("id,status").eq("workspace_id", claim.workspace_id)
+      .eq("idempotency_key", idempotencyKey).maybeSingle();
+    if (priorError) throw new Error("WHATSAPP_DELIVERY_LOOKUP_FAILED");
+    if (prior?.status === "accepted") {
+      await markPlaybookDecisionExecuted(db, lead, approval.decisionId);
+      return "sent";
+    }
+    // A sending/unknown/failed row is never re-sent automatically. This avoids
+    // duplicate customer messages after an ambiguous provider timeout.
+    return "skipped";
+  }
+  if (deliveryError || !delivery) throw new Error("WHATSAPP_DELIVERY_LEDGER_WRITE_FAILED");
+
+  const operation = findOperation("whatsapp_business", "send_template", "action");
+  if (!operation) {
+    await db.from("real_estate_channel_deliveries").update({
+      status: "failed", last_error_code: "WHATSAPP_OPERATION_NOT_REGISTERED", updated_at: new Date().toISOString(),
+    }).eq("id", delivery.id).eq("workspace_id", claim.workspace_id);
+    return "skipped";
+  }
+  try {
+    const result = await operation.run(makeNodeContext({ whatsapp_business: configured.credentials }), { to: lead.phone }) as { messageId?: string };
+    if (typeof result?.messageId !== "string" || !result.messageId) throw new Error("WHATSAPP_PROVIDER_RESULT_INVALID");
+    const now = new Date().toISOString();
+    const { error: acceptedError } = await db.from("real_estate_channel_deliveries").update({
+      status: "accepted", provider_message_id: result.messageId, accepted_at: now, updated_at: now, last_error_code: null,
+    }).eq("id", delivery.id).eq("workspace_id", claim.workspace_id).eq("status", "sending");
+    if (acceptedError) throw new Error("WHATSAPP_DELIVERY_FINALIZE_FAILED");
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_template_accepted",
+      details: { provider: "whatsapp_business", providerMessageId: result.messageId, sequence: 1 },
+    });
+    await markPlaybookDecisionExecuted(db, lead, approval.decisionId);
+    return "sent";
+  } catch (error) {
+    const code = safeErrorCode(error, "WHATSAPP_SEND_FAILED");
+    const uncertain = /NETWORK|TIMEOUT|ABORT|FETCH|PROVIDER_RESULT_INVALID/.test(code);
+    await db.from("real_estate_channel_deliveries").update({
+      status: uncertain ? "unknown" : "failed",
+      last_error_code: code,
+      updated_at: new Date().toISOString(),
+    }).eq("id", delivery.id).eq("workspace_id", claim.workspace_id).eq("status", "sending");
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_delivery_failed",
+      details: { errorCode: code, deliveryStatus: uncertain ? "unknown" : "failed" },
+    });
+    return "skipped";
+  }
+}
+
 async function processClaim(db: ServiceClient, claim: PipelineClaim) {
   const { data: leadData, error } = await db.from("real_estate_leads")
     .select("*")
@@ -681,6 +798,9 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       return "failed";
     }
   }
+
+  const whatsappResult = await sendConsentedWhatsApp(db, claim, lead, runtime, ruleResults);
+  if (whatsappResult === "pending") return "blocked";
 
   await updateClaim(db, claim, {
     pipeline_status: "completed",
