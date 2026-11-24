@@ -144,6 +144,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
           return NextResponse.json({ error: policy.error || "Playbook rules and permissions are invalid.", code: "PLAYBOOK_POLICY_INVALID" }, { status: 422 });
         }
         steps = registered.steps as RegisteredWorkflowStep[];
+        const hasAgencyEmailAction = steps.some((step) =>
+          step.kind === "action" && step.nodeId === "email" && step.operationId === "send_email"
+        );
+        if (hasAgencyEmailAction) {
+          const { data: approvedRecipients, error: recipientsError } = await auth.supabase
+            .from("real_estate_notification_recipients")
+            .select("email")
+            .eq("workspace_id", candidate.workspace_id)
+            .eq("active", true)
+            .limit(25);
+          if (recipientsError) throw recipientsError;
+          const validRecipients = (approvedRecipients ?? []).filter((recipient) =>
+            typeof recipient.email === "string" && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient.email.trim())
+          );
+          if (!validRecipients.length) {
+            return NextResponse.json({
+              error: "Add and approve at least one agency alert recipient in the Real Estate workspace before activating this Playbook.",
+              code: "AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED",
+            }, { status: 409 });
+          }
+        }
       } else if (stored?.format === "aivanta-registry-v1") {
         const checked = validateRegisteredSteps(stored.steps);
         if (!checked.steps) return NextResponse.json({ error: checked.error || "Workflow registry definition is invalid." }, { status: 422 });
@@ -168,7 +189,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         }
       }
 
-      const livePolicyError = validateDurableLiveSteps(steps);
+      const livePolicyError = validateDurableLiveSteps(steps, { skipEmailRecipientAllowlist: (candidate.definition as Record<string, unknown> | null)?.playbook !== undefined });
       if (livePolicyError) {
         return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
       }
