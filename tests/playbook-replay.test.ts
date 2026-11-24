@@ -65,10 +65,11 @@ test("a never-permitted action is always displayed as blocked", () => {
 });
 
 test("replay marks actions excluded by the deterministic selected branch", () => {
-  const branchedSteps = [
-    ...steps,
-    { id: "notify", nodeId: "email", operationId: "send_email", kind: "action", input: {}, branchPaths: [[{ fromStepId: "condition-budget", route: "false" }]] },
-  ];
+  const branchedSteps = steps.map((step) =>
+    step.id === "notify"
+      ? { ...step, branchPaths: [[{ fromStepId: "condition-budget", route: "false" }]] }
+      : step
+  );
   const result = replayPlaybookAgainstLead({
     ...playbook,
     actionPolicies: [playbook.actionPolicies[1]],
