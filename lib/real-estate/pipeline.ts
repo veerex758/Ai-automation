@@ -5,6 +5,7 @@ import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-es
 import { scoreRealEstateLead, type RealEstateLeadInput } from "@/lib/real-estate/lead-scoring";
 import { findOperation } from "@/nodes/registry";
 import { getWorkerOperationMapping } from "@/lib/workflows/worker-operation-map";
+import { isProviderLiveEnabled } from "@/lib/workflows/provider-live-gates";
 import type { NodeContext } from "@/nodes/types";
 import {
   getPlaybookPolicy, isPlaybookActionOnSelectedBranch, loadPlaybookRuntime,
@@ -40,6 +41,8 @@ type LeadRow = {
   qualification_summary: string | null;
   suggested_reply: string | null;
   consent_to_contact: boolean;
+  consent_text: string | null;
+  consent_at: string | null;
   contact_preference: string;
   created_at: string;
   pipeline_attempt_count: number | string;
@@ -129,9 +132,9 @@ function makeNodeContext(credentials: Record<string, Record<string, string>>): N
 async function approvedCredentials(
   db: ServiceClient,
   workspaceId: string,
-  provider: "gemini" | "resend",
-  nodeId: "gemini" | "email",
-  operationId: "qualify_real_estate_lead" | "send_email",
+  provider: string,
+  nodeId: string,
+  operationId: string,
   selectedConnectionId?: string,
   requireSelectedConnection = false,
 ): Promise<CredentialResult> {
@@ -179,16 +182,19 @@ async function approvedCredentials(
     .select("encrypted_credentials,encryption_version")
     .eq("integration_id", integration.id)
     .maybeSingle();
-  if (secretError || !secret || secret.encryption_version !== "v1") {
+  if (secretError || !secret || !["v1", "v2"].includes(secret.encryption_version)) {
     return { ok: false, code: provider.toUpperCase() + "_CREDENTIALS_UNAVAILABLE" };
   }
   try {
+    const associatedData = secret.encryption_version === "v2"
+      ? workspaceId + ":" + provider + ":" + integration.id
+      : workspaceId + ":" + provider;
     const decoded = decryptWorkspaceCredentials(
       secret.encrypted_credentials,
       undefined,
-      workspaceId + ":" + provider,
+      associatedData,
     );
-    const credentials = decoded[provider];
+    const credentials = (decoded as Record<string, Record<string, string>>)[provider];
     if (!credentials || Object.keys(credentials).length === 0) {
       return { ok: false, code: provider.toUpperCase() + "_CREDENTIALS_INCOMPLETE" };
     }
@@ -433,6 +439,398 @@ async function sendAgentNotifications(
   return { ok: true as const };
 }
 
+
+async function ensureBackOfficeTask(db: ServiceClient, lead: LeadRow) {
+  const idempotencyKey = "real-estate-new-enquiry-review:" + lead.id;
+  const dueAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const { error } = await db.from("real_estate_tasks").upsert({
+    workspace_id: lead.workspace_id,
+    lead_id: lead.id,
+    task_type: "new_enquiry_review",
+    title: "Review new property enquiry",
+    description: "Review the saved Gemini qualification, confirm ownership and record the next agency action.",
+    priority: lead.lead_temperature === "hot" ? "urgent" : lead.lead_temperature === "warm" ? "high" : "normal",
+    due_at: dueAt,
+    idempotency_key: idempotencyKey,
+  }, { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true });
+  if (error) throw new Error("REAL_ESTATE_BACK_OFFICE_TASK_WRITE_FAILED");
+
+  const { data: existing, error: lookupError } = await db.from("real_estate_lead_activities")
+    .select("id").eq("workspace_id", lead.workspace_id).eq("lead_id", lead.id)
+    .eq("activity_type", "lead.back_office_task_created")
+    .contains("details", { idempotencyKey }).limit(1).maybeSingle();
+  if (lookupError) throw new Error("REAL_ESTATE_BACK_OFFICE_TASK_AUDIT_LOOKUP_FAILED");
+  if (!existing) {
+    const { error: eventError } = await db.from("real_estate_lead_activities").insert({
+      workspace_id: lead.workspace_id,
+      lead_id: lead.id,
+      actor_user_id: null,
+      activity_type: "lead.back_office_task_created",
+      details: { idempotencyKey, taskType: "new_enquiry_review", priority: lead.lead_temperature },
+    });
+    if (eventError) throw new Error("REAL_ESTATE_BACK_OFFICE_TASK_AUDIT_WRITE_FAILED");
+  }
+}
+
+function recordDetails(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function resolveTemplateParameter(value: string, lead: LeadRow): string {
+  const fields: Record<string, unknown> = {
+    full_name: lead.full_name,
+    email: lead.email,
+    phone: lead.phone,
+    preferred_location: lead.preferred_location,
+    budget_min: lead.budget_min,
+    budget_max: lead.budget_max,
+    currency: lead.currency,
+    transaction_type: lead.transaction_type,
+    property_type: lead.property_type,
+    timeframe: lead.timeframe,
+    lead_score: lead.lead_score,
+    lead_temperature: lead.lead_temperature,
+    qualification_summary: lead.qualification_summary,
+  };
+  return value.replace(/\{\{\s*lead\.([a-z_]+)\s*\}\}/g, (_match, key: string) => {
+    const field = fields[key];
+    return field === null || field === undefined ? "" : String(field);
+  }).slice(0, 1024);
+}
+
+type ExternalActionResult = { state: "completed" | "skipped" | "blocked" | "retry"; code?: string };
+
+async function sendWhatsAppTemplate(
+  db: ServiceClient,
+  claim: PipelineClaim,
+  lead: LeadRow,
+  runtime: Awaited<ReturnType<typeof loadPlaybookRuntime>>,
+  ruleResults: Array<{ nodeId: string; route: string | null }>,
+): Promise<ExternalActionResult> {
+  if (runtime.mode !== "playbook") return { state: "skipped" };
+  const policy = getPlaybookPolicy(runtime, "whatsapp_business", "send_template");
+  if (!policy || policy.permission === "never" || !isPlaybookActionOnSelectedBranch(runtime, policy, ruleResults)) {
+    return { state: "skipped" };
+  }
+
+  // WhatsApp is a customer communication channel: require channel-specific,
+  // timestamped consent and a valid E.164 destination before touching providers.
+  if (!lead.consent_to_contact || !lead.consent_at || !lead.consent_text ||
+      !/whatsapp/i.test(lead.consent_text) || lead.contact_preference !== "whatsapp") {
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_action_skipped",
+      details: { reason: "CHANNEL_SPECIFIC_CONSENT_NOT_RECORDED", channel: "whatsapp" },
+    });
+    return { state: "skipped" };
+  }
+  if (!lead.phone || !/^\+[1-9]\d{7,14}$/.test(lead.phone)) {
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_action_skipped",
+      details: { reason: "WHATSAPP_E164_PHONE_REQUIRED", channel: "whatsapp" },
+    });
+    return { state: "skipped" };
+  }
+
+  if (!isProviderLiveEnabled("whatsapp_business", process.env.AIVANTA_LIVE_INTEGRATIONS)) {
+    return { state: "blocked", code: "WHATSAPP_BUSINESS_LIVE_GATE_DISABLED" };
+  }
+  const step = runtime.steps?.find((candidate) => candidate.id === policy.stepId);
+  if (!step?.connectionId) return { state: "blocked", code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED" };
+
+  const gate = await requestOrReadPlaybookDecision({
+    db, lead, runtime, type: "action_approval", policy,
+    reason: "The Playbook requires approval before sending this approved WhatsApp template.",
+    leaseToken: claim.lease_token,
+  });
+  if (gate.state !== "allow") return { state: "blocked", code: "WHATSAPP_ACTION_APPROVAL_REQUIRED" };
+
+  const configured = await approvedCredentials(
+    db, claim.workspace_id, "whatsapp_business", "whatsapp_business", "send_template",
+    step.connectionId, true,
+  );
+  if (!configured.ok) return { state: "blocked", code: configured.code };
+
+  const { data: existing, error: lookupError } = await db.from("real_estate_channel_deliveries")
+    .select("id,status,attempt_count,max_attempts,next_attempt_at,last_error_code")
+    .eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id)
+    .eq("channel", "whatsapp").eq("sequence", 1).maybeSingle();
+  if (lookupError) return { state: "blocked", code: "WHATSAPP_DELIVERY_LOOKUP_FAILED" };
+  if (existing?.status === "accepted") return { state: "completed" };
+  if (existing?.status === "cancelled" || existing?.status === "blocked") return { state: "blocked", code: existing.last_error_code ?? "WHATSAPP_DELIVERY_BLOCKED" };
+  if (existing?.status === "unknown" || existing?.status === "sending") {
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_delivery_needs_reconciliation",
+      details: { deliveryId: existing.id, reason: "A previous provider request may have been accepted; automatic resend is disabled." },
+    });
+    return { state: "blocked", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
+  }
+  if (existing?.status === "failed") {
+    if (!String(existing.last_error_code ?? "").includes("RATE_LIMITED") ||
+        Number(existing.attempt_count) >= Number(existing.max_attempts) ||
+        new Date(existing.next_attempt_at).getTime() > Date.now()) {
+      return { state: "blocked", code: existing.last_error_code ?? "WHATSAPP_RETRY_NOT_ALLOWED" };
+    }
+  }
+
+  const nextAttempt = existing ? Number(existing.attempt_count) + 1 : 1;
+  if (existing) {
+    const { data: claimed, error } = await db.from("real_estate_channel_deliveries")
+      .update({ status: "sending", attempt_count: nextAttempt, last_attempt_at: new Date().toISOString(), last_error_code: null })
+      .eq("id", existing.id).eq("workspace_id", claim.workspace_id).eq("status", "failed")
+      .select("id").maybeSingle();
+    if (error || !claimed) return { state: "blocked", code: "WHATSAPP_DELIVERY_RETRY_CLAIM_FAILED" };
+  } else {
+    const { error } = await db.from("real_estate_channel_deliveries").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, channel: "whatsapp", sequence: 1,
+      status: "sending", idempotency_key: "real-estate-whatsapp:" + lead.id,
+      attempt_count: 1, max_attempts: 3, last_attempt_at: new Date().toISOString(),
+    });
+    if (error) return { state: "blocked", code: error.code === "23505" ? "WHATSAPP_DELIVERY_ALREADY_CLAIMED" : "WHATSAPP_DELIVERY_CREATE_FAILED" };
+  }
+
+  const operation = findOperation("whatsapp_business", "send_template", "action");
+  if (!operation) {
+    await db.from("real_estate_channel_deliveries").update({ status: "blocked", last_error_code: "WHATSAPP_OPERATION_NOT_REGISTERED" })
+      .eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("channel", "whatsapp").eq("sequence", 1);
+    return { state: "blocked", code: "WHATSAPP_OPERATION_NOT_REGISTERED" };
+  }
+  const configuredInput = recordDetails(step.input);
+  const parameters = Array.isArray(configuredInput.bodyParameters)
+    ? configuredInput.bodyParameters.filter((item): item is string => typeof item === "string").slice(0, 20).map((item) => resolveTemplateParameter(item, lead))
+    : [];
+  const input: Record<string, unknown> = { to: lead.phone, bodyParameters: parameters };
+  if (typeof configuredInput.templateName === "string") input.templateName = configuredInput.templateName;
+  if (typeof configuredInput.language === "string") input.language = configuredInput.language;
+  try {
+    const result = await operation.run(makeNodeContext({ whatsapp_business: configured.credentials }), input) as { messageId?: string };
+    if (typeof result?.messageId !== "string" || !result.messageId) throw new Error("WHATSAPP_PROVIDER_MESSAGE_ID_MISSING");
+    const { error } = await db.from("real_estate_channel_deliveries").update({
+      status: "accepted", provider_message_id: result.messageId, accepted_at: new Date().toISOString(),
+      last_error_code: null,
+    }).eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("channel", "whatsapp").eq("sequence", 1).eq("status", "sending");
+    if (error) return { state: "blocked", code: "WHATSAPP_DELIVERY_OUTCOME_WRITE_FAILED" };
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.whatsapp_template_accepted",
+      details: { messageId: result.messageId, templateName: typeof configuredInput.templateName === "string" ? configuredInput.templateName : "workspace_default" },
+    });
+    await markPlaybookDecisionExecuted(db, lead, gate.decisionId);
+    return { state: "completed" };
+  } catch (error) {
+    const code = safeErrorCode(error, "WHATSAPP_DELIVERY_UNKNOWN");
+    const rateLimited = /RATE_LIMITED/.test(code);
+    const definiteClientReject = /_HTTP_4\d\d/.test(code) && !/_HTTP_429/.test(code);
+    const nextStatus = rateLimited ? "failed" : definiteClientReject ? "blocked" : "unknown";
+    const { error: persistError } = await db.from("real_estate_channel_deliveries").update({
+      status: nextStatus,
+      last_error_code: code,
+      next_attempt_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    }).eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("channel", "whatsapp").eq("sequence", 1);
+    if (persistError) return { state: "blocked", code: "WHATSAPP_DELIVERY_OUTCOME_WRITE_FAILED" };
+    if (nextStatus === "unknown") {
+      if (runtime.definition?.review.reviewProviderFailures) {
+        const failureGate = await requestOrReadPlaybookDecision({
+          db, lead, runtime, type: "provider_failure", policy,
+          reason: "WhatsApp provider outcome is unknown; reconcile the Meta message before any resend. " + code,
+          leaseToken: claim.lease_token,
+        });
+        if (failureGate.state === "pending") return { state: "blocked", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
+      }
+      return { state: "blocked", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
+    }
+    return { state: "blocked", code };
+  }
+}
+
+const CRM_PROVIDERS = ["pipedrive", "zoho_crm", "freshsales"] as const;
+type CrmProvider = typeof CRM_PROVIDERS[number];
+
+async function syncRealEstateCrmContact(
+  db: ServiceClient,
+  claim: PipelineClaim,
+  lead: LeadRow,
+  runtime: Awaited<ReturnType<typeof loadPlaybookRuntime>>,
+  ruleResults: Array<{ nodeId: string; route: string | null }>,
+): Promise<ExternalActionResult> {
+  if (runtime.mode !== "playbook") return { state: "skipped" };
+  const provider = CRM_PROVIDERS.find((candidate) =>
+    runtime.steps?.some((step) => step.nodeId === candidate && step.operationId === "search_contacts") &&
+    runtime.steps?.some((step) => step.nodeId === candidate && step.operationId === "execute")
+  ) as CrmProvider | undefined;
+  if (!provider) return { state: "skipped" };
+
+  const searchStep = runtime.steps?.find((step) => step.nodeId === provider && step.operationId === "search_contacts");
+  const createStep = runtime.steps?.find((step) => step.nodeId === provider && step.operationId === "execute");
+  const searchPolicy = getPlaybookPolicy(runtime, provider, "search_contacts");
+  const createPolicy = getPlaybookPolicy(runtime, provider, "execute");
+  if (!searchStep || !createStep || !searchPolicy || !createPolicy ||
+      !isPlaybookActionOnSelectedBranch(runtime, searchPolicy, ruleResults) ||
+      !isPlaybookActionOnSelectedBranch(runtime, createPolicy, ruleResults)) return { state: "skipped" };
+
+  if (!lead.consent_to_contact || !lead.consent_at || !lead.email) {
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_sync_skipped",
+      details: { provider, reason: "RECORDED_CONTACT_CONSENT_AND_EMAIL_REQUIRED" },
+    });
+    return { state: "skipped" };
+  }
+  if (!isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS)) {
+    return { state: "blocked", code: provider.toUpperCase() + "_LIVE_GATE_DISABLED" };
+  }
+  if (searchPolicy.permission === "never" || createPolicy.permission === "never") {
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_sync_skipped",
+      details: { provider, reason: "CRM_ACTION_DISABLED_BY_PLAYBOOK_POLICY" },
+    });
+    return { state: "skipped" };
+  }
+
+  const selectedConnectionId = searchStep.connectionId ?? createStep.connectionId;
+  if (!selectedConnectionId || (searchStep.connectionId && createStep.connectionId && searchStep.connectionId !== createStep.connectionId)) {
+    return { state: "blocked", code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED" };
+  }
+  const idempotencyKey = "real-estate-crm-contact:" + lead.id + ":" + provider;
+  const { data: prior, error: priorError } = await db.from("real_estate_crm_syncs")
+    .select("id,status,attempt_count,max_attempts,last_error_code,provider_contact_id")
+    .eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("provider", provider).maybeSingle();
+  if (priorError) return { state: "blocked", code: "CRM_SYNC_LOOKUP_FAILED" };
+  if (prior?.status === "created" || prior?.status === "matched") return { state: "completed" };
+  if (prior?.status === "blocked") return { state: "blocked", code: prior.last_error_code ?? "CRM_SYNC_BLOCKED" };
+
+  const searchGate = await requestOrReadPlaybookDecision({
+    db, lead, runtime, type: "action_approval", policy: searchPolicy,
+    reason: "The Playbook requires approval before searching the selected CRM for this exact email.",
+    leaseToken: claim.lease_token,
+  });
+  if (searchGate.state !== "allow") return { state: "blocked", code: "CRM_SEARCH_APPROVAL_REQUIRED" };
+  const searchCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "search_contacts", selectedConnectionId, true);
+  if (!searchCredentials.ok) return { state: "blocked", code: searchCredentials.code };
+  const searchOperation = findOperation(provider, "search_contacts", "action");
+  const createOperation = findOperation(provider, "execute", "action");
+  if (!searchOperation || !createOperation) return { state: "blocked", code: "CRM_OPERATION_NOT_REGISTERED" };
+
+  let matches: Array<{ contactId: string; email?: string }> = [];
+  try {
+    const searchResult = await searchOperation.run(
+      makeNodeContext({ [provider]: searchCredentials.credentials }),
+      { email: lead.email },
+    ) as { contacts?: Array<{ contactId: string; email?: string }> };
+    matches = Array.isArray(searchResult.contacts)
+      ? searchResult.contacts.filter((item) => item && typeof item.contactId === "string" &&
+          typeof item.email === "string" && item.email.toLowerCase() === String(lead.email).toLowerCase())
+      : [];
+  } catch (error) {
+    const code = safeErrorCode(error, "CRM_SEARCH_FAILED");
+    return { state: "blocked", code };
+  }
+
+  if (matches.length > 1) {
+    await db.from("real_estate_crm_syncs").upsert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, provider,
+      status: "unknown", idempotency_key: idempotencyKey, last_error_code: "CRM_DUPLICATE_EMAIL_MATCHES",
+    }, { onConflict: "workspace_id,lead_id,provider" });
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_sync_needs_review",
+      details: { provider, reason: "CRM_DUPLICATE_EMAIL_MATCHES", matchCount: matches.length },
+    });
+    return { state: "blocked", code: "CRM_DUPLICATE_EMAIL_MATCHES" };
+  }
+
+  if (matches.length === 1) {
+    const { error } = await db.from("real_estate_crm_syncs").upsert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, provider,
+      status: "matched", idempotency_key: idempotencyKey,
+      provider_contact_id: matches[0].contactId, accepted_at: new Date().toISOString(), last_error_code: null,
+    }, { onConflict: "workspace_id,lead_id,provider" });
+    if (error) return { state: "blocked", code: "CRM_SYNC_OUTCOME_WRITE_FAILED" };
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_contact_matched",
+      details: { provider, contactId: matches[0].contactId, idempotencyKey },
+    });
+    await markPlaybookDecisionExecuted(db, lead, searchGate.decisionId);
+    return { state: "completed" };
+  }
+
+  // A prior uncertain/creating state is never blindly repeated. The exact email
+  // search above is the reconciliation step; the owner must approve retry.
+  if (prior && ["unknown", "creating"].includes(prior.status)) {
+    const recovery = await requestOrReadPlaybookDecision({
+      db, lead, runtime, type: "provider_failure", policy: createPolicy,
+      reason: "The prior CRM create may have completed despite a missing response. Exact-email search found no matching contact; approve a single reconciled retry.",
+      leaseToken: claim.lease_token,
+    });
+    if (recovery.state !== "allow") return { state: "blocked", code: "CRM_CREATE_RECONCILIATION_APPROVAL_REQUIRED" };
+  }
+
+  const createGate = await requestOrReadPlaybookDecision({
+    db, lead, runtime, type: "action_approval", policy: createPolicy,
+    reason: "The Playbook requires approval before creating a new CRM contact.",
+    leaseToken: claim.lease_token,
+  });
+  if (createGate.state !== "allow") return { state: "blocked", code: "CRM_CREATE_APPROVAL_REQUIRED" };
+
+  const createCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "execute", selectedConnectionId, true);
+  if (!createCredentials.ok) return { state: "blocked", code: createCredentials.code };
+  const nameParts = lead.full_name.trim().split(/\s+/).filter(Boolean);
+  const contactName = { firstName: nameParts[0] || "Lead", lastName: nameParts.slice(1).join(" ") || "Lead" };
+  const createInput = provider === "freshsales"
+    ? { email: lead.email, ...contactName, ...(lead.phone ? { phone: lead.phone } : {}) }
+    : { email: lead.email, ...contactName, ...(lead.phone ? { phone: lead.phone } : {}) };
+
+  await db.from("real_estate_crm_syncs").upsert({
+    workspace_id: claim.workspace_id, lead_id: lead.id, provider,
+    status: "creating", idempotency_key: idempotencyKey,
+    attempt_count: Number(prior?.attempt_count ?? 0) + 1,
+    max_attempts: Number(prior?.max_attempts ?? 3), last_error_code: null,
+  }, { onConflict: "workspace_id,lead_id,provider" });
+
+  try {
+    const created = await createOperation.run(
+      makeNodeContext({ [provider]: createCredentials.credentials }),
+      createInput,
+    ) as { contactId?: string };
+    if (!created || typeof created.contactId !== "string" || !created.contactId) throw new Error("CRM_CONTACT_ID_MISSING");
+    const { error } = await db.from("real_estate_crm_syncs").update({
+      status: "created", provider_contact_id: created.contactId,
+      accepted_at: new Date().toISOString(), last_error_code: null,
+    }).eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("provider", provider);
+    if (error) return { state: "blocked", code: "CRM_SYNC_OUTCOME_WRITE_FAILED" };
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_contact_created",
+      details: { provider, contactId: created.contactId, idempotencyKey },
+    });
+    await markPlaybookDecisionExecuted(db, lead, searchGate.decisionId);
+    await markPlaybookDecisionExecuted(db, lead, createGate.decisionId);
+    return { state: "completed" };
+  } catch (error) {
+    const code = safeErrorCode(error, "CRM_CREATE_OUTCOME_UNKNOWN");
+    const rateLimited = /RATE_LIMITED/.test(code);
+    await db.from("real_estate_crm_syncs").update({
+      status: rateLimited ? "failed" : "unknown",
+      last_error_code: code,
+    }).eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("provider", provider);
+    if (!rateLimited && runtime.definition?.review.reviewProviderFailures) {
+      const failureGate = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "provider_failure", policy: createPolicy,
+        reason: "CRM contact creation outcome needs reconciliation before another create attempt. " + code,
+        leaseToken: claim.lease_token,
+      });
+      if (failureGate.state === "pending") return { state: "blocked", code: "CRM_CREATE_OUTCOME_UNKNOWN_REQUIRES_REVIEW" };
+    }
+    return { state: rateLimited ? "retry" : "blocked", code };
+  }
+}
+
 async function processClaim(db: ServiceClient, claim: PipelineClaim) {
   const { data: leadData, error } = await db.from("real_estate_leads")
     .select("*")
@@ -549,6 +947,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
   try {
     await ensureFollowupDrafts(db, lead, qualification);
     await ensureQualificationActivity(db, lead, claim.workspace_id, Number(lead.lead_score));
+    await ensureBackOfficeTask(db, lead);
   } catch (error) {
     const code = safeErrorCode(error, "LEAD_PIPELINE_PERSISTENCE_FAILED");
     await retryClaim(db, claim, lead, "pipeline", code, false);
@@ -684,6 +1083,28 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       }
       await retryClaim(db, claim, lead, "notification", code, /CONNECTION_NOT_VERIFIED|NOT_APPROVED|CREDENTIALS|EMAIL_NOT_FOUND/.test(code));
       return "failed";
+    }
+  }
+
+  if (runtime.mode === "playbook") {
+    const whatsapp = await sendWhatsAppTemplate(db, claim, lead, runtime, ruleResults);
+    if (whatsapp.state === "retry") {
+      await retryClaim(db, claim, lead, "pipeline", whatsapp.code ?? "WHATSAPP_RETRYABLE_FAILURE", false);
+      return "failed";
+    }
+    if (whatsapp.state === "blocked") {
+      await retryClaim(db, claim, lead, "pipeline", whatsapp.code ?? "WHATSAPP_ACTION_BLOCKED", true);
+      return "blocked";
+    }
+
+    const crm = await syncRealEstateCrmContact(db, claim, lead, runtime, ruleResults);
+    if (crm.state === "retry") {
+      await retryClaim(db, claim, lead, "pipeline", crm.code ?? "CRM_SYNC_RETRYABLE_FAILURE", false);
+      return "failed";
+    }
+    if (crm.state === "blocked") {
+      await retryClaim(db, claim, lead, "pipeline", crm.code ?? "CRM_ACTION_BLOCKED", true);
+      return "blocked";
     }
   }
 
