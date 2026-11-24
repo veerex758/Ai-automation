@@ -11,7 +11,7 @@ async function get(ctx: NodeContext, provider: string, url: string): Promise<Rec
   const response = await ctx.http.request({ url, method: "GET", headers: { Authorization: "Bearer " + token(ctx, provider) }, timeoutMs: 15000, retries: 0 });
   if (response.status < 200 || response.status >= 300) {
     ctx.logger.error("Google provider request failed", { provider, status: response.status });
-    throw new Error(response.status === 429 ? provider.toUpperCase() + "_RATE_LIMITED" : provider.toUpperCase() + "_REQUEST_FAILED");
+    throw new Error(response.status === 429 ? provider.toUpperCase() + "_RATE_LIMITED" : provider.toUpperCase() + "_HTTP_" + response.status);
   }
   if (!response.body || typeof response.body !== "object" || Array.isArray(response.body)) throw new Error(provider.toUpperCase() + "_INVALID_RESPONSE");
   return response.body as Record<string, unknown>;
