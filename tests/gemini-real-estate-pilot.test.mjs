@@ -57,3 +57,11 @@ test("webhook provisioning encrypts secrets and the builder makes activation exp
   assert.match(testPanel, /\/dispatch/);
   assert.match(testPanel, /idempotencyKey\.current/);
 });
+
+test("Playbook email recipients are approved through the real-estate workspace allowlist", () => {
+  assert.match(activation, /real_estate_notification_recipients/);
+  assert.match(activation, /AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED/);
+  assert.match(activation, /skipEmailRecipientAllowlist: \(candidate\.definition as Record<string, unknown> \| null\)\?\.playbook !== undefined/);
+  assert.match(pipeline, /real_estate_notification_recipients/);
+  assert.match(pipeline, /AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED/);
+});
