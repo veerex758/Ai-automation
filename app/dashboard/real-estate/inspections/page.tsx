@@ -125,13 +125,13 @@ export default function RealEstateInspectionsPage() {
   async function approve(booking: Booking) {
     setBusy(true); setError(""); setNotice("");
     try {
-      const result = await requestJson<{ status: string; eventUrl?: string; reconciled?: boolean }>(
+      const result = await requestJson<{ status: string; eventUrl?: string; reconciled?: boolean; invited?: boolean }>(
         "/api/real-estate/inspections/" + booking.id + "/approve",
         { method: "POST" },
       );
       setNotice(result.reconciled
-        ? "Existing Google Calendar event was reconciled. No duplicate was created."
-        : "Inspection approved and added to the selected Google Calendar. Customer invitations were not sent.");
+        ? "Existing Google Calendar event was reconciled. No duplicate was created." + (result.invited ? " The customer invitation is recorded on that event." : "")
+        : "Inspection approved and added to the selected Google Calendar." + (result.invited ? " The customer calendar invitation was sent." : " No customer invitation was sent."));
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not approve or reconcile this inspection.");
@@ -169,7 +169,7 @@ export default function RealEstateInspectionsPage() {
           </div> : <form className="re-form" onSubmit={reserve}>
             <div className="re-form-grid">
               <label>Customer / lead
-                <select required value={leadId} onChange={(event) => setLeadId(event.target.value)}>
+                <select required value={leadId} onChange={(event) => { setLeadId(event.target.value); setSendCustomerInvite(false); }}>
                   <option value="">Choose a lead</option>
                   {leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.full_name}{lead.email ? " · " + lead.email : ""}</option>)}
                 </select>
