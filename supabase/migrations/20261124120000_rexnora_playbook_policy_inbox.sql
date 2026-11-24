@@ -158,7 +158,7 @@ begin
            pipeline_next_attempt_at=now(),
            pipeline_last_error_code=null,
            qualification_status=case
-             when decision_row.node_id='gemini' and decision_row.decision_type='action_approval' then 'pending'
+             when decision_row.node_id='gemini' and decision_row.decision_type in ('action_approval','provider_failure') then 'pending'
              else qualification_status end,
            qualification_error_code=null,
            agent_notification_status=case
