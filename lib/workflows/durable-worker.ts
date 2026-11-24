@@ -708,14 +708,14 @@ async function runDurableWorkerPass() {
 }
 
 /**
- * Keep short, bounded transient retries inside the dispatch wake-up. The
- * database remains authoritative: if this function is interrupted, leases and
- * retry_wait state are recovered by the next worker tick. 5s/10s matches the
- * database backoff for attempts 1 and 2; no unbounded polling is performed.
+ * Drain due work within a strict invocation budget. A 10-second wait covers
+ * both database retry delays (5s then 10s), and retry_wait rows are prioritized
+ * by the claim RPC. The database remains authoritative if this invocation ends.
  */
 export async function runDurableWorker() {
   const total = { claimed: 0, succeeded: 0, retried: 0, deadLettered: 0, leaseLost: 0, cancelled: 0 };
-  for (let pass = 0; pass < 3; pass++) {
+  const deadline = Date.now() + 50_000;
+  for (let pass = 0; pass < 25 && Date.now() < deadline; pass++) {
     const result = await runDurableWorkerPass();
     total.claimed += result.claimed;
     total.succeeded += result.succeeded;
@@ -723,8 +723,11 @@ export async function runDurableWorker() {
     total.deadLettered += result.deadLettered;
     total.leaseLost += result.leaseLost;
     total.cancelled += result.cancelled;
-    if (result.retried === 0 || pass === 2) break;
-    await new Promise((resolve) => setTimeout(resolve, pass === 0 ? 5000 : 10000));
+    if (result.claimed === 0) break;
+    if (result.retried > 0) {
+      if (Date.now() + 10_000 >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+    }
   }
   return total;
 }
