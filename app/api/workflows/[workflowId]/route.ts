@@ -156,7 +156,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
             .limit(25);
           if (recipientsError) throw recipientsError;
           const validRecipients = (approvedRecipients ?? []).filter((recipient) =>
-            typeof recipient.email === "string" && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient.email.trim())
+            typeof recipient.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email.trim())
           );
           if (!validRecipients.length) {
             return NextResponse.json({
