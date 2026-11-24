@@ -137,7 +137,7 @@ begin
   if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
-  if p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
+  if p_provider is null or p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
     raise exception 'invalid webhook completion' using errcode = '22023';
   end if;
 
@@ -176,7 +176,7 @@ begin
   if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
-  if p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
+  if p_provider is null or p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
     raise exception 'invalid webhook release' using errcode = '22023';
   end if;
 
