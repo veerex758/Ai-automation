@@ -769,7 +769,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       }
       await markPlaybookDecisionExecuted(db, lead, searchDecisionId);
 
-      if (!searchResult.exists && selectedCreate) {
+      if (!searchResult.exists && !searchResult.skipped && selectedCreate) {
         let createDecisionId: string | undefined;
         if (createPolicy?.permission === "ask_first") {
           const gate = await requestOrReadPlaybookDecision({
@@ -806,8 +806,8 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
       }
       const { error: crmAuditError } = await db.from("real_estate_lead_activities").insert({
         workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
-        activity_type: searchResult.exists ? "lead.crm_contact_verified" : selectedCreate ? "lead.crm_contact_created" : "lead.crm_contact_missing",
-        details: { provider: "hubspot", exactEmailMatch: true, created: !searchResult.exists && selectedCreate },
+        activity_type: searchResult.skipped ? "lead.crm_contact_skipped" : searchResult.exists ? "lead.crm_contact_verified" : selectedCreate ? "lead.crm_contact_created" : "lead.crm_contact_missing",
+        details: { provider: "hubspot", exactEmailMatch: !searchResult.skipped, created: !searchResult.exists && !searchResult.skipped && selectedCreate },
       });
       if (crmAuditError) throw new Error("CRM_SYNC_AUDIT_WRITE_FAILED");
     }
