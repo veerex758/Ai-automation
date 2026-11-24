@@ -38,6 +38,13 @@ export async function getWorkspacePermissions(
   if (role === "owner" || role === "admin") {
     return { role, customRoleId: member?.custom_role_id ?? null, permissions: Object.fromEntries(WORKSPACE_PERMISSIONS.map((key) => [key, true])) as WorkspacePermissionMap };
   }
+
+  // Custom roles and the default permission set are only valid for ordinary
+  // members. Unknown, missing, or future role values must not inherit access.
+  if (role !== "member") {
+    return { role, customRoleId: null, permissions: {} };
+  }
+
   if (member?.custom_role_id) {
     const admin = createAdminClient();
     const { data: customRole, error } = await admin.from("workspace_custom_roles")
