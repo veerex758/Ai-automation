@@ -634,17 +634,15 @@ async function sendWhatsAppTemplate(
     }).eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id).eq("channel", "whatsapp").eq("sequence", 1);
     if (persistError) return { state: "blocked", code: "WHATSAPP_DELIVERY_OUTCOME_WRITE_FAILED" };
     if (nextStatus === "unknown") {
-      if (runtime.definition?.review.reviewProviderFailures) {
-        const failureGate = await requestOrReadPlaybookDecision({
-          db, lead, runtime, type: "provider_failure", policy,
-          reason: "WhatsApp provider outcome is unknown; reconcile the Meta message before any resend. " + code,
-          leaseToken: claim.lease_token,
-        });
-        if (failureGate.state === "pending") return { state: "paused", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
-      }
+      const failureGate = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "provider_failure", policy,
+        reason: "WhatsApp provider outcome is unknown; reconcile the Meta message before any resend. " + code,
+        leaseToken: claim.lease_token,
+      });
+      if (failureGate.state === "pending") return { state: "paused", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
       return { state: "blocked", code: "WHATSAPP_DELIVERY_UNKNOWN_REQUIRES_RECONCILIATION" };
     }
-    return { state: "blocked", code };
+    return { state: rateLimited ? "retry" : "blocked", code };
   }
 }
 
@@ -733,7 +731,7 @@ async function syncRealEstateCrmContact(
     matches = candidates.filter((item) =>
       typeof item.email === "string" && item.email.toLowerCase() === String(lead.email).toLowerCase()
     );
-    if (candidates.length > matches.length) {
+    if (candidates.length > matches.length || matches.length > 1) {
       await db.from("real_estate_crm_syncs").upsert({
         workspace_id: claim.workspace_id, lead_id: lead.id, provider,
         status: "unknown", idempotency_key: idempotencyKey, last_error_code: "CRM_SEARCH_RESULT_NEEDS_REVIEW",
@@ -756,19 +754,6 @@ async function syncRealEstateCrmContact(
     const code = safeErrorCode(error, "CRM_SEARCH_FAILED");
     if (/RATE_LIMITED|_HTTP_5\\d\\d/.test(code)) return { state: "retry", code };
     return { state: "blocked", code };
-  }
-
-  if (matches.length > 1) {
-    await db.from("real_estate_crm_syncs").upsert({
-      workspace_id: claim.workspace_id, lead_id: lead.id, provider,
-      status: "unknown", idempotency_key: idempotencyKey, last_error_code: "CRM_DUPLICATE_EMAIL_MATCHES",
-    }, { onConflict: "workspace_id,lead_id,provider" });
-    await db.from("real_estate_lead_activities").insert({
-      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
-      activity_type: "lead.crm_sync_needs_review",
-      details: { provider, reason: "CRM_DUPLICATE_EMAIL_MATCHES", matchCount: matches.length },
-    });
-    return { state: "blocked", code: "CRM_DUPLICATE_EMAIL_MATCHES" };
   }
 
   if (matches.length === 1) {
