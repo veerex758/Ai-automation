@@ -45,3 +45,10 @@ test("activation applies only to the exact workflow version that passed server-s
   assert.match(activation, /PLAYBOOK_VERSION_CHANGED_DURING_ACTIVATION/);
   assert.match(activation, /Reload, test and review the latest saved version/);
 });
+
+
+test("Playbook agency notifications require a workspace-approved recipient list", () => {
+  assert.match(activation, /real_estate_notification_recipients/);
+  assert.match(activation, /AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED/);
+  assert.match(activation, /skipEmailRecipientAllowlist/);
+});
