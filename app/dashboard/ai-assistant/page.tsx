@@ -1,4 +1,11 @@
-"use client";
+import { redirect } from "next/navigation";
+
+export default function LegacyAIAssistantRedirect() {
+  redirect("/dashboard/playbooks/new");
+}
+
+/* Legacy implementation retired; all authoring now starts with a Playbook. */
+/* "use client"; */
 
 import { FormEvent, useEffect, useState } from "react";
 import DashboardSidebar from "../dashboard-sidebar";
