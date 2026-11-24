@@ -20,9 +20,14 @@ test("Control Room exposes the saved business rules, action permissions and revi
   assert.match(page, /permissionCopy/);
 });
 
-test("Control Room does not allow activation or execution", () => {
-  assert.match(page, /Activation is locked until the durable runtime enforces/);
-  assert.doesNotMatch(page, /\/activate|\/execute|\/dispatch|status:\s*["']active["']/);
+test("Control Room exposes activation only through the server-side workflow gate", () => {
+  assert.match(page, /changeStatus/);
+  assert.match(page, /method: "PATCH"/);
+  assert.match(page, /status: nextStatus/);
+  assert.match(page, /Activation is checked server-side/);
+  assert.match(page, /Pause Playbook/);
+  assert.match(page, /Activate Playbook/);
+  assert.match(page, /No external action can run from this page/);
 });
 
 test("Control Room links to the real-estate lead workspace and optional advanced graph", () => {
