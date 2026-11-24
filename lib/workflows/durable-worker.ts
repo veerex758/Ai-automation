@@ -415,6 +415,9 @@ export async function runDurableWorker() {
       }, 30_000);
       heartbeatTimer.unref?.();
       const definition = job.workflow_definition as Record<string, unknown>;
+      if (job.execution_mode === "live" && definition.playbook !== undefined) {
+        throw new Error("PLAYBOOK_LIVE_EXECUTION_MUST_USE_REAL_ESTATE_PIPELINE");
+      }
       if (job.execution_mode === "live" && process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         throw new Error("LIVE_EXECUTION_DISABLED");
       }
