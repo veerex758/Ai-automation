@@ -114,6 +114,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
 
       let steps: RegisteredWorkflowStep[];
       const stored = candidate.definition as Record<string, unknown> | null;
+      // Playbook action permissions are metadata until the durable worker enforces
+      // every policy and records approval decisions. The generic workflow activator
+      // must not bypass that missing enforcement layer.
+      if (stored?.playbook !== undefined) {
+        return NextResponse.json({
+          error: "This Playbook cannot be activated yet. Its action permissions and Decision Inbox must be enforced by the durable runtime first.",
+          code: "PLAYBOOK_RUNTIME_POLICY_NOT_ENFORCED",
+        }, { status: 409 });
+      }
       if (stored?.format === "aivanta-registry-v1") {
         const checked = validateRegisteredSteps(stored.steps);
         if (!checked.steps) return NextResponse.json({ error: checked.error || "Workflow registry definition is invalid." }, { status: 422 });
