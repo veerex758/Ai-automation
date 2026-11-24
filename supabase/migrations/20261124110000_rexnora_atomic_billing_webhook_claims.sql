@@ -42,7 +42,7 @@ begin
   if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
-  if p_provider not in ('stripe','paystack')
+  if p_provider is null or p_provider not in ('stripe','paystack')
      or p_event_key is null or length(p_event_key) not between 1 and 255
      or p_event_type is null or length(p_event_type) not between 1 and 120
      or p_payload_hash is null or p_payload_hash !~ '^[a-f0-9]{64}$'
