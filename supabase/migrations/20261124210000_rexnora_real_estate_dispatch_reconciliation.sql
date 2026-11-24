@@ -61,7 +61,7 @@ create table if not exists public.real_estate_channel_deliveries (
   lead_id uuid not null references public.real_estate_leads(id) on delete cascade,
   channel text not null check (channel = 'whatsapp'),
   sequence smallint not null default 1 check (sequence > 0 and sequence <= 20),
-  status text not null default 'pending' check (status in ('pending','sending','accepted','unknown','failed','blocked','cancelled')),
+  status text not null default 'pending',
   idempotency_key varchar(240) not null,
   recipient_phone text,
   template_name varchar(512),
