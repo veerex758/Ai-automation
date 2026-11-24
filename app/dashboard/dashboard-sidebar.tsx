@@ -9,8 +9,7 @@ const groups = [
     { label: "Activity logs", icon: "◷", href: "/dashboard/activity", key: "activity" },
   ] },
   { label: "BUILD", items: [
-    { label: "Workflow builder", icon: "＋", href: "/dashboard/builder", key: "builder" },
-    { label: "AI assistant", icon: "✧", href: "/dashboard/ai-assistant", key: "assistant" },
+    { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks/new", key: "playbooks" },
     { label: "AI agents", icon: "✺", href: "/dashboard/agents", key: "agents" },
     { label: "Templates", icon: "▧", href: "/dashboard/templates", key: "templates" },
   ] },
