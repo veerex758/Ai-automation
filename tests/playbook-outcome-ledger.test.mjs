@@ -10,6 +10,9 @@ test("Outcome Ledger reads only leads and activities bound to this workspace and
   assert.match(api, /\.eq\("workflow_id", workflowId\)/);
   assert.match(api, /real_estate_lead_activities/);
   assert.match(api, /real_estate_followups/);
+  assert.match(api, /real_estate_channel_deliveries/);
+  assert.match(api, /real_estate_inspection_bookings/);
+  assert.match(api, /real_estate_tasks/);
 });
 
 test("Outcome Ledger is read-only and does not mutate activity or delivery history", () => {
@@ -23,4 +26,7 @@ test("Outcome Ledger displays activity explanations and delivery state", () => {
   assert.match(page, /Follow-up delivery/);
   assert.match(page, /event\.details/);
   assert.match(page, /item\.status/);
+  assert.match(page, /WhatsApp delivery/);
+  assert.match(page, /Property inspections/);
+  assert.match(page, /Back-office tasks/);
 });
