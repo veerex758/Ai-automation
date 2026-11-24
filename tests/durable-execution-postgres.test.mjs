@@ -152,7 +152,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
   }
 
 
-  await t.test("live dispatch is explicit, single-attempt, and the legacy RPC stays dry-run", async () => {
+  await t.test("live dispatch caps explicitly approved retries and the legacy RPC stays dry-run", async () => {
     await resetFixture();
     const db = await client();
     try {
@@ -261,6 +261,32 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     } finally { replacement.release(); }
   });
 
+  await t.test("cancellation requested on a leased job wins over expired-lease recovery", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const created = await dispatch(db, crypto.randomUUID(), 3);
+      const [leased] = await claim(db, "cancelled-worker", 1, 30);
+      assert.equal(leased.id, created.job_id);
+      const requested = await db.query(
+        "select public.cancel_execution_job($1,$2,$3) as status",
+        [leased.id, ids.workspace, ids.workflow],
+      );
+      assert.equal(requested.rows[0].status, "cancellation_requested");
+      await db.query(
+        "update public.execution_jobs set lease_until=now()-interval '1 second' where id=$1",
+        [leased.id],
+      );
+      const reclaimed = await claim(db, "replacement-after-cancel", 1, 30);
+      assert.equal(reclaimed.length, 0);
+      const state = await db.query(
+        "select j.status job_status,r.status run_status from public.execution_jobs j join public.workflow_runs r on r.id=j.run_id where j.id=$1",
+        [leased.id],
+      );
+      assert.deepEqual(state.rows[0], { job_status: "cancelled", run_status: "cancelled" });
+    } finally { db.release(); }
+  });
+
   await t.test("retry exhaustion atomically dead-letters and fails the run", async () => {
     await resetFixture();
     const db = await client();
@@ -278,7 +304,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       const [second] = await claim(db, "retry-worker-2", 1, 30);
       assert.equal(second.attempts, 2);
       const secondFinish = await db.query(
-        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE') as status",
+        "select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null) as status",
         [second.id, second.lease_token],
       );
       assert.equal(secondFinish.rows[0].status, "dead_letter");
@@ -290,7 +316,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         where j.id=$1
       `, [first.id]);
       assert.deepEqual(state.rows[0], {
-        job_status: "dead_letter", error_code: "TEST_FAILURE", run_status: "failed",
+        job_status: "dead_letter", error_code: "PROVIDER_TRANSIENT_FAILURE", run_status: "failed",
       });
     } finally { db.release(); }
   });
@@ -525,7 +551,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         [first.id, first.lease_token]);
       await db.query("update public.execution_jobs set available_at=now()-interval '1 second' where id=$1", [first.id]);
       const [second] = await claim(db, "recovery-worker-2");
-      await db.query("select public.finish_execution_job($1,$2,false,'RECOVERY_TEST_FAILURE')",
+      await db.query("select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null)",
         [second.id, second.lease_token]);
 
       const dead = await db.query("select id from public.execution_dead_letters where original_job_id=$1", [first.id]);
