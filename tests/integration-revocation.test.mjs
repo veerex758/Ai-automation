@@ -17,7 +17,7 @@ test("standard integration disconnect is origin-checked, bounded and transaction
   assert.match(handler, /Buffer\.byteLength\(rawBody, "utf8"\) > 4 \* 1024/);
   assert.match(handler, /rpc\("revoke_workspace_integration_connection"/);
   assert.doesNotMatch(handler, /from\("workspace_integrations"\)\.delete/);
-  assert.match(revokeMigration, /select wi\.\* from public\.workspace_integrations[\s\S]*for update/i);
+  assert.match(revokeMigration, /select wi\\.\\* into v_connection[\\s\\S]*?for update/i);
   assert.match(revokeMigration, /wm\.role in \('owner','admin'\)/i);
   assert.match(revokeMigration, /delete from public\.workspace_integrations/i);
   assert.match(revokeMigration, /revoke all on function public\.revoke_workspace_integration_connection[\s\S]*from public, anon, authenticated/i);
