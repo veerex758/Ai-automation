@@ -570,7 +570,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
 
   let notificationSkipped = false;
   let notificationDecisionId: string | undefined;
-  let emailPolicy = runtime.mode === "playbook" ? getPlaybookPolicy(runtime, "email", "send_email") : null;
+  const emailPolicy = runtime.mode === "playbook" ? getPlaybookPolicy(runtime, "email", "send_email") : null;
   if (runtime.mode === "playbook") {
     if (!emailPolicy || emailPolicy.permission === "never" ||
         !isPlaybookActionOnSelectedBranch(runtime, emailPolicy, ruleResults)) {
