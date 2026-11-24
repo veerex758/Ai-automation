@@ -56,14 +56,14 @@ export async function OPTIONS(request:NextRequest,context:Context){
 }
 export async function POST(request:NextRequest,context:Context){
  try{
+  const ingressLimit=await enforceDistributedRateLimit(request,{
+   scope:"real-estate-public-intake",windowMs:60_000,ipLimit:10,
+  });
+  if(ingressLimit)return ingressLimit;
   const {publicKey}=await context.params;if(!/^[A-Za-z0-9_-]{32,100}$/.test(publicKey))return NextResponse.json({error:"Intake form not found."},{status:404});
   const {db,form}=await findForm(publicKey);if(!form||!form.enabled)return NextResponse.json({error:"Intake form is disabled or unavailable."},{status:404});
   const origin=request.headers.get("origin"),headers=originHeaders(origin,form);
   if(!origin||!form.allowed_origins.includes(origin))return NextResponse.json({error:"This website origin is not allowed to submit to this form."},{status:403,headers});
-  const ipLimit=await enforceDistributedRateLimit(request,{
-   scope:"real-estate-public-intake",windowMs:60_000,ipLimit:10,
-  });
-  if(ipLimit)return ipLimit;
   const tenantLimit=await enforceDistributedRateLimit(request,{
    scope:"real-estate-public-intake-hourly",windowMs:60*60_000,
    workspaceId:form.workspace_id,workspaceLimit:100,
@@ -80,7 +80,7 @@ export async function POST(request:NextRequest,context:Context){
   if(!/^[A-Za-z0-9._:-]{8,200}$/.test(idempotencyKey))return NextResponse.json({error:"Provide a unique Idempotency-Key header (8–200 safe characters)."} ,{status:400,headers});
   if(!fullName||(!email&&!phone)||typeof body.consentToContact!=="boolean")return NextResponse.json({error:"Name, email or phone, and an explicit contact-consent choice are required."},{status:400,headers});
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return NextResponse.json({error:"Enter a valid email address."},{status:400,headers});
-  const ip=request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()??"unknown";
+  const ip=request.headers.get("x-real-ip")?.trim()??"unknown";
   const ipHash=createHash("sha256").update(publicKey+":"+ip).digest("hex").slice(0,32);
   const {data:limit,error:limitError}=await db.rpc("consume_execution_rate_limit",{p_workspace_id:form.workspace_id,p_key:"real-estate-intake:"+form.id+":"+ipHash,p_limit:20,p_window_ms:3600000});
   const rate=Array.isArray(limit)?limit[0]:limit;

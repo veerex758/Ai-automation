@@ -180,3 +180,14 @@ test("workspace integration list, save and disconnect are distributed-rate-limit
   assert.ok(route.includes('["owner", "admin"].includes(membership.role)'));
   assert.ok(route.includes('.eq("id", connectionId).eq("workspace_id", workspace.id)'));
 });
+
+
+test("public real-estate intake rate-limits invalid public keys before tenant/form lookup", async () => {
+  const route = await read("../app/api/real-estate/intake/[publicKey]/route.ts");
+  const post = route.indexOf("export async function POST");
+  const limiter = route.indexOf('scope:"real-estate-public-intake"', post);
+  const lookup = route.indexOf("findForm(publicKey)", post);
+  assert.ok(limiter > post && lookup > limiter);
+  assert.ok(route.includes('request.headers.get("x-real-ip")'));
+  assert.ok(!route.includes('headers.get("x-forwarded-for")'));
+});
