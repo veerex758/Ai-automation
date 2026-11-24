@@ -26,8 +26,8 @@ const GOOGLE_IDENTITY_SCOPES = new Set([
 ]);
 
 /**
- * If Google returns a granted-scope list, require the product's exact read-only
- * scope and allow only the minimal identity scopes requested by Aivanta.
+ * If Google returns a granted-scope list, require the product's exact requested
+ * scope and allow only the minimal identity scopes requested by Rexnora.
  * Google may omit the scope field when the grant matches the requested scopes;
  * in that case, the authorization request remains the boundary because
  * include_granted_scopes=false.
