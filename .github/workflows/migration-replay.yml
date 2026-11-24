@@ -25,6 +25,15 @@ jobs:
       - name: Check out migration inventory
         uses: actions/checkout@v4
 
+      - name: Set up Node.js for the concurrent RPC regression
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v3
         with:
