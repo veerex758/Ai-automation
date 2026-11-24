@@ -24,7 +24,7 @@ async function post(ctx: NodeContext, provider: string, url: string, body: unkno
   });
   if (response.status < 200 || response.status >= 300) {
     ctx.logger.error("Google provider write failed", { provider, status: response.status });
-    throw new Error(response.status === 429 ? provider.toUpperCase() + "_RATE_LIMITED" : provider.toUpperCase() + "_REQUEST_FAILED");
+    throw new Error(response.status === 429 ? provider.toUpperCase() + "_RATE_LIMITED" : provider.toUpperCase() + "_HTTP_" + response.status);
   }
   if (!response.body || typeof response.body !== "object" || Array.isArray(response.body)) throw new Error(provider.toUpperCase() + "_INVALID_RESPONSE");
   return response.body as Record<string, unknown>;
@@ -166,7 +166,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
           // response was lost after Google accepted it.
           const message = error instanceof Error ? error.message : "";
           if (!input.eventId || !/409|ALREADY_EXISTS|CONFLICT/.test(message)) throw error;
-          body = await get(ctx, "google_calendar", url.toString().replace(/\\/$/, "") + "/" + encodeURIComponent(input.eventId));
+          body = await get(ctx, "google_calendar", url.toString().replace(/\/$/, "") + "/" + encodeURIComponent(input.eventId));
         }
         if (typeof body.id !== "string") throw new Error("GOOGLE_CALENDAR_INVALID_RESPONSE");
         return {
