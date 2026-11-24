@@ -12,6 +12,14 @@ const followups = read("../lib/real-estate/followups.ts");
 const followupsRoute = read("../app/api/cron/real-estate-followups/route.ts");
 const pipelineWorker = read("../app/api/cron/real-estate-pipeline/route.ts");
 const emailNode = read("../nodes/email.ts");
+const playbookDefinition = read("../lib/playbooks/definition.cjs");
+const durableWorker = read("../lib/workflows/durable-worker.ts");
+const inspectionRoute = read("../app/api/real-estate/inspections/route.ts");
+const inspectionApprovalRoute = read("../app/api/real-estate/inspections/[bookingId]/approve/route.ts");
+const tasksRoute = read("../app/api/real-estate/tasks/route.ts");
+const taskItemRoute = read("../app/api/real-estate/tasks/[taskId]/route.ts");
+const operationsPage = read("../app/dashboard/real-estate/operations/page.tsx");
+const channelMigration = read("../supabase/migrations/20261124125757_rexnora_real_estate_channels_inspections_tasks.sql");
 
 test("real-estate service client skips empty Supabase placeholders and falls back to integration keys", () => {
   assert.match(
@@ -74,9 +82,9 @@ test("real-estate template gallery exposes four distinct automation setup paths"
   const realEstatePage = read("../app/dashboard/real-estate/page.tsx");
   for (const [name, href] of [
     ["Instant Speed-to-Lead & Qualification", "#speed-to-lead"],
-    ["Property Inspection & Calendar Booking", "#inspection-booking"],
+    ["Property Inspection & Calendar Booking", "/dashboard/real-estate/operations"],
     ["90-Day Buyer & Investor Follow-Up", "/dashboard/real-estate#followups"],
-    ["Real Estate Back-Office Automation", "#back-office"],
+    ["Real Estate Back-Office Automation", "/dashboard/real-estate/operations#tasks"],
   ]) {
     assert.ok(gallery.includes(name), "missing template " + name);
     assert.ok(gallery.includes(href), "missing template destination " + href);
@@ -85,6 +93,74 @@ test("real-estate template gallery exposes four distinct automation setup paths"
   assert.match(playbookSetup, /google_calendar\.create_event/);
   assert.match(playbookSetup, /exact match before creating a contact/);
   assert.match(realEstatePage, /window\.location\.hash==="#followups"/);
+});
+
+test("WhatsApp delivery requires exact channel consent and a durable no-resend ledger", () => {
+  assert.ok(pipeline.includes('lead.consent_to_contact === true'));
+  assert.ok(pipeline.includes('lead.contact_preference === "whatsapp"'));
+  assert.ok(pipeline.includes("WHATSAPP_CHANNEL_CONSENT_REQUIRED"));
+  assert.ok(pipeline.includes("real_estate_channel_deliveries"));
+  assert.ok(pipeline.includes('status === "accepted"'));
+  assert.ok(pipeline.includes('status: uncertain ? "unknown" : "failed"'));
+  assert.ok(pipeline.includes("A sending/unknown/failed row is never re-sent automatically"));
+  assert.ok(playbookDefinition.includes('["whatsapp_business", new Set(["send_template"])]'));
+});
+
+test("CRM sync performs exact-email search first and reconciles ambiguous creates", () => {
+  assert.ok(playbookDefinition.includes("exact-email search and one contact-create action"));
+  assert.ok(playbookDefinition.includes("Choose one CRM provider for this real-estate Playbook"));
+  assert.ok(pipeline.includes('operationId === "search_contacts"'));
+  assert.ok(pipeline.includes("crm_contact_created_reconciled"));
+  assert.ok(pipeline.includes('task_type: "crm_review"'));
+  assert.ok(pipeline.includes("CRM contact synchronisation"));
+});
+
+test("Playbook execution uses the exact provider account selected on each registered step", () => {
+  assert.ok(pipeline.includes("selectedConnectionId?: string"));
+  assert.ok(pipeline.includes('integrationQuery = integrationQuery.eq("id", selectedConnectionId)'));
+  assert.ok(pipeline.includes('step.nodeId === "email" && step.operationId === "send_email"'));
+  assert.ok(followups.includes("loadPlaybookRuntime"));
+  assert.ok(followups.includes('step.nodeId === "email" && step.operationId === "send_email"'));
+  assert.ok(followups.includes('encryption_version === "v2"'));
+});
+
+test("Calendar inspections check external availability and reserve slots through the guarded database RPC", () => {
+  assert.ok(inspectionRoute.includes("operations.manage"));
+  assert.ok(inspectionRoute.includes('last_test_status", "passed"'));
+  assert.ok(inspectionRoute.includes('findOperation("google_calendar", "execute", "action")'));
+  assert.ok(inspectionRoute.includes("timeMin"));
+  assert.ok(inspectionRoute.includes("timeMax"));
+  assert.ok(inspectionRoute.includes("INSPECTION_CALENDAR_SLOT_BUSY"));
+  assert.ok(inspectionRoute.includes("reserve_real_estate_inspection_booking"));
+  assert.ok(channelMigration.includes("Customer email invitation requires recorded email contact consent"));
+});
+
+test("Calendar event creation requires owner approval and an approved create-event operation", () => {
+  assert.ok(inspectionApprovalRoute.includes("Only workspace owners and admins"));
+  assert.ok(inspectionApprovalRoute.includes('operation_id", "create_event"'));
+  assert.ok(inspectionApprovalRoute.includes("begin_real_estate_inspection_booking"));
+  assert.ok(inspectionApprovalRoute.includes('booking.id.replaceAll("-", "")'));
+  assert.ok(inspectionApprovalRoute.includes('sendUpdates: invite ? "all" : "none"'));
+  assert.ok(inspectionApprovalRoute.indexOf('task_type: "inspection_preparation"') < inspectionApprovalRoute.indexOf('status: "confirmed"'));
+  assert.ok(inspectionApprovalRoute.includes('status: uncertain ? "unknown" : "failed"'));
+});
+
+test("Back-office task APIs require workspace permissions and task creation is idempotent", () => {
+  assert.ok(pipeline.includes("ensureBackOfficeTask"));
+  assert.ok(pipeline.includes('task_type: "new_enquiry_review"'));
+  assert.ok(pipeline.includes('onConflict: "workspace_id,idempotency_key"'));
+  assert.ok(tasksRoute.includes("operations.view"));
+  assert.ok(taskItemRoute.includes("operations.manage"));
+  assert.ok(taskItemRoute.includes('eq("workspace_id", workspace.id)'));
+  assert.ok(operationsPage.includes("Back-office task queue"));
+  assert.ok(operationsPage.includes("Approve & create event"));
+});
+
+test("Generic live workflow executor cannot bypass the real-estate Playbook pipeline", () => {
+  assert.ok(durableWorker.includes("PLAYBOOK_LIVE_EXECUTION_MUST_USE_REAL_ESTATE_PIPELINE"));
+  assert.ok(durableWorker.includes('job.execution_mode === "live"'));
+  assert.ok(playbookDefinition.includes("whatsapp_business"));
+  assert.ok(playbookDefinition.includes("pipedrive"));
 });
 
 test("real-estate nurture is spread across 90 days using the existing five-step queue", () => {
