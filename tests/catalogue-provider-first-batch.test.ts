@@ -90,6 +90,28 @@ test("Google Calendar get_event safely encodes calendar and event identifiers", 
   assert.deepEqual(result, { id: "event-1", summary: "Planning", start: { dateTime: "2026-11-07T10:00:00Z" }, end: { dateTime: "2026-11-07T10:30:00Z" } });
 });
 
+test("Google Calendar create_event sends a deterministic event ID for safe booking reconciliation", async () => {
+  let request: any;
+  const operation = findOperation("google_calendar", "create_event", "action");
+  assert.ok(operation);
+  await operation.run({
+    credentials: { google_calendar: { accessToken: "calendar-write-token" } }, logger,
+    http: { async request(args: any) {
+      request = args;
+      return { status: 200, body: { id: "abc0123456789abcdef0123456789ab", summary: "Property inspection" } };
+    } },
+    previousOutputs: {},
+  }, {
+    eventId: "abc0123456789abcdef0123456789ab",
+    summary: "Property inspection",
+    startDateTime: "2026-11-27T10:00:00+01:00",
+    endDateTime: "2026-11-27T10:45:00+01:00",
+    timeZone: "Africa/Lagos",
+  });
+  assert.equal(request.body.id, "abc0123456789abcdef0123456789ab");
+  assert.equal(request.retries, 0);
+});
+
 test("Discord get_channel reads only bounded channel metadata", async () => {
   let request: any;
   const operation = findOperation("discord", "get_channel", "action");
