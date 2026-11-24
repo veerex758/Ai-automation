@@ -68,12 +68,15 @@ export default function NewPlaybookPage() {
     try {
       const prompt = [
         "Create a real-estate agency Playbook for this business outcome: " + outcome.trim(),
-        "For this first real-estate pilot, use only webhooks.receive_event or manual.start as the trigger, Gemini qualify_real_estate_lead for qualification, IF evaluate for rules, and optionally email send_email for the agency alert.",
-        "Do not use Switch, WhatsApp, Google Calendar, CRM writes, or any other provider/action in this first Playbook. Those operations are not enabled in this pilot runtime.",
+        "Use webhooks.receive_event or manual.start as the intake trigger, Gemini qualify_real_estate_lead for qualification, IF evaluate for deterministic rules, and optionally email send_email for the approved agency inbox.",
+        "WhatsApp is allowed only as whatsapp_business.send_template using an approved Meta template, a selected verified workspace connection, operation-level approval, E.164 phone number, and timestamped consent whose recorded text explicitly includes WhatsApp. Never send free-form WhatsApp messages.",
+        "CRM sync is allowed only through one supported provider: Pipedrive, Zoho CRM, or Freshsales. Always run that provider's search_contacts action using the exact lead email before execute creates a contact. Use the same selected workspace connection for both actions. Never create a second CRM contact if the search result is ambiguous or a previous create outcome is unknown.",
+        "Do not put Google Calendar create-event actions in the generic Playbook. Property inspection booking uses the dedicated owner-approved inspection booking flow and its selected Google Calendar connection; never bypass that flow.",
+        "Customer follow-up is handled by Rexnora's durable 90-day follow-up service and must only use timestamped recorded email consent. Do not generate arbitrary scheduled customer messages.",
         "Do not invent integrations, tools, data sources or delivery channels. Use registered Rexnora operations only.",
         "Gemini may extract and classify enquiry details into structured fields. Use deterministic IF conditions for explicit business rules.",
-        "Only use Resend to notify a specifically approved agency inbox. Do not contact the property enquiry customer unless a separate consent-aware process is explicitly represented.",
-        "Keep the graph simple and connected. Include a supported intake trigger, qualification where available, explicit IF branches for the stated rules, and an agency notification only if a supported registered operation exists.",
+        "Resend may notify a specifically approved agency inbox. Customer communication must remain consent-gated and action permissions must default to ask_first for external writes.",
+        "Keep the graph simple and connected. Include a supported intake trigger, qualification, explicit IF branches where needed, and only the external actions required by the stated outcome.",
         "Return an inactive draft only. Never activate or execute anything."
       ].join("\n\n");
       const response = await fetch("/api/ai/generate-workflow", {
