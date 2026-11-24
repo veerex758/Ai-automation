@@ -131,6 +131,7 @@ export default function PlaybookControlRoomPage() {
             <div><strong>Next: verify real enquiries</strong><small>Review leads and qualification results in the real-estate workspace. Advanced graph editing is available for technical inspection only.</small></div>
             <div className="playbook-actions">
               <Link className="playbook-secondary-link" href="/dashboard/real-estate">Open leads</Link>
+              <Link className="playbook-secondary-link" href={"/dashboard/playbooks/" + encodeURIComponent(playbookId) + "/preview"}>Safe Preview</Link>
               <Link className="playbook-primary" href={"/dashboard/workflows/" + encodeURIComponent(playbookId)}>Advanced graph ↗</Link>
             </div>
           </div>

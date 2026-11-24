@@ -3,7 +3,9 @@ import type { NodeDefinition } from "./types";
 
 const comparison = z.enum(["equals", "not_equals", "greater_than", "greater_or_equal", "less_than", "less_or_equal", "contains", "exists", "is_empty"]);
 
-function compare(actual: unknown, expected: unknown, operator: z.infer<typeof comparison>): boolean {
+export type IfComparisonOperator = z.infer<typeof comparison>;
+
+function compare(actual: unknown, expected: unknown, operator: IfComparisonOperator): boolean {
   switch (operator) {
     case "equals": return Object.is(actual, expected);
     case "not_equals": return !Object.is(actual, expected);
@@ -15,6 +17,10 @@ function compare(actual: unknown, expected: unknown, operator: z.infer<typeof co
     case "exists": return actual !== undefined && actual !== null;
     case "is_empty": return actual === undefined || actual === null || actual === "" || (Array.isArray(actual) && actual.length === 0) || (typeof actual === "object" && actual !== null && Object.keys(actual).length === 0);
   }
+}
+
+export function evaluateIfCondition(actual: unknown, expected: unknown, operator: IfComparisonOperator): boolean {
+  return compare(actual, expected, operator);
 }
 
 const ifInput = z.object({
@@ -33,7 +39,7 @@ export const ifNode: NodeDefinition = {
     outputSchema: z.object({ matched: z.boolean(), route: z.enum(["true", "false"]) }).strict(),
     async run(_ctx, raw) {
       const input = ifInput.parse(raw);
-      const matched = compare(input.value, input.compareTo, input.operator);
+      const matched = evaluateIfCondition(input.value, input.compareTo, input.operator);
       return { matched, route: matched ? "true" as const : "false" as const };
     },
   }],
