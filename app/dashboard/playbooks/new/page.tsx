@@ -45,7 +45,8 @@ async function responseJson<T>(response: Response): Promise<T> {
 
 export default function NewPlaybookPage() {
   const router = useRouter();
-  const [outcome, setOutcome] = useState("Qualify each new property enquiry, identify serious buyers or tenants, and notify the right person at the agency.");
+  const [outcome, setOutcome] = useState("Handle every new property enquiry: qualify the lead, notify the agency, send an approved WhatsApp template only with explicit consent, sync the selected CRM, create agent tasks, and support inspection booking and 90-day follow-up.");
+  const [crmProvider, setCrmProvider] = useState<"pipedrive" | "zoho_crm" | "freshsales">("pipedrive");
   const [draft, setDraft] = useState<GeneratedDraft | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
   const [policies, setPolicies] = useState<ActionPolicy[]>([]);
@@ -68,9 +69,10 @@ export default function NewPlaybookPage() {
     try {
       const prompt = [
         "Create a real-estate agency Playbook for this business outcome: " + outcome.trim(),
-        "Use webhooks.receive_event or manual.start as the intake trigger, Gemini qualify_real_estate_lead for qualification, IF evaluate for deterministic rules, and optionally email send_email for the approved agency inbox.",
-        "WhatsApp is allowed only as whatsapp_business.send_template using an approved Meta template, a selected verified workspace connection, operation-level approval, E.164 phone number, and timestamped consent whose recorded text explicitly includes WhatsApp. Never send free-form WhatsApp messages.",
-        "CRM sync is allowed only through one supported provider: Pipedrive, Zoho CRM, or Freshsales. Always run that provider's search_contacts action using the exact lead email before execute creates a contact. Use the same selected workspace connection for both actions. Never create a second CRM contact if the search result is ambiguous or a previous create outcome is unknown.",
+        "This is the complete Rexnora real-estate starter. Include exactly one supported intake trigger (webhooks.receive_event or manual.start), one Gemini qualify_real_estate_lead action, at least one IF evaluate rule for deterministic routing, one email send_email action addressed only to the agency's approved recipient allowlist, and one whatsapp_business.send_template action for the optional customer response.",
+        "WhatsApp is allowed only as whatsapp_business.send_template using an approved Meta template, a selected verified workspace connection, operation-level approval, E.164 phone number, and timestamped consent whose recorded text explicitly includes WhatsApp. Never send free-form WhatsApp messages. Missing consent must skip the send.",
+        "The selected CRM for this starter is " + crmProvider + ". Include exactly two CRM action steps for this provider: search_contacts by the exact lead email, then execute to create only when no exact match exists. Both must use the same selected workspace connection. Never create a contact on ambiguous search results or after an unknown prior create outcome. Do not add a second CRM provider.",
+        "Do not omit one of the required actions because the agency has not connected its accounts yet. Save the workflow inactive; the agency will select verified workspace connections and approve each operation before activation.",
         "Do not put Google Calendar create-event actions in the generic Playbook. Property inspection booking uses the dedicated owner-approved inspection booking flow and its selected Google Calendar connection; never bypass that flow.",
         "Customer follow-up is handled by Rexnora's durable 90-day follow-up service and must only use timestamped recorded email consent. Do not generate arbitrary scheduled customer messages.",
         "Do not invent integrations, tools, data sources or delivery channels. Use registered Rexnora operations only.",
@@ -88,6 +90,31 @@ export default function NewPlaybookPage() {
       if (!generated.definition || !Array.isArray(generated.definition.nodes) ||
           !Array.isArray(generated.registrySteps) || generated.registrySteps.length === 0) {
         throw new Error("Gemini did not return a complete registered workflow. No Playbook draft was saved.");
+      }
+      const hasStep = (nodeId: string, operationId: string, kind: "trigger" | "action") =>
+        generated.registrySteps!.some((step) => step.kind === kind && step.nodeId === nodeId && step.operationId === operationId);
+      const hasIntake = hasStep("webhooks", "receive_event", "trigger") || hasStep("manual", "start", "trigger");
+      const crmSteps = generated.registrySteps.filter((step) =>
+        step.kind === "action" && ["pipedrive", "zoho_crm", "freshsales"].includes(step.nodeId)
+      );
+      const selectedCrmSteps = crmSteps.filter((step) => step.nodeId === crmProvider);
+      const crmSearchIndex = generated.registrySteps.findIndex((step) =>
+        step.kind === "action" && step.nodeId === crmProvider && step.operationId === "search_contacts"
+      );
+      const crmCreateIndex = generated.registrySteps.findIndex((step) =>
+        step.kind === "action" && step.nodeId === crmProvider && step.operationId === "execute"
+      );
+      const requiredActionsPresent =
+        hasStep("gemini", "qualify_real_estate_lead", "action") &&
+        hasStep("if", "evaluate", "action") &&
+        hasStep("email", "send_email", "action") &&
+        hasStep("whatsapp_business", "send_template", "action");
+      if (!hasIntake || !requiredActionsPresent || selectedCrmSteps.length !== 2 ||
+          crmSteps.length !== 2 || crmSearchIndex < 0 || crmCreateIndex <= crmSearchIndex) {
+        throw new Error(
+          "The real-estate starter is incomplete. It must include an intake trigger, Gemini qualification, an IF rule, approved agency email, an optional consent-gated WhatsApp template, and " +
+          crmProvider.replaceAll("_", " ") + " exact-email search followed by contact creation. No draft was saved; generate it again."
+        );
       }
       const generatedRules = generated.definition.nodes
         .filter((node) => node.type === "condition")
@@ -185,9 +212,15 @@ export default function NewPlaybookPage() {
           <form onSubmit={generate}>
             <label className="playbook-field-label" htmlFor="playbook-outcome">What should Rexnora achieve?</label>
             <textarea id="playbook-outcome" value={outcome} onChange={(event) => setOutcome(event.target.value)} maxLength={240} rows={3} required />
-            <div className="playbook-form-footer"><span>{outcome.length}/240 · Real-estate agencies</span><button className="playbook-primary" type="submit" disabled={generating || !outcome.trim()}>{generating ? "Preparing your draft…" : "Create my draft"} <span>→</span></button></div>
+            <label className="playbook-field-label" htmlFor="playbook-crm-provider" style={{ marginTop: 18 }}>CRM to include in this starter</label>
+            <select id="playbook-crm-provider" value={crmProvider} onChange={(event) => setCrmProvider(event.target.value as typeof crmProvider)} style={{ width: "100%", boxSizing: "border-box", marginTop: 8, border: "1px solid #334253", background: "#0c1219", borderRadius: 8, color: "#edf2f8", padding: 12, fontSize: 12 }}>
+              <option value="pipedrive">Pipedrive</option>
+              <option value="zoho_crm">Zoho CRM</option>
+              <option value="freshsales">Freshsales</option>
+            </select>
+            <div className="playbook-form-footer"><span>{outcome.length}/240 · Real-estate agencies</span><button className="playbook-primary" type="submit" disabled={generating || !outcome.trim()}>{generating ? "Preparing your draft…" : "Create full starter draft"} <span>→</span></button></div>
           </form>
-          <p className="playbook-footnote">Gemini proposes a draft using registered operations only. It cannot activate a Playbook or send messages from this screen.</p>
+          <p className="playbook-footnote">The starter includes speed-to-lead, Gemini qualification, agency email, consent-gated WhatsApp and your selected CRM. Inspection booking, the five-step 90-day email drip and back-office tasks run through Rexnora's dedicated Operations and lead pipeline. This screen saves an inactive draft only; connect and test providers, select workspace accounts and approve actions before activation.</p>
         </section>
 
         {draft?.definition && draft.registrySteps && <section className="playbook-review">
