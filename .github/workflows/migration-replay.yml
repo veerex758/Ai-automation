@@ -25,7 +25,16 @@ jobs:
       - name: Check out migration inventory
         uses: actions/checkout@v4
 
+      - name: Set up Node.js for the concurrent RPC regression
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install application dependencies
+        run: npm install
+
       - name: Install Supabase CLI
+        id: install_supabase_cli
         uses: supabase/setup-cli@v3
         with:
           version: 2.84.2
@@ -45,6 +54,31 @@ jobs:
       - name: Run database transaction tests (pgTAP)
         run: supabase test db --local
 
+      - name: Restart local Supabase services for RPC regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          # pgTAP runs against Postgres and may leave the API containers stopped.
+          # A plain "supabase start" then reports the stack is already running
+          # because Postgres is still up, without restoring the API services.
+          # Stop normally (not --no-backup) so the migrated database volume is
+          # preserved, then start the complete local stack for the RPC test.
+          supabase stop
+          supabase start
+
+      - name: Export local Supabase API credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status --output env | sed -n 's/^API_URL=/export API_URL=/p; s/^SERVICE_ROLE_KEY=/export SERVICE_ROLE_KEY=/p')"
+          test -n "${API_URL:-}"
+          test -n "${SERVICE_ROLE_KEY:-}"
+          echo "API_URL=${API_URL}" >> "$GITHUB_ENV"
+          echo "SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}" >> "$GITHUB_ENV"
+
+      - name: Exercise concurrent webhook claims against local Postgres
+        run: node --test tests/billing-webhook-claims.integration.test.mjs
+
       - name: Verify local migration inventory
         shell: bash
         run: |
@@ -54,5 +88,5 @@ jobs:
           supabase migration list --local
 
       - name: Stop disposable local Supabase project
-        if: always()
+        if: always() && steps.install_supabase_cli.outcome == 'success'
         run: supabase stop --no-backup

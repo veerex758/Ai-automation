@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { createHash } from "node:crypto";
 import {NextResponse} from "next/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 export const runtime="nodejs";
@@ -32,11 +33,25 @@ export async function POST(request:Request){
  const supported=["checkout.session.completed","invoice.paid","invoice.payment_failed","customer.subscription.deleted","customer.subscription.updated"];
  if(!supported.includes(event.type))return privateJson({received:true});
  const admin=createAdminClient();
+ let claimToken:string|null=null;
  try{
-  const {error:ledgerError}=await admin.from("billing_recurring_events").insert({provider:"stripe",event_key:event.id,event_type:event.type,payload_hash:Buffer.from(raw).toString("base64").slice(0,64)});
-  if(ledgerError&&ledgerError.code!=="23505")throw ledgerError;
-  const {data:prior}=await admin.from("billing_recurring_events").select("processed_at").eq("event_key",event.id).maybeSingle();
-  if(prior?.processed_at)return privateJson({received:true,duplicate:true});
+  const payloadHash=createHash("sha256").update(raw).digest("hex");
+  const {data:claimRows,error:claimError}=await admin.rpc("claim_billing_webhook_event",{
+   p_provider:"stripe",p_event_key:event.id,p_event_type:event.type,p_payload_hash:payloadHash,
+   p_lease_seconds:900
+  });
+  if(claimError)throw claimError;
+  const claim=Array.isArray(claimRows)?claimRows[0]:claimRows;
+  if(!claim||typeof claim!=="object")throw new Error("STRIPE_WEBHOOK_CLAIM_INVALID");
+  const claimRecord=claim as Record<string,unknown>;
+  if(claimRecord.reason==="payload_mismatch"||claimRecord.reason==="event_key_conflict")
+   return privateJson({error:"Webhook event key conflicts with its stored payload."},{status:409});
+  if(claimRecord.claimed!==true||typeof claimRecord.claim_token!=="string"){
+   if(claimRecord.reason==="in_progress"||claimRecord.reason==="completed")
+    return privateJson({received:true,duplicate:true});
+   throw new Error("STRIPE_WEBHOOK_CLAIM_UNAVAILABLE");
+  }
+  claimToken=claimRecord.claim_token;
   if(event.type==="checkout.session.completed"){
    const session=event.data.object as Stripe.Checkout.Session;
    if(session.mode==="subscription"&&typeof session.subscription==="string"&&session.metadata?.workspace_id&&session.metadata.plan_key){
@@ -79,7 +94,19 @@ export async function POST(request:Request){
     }
    }
   }
-  const {error:markError}=await admin.from("billing_recurring_events").update({processed_at:new Date().toISOString(),processing_error:null}).eq("event_key",event.id);if(markError)throw markError;
+  const {data:completed,error:completeError}=await admin.rpc("complete_billing_webhook_event",{
+   p_provider:"stripe",p_event_key:event.id,p_claim_token:claimToken
+  });
+  if(completeError||completed!==true)throw completeError??new Error("STRIPE_WEBHOOK_CLAIM_LOST");
   return privateJson({received:true});
- }catch(error){console.error("Stripe subscription webhook processing failed:",error);await admin.from("billing_recurring_events").update({processing_error:"processing_failed"}).eq("event_key",event.id);return privateJson({error:"Recurring Stripe event processing failed."},{status:503});}
+ }catch(error){
+  if(claimToken){
+   const {error:releaseError}=await admin.rpc("release_billing_webhook_event",{
+    p_provider:"stripe",p_event_key:event.id,p_claim_token:claimToken,p_error_code:"PROCESSING_FAILED"
+   });
+   if(releaseError)console.error("Stripe webhook claim release failed.");
+  }
+  console.error("Stripe subscription webhook processing failed:",error);
+  return privateJson({error:"Recurring Stripe event processing failed."},{status:503});
+ }
 }

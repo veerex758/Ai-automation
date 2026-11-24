@@ -49,10 +49,14 @@ export async function GET() {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  try {
+    const { url, serviceRoleKey } = getAdminSupabaseConfig();
+    return createSupabaseClient(url, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    });
+  } catch {
+    throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
+  }
 }
 
 async function requireWorkspaceAdmin(supabase: Awaited<ReturnType<typeof createClient>>, workspaceId: string, userId: string) {
@@ -170,45 +174,68 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const headers = { "Cache-Control": "private, no-store" };
   try {
+    const sourceOrigin = request.headers.get("origin");
+    const targetOrigin = new URL(request.url).origin;
+    if (!sourceOrigin || sourceOrigin !== targetOrigin) {
+      return NextResponse.json({ error: "Invalid request origin." }, { status: 403, headers });
+    }
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401, headers });
+
     const rawBody = await request.text();
     if (Buffer.byteLength(rawBody, "utf8") > 2048) return NextResponse.json({ error: "Request is too large." }, { status: 413, headers });
     let body: unknown;
     try { body = JSON.parse(rawBody); } catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400, headers }); }
     const connectionId = body && typeof body === "object" ? (body as { connectionId?: unknown }).connectionId : undefined;
-    if (typeof connectionId !== "string" || !uuidPattern.test(connectionId)) return NextResponse.json({ error: "Choose a Google connection to disconnect." }, { status: 400, headers });
+    if (typeof connectionId !== "string" || !uuidPattern.test(connectionId)) {
+      return NextResponse.json({ error: "Choose a Google connection to disconnect." }, { status: 400, headers });
+    }
+
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    if (!await requireWorkspaceAdmin(supabase, workspace.id, user.id)) return NextResponse.json({ error: "Only workspace owners and admins can disconnect connections." }, { status: 403, headers });
+    // The service-role RPC rechecks owner/admin membership and removes the
+    // local credential row atomically before attempting remote revocation.
     const admin = serviceClient();
-    const { data: connection, error: lookupError } = await admin.from("google_connections")
-      .select("id,encrypted_credentials").eq("id", connectionId).eq("workspace_id", workspace.id)
-      .eq("provider", "google").maybeSingle();
-    if (lookupError) throw lookupError;
-    if (!connection) return NextResponse.json({ error: "Google connection not found in this workspace." }, { status: 404, headers });
+    const { data: encryptedCredentials, error: revokeError } = await admin.rpc("revoke_google_connection", {
+      p_workspace_id: workspace.id,
+      p_connection_id: connectionId,
+      p_actor_id: user.id,
+    });
+    if (revokeError) {
+      if (revokeError.message === "CONNECTION_NOT_FOUND") {
+        return NextResponse.json({ error: "Google connection not found in this workspace." }, { status: 404, headers });
+      }
+      if (revokeError.message === "CONNECTION_PERMISSION_DENIED") {
+        return NextResponse.json({ error: "Only workspace owners and admins can disconnect connections." }, { status: 403, headers });
+      }
+      throw revokeError;
+    }
+
+    // The database transaction has already deleted the local credential and
+    // connection row. Remote revocation is best-effort and cannot restore access.
     let remoteRevoked = false;
     try {
-      const credentials = decryptGoogleCredentials(connection.encrypted_credentials);
-      const token = credentials.refresh_token || credentials.access_token;
-      if (token) {
-        const revokeResponse = await fetch("https://oauth2.googleapis.com/revoke", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ token }),
-          cache: "no-store", redirect: "error", signal: AbortSignal.timeout(5000),
-        });
-        remoteRevoked = revokeResponse.ok;
+      if (typeof encryptedCredentials === "string" && encryptedCredentials.length > 0) {
+        const credentials = decryptGoogleCredentials(encryptedCredentials);
+        const token = credentials.refresh_token || credentials.access_token;
+        if (token) {
+          const revokeResponse = await fetch("https://oauth2.googleapis.com/revoke", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ token }),
+            cache: "no-store", redirect: "error", signal: AbortSignal.timeout(5000),
+          });
+          remoteRevoked = revokeResponse.ok;
+        }
       }
     } catch {
-      // Local disconnect is still mandatory. The response reports remote revoke separately.
+      // The local connection is already removed. Report remote status separately.
     }
-    const { error: deleteError } = await admin.from("google_connections")
-      .delete().eq("id", connectionId).eq("workspace_id", workspace.id);
-    if (deleteError) throw deleteError;
     return NextResponse.json({
       success: true, disconnected: true, remoteRevoked,
-      message: remoteRevoked ? "Disconnected and Google accepted the token revocation." : "Disconnected from this workspace. Google could not confirm remote token revocation; review active grants in your Google Account.",
+      message: remoteRevoked
+        ? "Disconnected locally and Google accepted the token revocation."
+        : "Disconnected locally. Google could not confirm remote token revocation; review active grants in your Google Account.",
     }, { headers });
   } catch {
     return NextResponse.json({ error: "Could not disconnect this Google account." }, { status: 500, headers });

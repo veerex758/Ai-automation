@@ -57,12 +57,14 @@ test("recurring checkout validates plan, explicit consent, request size and same
 
 test("payment webhooks verify provider signatures and deduplicate provider events", () => {
   assert.match(paystackWebhook, /isValidPaystackSignature/);
-  assert.match(paystackWebhook, /billing_webhook_events/);
-  assert.match(paystackWebhook, /processed_at/);
+  assert.match(paystackWebhook, /claim_billing_webhook_event/);
+  assert.match(paystackWebhook, /complete_billing_webhook_event/);
+  assert.match(paystackWebhook, /release_billing_webhook_event/);
   assert.match(paystackWebhook, /256\*1024/);
   assert.match(stripeWebhook, /constructEvent/);
-  assert.match(stripeWebhook, /billing_recurring_events/);
-  assert.match(stripeWebhook, /processed_at/);
+  assert.match(stripeWebhook, /claim_billing_webhook_event/);
+  assert.match(stripeWebhook, /complete_billing_webhook_event/);
+  assert.match(stripeWebhook, /release_billing_webhook_event/);
   assert.match(stripeWebhook, /256\*1024/);
 });
 

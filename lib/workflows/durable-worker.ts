@@ -267,7 +267,12 @@ function knownCredentialValues(credentials: WorkspaceCredentials): string[] {
       .map(([, value]) => value));
 }
 
-function executionContext(credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient, workspaceId: string, job: Job, leaseState: { lost: boolean; cancelled: boolean; controller: AbortController }): Omit<NodeContext, "previousOutputs"> {
+function executionContext(
+  credentials: WorkspaceCredentials, webhookVerified: boolean, db: DbClient,
+  workspaceId: string, job: Job,
+  leaseState: { lost: boolean; cancelled: boolean; controller: AbortController },
+  activeConnectionIds: Map<string, string> = new Map(),
+): Omit<NodeContext, "previousOutputs"> {
   return {
     credentials,
     signal: leaseState.controller.signal,
@@ -311,6 +316,37 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
       const mapping = getWorkerOperationMapping({ nodeId, operationId, kind });
       if (!mapping) throw new Error("WORKER_OPERATION_MAPPING_MISSING");
       if (!mapping.provider) return;
+
+      const selectedConnectionId = activeConnectionIds.get(mapping.provider);
+      if (!selectedConnectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+      const googleProductByProvider: Record<string, GoogleProduct> = {
+        gmail: "gmail", sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
+        google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
+      };
+      const googleProduct = googleProductByProvider[mapping.provider];
+      if (googleProduct) {
+        const { data: connection, error: connectionError } = await db.from("google_connections")
+          .select("id,scopes").eq("id", selectedConnectionId).eq("workspace_id", workspaceId)
+          .eq("provider", "google").eq("product", googleProduct)
+          .eq("status", "connected").eq("last_test_status", "passed").maybeSingle();
+        if (connectionError) throw new Error("GOOGLE_CONNECTION_RECHECK_FAILED");
+        if (!connection || !Array.isArray(connection.scopes) ||
+            !connection.scopes.includes(GOOGLE_PRODUCTS[googleProduct].scopes[0])) {
+          throw new Error("GOOGLE_CONNECTION_REVOKED_OR_UNVERIFIED");
+        }
+      } else {
+        const { data: integration, error: integrationError } = await db.from("workspace_integrations")
+          .select("id").eq("id", selectedConnectionId).eq("workspace_id", workspaceId)
+          .eq("provider", mapping.provider).eq("status", "connected")
+          .eq("last_test_status", "passed").maybeSingle();
+        if (integrationError) throw new Error("WORKSPACE_CONNECTION_RECHECK_FAILED");
+        if (!integration) throw new Error("WORKSPACE_CONNECTION_REVOKED_OR_UNVERIFIED");
+        const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
+          .select("integration_id").eq("integration_id", selectedConnectionId).maybeSingle();
+        if (secretError) throw new Error("WORKSPACE_CREDENTIAL_RECHECK_FAILED");
+        if (!secret) throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
+      }
+
       const { data, error } = await db.from("workspace_provider_operation_approvals")
         .select("decision")
         .eq("workspace_id", workspaceId)
@@ -449,15 +485,18 @@ export async function runDurableWorker() {
         // The mutable credentials map is server-only and is populated immediately
         // before a live provider operation; no implicit/default account is selected.
         const credentials: WorkspaceCredentials = {};
-        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id, job, leaseState);
+        const activeConnectionIds = new Map<string, string>();
+        const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id, job, leaseState, activeConnectionIds);
         context.resolveStepCredentials = async ({ nodeId, operationId, kind, connectionId }) => {
           if (job.execution_mode !== "live") return;
           const step = { nodeId, operationId, kind, connectionId } as RegisteredWorkflowStep;
           const provider = providerPackLiveId(step) ?? getWorkerProvider(step);
           if (!provider || provider === "rss_feed") return;
+          if (!connectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+          activeConnectionIds.set(provider, connectionId);
           const resolved = await workspaceCredentials(
             db, job.workspace_id, new Set([provider]),
-            connectionId ? new Map([[provider, connectionId]]) : new Map(),
+            new Map([[provider, connectionId]]),
           );
           Object.assign(credentials, resolved);
           executionSecrets = knownCredentialValues(credentials);

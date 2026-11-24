@@ -232,30 +232,46 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return json({ error: "Authentication required." }, 401);
-    const body = await request.json().catch(() => null);
+    const sourceOrigin = request.headers.get("origin");
+    const targetOrigin = new URL(request.url).origin;
+    if (!sourceOrigin || sourceOrigin !== targetOrigin) {
+      return json({ error: "Invalid request origin.", code: "INTEGRATION_REQUEST_INVALID" }, 403);
+    }
+
+    const rawBody = await request.text();
+    if (Buffer.byteLength(rawBody, "utf8") > 4 * 1024) {
+      return json({ error: "Disconnect request exceeds 4 KB.", code: "INTEGRATION_REQUEST_TOO_LARGE" }, 413);
+    }
+    let body: unknown;
+    try { body = JSON.parse(rawBody); }
+    catch { return json({ error: "Request body must be valid JSON.", code: "INTEGRATION_REQUEST_INVALID" }, 400); }
     const connectionId = isRecord(body) && typeof body.connectionId === "string" ? body.connectionId : "";
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
       return json({ error: "A valid connection ID is required.", code: "INTEGRATION_REQUEST_INVALID" }, 400);
     }
+
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return json({ error: "Authentication required.", code: "AUTHENTICATION_REQUIRED" }, 401);
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
-      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
-    if (membershipError) throw new Error("INTEGRATION_MEMBERSHIP_CHECK_FAILED");
-    if (!membership || !["owner", "admin"].includes(membership.role)) {
-      return json({ error: integrationErrorMessages.INTEGRATION_PERMISSION_DENIED, code: "INTEGRATION_PERMISSION_DENIED" }, 403);
-    }
+    // The service-role RPC rechecks owner/admin membership and deletes the
+    // connection plus encrypted secret in one database transaction.
     const db = serviceClient();
-    const { data: connection, error: lookupError } = await db.from("workspace_integrations")
-      .select("id").eq("id", connectionId).eq("workspace_id", workspace.id).maybeSingle();
-    if (lookupError) throw lookupError;
-    if (!connection) return json({ error: integrationErrorMessages.INTEGRATION_CONNECTION_NOT_FOUND, code: "INTEGRATION_CONNECTION_NOT_FOUND" }, 404);
-    const { error: deleteError } = await db.from("workspace_integrations")
-      .delete().eq("id", connectionId).eq("workspace_id", workspace.id);
-    if (deleteError) throw deleteError;
-    return json({ success: true, disconnected: true });
+    const { data, error } = await db.rpc("revoke_workspace_integration_connection", {
+      p_workspace_id: workspace.id,
+      p_connection_id: connectionId,
+      p_actor_id: user.id,
+    });
+    if (error) throw error;
+    if (!isRecord(data) || data.success !== true || data.disconnected !== true) {
+      throw new Error("INTEGRATION_DISCONNECT_FAILED");
+    }
+    return json({
+      success: true,
+      disconnected: true,
+      provider: typeof data.provider === "string" ? data.provider : undefined,
+      message: "Connection removed from this workspace and its encrypted credential deleted. The provider account or API token may still need revocation in that provider's security settings.",
+    });
   } catch (error) {
     return integrationFailure(error, "INTEGRATION_DISCONNECT_FAILED");
   }
