@@ -188,7 +188,7 @@ test("public and manual intake require recorded channel consent before creating 
 });
 
 test("Playbook policy validation evaluates all IF rules before CRM writes", () => {
-  assert.match(playbookDefinition, /\.{3}crmActions/);
+  assert.match(playbookDefinition, /\.{3}\s*crmActions/);
   assert.match(playbookDefinition, /Every deterministic Playbook rule must be evaluated before customer communication or CRM writes/);
 });
 
@@ -202,7 +202,7 @@ test("manual lead UI records the customer's actual words and never synthesizes c
 });
 
 test("real-estate starter requires the complete configured action bundle and one selected CRM", () => {
-  assert.match(playbookPage, /setCrmProvider<"pipedrive" \| "zoho_crm" \| "freshsales">/);
+  assert.match(playbookPage, /useState<"pipedrive" \| "zoho_crm" \| "freshsales">\("pipedrive"\)/);
   assert.match(playbookPage, /hasStep\("gemini", "qualify_real_estate_lead", "action"\)/);
   assert.match(playbookPage, /hasStep\("if", "evaluate", "action"\)/);
   assert.match(playbookPage, /hasStep\("email", "send_email", "action"\)/);
