@@ -7,7 +7,7 @@
       "timezone": "UTC"
     },
     "durable-worker-recovery": {
-      "schedule": "0 * * * *",
+      "schedule": "*/30 * * * *",
       "function": "api/worker-sweep",
       "timezone": "UTC"
     }
