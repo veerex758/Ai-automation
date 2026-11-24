@@ -453,3 +453,45 @@
 .workflow-builder-main .graph-node-code-mark{
   color:#28384D;font:800 23px/1 'DM Sans',sans-serif;letter-spacing:-.08em
 }
+
+
+/* Stage 1 editor usability fixes: readable preview, explicit selection and mobile inspector. */
+.workflow-builder-main .dry-run-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.workflow-builder-main .dry-run-heading>div{min-width:0;flex:1}
+.workflow-builder-main .dry-run-heading h2{
+  display:block!important;position:static!important;transform:none!important;
+  margin:5px 0 7px!important;padding:0!important;
+  font:750 16px/1.35 Manrope,sans-serif!important;letter-spacing:-.02em!important;
+  white-space:normal!important;overflow-wrap:anywhere!important
+}
+.workflow-builder-main .dry-run-heading p{line-height:1.55}
+.workflow-builder-main .panel-header{align-items:flex-start;gap:10px}
+.workflow-builder-main .panel-header>div{min-width:0;flex:1}
+.workflow-builder-main .panel-header h2{line-height:1.35;overflow-wrap:anywhere}
+.workflow-builder-main .panel-selected-hint{margin:5px 0 0;font-size:10px;line-height:1.45;color:#94A3B8}
+.workflow-builder-main #node-settings-panel{scroll-margin-top:16px}
+.workflow-builder-main .branch-connection-status{display:flex;flex-wrap:wrap;gap:8px;margin:3px 0 8px}
+.workflow-builder-main .branch-connection-status span{
+  display:inline-flex;align-items:center;border:1px solid #354052;border-radius:7px;
+  padding:6px 8px;background:#111722;color:#CBD5E1;font-size:10px;font-weight:650
+}
+.workflow-builder-main .branch-connection-status .branch-connected{border-color:#276749;color:#86EFAC;background:#10251F}
+.workflow-builder-main .builder-mobile-edit-shortcut{display:none}
+@media(max-width:720px){
+  .workflow-builder-main .dry-run-heading{align-items:flex-start;gap:9px}
+  .workflow-builder-main .dry-run-heading h2{font-size:15px!important;line-height:1.4!important}
+  .workflow-builder-main .dry-run-badge{margin-top:14px}
+  .workflow-builder-main .builder-panel{min-height:0}
+  .workflow-builder-main .builder-mobile-edit-shortcut{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin:0 12px 12px;padding:10px 12px;border:1px solid #354052;
+    border-radius:9px;background:#111722;color:#E2E8F0;font-size:11px
+  }
+  .workflow-builder-main .builder-mobile-edit-shortcut span{min-width:0;overflow-wrap:anywhere}
+  .workflow-builder-main .builder-mobile-edit-shortcut button{
+    flex:0 0 auto;border:1px solid #45638B;border-radius:7px;
+    padding:8px 10px;background:#172846;color:#DBEAFE;font:650 10px 'DM Sans',sans-serif
+  }
+  .workflow-builder-main .builder-mobile-edit-shortcut button:disabled{opacity:.45}
+  .workflow-builder-main .graph-viewport-controls{z-index:12}
+}
