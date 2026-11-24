@@ -63,3 +63,29 @@ test("a never-permitted action is always displayed as blocked", () => {
   }, steps, { id: "lead-4", full_name: "Blocked", budget_min: 250000, qualification: { confidence: 0.9 } });
   assert.equal(result.actions[0].preview, "blocked_by_policy");
 });
+
+test("replay marks actions excluded by the deterministic selected branch", () => {
+  const branchedSteps = [
+    ...steps,
+    { id: "notify", nodeId: "email", operationId: "send_email", kind: "action", input: {}, branchPaths: [[{ fromStepId: "condition-budget", route: "false" }]] },
+  ];
+  const result = replayPlaybookAgainstLead({
+    ...playbook,
+    actionPolicies: [playbook.actionPolicies[1]],
+  }, branchedSteps, {
+    id: "lead-5", full_name: "Qualified Buyer", budget_min: 150000,
+    qualification: { confidence: 0.93 },
+  });
+  assert.equal(result.rules[0].route, "true");
+  assert.equal(result.actions[0].preview, "not_selected_by_rule");
+});
+
+test("canonical corrected lead fields override stale raw enquiry values", () => {
+  const result = replayPlaybookAgainstLead(playbook, steps, {
+    id: "lead-6", full_name: "Corrected Buyer", budget_min: 50000,
+    raw_enquiry: { budget_min: 250000 },
+    qualification: { confidence: 0.93 },
+  });
+  assert.equal(result.rules[0].outcome, "not_matched");
+  assert.equal(result.rules[0].route, "false");
+});
