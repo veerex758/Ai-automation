@@ -189,9 +189,8 @@ export async function DELETE(request: Request) {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    if (!await requireWorkspaceAdmin(supabase, workspace.id, user.id)) {
-      return NextResponse.json({ error: "Only workspace owners and admins can disconnect connections." }, { status: 403, headers });
-    }
+    // The service-role RPC rechecks owner/admin membership and removes the
+    // local credential row atomically before attempting remote revocation.
     const admin = serviceClient();
     const { data: encryptedCredentials, error: revokeError } = await admin.rpc("revoke_google_connection", {
       p_workspace_id: workspace.id,
