@@ -179,14 +179,14 @@ async function approvedCredentials(
     .select("encrypted_credentials,encryption_version")
     .eq("integration_id", integration.id)
     .maybeSingle();
-  if (secretError || !secret || secret.encryption_version !== "v1") {
+  if (secretError || !secret || !["v1", "v2"].includes(secret.encryption_version)) {
     return { ok: false, code: provider.toUpperCase() + "_CREDENTIALS_UNAVAILABLE" };
   }
   try {
     const decoded = decryptWorkspaceCredentials(
       secret.encrypted_credentials,
       undefined,
-      workspaceId + ":" + provider,
+      secret.encryption_version === "v2" ? workspaceId + ":" + provider + ":" + integration.id : workspaceId + ":" + provider,
     );
     const credentials = decoded[provider];
     if (!credentials || Object.keys(credentials).length === 0) {
