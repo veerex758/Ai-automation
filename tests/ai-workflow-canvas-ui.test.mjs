@@ -11,7 +11,8 @@ test("Playbook authoring starts with a business outcome instead of a canvas", ()
   assert.match(page, /What should Rexnora achieve/);
   assert.match(page, /industry: "real_estate"/);
   assert.match(page, /api\/ai\/generate-workflow/);
-  assert.match(page, /Only use registered Rexnora operations/);
+  assert.match(page, /Use registered Rexnora operations only/);
+  assert.match(page, /Do not use Switch, WhatsApp, Google Calendar, CRM writes/);
 });
 
 test("business rules are linked to actual generated graph condition nodes", () => {
