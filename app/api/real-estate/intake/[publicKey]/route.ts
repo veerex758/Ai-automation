@@ -99,9 +99,16 @@ export async function POST(request:NextRequest,context:Context){
   const contactPreference=enumValue(body.contactPreference,["email","phone","whatsapp"],"email");
   const preferredLocation=typeof body.preferredLocation==="string"?body.preferredLocation.trim().slice(0,200):null;
   const leadInput: RealEstateLeadInput = {transactionType,propertyType,preferredLocation,budgetMin,budgetMax,timeframe,readiness,email,phone};
+  const {data:activePlaybooks,error:activePlaybookError}=await db.from("workflows").select("id,version")
+   .eq("workspace_id",form.workspace_id).eq("status","active")
+   .contains("definition",{playbook:{schema:"rexnora.playbook",schemaVersion:1}}).limit(2);
+  if(activePlaybookError)throw new Error("ACTIVE_PLAYBOOK_LOOKUP_FAILED");
+  if((activePlaybooks??[]).length>1)throw new Error("MULTIPLE_ACTIVE_PLAYBOOKS_FOR_WORKSPACE");
+  const activePlaybook=activePlaybooks?.[0]??null;
   const score=scoreRealEstateLead(leadInput);
   const {data:lead,error:insertError}=await db.from("real_estate_leads").insert({
    workspace_id:form.workspace_id,source,source_event_id:sourceEventId,full_name:fullName,email,phone,
+   workflow_id:activePlaybook?.id??null,playbook_version:activePlaybook?.version??null,
    transaction_type:transactionType,property_type:propertyType,preferred_location:preferredLocation,
    budget_min:budgetMin,budget_max:budgetMax,currency,
    bedrooms,
