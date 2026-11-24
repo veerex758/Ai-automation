@@ -182,9 +182,9 @@ security definer
 set search_path = ''
 as $$
 declare
-  row_count integer;
+  v_row_count integer;
 begin
-  if p_workspace_id is null or p_delivery_id is null or p_lease_token is null
+  if p_workspace_id is null or p_delivery_id is null or p_lease_token is null or p_outcome is null
      or p_outcome not in ('accepted','failed','unknown','blocked','cancelled')
      or p_retry_after_seconds is null or p_retry_after_seconds not between 0 and 86400 then
     raise exception using errcode='22023', message='Invalid channel delivery result';
@@ -211,8 +211,8 @@ begin
      and d.lease_token=p_lease_token
      and d.status='sending';
 
-  get diagnostics row_count = row_count;
-  return row_count=1;
+  get diagnostics v_row_count = row_count;
+  return v_row_count=1;
 end;
 $$;
 
@@ -222,7 +222,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare changed integer;
+declare v_changed integer;
 begin
   if p_limit is null or p_limit not between 1 and 5000 then
     raise exception using errcode='22023',message='Invalid channel reconciliation limit';
@@ -246,8 +246,8 @@ begin
      where d.id=e.id
      returning d.id
   )
-  select count(*)::integer into changed from marked;
-  return changed;
+  select count(*)::integer into v_changed from marked;
+  return v_changed;
 end;
 $$;
 
@@ -255,7 +255,7 @@ create or replace function public.resolve_real_estate_playbook_decision(
   p_decision_id uuid,
   p_actor_user_id uuid,
   p_decision text,
-  p_corrections jsonb default '{}'::jsonb
+  p_corrections jsonb
 )
 returns table (
   result_status text,
@@ -460,8 +460,9 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare prior public.real_estate_inspection_bookings%rowtype;
-declare inserted public.real_estate_inspection_bookings%rowtype;
+declare
+  prior public.real_estate_inspection_bookings%rowtype;
+  inserted public.real_estate_inspection_bookings%rowtype;
 begin
   if p_workspace_id is null or p_lead_id is null or p_google_connection_id is null or p_requested_by is null
      or p_calendar_id is null or length(p_calendar_id) not between 1 and 300
@@ -595,6 +596,8 @@ begin
 end;
 $$;
 
+revoke all on function public.resolve_real_estate_playbook_decision(uuid,uuid,text,jsonb) from public,anon,authenticated;
+grant execute on function public.resolve_real_estate_playbook_decision(uuid,uuid,text,jsonb) to service_role;
 revoke all on function public.claim_due_real_estate_channel_deliveries(integer,integer) from public,anon,authenticated;
 grant execute on function public.claim_due_real_estate_channel_deliveries(integer,integer) to service_role;
 revoke all on function public.finish_real_estate_channel_delivery(uuid,uuid,uuid,text,text,text,integer) from public,anon,authenticated;
