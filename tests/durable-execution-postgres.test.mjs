@@ -108,13 +108,26 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     await setup.query(`
       drop table if exists public.execution_dead_letter_recoveries cascade;
       drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade;
+      drop table if exists public.workspace_integration_secrets, public.workspace_integrations, public.workspace_members, public.google_connections cascade;
       drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade;
       do $$ begin
         if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
         if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
         if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role nologin bypassrls; end if;
       end $$;
-      create table public.workspaces (id uuid primary key);
+      create table public.workspaces (id uuid primary key, owner_id uuid);
+      create table public.workspace_members (workspace_id uuid, user_id uuid, role text);
+      create table public.google_connections (id uuid primary key default gen_random_uuid(), workspace_id uuid, product text);
+      create table public.workspace_integrations (
+        id uuid primary key default gen_random_uuid(), workspace_id uuid not null,
+        provider text not null, status text not null, display_name text not null,
+        created_by uuid not null, updated_at timestamptz not null default now(),
+        unique (workspace_id, provider)
+      );
+      create table public.workspace_integration_secrets (
+        integration_id uuid primary key, encrypted_credentials text not null,
+        encryption_version text not null, updated_at timestamptz not null default now()
+      );
       create table public.workflows (
         id uuid primary key, workspace_id uuid not null references public.workspaces(id),
         version integer not null, status text not null,
@@ -131,7 +144,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       grant usage on schema public to anon, authenticated, service_role;
     `);
-    await setup.query("insert into public.workspaces values ($1),($2)", [ids.workspace, ids.workspaceOther]);
+    await setup.query("insert into public.workspaces (id,owner_id) values ($1,$3),($2,$3)", [ids.workspace, ids.workspaceOther, ids.user]);
     await setup.query(
       "insert into public.workflows (id,workspace_id,version,status,definition,created_by) values ($1,$2,1,'active',$3::jsonb,$4),($5,$2,1,'active',$3::jsonb,$4)",
       [ids.workflow, ids.workspace, JSON.stringify({ version: 1, nodes: [] }), ids.user, ids.workflowOther],
@@ -654,6 +667,7 @@ test.after(async () => {
       try {
         await db.query("drop table if exists public.execution_dead_letter_recoveries cascade");
         await db.query("drop table if exists public.execution_error_events, public.execution_rate_limit_hits, public.execution_dead_letters, public.execution_checkpoints, public.execution_jobs cascade");
+        await db.query("drop table if exists public.workspace_integration_secrets, public.workspace_integrations, public.workspace_members, public.google_connections cascade");
         await db.query("drop table if exists public.workflow_runs, public.workflows, public.workspaces cascade");
         await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer)");
         await db.query("drop function if exists public.dispatch_workflow_execution(uuid,uuid,integer,uuid,text,jsonb,integer,text)");
