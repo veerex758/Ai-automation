@@ -68,6 +68,11 @@ export async function POST(request:NextRequest,context:Context){
   const idempotencyKey=(request.headers.get("idempotency-key")??(typeof body.sourceEventId==="string"?body.sourceEventId:"")).trim();
   if(!/^[A-Za-z0-9._:-]{8,200}$/.test(idempotencyKey))return NextResponse.json({error:"Provide a unique Idempotency-Key header (8–200 safe characters)."} ,{status:400,headers});
   if(!fullName||(!email&&!phone)||typeof body.consentToContact!=="boolean")return NextResponse.json({error:"Name, email or phone, and an explicit contact-consent choice are required."},{status:400,headers});
+  const contactPreference=enumValue(body.contactPreference,["email","phone","whatsapp"] as const,"email");
+  const consentText=typeof body.consentText==="string"?body.consentText.trim().slice(0,1000):"";
+  if(body.consentToContact && (!consentText || (contactPreference==="whatsapp" && !/whatsapp/i.test(consentText)))) {
+    return NextResponse.json({error:contactPreference==="whatsapp" ? "Record the customer's explicit WhatsApp consent text before selecting WhatsApp contact." : "Record the customer's consent text before enabling follow-up contact."},{status:400,headers});
+  }
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return NextResponse.json({error:"Enter a valid email address."},{status:400,headers});
   const ip=request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()??"unknown";
   const ipHash=createHash("sha256").update(publicKey+":"+ip).digest("hex").slice(0,32);
@@ -96,7 +101,6 @@ export async function POST(request:NextRequest,context:Context){
   const propertyType=enumValue(body.propertyType,["apartment","house","land","commercial","other","unknown"] as const,"unknown");
   const timeframe=enumValue(body.timeframe,["urgent","within_30_days","one_to_three_months","over_three_months","unknown"] as const,"unknown");
   const readiness=enumValue(body.readiness,["cash_ready","pre_approved","financing_needed","researching","unknown"] as const,"unknown");
-  const contactPreference=enumValue(body.contactPreference,["email","phone","whatsapp"],"email");
   const preferredLocation=typeof body.preferredLocation==="string"?body.preferredLocation.trim().slice(0,200):null;
   const leadInput: RealEstateLeadInput = {transactionType,propertyType,preferredLocation,budgetMin,budgetMax,timeframe,readiness,email,phone};
   const {data:activePlaybooks,error:activePlaybookError}=await db.from("workflows").select("id,version")
@@ -115,7 +119,7 @@ export async function POST(request:NextRequest,context:Context){
    timeframe,readiness,financing_notes:typeof body.financingNotes==="string"?body.financingNotes.slice(0,500):null,
    main_concern:typeof body.mainConcern==="string"?body.mainConcern.slice(0,500):null,
    contact_preference:contactPreference,consent_to_contact:body.consentToContact,
-   consent_text:typeof body.consentText==="string"?body.consentText.slice(0,1000):null,
+   consent_text:body.consentToContact?consentText:null,
    consent_at:body.consentToContact?new Date().toISOString():null,status:"new",
    qualification:{},raw_enquiry:{message:typeof body.message==="string"?body.message.slice(0,6000):"",formId:form.id},
    lead_score:score.score,lead_temperature:score.temperature,score_factors:score.factors,
