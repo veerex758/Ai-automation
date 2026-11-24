@@ -9,6 +9,7 @@ import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 45;
 
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_EVENT_AGE_SECONDS = 300;
