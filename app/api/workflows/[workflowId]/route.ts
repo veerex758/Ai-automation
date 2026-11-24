@@ -6,8 +6,10 @@ import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { getWorkerProvider } from "@/lib/workflows/worker-operation-map";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
+const { validatePlaybookDefinition } = playbookDefinition;
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -114,16 +116,33 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
 
       let steps: RegisteredWorkflowStep[];
       const stored = candidate.definition as Record<string, unknown> | null;
-      // Playbook action permissions are metadata until the durable worker enforces
-      // every policy and records approval decisions. The generic workflow activator
-      // must not bypass that missing enforcement layer.
       if (stored?.playbook !== undefined) {
-        return NextResponse.json({
-          error: "This Playbook cannot be activated yet. Its action permissions and Decision Inbox must be enforced by the durable runtime first.",
-          code: "PLAYBOOK_RUNTIME_POLICY_NOT_ENFORCED",
-        }, { status: 409 });
-      }
-      if (stored?.format === "aivanta-registry-v1") {
+        // The real-estate worker currently implements exactly one safe Playbook
+        // runtime: Gemini qualification, deterministic IF rules and optional
+        // Resend agency notification. Do not activate unsupported provider steps.
+        if (process.env.REAL_ESTATE_PIPELINE_ENABLED !== "true") {
+          return NextResponse.json({
+            error: "The real-estate Playbook worker is disabled on this deployment. No activation was performed.",
+            code: "REAL_ESTATE_PIPELINE_DISABLED",
+          }, { status: 503 });
+        }
+        if (stored.format !== "aivanta-registry-v1") {
+          return NextResponse.json({ error: "Playbooks must use the registered workflow format.", code: "PLAYBOOK_FORMAT_INVALID" }, { status: 422 });
+        }
+        const graph = validateDefinition(stored);
+        if (!graph.definition) {
+          return NextResponse.json({ error: graph.error || "Playbook graph is invalid.", code: "PLAYBOOK_GRAPH_INVALID" }, { status: 422 });
+        }
+        const registered = validateRegisteredSteps(stored.steps);
+        if (!registered.steps) {
+          return NextResponse.json({ error: registered.error || "Playbook operations are invalid.", code: "PLAYBOOK_OPERATIONS_INVALID" }, { status: 422 });
+        }
+        const policy = validatePlaybookDefinition(stored.playbook, graph.definition, registered.steps);
+        if (!policy.playbook) {
+          return NextResponse.json({ error: policy.error || "Playbook rules and permissions are invalid.", code: "PLAYBOOK_POLICY_INVALID" }, { status: 422 });
+        }
+        steps = registered.steps as RegisteredWorkflowStep[];
+      } else if (stored?.format === "aivanta-registry-v1") {
         const checked = validateRegisteredSteps(stored.steps);
         if (!checked.steps) return NextResponse.json({ error: checked.error || "Workflow registry definition is invalid." }, { status: 422 });
         steps = checked.steps;
