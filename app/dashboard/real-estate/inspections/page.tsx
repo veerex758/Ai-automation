@@ -143,7 +143,7 @@ export default function RealEstateInspectionsPage() {
   const connectionById = new Map(connections.map((connection) => [connection.id, connection]));
 
   return <main className="app-shell">
-    <DashboardSidebar activePage="real-estate" />
+    <DashboardSidebar activePage="realestate" />
     <section className="dashboard-main">
       <header className="dashboard-topbar">
         <div className="breadcrumbs">Workspace <span>/</span><Link href="/dashboard/real-estate">Real Estate</Link> <span>/</span><strong>Inspections</strong></div>
