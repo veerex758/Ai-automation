@@ -46,7 +46,7 @@ begin
      or p_event_key is null or length(p_event_key) not between 1 and 255
      or p_event_type is null or length(p_event_type) not between 1 and 120
      or p_payload_hash is null or p_payload_hash !~ '^[a-f0-9]{64}$'
-     or p_lease_seconds < 30 or p_lease_seconds > 900 then
+     or p_lease_seconds is null or p_lease_seconds < 30 or p_lease_seconds > 900 then
     raise exception 'invalid webhook claim' using errcode = '22023';
   end if;
 
