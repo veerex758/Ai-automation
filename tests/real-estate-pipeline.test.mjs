@@ -83,6 +83,31 @@ test("agent alerts use an explicit agency allowlist and stable recipient idempot
   assert.match(migration, /agent_notification_accepted_recipient_hashes jsonb/i);
 });
 
+test("WhatsApp delivery is consent-gated, active-Playbook-only, and reconciled without blind retries", () => {
+  assert.match(pipeline, /lead\.consent_to_contact && lead\.contact_preference === "whatsapp"/);
+  assert.match(pipeline, /runtime\.mode !== "playbook" \|\| !whatsappPolicy/);
+  assert.match(pipeline, /approvedCredentials\([\s\S]*?"whatsapp_business",[\s\S]*?"send_template"/);
+  assert.match(pipeline, /real_estate_channel_deliveries/);
+  assert.match(pipeline, /WHATSAPP_DELIVERY_REQUIRES_RECONCILIATION/);
+  assert.match(pipeline, /status: "unknown"/);
+  assert.match(pipeline, /isProviderLiveEnabled\(provider, process\.env\.AIVANTA_LIVE_INTEGRATIONS\)/);
+});
+
+test("qualification creates one internal workspace task per lead", () => {
+  assert.match(pipeline, /real_estate_tasks/);
+  assert.match(pipeline, /onConflict: "workspace_id,idempotency_key"/);
+  assert.match(pipeline, /real-estate-new-enquiry-review:/);
+  assert.match(pipeline, /assigned_agent_id: lead\.assigned_agent_id \?\? null/);
+});
+
+test("HubSpot back-office path searches an exact email before creating and checks both operation approvals", () => {
+  assert.match(pipeline, /findOperation\("hubspot", "search_contacts", "action"\)/);
+  assert.match(pipeline, /findOperation\("hubspot", "create_contact", "action"\)/);
+  assert.match(pipeline, /contacts\.length > 0/);
+  assert.match(pipeline, /approvedCredentials\(db, workspaceId, "hubspot", "hubspot", "create_contact"\)/);
+  assert.match(pipeline, /PLAYBOOK_HUBSPOT_CREATE_BLOCKED/);
+});
+
 test("follow-up delivery goes through the registered Resend operation with a stable idempotency key", () => {
   assert.match(followups, /findOperation\("email", "send_email", "action"\)/);
   assert.match(followups, /idempotencyKey: "real-estate-followup:"/);
