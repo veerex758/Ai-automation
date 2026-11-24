@@ -133,7 +133,7 @@ declare
   prior public.real_estate_inspection_bookings%rowtype;
   inserted public.real_estate_inspection_bookings%rowtype;
 begin
-  if p_workspace_id is null or p_lead_id is null or p_requested_by is null
+  if p_workspace_id is null or p_lead_id is null or p_google_connection_id is null or p_requested_by is null
      or p_calendar_id is null or length(p_calendar_id) < 1 or length(p_calendar_id) > 300
      or p_time_zone is null or length(p_time_zone) < 1 or length(p_time_zone) > 100
      or p_idempotency_key is null or length(p_idempotency_key) < 8 or length(p_idempotency_key) > 240
@@ -175,7 +175,9 @@ begin
   select * into prior from public.real_estate_inspection_bookings
    where workspace_id=p_workspace_id and idempotency_key=p_idempotency_key;
   if found then
-    if prior.lead_id is distinct from p_lead_id or prior.calendar_id is distinct from p_calendar_id
+    if prior.lead_id is distinct from p_lead_id or prior.property_id is distinct from p_property_id
+       or prior.agent_id is distinct from p_agent_id or prior.google_connection_id is distinct from p_google_connection_id
+       or prior.calendar_id is distinct from p_calendar_id or prior.time_zone is distinct from p_time_zone
        or prior.start_at is distinct from p_start_at or prior.end_at is distinct from p_end_at then
       raise exception using errcode='23505', message='Inspection idempotency key reused with different booking data';
     end if;
@@ -206,7 +208,7 @@ end;
 $$;
 
 revoke all on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,text,uuid) from public,anon,authenticated;
-grant execute on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,text,uuid) to service_role;
+grant execute on function public.reserve_real_estate_inspection_booking(uuid,uuid,uuid,uuid,uuid,text,timestamptz,timestamptz,text,text,uuid) to service_role;
 
 create or replace function public.begin_real_estate_inspection_booking(
   p_workspace_id uuid,
