@@ -100,9 +100,12 @@ test("durable worker executes registered steps only for explicitly gated live jo
   assert.match(workerService, /AIVANTA_LIVE_EXECUTION_ENABLED !== "true"/);
   assert.match(workerService, /context\.resolveStepCredentials = async/);
   assert.match(workerService, /if \(job\.execution_mode !== "live"\) return;/);
-  assert.match(workerService, /const selectedConnectionId = selectedConnectionIds\.get\(provider\)/);
+  assert.match(workerService, /const activeConnectionIds = new Map<string, string>\(\)/);
+  assert.match(workerService, /const selectedConnectionId = activeConnectionIds\.get\(mapping\.provider\)/);
   assert.match(workerService, /if \(!selectedConnectionId\) throw new Error\("WORKSPACE_CONNECTION_SELECTION_REQUIRED"\)/);
-  assert.match(workerService, /connectionId \? new Map\(\[\[provider, connectionId\]\]\) : new Map\(\)/);
+  assert.match(workerService, /if \(!connectionId\) throw new Error\("WORKSPACE_CONNECTION_SELECTION_REQUIRED"\)/);
+  assert.match(workerService, /new Map\(\[\[provider, connectionId\]\]\)/);
+  assert.match(workerService, /WORKSPACE_CONNECTION_REVOKED_OR_UNVERIFIED/);
   assert.match(workerService, /onStepStart/);
   assert.match(workerService, /onStepComplete/);
   assert.match(workerService, /LIVE_OPERATION_NOT_ENABLED/);
