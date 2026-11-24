@@ -11,6 +11,8 @@ const intake = read("../app/api/real-estate/intake/[publicKey]/route.ts");
 const manualLead = read("../app/api/real-estate/leads/route.ts");
 const serviceClient = read("../lib/real-estate/server.ts");
 const followups = read("../lib/real-estate/followups.ts");
+const realEstatePage = read("../app/dashboard/real-estate/page.tsx");
+const playbookPage = read("../app/dashboard/playbooks/new/page.tsx");
 const followupsRoute = read("../app/api/cron/real-estate-followups/route.ts");
 const pipelineWorker = read("../app/api/cron/real-estate-pipeline/route.ts");
 const emailNode = read("../nodes/email.ts");
@@ -188,4 +190,26 @@ test("public and manual intake require recorded channel consent before creating 
 test("Playbook policy validation evaluates all IF rules before CRM writes", () => {
   assert.match(playbookDefinition, /\\.\\.\\.crmActions/);
   assert.match(playbookDefinition, /Every deterministic Playbook rule must be evaluated before customer communication or CRM writes/);
+});
+
+
+test("manual lead UI records the customer's actual words and never synthesizes channel consent", () => {
+  assert.match(realEstatePage, /consentText:""/);
+  assert.match(realEstatePage, /leadForm\.consentText\.trim\(\)/);
+  assert.match(realEstatePage, /Record the customer’s actual consent wording/);
+  assert.match(realEstatePage, /For WhatsApp, the wording must explicitly mention WhatsApp/);
+  assert.doesNotMatch(realEstatePage, /Customer explicitly agreed to follow-up contact by/);
+});
+
+test("real-estate starter requires the complete configured action bundle and one selected CRM", () => {
+  assert.match(playbookPage, /setCrmProvider<"pipedrive" \| "zoho_crm" \| "freshsales">/);
+  assert.match(playbookPage, /hasStep\("gemini", "qualify_real_estate_lead", "action"\)/);
+  assert.match(playbookPage, /hasStep\("if", "evaluate", "action"\)/);
+  assert.match(playbookPage, /hasStep\("email", "send_email", "action"\)/);
+  assert.match(playbookPage, /hasStep\("whatsapp_business", "send_template", "action"\)/);
+  assert.match(playbookPage, /crmSteps\.length !== 2/);
+  assert.match(playbookPage, /crmCreateIndex <= crmSearchIndex/);
+  assert.match(playbookPage, /No draft was saved; generate it again/);
+  assert.match(playbookPage, /Create full starter draft/);
+  assert.match(playbookPage, /never activate or execute anything/i);
 });
