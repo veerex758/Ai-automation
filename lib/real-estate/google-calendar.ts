@@ -136,13 +136,22 @@ export async function assertRealEstateCalendarSlotAvailable(
 ) {
   const operation = findOperation("google_calendar", "execute", "action");
   if (!operation) throw new Error("GOOGLE_CALENDAR_LIST_OPERATION_NOT_REGISTERED");
-  const result = await operation.run(context, {
-    calendarId,
-    timeMin: new Date(Date.parse(startAt) - 86400000).toISOString(),
-    timeMax: new Date(Date.parse(endAt) + 86400000).toISOString(),
-    maxResults: 100,
-  }) as { events?: CalendarEvent[] };
-  for (const event of result.events ?? []) {
+  const allEvents: CalendarEvent[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < 5; page++) {
+    const result = await operation.run(context, {
+      calendarId,
+      timeMin: startAt,
+      timeMax: endAt,
+      maxResults: 100,
+      ...(pageToken ? { pageToken } : {}),
+    }) as { events?: CalendarEvent[]; nextPageToken?: string };
+    allEvents.push(...(result.events ?? []));
+    pageToken = result.nextPageToken;
+    if (!pageToken) break;
+  }
+  if (pageToken) throw new Error("GOOGLE_CALENDAR_AVAILABILITY_UNVERIFIED");
+  for (const event of allEvents) {
     if (excludeEventId && event.id === excludeEventId) continue;
     if (event.status === "cancelled" || event.transparency === "transparent") continue;
     const interval = eventInterval(event);
