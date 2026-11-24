@@ -16,7 +16,7 @@ export type NodeContext = {
   /** Aborted when the durable worker loses its lease. */
   signal?: AbortSignal;
   /** Worker-side authorization hook, called immediately before every live provider handler. */
-  authorizeOperation?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action" }) => Promise<void>;
+  authorizeOperation?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action"; connectionId?: string }) => Promise<void>;
   /** Resolve the exact workspace connection selected on this workflow step. Never resolves credentials in the browser. */
   resolveStepCredentials?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action"; connectionId?: string }) => Promise<void>;
   webhook?: { verified: boolean };
