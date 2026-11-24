@@ -11,6 +11,19 @@ async function get(ctx: NodeContext, provider: string, url: string): Promise<Rec
   const response = await ctx.http.request({ url, method: "GET", headers: { Authorization: "Bearer " + token(ctx, provider) }, timeoutMs: 15000, retries: 0 });
   if (response.status < 200 || response.status >= 300) {
     ctx.logger.error("Google provider request failed", { provider, status: response.status });
+    throw new Error(response.status === 429 ? provider.toUpperCase() + "_RATE_LIMITED" : provider.toUpperCase() + "_HTTP_" + response.status);
+  }
+  if (!response.body || typeof response.body !== "object" || Array.isArray(response.body)) throw new Error(provider.toUpperCase() + "_INVALID_RESPONSE");
+  return response.body as Record<string, unknown>;
+}
+async function post(ctx: NodeContext, provider: string, url: string, body: unknown): Promise<Record<string, unknown>> {
+  const response = await ctx.http.request({
+    url, method: "POST",
+    headers: { Authorization: "Bearer " + token(ctx, provider), "Content-Type": "application/json" },
+    body, timeoutMs: 15000, retries: 0,
+  });
+  if (response.status < 200 || response.status >= 300) {
+    ctx.logger.error("Google provider write failed", { provider, status: response.status });
     throw new Error(response.status === 429 ? provider.toUpperCase() + "_RATE_LIMITED" : provider.toUpperCase() + "_REQUEST_FAILED");
   }
   if (!response.body || typeof response.body !== "object" || Array.isArray(response.body)) throw new Error(provider.toUpperCase() + "_INVALID_RESPONSE");
@@ -69,10 +82,10 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
   }),
   node({
     id: "google_calendar", name: "Google Calendar",
-    scope: "https://www.googleapis.com/auth/calendar.readonly",
-    description: "Lists events from a selected Google Calendar within a bounded time window using read-only OAuth access.",
+    scope: "https://www.googleapis.com/auth/calendar.events.owned",
+    description: "Lists events and creates new events on Google Calendars the connected user owns. Requires explicit calendar.events.owned consent.",
     input: z.object({ calendarId: z.string().trim().min(1).max(300).default("primary"), timeMin: z.string().datetime().optional(), timeMax: z.string().datetime().optional(), maxResults: z.number().int().min(1).max(100).default(20) }).strict(),
-    output: z.object({ events: z.array(z.object({ id: z.string(), summary: z.string().optional(), start: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict()).max(100) }).strict(),
+    output: z.object({ events: z.array(z.object({ id: z.string(), summary: z.string().optional(), start: z.unknown().optional(), end: z.unknown().optional(), htmlLink: z.string().url().optional() }).strict()).max(100) }).strict(),
     async run(ctx, input) {
       const url = new URL("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId ?? "primary") + "/events");
       url.searchParams.set("maxResults", String(input.maxResults ?? 20));
@@ -80,7 +93,7 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
       if (input.timeMax) url.searchParams.set("timeMax", input.timeMax);
       const body = await get(ctx, "google_calendar", url.toString());
       const events = Array.isArray(body.items) ? body.items.flatMap((item: any) => typeof item?.id === "string"
-        ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
+        ? [{ id: item.id, ...(typeof item.summary === "string" ? { summary: item.summary } : {}), ...(item.start !== undefined ? { start: item.start } : {}), ...(item.end !== undefined ? { end: item.end } : {}), ...(typeof item.htmlLink === "string" ? { htmlLink: item.htmlLink } : {}) }] : []) : [];
       return { events: events.slice(0, input.maxResults ?? 20) };
     },
     additionalActions: [{
@@ -94,6 +107,76 @@ export const catalogueGoogleNodes: NodeDefinition[] = [
         const body = await get(ctx, "google_calendar", url);
         if (typeof body.id !== "string") throw new Error("GOOGLE_CALENDAR_INVALID_RESPONSE");
         return { id: body.id, ...(typeof body.summary === "string" ? { summary: body.summary } : {}), ...(typeof body.description === "string" ? { description: body.description.slice(0, 10000) } : {}), ...(body.start !== undefined ? { start: body.start } : {}), ...(body.end !== undefined ? { end: body.end } : {}), ...(typeof body.htmlLink === "string" ? { htmlLink: body.htmlLink } : {}) };
+      },
+    }, {
+      id: "create_event", name: "Create event",
+      description: "Creates a calendar event on a calendar the connected Google account owns. Invitee notifications default to off and must be deliberately enabled.",
+      inputSchema: z.object({
+        calendarId: z.string().trim().min(1).max(300).default("primary"),
+        summary: z.string().trim().min(1).max(200),
+        description: z.string().max(10000).optional(),
+        location: z.string().trim().max(500).optional(),
+        startDateTime: z.string().datetime({ offset: true }),
+        endDateTime: z.string().datetime({ offset: true }),
+        timeZone: z.string().trim().min(1).max(100).optional(),
+        attendeeEmails: z.array(z.string().email()).max(25).optional(),
+        eventId: z.string().regex(/^[a-v0-9]{5,1024}$/).optional(),
+        sendUpdates: z.enum(["all", "externalOnly", "none"]).default("none"),
+      }).strict(),
+      outputSchema: z.object({
+        id: z.string(),
+        summary: z.string().optional(),
+        status: z.string().optional(),
+        start: z.unknown().optional(),
+        end: z.unknown().optional(),
+        htmlLink: z.string().url().optional(),
+      }).strict(),
+      async run(ctx, raw) {
+        const input = z.object({
+          calendarId: z.string().trim().min(1).max(300).default("primary"),
+          summary: z.string().trim().min(1).max(200),
+          description: z.string().max(10000).optional(),
+          location: z.string().trim().max(500).optional(),
+          startDateTime: z.string().datetime({ offset: true }),
+          endDateTime: z.string().datetime({ offset: true }),
+          timeZone: z.string().trim().min(1).max(100).optional(),
+          attendeeEmails: z.array(z.string().email()).max(25).optional(),
+          eventId: z.string().regex(/^[a-v0-9]{5,1024}$/).optional(),
+          sendUpdates: z.enum(["all", "externalOnly", "none"]).default("none"),
+        }).strict().parse(raw);
+        if (Date.parse(input.endDateTime) <= Date.parse(input.startDateTime)) {
+          throw new Error("GOOGLE_CALENDAR_TIME_RANGE_INVALID");
+        }
+        const url = new URL("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(input.calendarId) + "/events");
+        url.searchParams.set("sendUpdates", input.sendUpdates);
+        const event = {
+          ...(input.eventId ? { id: input.eventId } : {}),
+          summary: input.summary,
+          ...(input.description ? { description: input.description } : {}),
+          ...(input.location ? { location: input.location } : {}),
+          start: { dateTime: input.startDateTime, ...(input.timeZone ? { timeZone: input.timeZone } : {}) },
+          end: { dateTime: input.endDateTime, ...(input.timeZone ? { timeZone: input.timeZone } : {}) },
+          ...(input.attendeeEmails?.length ? { attendees: input.attendeeEmails.map((email) => ({ email })) } : {}),
+        };
+        let body: Record<string, unknown>;
+        try {
+          body = await post(ctx, "google_calendar", url.toString(), event);
+        } catch (error) {
+          // A deterministic event ID lets a retry reconcile a create whose
+          // response was lost after Google accepted it.
+          const message = error instanceof Error ? error.message : "";
+          if (!input.eventId || !/409|ALREADY_EXISTS|CONFLICT/.test(message)) throw error;
+          body = await get(ctx, "google_calendar", url.toString().replace(/\\/$/, "") + "/" + encodeURIComponent(input.eventId));
+        }
+        if (typeof body.id !== "string") throw new Error("GOOGLE_CALENDAR_INVALID_RESPONSE");
+        return {
+          id: body.id,
+          ...(typeof body.summary === "string" ? { summary: body.summary } : {}),
+          ...(typeof body.status === "string" ? { status: body.status } : {}),
+          ...(body.start !== undefined ? { start: body.start } : {}),
+          ...(body.end !== undefined ? { end: body.end } : {}),
+          ...(typeof body.htmlLink === "string" ? { htmlLink: body.htmlLink } : {}),
+        };
       },
     }],
   }),
