@@ -496,3 +496,31 @@ test("Switch node predicts branch selection during dry-run without running downs
   assert.deepEqual(live.steps.map(step => step.status), ["succeeded", "skipped", "succeeded"]);
   assert.equal((live.outputs.qualifiedPath as { text: string }).text, "qualified lead");
 });
+
+
+test("builder graph rejects fan-out from regular nodes and enforces exactly two IF branches", async () => {
+  const { buildRegistrySteps } = await import("../lib/workflows/build-registry-steps");
+  const trigger = { id: "trigger", type: "trigger" as const, title: "Start", settings: {}, registryNodeId: "manual", registryOperationId: "start", registryInput: {} };
+  const action = (id: string) => ({ id, type: "action" as const, title: id, settings: {}, registryNodeId: "set_fields", registryOperationId: "merge_fields", registryInput: { data: {}, fields: { result: id } } });
+  const yes = action("yes");
+  const no = action("no");
+  const check = { id: "check", type: "condition" as const, title: "Qualified?", settings: { field: "status", operator: "equals", value: "qualified" } };
+
+  assert.throws(() => buildRegistrySteps({
+    nodes: [trigger, yes, no],
+    edges: [
+      { id: "a", source: "trigger", target: "yes", label: "next" as const },
+      { id: "b", source: "trigger", target: "no", label: "next" as const },
+    ],
+  }), /Only IF or Switch nodes can have multiple outgoing connections/);
+
+  assert.throws(() => buildRegistrySteps({
+    nodes: [trigger, check, yes, no],
+    edges: [
+      { id: "a", source: "trigger", target: "check", label: "next" as const },
+      { id: "b", source: "check", target: "yes", label: "true" as const },
+      { id: "c", source: "check", target: "no", label: "false" as const },
+      { id: "d", source: "check", target: "yes", label: "next" as const },
+    ],
+  }), /exactly one true path and one false path/);
+});
