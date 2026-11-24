@@ -4,6 +4,7 @@ import { runDurableWorker } from "@/lib/workflows/durable-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 45;
 
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_WORKER_SECRET;
