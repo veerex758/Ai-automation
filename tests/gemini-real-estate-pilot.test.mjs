@@ -11,6 +11,7 @@ const provision = readFileSync("app/api/workflows/[workflowId]/webhook/route.ts"
 const builder = readFileSync("app/dashboard/workflows/[workflowId]/page.tsx", "utf8");
 const testPanel = readFileSync("app/dashboard/workflows/[workflowId]/run-test-panel.tsx", "utf8");
 const pipeline = readFileSync("lib/real-estate/pipeline.ts", "utf8");
+const adminConfig = readFileSync("lib/supabase/admin.ts", "utf8");
 
 test("Gemini lead qualification is a registered structured operation and does not expose direct contact identifiers", () => {
   assert.match(node, /id: "qualify_real_estate_lead"/);
@@ -48,8 +49,10 @@ test("signed webhook ingress queues durable work with a verified workspace actor
 
 test("webhook provisioning encrypts secrets and the builder makes activation explicit", () => {
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
-  assert.match(provision, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(provision, /CODED_SUPABASE_URL/);
+  assert.match(provision, /getAdminSupabaseConfig\(\)/);
+  assert.match(provision, /serviceRoleKey/);
+  assert.match(adminConfig, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(adminConfig, /CODED_SUPABASE_URL/);
   assert.match(builder, /Activate workflow/);
   assert.match(builder, /JSON\.stringify\(\{ status: "active" \}\)/);
   assert.match(builder, /signingSecret/);

@@ -7,6 +7,7 @@ import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,12 @@ export async function POST(request: NextRequest) {
 
     const { getOrCreateDefaultWorkspace } = await import("@/lib/supabase/workspace");
     const workspace = await getOrCreateDefaultWorkspace(supabase);
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "ai-workflow-generation", windowMs: 60 * 60_000,
+      ipLimit: 20, userId: user.id, userLimit: 20,
+      workspaceId: workspace.id, workspaceLimit: 100,
+    });
+    if (rateLimit) return rateLimit;
 
     // Read the current allowance before calling Gemini so an exhausted account
     // does not incur provider cost. The final consume RPC remains after graph

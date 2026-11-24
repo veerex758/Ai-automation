@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { getAgentTools } from "@/lib/agents/tool-runtime";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 const headers={"Cache-Control":"private, no-store"};
 const toolPattern=/^[a-z][a-z0-9._:-]{0,79}$/;
@@ -30,9 +31,10 @@ async function auth(){
  if(error||!user)return {response:NextResponse.json({error:"Authentication required."},{status:401,headers})};
  const workspace=await getOrCreateDefaultWorkspace(supabase);return {supabase,user,workspace};
 }
-export async function GET(){
+export async function GET(request:NextRequest){
  try{const a=await auth();if("response"in a)return a.response;
  if(!(await hasWorkspacePermission(a.supabase,a.workspace.id,a.user.id,"agents.view")))return NextResponse.json({error:"Workspace agents.view permission required."},{status:403,headers});
+ const limited=await enforceDistributedRateLimit(request,{scope:"agent-list",windowMs:60_000,ipLimit:60,userId:a.user.id,userLimit:60,workspaceId:a.workspace.id,workspaceLimit:180});if(limited)return limited;
  const {data:agents,error}=await a.supabase.from("agents").select("id,name,description,instructions,model_provider,model_name,tool_ids,permissions,status,created_at,updated_at").eq("workspace_id",a.workspace.id).order("updated_at",{ascending:false});
  if(error)throw error;
  const {data:activity}=await a.supabase.from("agent_activity").select("id,agent_id,event_type,details,created_at").eq("workspace_id",a.workspace.id).order("created_at",{ascending:false}).limit(50);
@@ -42,6 +44,7 @@ export async function GET(){
 export async function POST(request:NextRequest){
  try{const a=await auth();if("response"in a)return a.response;
  if(!(await hasWorkspacePermission(a.supabase,a.workspace.id,a.user.id,"agents.manage")))return NextResponse.json({error:"Workspace agents.manage permission required."},{status:403,headers});
+ const limited=await enforceDistributedRateLimit(request,{scope:"agent-create",windowMs:60*60_000,ipLimit:10,userId:a.user.id,userLimit:10,workspaceId:a.workspace.id,workspaceLimit:20});if(limited)return limited;
  const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>16384)return NextResponse.json({error:"Agent request exceeds 16 KiB."},{status:413,headers});
  let body:unknown;try{body=JSON.parse(raw)}catch{return NextResponse.json({error:"Request must be valid JSON."},{status:400,headers});}
  const parsed=cleanAgent(body);if(parsed.error)return NextResponse.json({error:parsed.error},{status:400,headers});

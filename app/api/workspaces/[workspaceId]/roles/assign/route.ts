@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 export const dynamic = "force-dynamic";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const headers = { "Cache-Control": "private, no-store" };
@@ -18,6 +19,12 @@ export async function PATCH(request: Request, context: Context) {
   if (we || me) return NextResponse.json({ error: "Could not verify workspace access." }, { status: 503, headers });
   const role = workspace?.owner_id === user.id ? "owner" : member?.role;
   if (!workspace || !role || !["owner", "admin"].includes(role)) return NextResponse.json({ error: "Workspace owner/admin access required." }, { status: 403, headers });
+  const limited = await enforceDistributedRateLimit(request, {
+    scope: "workspace-custom-role-assignment", windowMs: 15 * 60_000,
+    ipLimit: 15, userId: user.id, userLimit: 15,
+    workspaceId, workspaceLimit: 30,
+  });
+  if (limited) return limited;
   try {
     const contentLength = Number(request.headers.get("content-length") ?? "0"); if (contentLength > 4096 || new TextEncoder().encode(await request.clone().text()).byteLength > 4096) return NextResponse.json({ error: "Role assignment exceeds 4 KiB." }, { status: 413, headers });
     const body = await request.json() as { user_id?: unknown; custom_role_id?: unknown };

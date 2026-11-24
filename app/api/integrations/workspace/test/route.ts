@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { decryptWorkspaceCredentials, type WorkspaceCredentialProvider } from "@/lib/integrations/workspace-credentials";
 import { performSafeHttpRequest } from "@/nodes/safe-http";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -476,6 +477,13 @@ export async function POST(request: Request) {
       .eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
     if (membershipError) throw membershipError;
     if (!membership || !["owner", "admin"].includes(membership.role)) return json({ error: "Only workspace owners and admins can test integrations." }, 403);
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "integration-connection-test", windowMs: 5 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workspace.id, workspaceLimit: 30,
+      resourceId: integrationId, resourceLimit: 3,
+    });
+    if (rateLimit) return rateLimit;
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations").select("id")
       .eq("id", integrationId).eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
@@ -490,8 +498,8 @@ export async function POST(request: Request) {
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets").select("encrypted_credentials,encryption_version")
       .eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
-    if (!secret?.encrypted_credentials || !["v1", "v2"].includes(secret.encryption_version)) return json({ error: "Saved credential is unavailable. Save the integration again." }, 409);
-    const associatedData = secret.encryption_version === "v2" ? workspace.id + ":" + provider + ":" + integration.id : workspace.id + ":" + provider;
+    if (!secret?.encrypted_credentials || !["v1", "v2", "v3"].includes(secret.encryption_version)) return json({ error: "Saved credential is unavailable. Save the integration again." }, 409);
+    const associatedData = ["v2", "v3"].includes(secret.encryption_version) ? workspace.id + ":" + provider + ":" + integration.id : workspace.id + ":" + provider;
     let credentials: Credentials;
     try { credentials = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData)[provider as Provider]; }
     catch { return json({ error: "Aivanta could not decrypt this credential. Check the encryption key and save it again if it changed." }, 503); }

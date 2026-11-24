@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { encryptWorkspaceCredentialsV2 } from "@/lib/integrations/workspace-credentials";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 import {
   exchangeProviderOAuthCode,
   exchangeMetaLongLivedToken,
@@ -76,6 +77,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pro
     if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
       return finish(request, provider, false);
     }
+    const limited = await enforceDistributedRateLimit(request, {
+      scope: "provider-oauth-callback", windowMs: 15 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workspace.id, workspaceLimit: 20,
+      resourceId: provider, resourceLimit: 10,
+    });
+    if (limited) return finish(request, provider, false);
 
     const config = PROVIDER_OAUTH_CONFIG[provider];
     let token = await exchangeProviderOAuthCode({

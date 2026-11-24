@@ -75,12 +75,12 @@ test("Resend verification decrypts server-side and checks the saved connection w
 });
 
 
-test("new saves use connection-bound v2 while old v1 records remain compatible",()=>{
+test("new saves support connection-bound v3 with v1/v2 compatibility",()=>{
  assert.ok(route.includes("encryptWorkspaceCredentialsV2"));
  assert.ok(route.includes("p_create_new: requestedConnectionId === undefined"));
  assert.ok(connectionMigration.includes("encryption_version in ('v1','v2')"));
  assert.ok(connectionMigration.includes("p_create_new boolean"));
- assert.ok(worker.includes('secret.encryption_version === "v2"'));
+ assert.ok(worker.includes('["v1", "v2", "v3"].includes(secret.encryption_version)'));
  assert.ok(worker.includes("integration.id"));
  assert.ok(worker.includes('encryption_version: "v2"'));
 });
@@ -91,7 +91,7 @@ test("OAuth and provider verification decrypt the exact selected connection",()=
  const resendEmail=readFileSync(new URL("../app/api/integrations/workspace/resend/test-email/route.ts",import.meta.url),"utf8");
  assert.ok(oauth.includes("encryptWorkspaceCredentialsV2"));
  for(const source of [providerTest,resendTest,resendEmail]){
-  assert.ok(source.includes('secret.encryption_version === "v2"'));
+  assert.ok(source.includes('["v1", "v2", "v3"].includes(secret.encryption_version)'));
   assert.ok(source.includes("integration.id"));
  }
 });

@@ -4,6 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getGoogleOAuthConfig, GOOGLE_PRODUCTS, isGoogleProduct } from "@/lib/integrations/google-oauth";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +45,13 @@ export async function GET(request: NextRequest) {
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return NextResponse.json({ error: "Only workspace owners and admins can connect Google accounts." }, { status: 403 });
     }
+    const rateLimit = await enforceDistributedRateLimit(request, {
+      scope: "google-oauth-start", windowMs: 15 * 60_000,
+      ipLimit: 10, userId: user.id, userLimit: 10,
+      workspaceId: workspace.id, workspaceLimit: 30,
+      resourceId: productValue, resourceLimit: 10,
+    });
+    if (rateLimit) return rateLimit;
     const connectionId = request.nextUrl.searchParams.get("connectionId") ?? undefined;
     if (connectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) {
       return NextResponse.json({ error: "The Google connection ID is invalid." }, { status: 400 });

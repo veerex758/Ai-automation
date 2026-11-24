@@ -117,3 +117,77 @@ test("agency alert recipients are workspace-visible only with real-estate read a
   assert.match(notificationRecipients, /Only a workspace owner or admin/);
   assert.match(notificationRecipients, /\.eq\("workspace_id", auth\.workspace\.id\)/);
 });
+
+
+test("workflow version restore, schedule deletion and dispatch enforce workspace permissions", async () => {
+  const [versions, schedule, dispatch] = await Promise.all([
+    read("../app/api/workflows/[workflowId]/versions/route.ts"),
+    read("../app/api/workflows/[workflowId]/schedule/route.ts"),
+    read("../app/api/workflows/[workflowId]/dispatch/route.ts"),
+  ]);
+  assert.ok(versions.includes('hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.view")'));
+  assert.ok(versions.includes('hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.edit")'));
+  assert.ok(schedule.includes('hasWorkspacePermission(supabase, workflow.workspace_id, user.id, "workflows.execute")'));
+  assert.ok(schedule.includes('.eq("workspace_id", workflow.workspace_id)'));
+  assert.ok(dispatch.includes('hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute")'));
+  for (const route of [versions, schedule, dispatch]) assert.ok(route.includes("enforceDistributedRateLimit"));
+});
+
+test("paid actions, OAuth callbacks and workspace administration use distributed abuse controls", async () => {
+  const routes = await Promise.all([
+    read("../app/api/billing/checkout/route.ts"),
+    read("../app/api/billing/stripe/checkout/route.ts"),
+    read("../app/api/billing/stripe/subscribe/route.ts"),
+    read("../app/api/billing/paystack/recurring/authorize/route.ts"),
+    read("../app/api/billing/cancel/route.ts"),
+    read("../app/api/marketplace/checkout/route.ts"),
+    read("../app/api/marketplace/bundles/checkout/route.ts"),
+    read("../app/api/marketplace/subscriptions/checkout/route.ts"),
+    read("../app/api/workspaces/[workspaceId]/invitations/route.ts"),
+    read("../app/api/workspaces/[workspaceId]/roles/assign/route.ts"),
+    read("../app/api/integrations/google/callback/route.ts"),
+    read("../app/api/integrations/oauth/[provider]/callback/route.ts"),
+  ]);
+  for (const route of routes) assert.ok(route.includes("enforceDistributedRateLimit"));
+  const [googleCallback, providerCallback] = routes.slice(-2);
+  assert.ok(googleCallback.indexOf("workspace_members") < googleCallback.indexOf("oauth2.googleapis.com/token"));
+  assert.ok(providerCallback.indexOf("workspace_members") < providerCallback.indexOf("await exchangeProviderOAuthCode"));
+  assert.ok(routes[0].includes("canManageWorkspaceBilling"));
+  assert.ok(routes[5].includes("auth.getUser"));
+});
+
+test("workspace integration secret writes and reads preserve tenant-bound v3 support", async () => {
+  const [save, testConnection, worker] = await Promise.all([
+    read("../app/api/integrations/workspace/route.ts"),
+    read("../app/api/integrations/workspace/test/route.ts"),
+    read("../lib/workflows/durable-worker.ts"),
+  ]);
+  assert.ok(save.includes("encryptWorkspaceCredentialsV2"));
+  assert.ok(save.includes("save_workspace_integration_connection"));
+  assert.ok(testConnection.includes('["v1", "v2", "v3"].includes(secret.encryption_version)'));
+  assert.ok(worker.includes('["v1", "v2", "v3"].includes(secret.encryption_version)'));
+  assert.ok(testConnection.includes("workspace.id"));
+  assert.ok(worker.includes("workspace_id"));
+});
+
+
+test("workspace integration list, save and disconnect are distributed-rate-limited after authorization", async () => {
+  const route = await read("../app/api/integrations/workspace/route.ts");
+  assert.ok(route.includes('scope: "workspace-integration-list"'));
+  assert.ok(route.includes('scope: "workspace-integration-save"'));
+  assert.ok(route.includes('scope: "workspace-integration-delete"'));
+  assert.ok(route.includes('hasWorkspacePermission(supabase, workspace.id, user.id, "integrations.view")'));
+  assert.ok(route.includes('["owner", "admin"].includes(membership.role)'));
+  assert.ok(route.includes('.eq("id", connectionId).eq("workspace_id", workspace.id)'));
+});
+
+
+test("public real-estate intake rate-limits invalid public keys before tenant/form lookup", async () => {
+  const route = await read("../app/api/real-estate/intake/[publicKey]/route.ts");
+  const post = route.indexOf("export async function POST");
+  const limiter = route.indexOf('scope:"real-estate-public-intake"', post);
+  const lookup = route.indexOf("findForm(publicKey)", post);
+  assert.ok(limiter > post && lookup > limiter);
+  assert.ok(route.includes('request.headers.get("x-real-ip")'));
+  assert.ok(!route.includes('headers.get("x-forwarded-for")'));
+});

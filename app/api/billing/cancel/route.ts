@@ -4,6 +4,7 @@ import {createClient} from "@/lib/supabase/server";
 import {createAdminClient} from "@/lib/supabase/admin";
 import {getOrCreateDefaultWorkspace,getWorkspaceRole,canManageWorkspaceBilling} from "@/lib/supabase/workspace";
 import {decryptWebhookSecret} from "@/lib/webhooks/secret-crypto";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const dynamic="force-dynamic";
 export const runtime="nodejs";
@@ -26,6 +27,11 @@ export async function POST(request:Request){
   const workspace=await getOrCreateDefaultWorkspace(supabase);
   const role=await getWorkspaceRole(supabase,workspace.id,user.id);
   if(!canManageWorkspaceBilling(role))return privateJson({error:"Only a workspace owner or admin can manage billing."},{status:403});
+  const limited=await enforceDistributedRateLimit(request,{
+   scope:"subscription-cancel",windowMs:60*60_000,ipLimit:5,userId:user.id,userLimit:3,
+   workspaceId:workspace.id,workspaceLimit:5,
+  });
+  if(limited)return limited;
   const admin=createAdminClient();
   const {data:subscription,error:subscriptionError}=await admin.from("workspace_subscriptions")
    .select("workspace_id,plan_key,status,billing_provider,provider_subscription_id,current_period_end,cancel_at_period_end,auto_renew")
