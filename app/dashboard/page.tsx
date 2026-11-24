@@ -148,7 +148,7 @@ export default function DashboardPage() {
       <section className="dashboard-main">
         <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>{activeNav}</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
         <div className="dashboard-content">
-          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={openCreateModal}><span>＋</span> New Playbook</button></div>
+          <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={() => router.push("/dashboard/playbooks/new")}><span>＋</span> New Playbook</button></div>
 
           <section className="quick-start-section" aria-labelledby="quick-start-title">
             <div className="quick-start-heading">
