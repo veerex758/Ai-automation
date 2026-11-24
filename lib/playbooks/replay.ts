@@ -47,11 +47,13 @@ export function replayPlaybookAgainstLead(playbook: Playbook, steps: Step[], lea
   const raw = lead.raw_enquiry && typeof lead.raw_enquiry === "object" && !Array.isArray(lead.raw_enquiry)
     ? lead.raw_enquiry as Record<string, unknown>
     : {};
+  // Canonical, workspace-validated columns win over raw source payload.
+  // This also ensures a human correction is what deterministic rules evaluate.
+  const canonicalLead = { ...raw, ...lead };
   const sample = {
-    ...lead,
-    ...raw,
-    trigger: { payload: { ...lead, ...raw } },
-    lead: { ...lead, ...raw },
+    ...canonicalLead,
+    trigger: { payload: canonicalLead },
+    lead: canonicalLead,
   };
   const ruleByNode = new Map(playbook.rules.map((rule) => [rule.nodeId, rule]));
   const conditionSteps = steps.filter((step) => step.kind === "action" && step.nodeId === "if" && step.operationId === "evaluate");
@@ -106,15 +108,22 @@ export function replayPlaybookAgainstLead(playbook: Playbook, steps: Step[], lea
     reasons.push(confidence === null ? "No recorded AI confidence score exists for this historical enquiry." : "Recorded AI confidence is below the configured threshold.");
   }
 
-  const actions = playbook.actionPolicies.map((policy) => ({
-    stepId: policy.stepId,
-    nodeId: policy.nodeId,
-    operationId: policy.operationId,
-    permission: policy.permission,
-    preview: policy.permission === "never" ? "blocked_by_policy" as const
-      : policy.permission === "ask_first" ? "would_require_approval" as const
-      : "would_be_eligible_after_all_runtime_checks" as const,
-  }));
+  const actions = playbook.actionPolicies.map((policy) => {
+    const step = steps.find((candidate) => candidate.id === policy.stepId);
+    const branch = step?.branch;
+    const selectedRule = branch ? rules.find((rule) => rule.nodeId === branch.fromStepId) : null;
+    const branchSelected = !branch || selectedRule?.route === branch.route;
+    return {
+      stepId: policy.stepId,
+      nodeId: policy.nodeId,
+      operationId: policy.operationId,
+      permission: policy.permission,
+      preview: !branchSelected ? "not_selected_by_rule" as const
+        : policy.permission === "never" ? "blocked_by_policy" as const
+        : policy.permission === "ask_first" ? "would_require_approval" as const
+        : "would_be_eligible_after_all_runtime_checks" as const,
+    };
+  });
 
   return {
     leadId: lead.id,
