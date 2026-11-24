@@ -8,7 +8,7 @@ type Playbook = {
   actionPolicies: PlaybookPolicy[];
   review: { confidenceThreshold: number; reviewMissingFields: boolean; reviewWhenNoRuleMatches: boolean; reviewProviderFailures: boolean };
 };
-type Step = { id: string; nodeId: string; operationId: string; kind: string; input: Record<string, unknown>; branchPaths?: Array<Array<{ fromStepId: string; route: string }>> };
+type Step = { id: string; nodeId: string; operationId: string; kind: string; input: unknown; branchPaths?: Array<Array<{ fromStepId: string; route: string }>> };
 type Lead = Record<string, unknown> & { id: string; qualification?: unknown; raw_enquiry?: unknown };
 
 function readPath(value: unknown, path: string): unknown {
@@ -59,7 +59,9 @@ export function replayPlaybookAgainstLead(playbook: Playbook, steps: Step[], lea
   const conditionSteps = steps.filter((step) => step.kind === "action" && step.nodeId === "if" && step.operationId === "evaluate");
   const rules = conditionSteps.map((step) => {
     const rule = ruleByNode.get(step.id) ?? ruleByNode.get(step.nodeId);
-    const input = step.input ?? {};
+    const input = step.input && typeof step.input === "object" && !Array.isArray(step.input)
+      ? step.input as Record<string, unknown>
+      : {};
     const actual = resolveExpression(input.value, sample);
     const expected = resolveExpression(input.compareTo, sample);
     const operator = input.operator as IfComparisonOperator;
