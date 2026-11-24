@@ -155,7 +155,12 @@ export async function requestOrReadPlaybookDecision(args: {
     }
   }
   if (decision.status === "approved" || decision.status === "executed") return { state: "allow", decisionId: decision.id };
-  if (decision.status !== "pending" || new Date(decision.expires_at).getTime() <= Date.now()) return { state: "denied", decisionId: decision.id };
+  if (decision.status !== "pending") return { state: "denied", decisionId: decision.id };
+  if (new Date(decision.expires_at).getTime() <= Date.now()) {
+    await db.from("real_estate_playbook_decisions").update({ status: "expired", decided_at: new Date().toISOString() })
+      .eq("id", decision.id).eq("workspace_id", lead.workspace_id).eq("status", "pending");
+    return { state: "denied", decisionId: decision.id };
+  }
 
   const { data: paused, error: pauseError } = await db.from("real_estate_leads").update({
     pipeline_status: "blocked",
