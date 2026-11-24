@@ -131,13 +131,6 @@ export async function POST(request: NextRequest, context: Context) {
     }) as { id?: string; htmlLink?: string };
     if (typeof event?.id !== "string" || event.id !== eventId) throw new Error("GOOGLE_CALENDAR_EVENT_ID_MISMATCH");
 
-    const now = new Date().toISOString();
-    const { error: confirmedError } = await db.from("real_estate_inspection_bookings").update({
-      status: "confirmed", google_event_id: event.id, google_event_url: event.htmlLink ?? null,
-      last_error_code: null, updated_at: now,
-    }).eq("id", bookingId).eq("workspace_id", workspace.id).in("status", ["creating", "unknown"]);
-    if (confirmedError) throw new Error("INSPECTION_BOOKING_CONFIRM_FAILED");
-
     const dueAt = new Date(Math.max(Date.now(), Date.parse(booking.start_at) - 60 * 60 * 1000)).toISOString();
     const { error: taskError } = await db.from("real_estate_tasks").upsert({
       workspace_id: workspace.id, lead_id: lead.id, assigned_agent_id: booking.agent_id,
@@ -147,6 +140,13 @@ export async function POST(request: NextRequest, context: Context) {
       idempotency_key: "inspection:" + bookingId + ":preparation:v1", created_by: user.id,
     }, { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true });
     if (taskError) throw new Error("INSPECTION_PREPARATION_TASK_FAILED");
+
+    const now = new Date().toISOString();
+    const { error: confirmedError } = await db.from("real_estate_inspection_bookings").update({
+      status: "confirmed", google_event_id: event.id, google_event_url: event.htmlLink ?? null,
+      last_error_code: null, updated_at: now,
+    }).eq("id", bookingId).eq("workspace_id", workspace.id).in("status", ["creating", "unknown"]);
+    if (confirmedError) throw new Error("INSPECTION_BOOKING_CONFIRM_FAILED");
     await db.from("real_estate_lead_activities").insert({
       workspace_id: workspace.id, lead_id: lead.id, actor_user_id: user.id,
       activity_type: "lead.inspection_booking_confirmed",
