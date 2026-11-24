@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         !hasOnlyApprovedGoogleScopes(product, connection.scopes.join(" "))) {
       await admin.from("google_connections").update({ last_tested_at: new Date().toISOString(), last_test_status: "failed", status: "needs_reauth" })
         .eq("id", connection.id).eq("workspace_id", workspace.id);
-      return NextResponse.json({ ok: false, message: "The saved Google consent does not contain the required read-only product scope. Reconnect this account." }, { status: 409, headers });
+      return NextResponse.json({ ok: false, message: "The saved Google consent does not contain the required product scope. Reconnect this account." }, { status: 409, headers });
     }
     let credentials: GoogleCredentials;
     try { credentials = decryptGoogleCredentials(connection.encrypted_credentials); }
