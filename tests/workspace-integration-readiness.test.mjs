@@ -20,7 +20,7 @@ test("worker refuses implicit defaults and requires a connected, freshly tested 
   assert.ok(worker.includes('eq("status", "connected")'));
   assert.ok(worker.includes('eq("last_test_status", "passed")'));
   assert.ok(worker.includes('eq("id", selectedConnectionId)'));
-  assert.ok(worker.includes('secret.encryption_version === "v2"'));
+  assert.ok(worker.includes('["v1", "v2", "v3"].includes(secret.encryption_version)'));
   assert.ok(worker.includes("encryptWorkspaceCredentialsV2"));
 });
 

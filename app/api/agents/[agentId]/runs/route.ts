@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { executeAgentTool, getAgentToolByName, getAgentTools } from "@/lib/agents/tool-runtime";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
+import { enforceDistributedRateLimit } from "@/lib/security/distributed-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,7 +69,7 @@ async function runTools(
   return results;
 }
 
-export async function GET(_request: NextRequest, context: Context) {
+export async function GET(request: NextRequest, context: Context) {
   const a = await auth();
   if ("response" in a) return a.response;
   const { agentId } = await context.params;
@@ -76,9 +77,11 @@ export async function GET(_request: NextRequest, context: Context) {
   const { data: agent, error: agentError } = await a.supabase.from("agents").select("workspace_id").eq("id", agentId).maybeSingle();
   if (agentError || !agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
   if (!(await hasWorkspacePermission(a.supabase, agent.workspace_id, a.user.id, "agents.view"))) return NextResponse.json({ error: "Workspace agents.view permission required." }, { status: 403, headers });
+  const limited = await enforceDistributedRateLimit(request, { scope: "agent-runs-read", windowMs: 60_000, ipLimit: 60, userId: a.user.id, userLimit: 60, workspaceId: agent.workspace_id, workspaceLimit: 180, resourceId: agentId, resourceLimit: 60 });
+  if (limited) return limited;
   const { data: runs, error } = await a.supabase.from("agent_runs")
     .select("id,status,input,output,model_provider,model_name,error_code,started_at,finished_at,created_at")
-    .eq("agent_id", agentId).order("created_at", { ascending: false }).limit(25);
+    .eq("agent_id", agentId).eq("workspace_id", agent.workspace_id).order("created_at", { ascending: false }).limit(25);
   if (error) return NextResponse.json({ error: "Could not load agent runs." }, { status: 500, headers });
   return NextResponse.json({ runs: runs ?? [] }, { headers });
 }
@@ -102,6 +105,8 @@ export async function POST(request: NextRequest, context: Context) {
     .eq("id", agentId).single();
   if (agentError || !agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
   if (!(await hasWorkspacePermission(a.supabase, agent.workspace_id, a.user.id, "agents.manage"))) return NextResponse.json({ error: "Workspace agents.manage permission required." }, { status: 403, headers });
+  const limited = await enforceDistributedRateLimit(request, { scope: "agent-run-create", windowMs: 60 * 60_000, ipLimit: 10, userId: a.user.id, userLimit: 5, workspaceId: agent.workspace_id, workspaceLimit: 20, resourceId: agentId, resourceLimit: 5 });
+  if (limited) return limited;
   if (agent.model_provider !== "gemini") return NextResponse.json({ error: "Rexnora agents currently run on Gemini only. Update this agent configuration before running." }, { status: 409, headers });
   if (agent.status !== "ready") return NextResponse.json({ error: "Set this agent to Ready before running it." }, { status: 409, headers });
   if (!agent.instructions?.trim()) return NextResponse.json({ error: "Add agent instructions before running." }, { status: 422, headers });
@@ -199,14 +204,14 @@ export async function POST(request: NextRequest, context: Context) {
     }
 
     if (!output) throw new Error("AI_EMPTY_RESPONSE");
-    const { error: completeError } = await a.supabase.from("agent_runs").update({ status: "completed", output: output.slice(0, 20000), finished_at: new Date().toISOString() }).eq("id", run.id);
+    const { error: completeError } = await a.supabase.from("agent_runs").update({ status: "completed", output: output.slice(0, 20000), finished_at: new Date().toISOString() }).eq("id", run.id).eq("workspace_id", agent.workspace_id).eq("agent_id", agent.id);
     if (completeError) throw new Error("AGENT_RUN_PERSIST_FAILED");
     const { error: auditError } = await a.supabase.from("agent_activity").insert({ workspace_id: agent.workspace_id, agent_id: agent.id, actor_user_id: a.user.id, event_type: "agent.run_completed", details: { run_id: run.id, provider: agent.model_provider, tools_enabled: toolDefinitions.map((tool) => tool.id) } });
     if (auditError) throw new Error("AGENT_RUN_AUDIT_FAILED");
     return NextResponse.json({ run: { id: run.id, status: "completed", output } }, { headers });
   } catch (error) {
     errorCode = error instanceof Error && /^[A-Z0-9_]{1,80}$/.test(error.message) ? error.message : "AI_PROVIDER_ERROR";
-    await a.supabase.from("agent_runs").update({ status: "failed", error_code: errorCode, finished_at: new Date().toISOString() }).eq("id", run.id);
+    await a.supabase.from("agent_runs").update({ status: "failed", error_code: errorCode, finished_at: new Date().toISOString() }).eq("id", run.id).eq("workspace_id", agent.workspace_id).eq("agent_id", agent.id);
     await a.supabase.from("agent_activity").insert({ workspace_id: agent.workspace_id, agent_id: agent.id, actor_user_id: a.user.id, event_type: "agent.run_failed", details: { run_id: run.id, error_code: errorCode } });
     const status = errorCode === "AI_NOT_CONFIGURED" ? 503 : errorCode === "AI_RATE_LIMITED" ? 429 : errorCode === "AGENT_TOOL_NOT_ALLOWED" ? 403 : errorCode === "AGENT_TOOL_LIMIT_REACHED" ? 429 : 502;
     const message = errorCode === "AI_NOT_CONFIGURED" ? "AI provider is not configured." : errorCode === "AI_RATE_LIMITED" ? "AI provider is busy; retry shortly." : errorCode === "AGENT_TOOL_NOT_ALLOWED" ? "The agent requested a tool that is not permitted." : errorCode === "AGENT_TOOL_LIMIT_REACHED" ? "The agent reached its tool-call limit." : "Agent run failed. Check provider configuration and try again.";

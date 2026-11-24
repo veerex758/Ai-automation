@@ -151,7 +151,7 @@ test("paid actions, OAuth callbacks and workspace administration use distributed
   for (const route of routes) assert.ok(route.includes("enforceDistributedRateLimit"));
   const [googleCallback, providerCallback] = routes.slice(-2);
   assert.ok(googleCallback.indexOf("workspace_members") < googleCallback.indexOf("oauth2.googleapis.com/token"));
-  assert.ok(providerCallback.indexOf("workspace_members") < providerCallback.indexOf("exchangeProviderOAuthCode"));
+  assert.ok(providerCallback.indexOf("workspace_members") < providerCallback.indexOf("await exchangeProviderOAuthCode"));
   assert.ok(routes[0].includes("canManageWorkspaceBilling"));
   assert.ok(routes[5].includes("auth.getUser"));
 });
