@@ -100,6 +100,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       .select("workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowAccessError) throw workflowAccessError;
     if (!workflowAccess) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    let activationVersion: number | null = null;
     const requiredPermission = updates.status === "active" ? "workflows.execute" : "workflows.edit";
     if (!(await hasWorkspacePermission(auth.supabase, workflowAccess.workspace_id, auth.user.id, requiredPermission))) {
       return NextResponse.json({ error: "Workspace " + requiredPermission + " permission required." }, { status: 403 });
@@ -110,6 +111,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         .from("workflows").select("id,workspace_id,version,definition").eq("id", workflowId).maybeSingle();
       if (candidateError) throw candidateError;
       if (!candidate) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      activationVersion = candidate.version;
       if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         return NextResponse.json({ error: "Live execution is disabled by the server. The workflow was not activated." }, { status: 503 });
       }
@@ -245,14 +247,26 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       }
     }
 
-    const { data, error } = await auth.supabase
+    // Activation must apply to the exact version that passed all checks above.
+    // If another request saves a new definition during validation, the version
+    // predicate prevents that unreviewed version from becoming active.
+    let updateQuery = auth.supabase
       .from("workflows")
       .update(updates)
       .eq("id", workflowId)
+      .eq("workspace_id", workflowAccess.workspace_id);
+    if (activationVersion !== null) updateQuery = updateQuery.eq("version", activationVersion);
+    const { data, error } = await updateQuery
       .select("id, name, description, status, updated_at")
       .maybeSingle();
 
     if (error) throw error;
+    if (!data && activationVersion !== null) {
+      return NextResponse.json({
+        error: "The Playbook changed while activation checks were running. Reload, test and review the latest saved version before activating it.",
+        code: "PLAYBOOK_VERSION_CHANGED_DURING_ACTIVATION",
+      }, { status: 409 });
+    }
     if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     return NextResponse.json({ workflow: presentWorkflow(data) });
   } catch (error) {
