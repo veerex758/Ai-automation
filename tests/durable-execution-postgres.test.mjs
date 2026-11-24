@@ -335,6 +335,39 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
   });
 
 
+  await t.test("transient live provider failure retries the same idempotent job and can then succeed", async () => {
+    await resetFixture();
+    const db = await client();
+    try {
+      const dispatched = await db.query(
+        "select public.dispatch_workflow_execution($1,$2,1,$3,$4,'{}'::jsonb,3,'live') as result",
+        [ids.workspace, ids.workflow, ids.user, crypto.randomUUID()],
+      );
+      const [first] = await claim(db, "transient-provider-worker");
+      assert.equal(first.id, dispatched.rows[0].result.job_id);
+      assert.equal(first.attempts, 1);
+      const retry = await db.query(
+        "select public.finish_execution_job($1,$2,false,'EMAIL_RATE_LIMITED','email-step','EMAIL_RATE_LIMITED') as status",
+        [first.id, first.lease_token],
+      );
+      assert.equal(retry.rows[0].status, "retry_wait");
+      await db.query("update public.execution_jobs set available_at=now()-interval '1 second' where id=$1", [first.id]);
+      const [second] = await claim(db, "transient-provider-retry-worker");
+      assert.equal(second.id, first.id);
+      assert.equal(second.attempts, 2);
+      const completed = await db.query(
+        "select public.finish_execution_job($1,$2,true,null,null,null) as status",
+        [second.id, second.lease_token],
+      );
+      assert.equal(completed.rows[0].status, "succeeded");
+      const state = await db.query(
+        "select j.status job_status,j.attempts,r.status run_status from public.execution_jobs j join public.workflow_runs r on r.id=j.run_id where j.id=$1",
+        [first.id],
+      );
+      assert.deepEqual(state.rows[0], { job_status: "succeeded", attempts: 2, run_status: "succeeded" });
+    } finally { db.release(); }
+  });
+
   await t.test("permanent live provider rejection bypasses retries and dead-letters immediately", async () => {
     await resetFixture();
     const db = await client();
