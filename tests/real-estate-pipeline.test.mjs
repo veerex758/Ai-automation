@@ -156,7 +156,7 @@ test("CRM sync searches exact email before creating and stops on uncertain or am
   assert.match(playbookDefinition, /zoho_crm.*search_contacts.*execute/);
   assert.match(playbookDefinition, /freshsales.*search_contacts.*execute/);
   assert.match(pipeline, /CRM_SEARCH_RESULT_NEEDS_REVIEW/);
-  assert.match(pipeline, /prior\.status === "unknown"/);
+  assert.match(pipeline, /\["unknown", "creating"\]\.includes\(prior\.status\)/);
   assert.match(pipeline, /real_estate_crm_syncs/);
   assert.match(pilotMigration, /create table if not exists public\.real_estate_crm_syncs/);
 });
