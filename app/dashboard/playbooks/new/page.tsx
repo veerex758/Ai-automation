@@ -34,13 +34,6 @@ type ActionPolicy = {
   permission: "auto" | "ask_first" | "never";
 };
 
-const reviewDefaults = {
-  confidenceThreshold: 0.8,
-  reviewMissingFields: true,
-  reviewWhenNoRuleMatches: true,
-  reviewProviderFailures: true,
-};
-
 async function responseJson<T>(response: Response): Promise<T> {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -48,12 +41,6 @@ async function responseJson<T>(response: Response): Promise<T> {
     throw new Error(message);
   }
   return result as T;
-}
-
-function permissionLabel(value: ActionPolicy["permission"]) {
-  if (value === "auto") return "Automatically";
-  if (value === "never") return "Never";
-  return "Ask me first";
 }
 
 export default function NewPlaybookPage() {
@@ -81,7 +68,7 @@ export default function NewPlaybookPage() {
     try {
       const prompt = [
         "Create a real-estate agency Playbook for this business outcome: " + outcome.trim(),
-        "Use only registered Rexnora operations. Do not invent integrations, tools, data sources or delivery channels.",
+        "Only use registered Rexnora operations. Do not invent integrations, tools, data sources or delivery channels.",
         "Gemini may extract and classify enquiry details into structured fields. Use deterministic IF conditions for explicit business rules.",
         "Only use Resend to notify a specifically approved agency inbox. Do not contact the property enquiry customer unless a separate consent-aware process is explicitly represented.",
         "Keep the graph simple and connected. Include a supported intake trigger, qualification where available, explicit IF branches for the stated rules, and an agency notification only if a supported registered operation exists.",
