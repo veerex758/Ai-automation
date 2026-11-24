@@ -32,3 +32,11 @@ test("rotation defaults to dry-run, makes ciphertext-only backup and supports re
   assert.ok(script.includes(".range(offset, offset + 499)") || script.includes(".range(offset, offset + 499)"));
   assert.ok(script.includes('.eq("encrypted_credentials", item.secret.encrypted_credentials)'));
 });
+
+
+test("database limiter increments past the threshold and saturates at limit plus one", async () => {
+  const migration = await read("../supabase/migrations/20261124092635_rexnora_api_rate_limit_counter_fix.sql");
+  assert.ok(migration.includes("least(current_bucket.hit_count + 1, p_limit + 1)"));
+  assert.ok(migration.includes("allowed := bucket.hit_count <= p_limit"));
+  assert.ok(migration.includes("check (hit_count between 1 and 10001)"));
+});
