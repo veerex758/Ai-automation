@@ -36,20 +36,21 @@ function deterministicGoogleEventId(workspaceId: string, bookingId: string) {
     .digest("hex").slice(0, 40);
 }
 
-function eventMatches(event: { start?: unknown; end?: unknown }, booking: Booking) {
+function eventMatches(event: { start?: unknown; end?: unknown; description?: unknown }, booking: Booking) {
   const start = event.start && typeof event.start === "object" ? event.start as Record<string, unknown> : {};
   const end = event.end && typeof event.end === "object" ? event.end as Record<string, unknown> : {};
   const startValue = typeof start.dateTime === "string" ? start.dateTime : typeof start.date === "string" ? start.date : null;
   const endValue = typeof end.dateTime === "string" ? end.dateTime : typeof end.date === "string" ? end.date : null;
-  if (!startValue || !endValue) return false;
+  if (!startValue || !endValue || typeof event.description !== "string" ||
+      !event.description.includes("Rexnora inspection booking " + booking.id)) return false;
   return Math.abs(Date.parse(startValue) - Date.parse(booking.start_at)) < 1000 &&
     Math.abs(Date.parse(endValue) - Date.parse(booking.end_at)) < 1000;
 }
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ bookingId: string }> }) {
   let booking: Booking | null = null;
-  const service = createRealEstateServiceClient();
   try {
+    const service = createRealEstateServiceClient();
     const { bookingId } = await context.params;
     if (!uuid.test(bookingId)) return NextResponse.json({ error: "Invalid inspection booking ID." }, { status: 400, headers });
     const supabase = await createClient();
@@ -91,7 +92,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
     }
 
     if (existingEvent) {
-      if (!eventMatches(existingEvent as { start?: unknown; end?: unknown }, booking)) {
+      if (existingEvent.status === "cancelled") {
+        await service.from("real_estate_inspection_bookings").update({
+          status: "failed", last_error_code: "GOOGLE_CALENDAR_EVENT_CANCELLED", updated_at: new Date().toISOString(),
+        }).eq("id", booking.id).eq("workspace_id", workspace.id);
+        return NextResponse.json({ error: "The corresponding Google Calendar event was cancelled. Create a new inspection request.", code: "GOOGLE_CALENDAR_EVENT_CANCELLED" }, { status: 409, headers });
+      }
+      if (!eventMatches(existingEvent as { start?: unknown; end?: unknown; description?: unknown }, booking)) {
         await service.from("real_estate_inspection_bookings").update({
           status: "unknown", last_error_code: "GOOGLE_EVENT_ID_CONFLICT", updated_at: new Date().toISOString(),
         }).eq("id", booking.id).eq("workspace_id", workspace.id);
@@ -100,6 +107,8 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ b
       const { error: reconcileError } = await service.from("real_estate_inspection_bookings").update({
         status: "confirmed",
         google_event_id: eventId,
+        approved_by: user.id,
+        approved_at: new Date().toISOString(),
         google_event_url: typeof existingEvent.htmlLink === "string" ? existingEvent.htmlLink : null,
         last_error_code: null,
         updated_at: new Date().toISOString(),
