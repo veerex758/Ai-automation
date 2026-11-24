@@ -904,8 +904,8 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
     const whatsappPolicy = runtime.mode === "playbook"
       ? getPlaybookPolicy(runtime, "whatsapp_business", "send_template")
       : null;
-    if (runtime.mode === "playbook" && (!whatsappPolicy || whatsappPolicy.permission === "never" ||
-        !isPlaybookActionOnSelectedBranch(runtime, whatsappPolicy, ruleResults))) {
+    if (runtime.mode !== "playbook" || !whatsappPolicy || whatsappPolicy.permission === "never" ||
+        !isPlaybookActionOnSelectedBranch(runtime, whatsappPolicy, ruleResults)) {
       whatsappSkipped = true;
       const { error: auditError } = await db.from("real_estate_lead_activities").insert({
         workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
