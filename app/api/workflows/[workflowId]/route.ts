@@ -71,6 +71,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     }
 
     const updates: { name?: string; description?: string; status?: string } = {};
+    let activationVersion: number | null = null;
     if ("name" in body) {
       if (typeof body.name !== "string" || body.name.trim().length < 1 || body.name.trim().length > 80) {
         return NextResponse.json({ error: "Workflow names must be between 1 and 80 characters." }, { status: 400 });
@@ -98,6 +99,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         .from("workflows").select("id,workspace_id,version,definition").eq("id", workflowId).maybeSingle();
       if (candidateError) throw candidateError;
       if (!candidate) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      activationVersion = candidate.version;
       if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         return NextResponse.json({ error: "Live execution is disabled by the server. The workflow was not activated." }, { status: 503 });
       }
@@ -189,14 +191,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       }
     }
 
-    const { data, error } = await auth.supabase
-      .from("workflows")
-      .update(updates)
-      .eq("id", workflowId)
-      .select("id, name, description, status, updated_at")
-      .maybeSingle();
+    const updateQuery = auth.supabase.from("workflows").update(updates).eq("id", workflowId);
+    const { data, error } = activationVersion === null
+      ? await updateQuery.select("id, name, description, status, updated_at").maybeSingle()
+      : await updateQuery.eq("version", activationVersion)
+          .select("id, name, description, status, updated_at").maybeSingle();
 
     if (error) throw error;
+    if (!data && activationVersion !== null) {
+      return NextResponse.json({ error: "The saved workflow changed during activation checks. Reload, test the latest version, and activate again." }, { status: 409 });
+    }
     if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     return NextResponse.json({ workflow: presentWorkflow(data) });
   } catch (error) {
