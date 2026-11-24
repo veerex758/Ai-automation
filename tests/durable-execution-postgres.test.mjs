@@ -23,6 +23,26 @@ const utilityIndexesMigration = await readFile(
   new URL("../supabase/migrations/20261105045900_aivanta_utility_execution_indexes.sql", import.meta.url),
   "utf8",
 );
+const cancellationMigration = await readFile(
+  new URL("../supabase/migrations/20261114072354_aivanta_execution_cancellation.sql", import.meta.url),
+  "utf8",
+);
+const webhookQueueMigration = await readFile(
+  new URL("../supabase/migrations/20261114072358_aivanta_durable_webhook_live_queue.sql", import.meta.url),
+  "utf8",
+);
+const workflowRunCancellationMigration = await readFile(
+  new URL("../supabase/migrations/20261114072907_aivanta_workflow_run_cancellation_status.sql", import.meta.url),
+  "utf8",
+);
+const runtimeReconciliationMigration = await readFile(
+  new URL("../supabase/migrations/20261114074228_aivanta_staging_runtime_reconciliation.sql", import.meta.url),
+  "utf8",
+);
+const reliabilityMigration = await readFile(
+  new URL("../supabase/migrations/20261124130000_rexnora_execution_reliability_retries.sql", import.meta.url),
+  "utf8",
+);
 const deadLetterRecoveryMigration = await readFile(
   new URL("../supabase/migrations/20261117190000_rexnora_dry_run_dead_letter_recovery.sql", import.meta.url),
   "utf8",
@@ -120,7 +140,12 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
     await setup.query(liveModeMigration);
     await setup.query(utilityMigration);
     await setup.query(utilityIndexesMigration);
+    await setup.query(cancellationMigration);
+    await setup.query(webhookQueueMigration);
+    await setup.query(workflowRunCancellationMigration);
+    await setup.query(runtimeReconciliationMigration);
     await setup.query(deadLetterRecoveryMigration);
+    await setup.query(reliabilityMigration);
     ready = true;
   } finally {
     setup.release();
@@ -144,7 +169,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       const liveResult = live.rows[0].result;
       const liveJob = await db.query("select execution_mode,max_attempts from public.execution_jobs where id=$1", [liveResult.job_id]);
       assert.equal(liveJob.rows[0].execution_mode, "live");
-      assert.equal(liveJob.rows[0].max_attempts, 1);
+      assert.equal(liveJob.rows[0].max_attempts, 3, "trusted live dispatch may request at most three attempts");
     } finally { db.release(); }
   });
 
@@ -245,7 +270,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       const [first] = await claim(db, "retry-worker-1", 1, 30);
       assert.equal(first.id, created.job_id);
       const firstFinish = await db.query(
-        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE') as status",
+        "select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null) as status",
         [first.id, first.lease_token],
       );
       assert.equal(firstFinish.rows[0].status, "retry_wait");
@@ -381,7 +406,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       const [job] = await claim(db, "outbox-source-worker");
       const finished = await db.query(
-        "select public.finish_execution_job($1,$2,false,'TEST_FAILURE','step-a','TEST_FAILURE') as result",
+        "select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE','step-a','PROVIDER_TRANSIENT_FAILURE') as result",
         [job.id, job.lease_token],
       );
       assert.equal(finished.rows[0].result, "dead_letter");
@@ -496,7 +521,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
         [JSON.stringify(originalPayload), snapshotDispatch.job_id]);
       const [first] = await claim(db, "recovery-worker-1");
       assert.equal(first.id, snapshotDispatch.job_id);
-      await db.query("select public.finish_execution_job($1,$2,false,'RECOVERY_TEST_FAILURE')",
+      await db.query("select public.finish_execution_job($1,$2,false,'PROVIDER_TRANSIENT_FAILURE',null,null)",
         [first.id, first.lease_token]);
       await db.query("update public.execution_jobs set available_at=now()-interval '1 second' where id=$1", [first.id]);
       const [second] = await claim(db, "recovery-worker-2");
@@ -551,7 +576,7 @@ test("PostgreSQL durable execution integration", { skip: !enabled, timeout: 6000
       );
       const [job] = await claim(db, "live-recovery-worker");
       assert.equal(job.id, live.rows[0].result.job_id);
-      await db.query("select public.finish_execution_job($1,$2,false,'UNCERTAIN_PROVIDER_OUTCOME')",
+      await db.query("select public.finish_execution_job($1,$2,false,'UNCERTAIN_PROVIDER_OUTCOME',null,null)",
         [job.id, job.lease_token]);
       const dead = await db.query("select id from public.execution_dead_letters where original_job_id=$1", [job.id]);
       assert.equal(dead.rowCount, 1);
