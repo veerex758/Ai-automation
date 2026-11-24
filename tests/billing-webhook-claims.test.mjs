@@ -23,7 +23,7 @@ test("both providers use the atomic database claim instead of read-then-process 
 test("the claim is a guarded single-row update with an expiring token lease", () => {
   assert.match(migration, /update public\.billing_recurring_events e[\s\S]*?e\.processed_at is null[\s\S]*?e\.claim_expires_at <= v_now/i);
   assert.match(migration, /update public\.billing_webhook_events e[\s\S]*?e\.processed_at is null[\s\S]*?e\.claim_expires_at <= v_now/i);
-  assert.match(migration, /claim_token = gen_random_uuid\(\)/i);
+  assert.match(migration, /claim_token = pg_catalog.gen_random_uuid\(\)/i);
   assert.match(migration, /returning e\.claim_token into v_token/i);
   assert.match(migration, /e\.payload_hash = p_payload_hash/i);
   assert.match(migration, /e\.payload_hash is null or e\.payload_hash = p_payload_hash/i);
