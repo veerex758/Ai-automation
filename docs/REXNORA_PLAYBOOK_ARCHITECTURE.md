@@ -71,7 +71,7 @@ The canonical Playbook is stored inside the existing versioned workflow definiti
 }
 ~~~
 
-The graph is the only source of truth for condition predicates and edges. A Playbook rule labels one existing condition node; it must not copy the predicate into a second format. Every executable action step except the deterministic IF/Switch evaluator must have exactly one permission bound to the exact step, node and operation identifiers.
+The graph is the only source of truth for condition predicates and edges. A Playbook rule labels one existing condition node; it must not copy the predicate into a second format. Every executable action step except the deterministic IF evaluator must have exactly one permission bound to the exact step, node and operation identifiers. The first worker supports Gemini qualification, IF rules and Resend agency email only; other providers and Switch operations remain blocked.
 
 Only auto, ask_first and never are valid permission values. Missing policy is not equivalent to auto. A permission envelope is not by itself an execution authorization: the worker must re-check the active immutable version, workspace connection, operation approval, consent, confidence/review gates and idempotency immediately before a side effect.
 
@@ -82,7 +82,7 @@ Only auto, ask_first and never are valid permission values. Missing policy is no
 - Existing definitions without a playbook property remain backward compatible during migration.
 - Once a definition contains a Playbook, updates must preserve and revalidate it. A graph change that adds, removes or changes an action requires explicit matching permission updates; it must not inherit permission from another operation.
 - Schema versions are explicit. Unknown fields and unsupported future versions fail closed.
-- No DB migration is needed for this envelope because workflows.definition and workflow_versions.definition already store JSONB. A new table should be introduced only for independently queryable decision/inbox items, not for a second copy of the Playbook definition.
+- The Playbook envelope itself is stored in the existing workflows.definition and workflow_versions.definition JSONB; it does not need a duplicate definition table. The Decision Inbox uses a separate workspace-scoped decision table because pending approvals need independent querying, expiry, idempotency and atomic resolution.
 
 ## Trust and execution semantics
 
@@ -99,8 +99,14 @@ Only auto, ask_first and never are valid permission values. Missing policy is no
 
 1. **Control Room:** activation state, last outcomes, pending review count, failures and paused state.
 2. **Decision Inbox:** uncertain leads and actions marked ask_first; users can approve, reject or correct extracted fields. Approval is version-bound, action-bound and expires or becomes invalid if the underlying lead, policy or connection changes.
-3. **Outcome Ledger:** read-only, append-only explanation of the enquiry, extraction, deterministic rules, rationale, action permission, approval, provider attempt/result and follow-up status.
+3. **Outcome Ledger:** read-only, workspace-scoped view of existing lead activities and follow-up delivery records. The first release does not yet persist every rule evaluation and provider attempt as a complete event-sourced audit stream.
 4. **Safe Preview:** validate the exact draft and replay a bounded sample of historical leads without provider calls or mutation.
+
+## Current implementation boundary
+
+- The durable lead worker executes Gemini qualification, deterministic IF rules and optional Resend agency notification. It records qualification/rule/decision/provider activity and uses the existing consent-aware email follow-up queue.
+- WhatsApp delivery, Google Calendar appointment creation, and CRM writes are not part of the current live Playbook worker. Their provider operations and template/setup work may exist in a separate draft bundle, but they must not be activated until consent, booking approval, idempotency, retry/reconciliation and Outcome Ledger coverage are implemented and verified.
+- A clean migration replay and code-level tests are necessary but do not replace authenticated staging acceptance or an agency's end-to-end sign-off.
 
 ## Consolidation rules
 
@@ -120,8 +126,8 @@ Only auto, ask_first and never are valid permission values. Missing policy is no
 | Outcome-first setup | Nontechnical goal/rule/action-permission setup; generated draft requires review |
 | Rules and permissions | Deterministic predicates, explicit auto/ask-first/never, server-side enforcement |
 | Decision Inbox | Workspace-isolated durable queue, approve/reject/correct, version/action binding, no provider call before approval |
-| Outcome Ledger | Append-only trace with extraction, rule results, rationale, action attempts, provider outcomes |
+| Outcome Ledger | Workspace-scoped read-only activity and follow-up history; complete event-sourced provider trace remains a follow-up requirement |
 | Historical replay and Safe Preview | Bounded deterministic replay; exact-version preview; guaranteed no external calls or writes |
-| Real-estate pilot | Authenticated end-to-end staging test with approved test enquiry, Gemini, Resend and persisted result, plus agency sign-off |
+| Real-estate pilot | Authenticated end-to-end staging test with approved test enquiry, Gemini, Resend and persisted result, plus agency sign-off; WhatsApp, calendar and CRM automations remain separate acceptance gates |
 
 Code, CI or a Preview URL alone does not pass authenticated staging or customer acceptance.
