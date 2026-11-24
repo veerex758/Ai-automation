@@ -49,7 +49,7 @@ export default function PlaybookOutcomeLedgerPage() {
         <div className="playbook-heading">
           <div className="playbook-eyebrow">REXNORA PLAYBOOKS · OUTCOME LEDGER</div>
           <h1>What happened to each enquiry?</h1>
-          <p>A workspace-scoped timeline of lead activity and follow-up delivery. Entries are read-only; the underlying activity history is append-only.</p>
+          <p>A workspace-scoped timeline of lead activity and follow-up delivery. Entries are read-only; this view does not mutate lead or delivery records.</p>
         </div>
         <div className="playbook-alert">The ledger currently reads the existing real-estate activity and delivery records. Detailed rule traces and action-decision records will appear once the Playbook runtime writes those events.</div>
         {loading && <div className="playbook-panel">Loading outcome history…</div>}
@@ -57,7 +57,7 @@ export default function PlaybookOutcomeLedgerPage() {
         {!loading && !error && result && <>
           <div className="playbook-steps">
             <div className="playbook-step"><span>{result.leadCount ?? 0}</span><div><strong>Enquiries</strong><small>Linked to this Playbook</small></div></div>
-            <div className="playbook-step"><span>{result.events?.length ?? 0}</span><div><strong>Recorded events</strong><small>Append-only activity history</small></div></div>
+            <div className="playbook-step"><span>{result.events?.length ?? 0}</span><div><strong>Recorded events</strong><small>Recorded activity history</small></div></div>
             <div className="playbook-step"><span>{result.delivery?.length ?? 0}</span><div><strong>Follow-up records</strong><small>Delivery and retry status</small></div></div>
           </div>
           <section className="playbook-panel">
