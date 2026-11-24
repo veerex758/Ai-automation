@@ -15,7 +15,7 @@ as $$
 declare
   v_connection public.workspace_integrations%rowtype;
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_workspace_id is null or p_connection_id is null or p_actor_id is null then
@@ -81,7 +81,7 @@ as $$
 declare
   v_encrypted_credentials text;
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_workspace_id is null or p_connection_id is null or p_actor_id is null then
