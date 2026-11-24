@@ -556,6 +556,142 @@ async function sendConsentedWhatsApp(
   }
 }
 
+async function syncConfiguredCrmContact(
+  db: ServiceClient,
+  claim: PipelineClaim,
+  lead: LeadRow,
+  runtime: Awaited<ReturnType<typeof loadPlaybookRuntime>>,
+  ruleResults: Array<{ nodeId: string; route: string | null }>,
+): Promise<"created" | "matched" | "skipped" | "pending"> {
+  if (runtime.mode !== "playbook" || !lead.email) return "skipped";
+  const providers = ["pipedrive", "zoho_crm", "freshsales"];
+  const selected = providers.filter((provider) => runtime.steps?.some((step) => step.kind === "action" && step.nodeId === provider));
+  if (!selected.length) return "skipped";
+  if (selected.length !== 1) throw new Error("PLAYBOOK_MULTIPLE_CRM_PROVIDERS");
+  const provider = selected[0];
+  const searchPolicy = getPlaybookPolicy(runtime, provider, "search_contacts");
+  const createPolicy = getPlaybookPolicy(runtime, provider, "execute");
+  if (!searchPolicy || !createPolicy || searchPolicy.permission === "never" || createPolicy.permission === "never" ||
+      !isPlaybookActionOnSelectedBranch(runtime, searchPolicy, ruleResults) ||
+      !isPlaybookActionOnSelectedBranch(runtime, createPolicy, ruleResults)) return "skipped";
+
+  const searchApproval = await requestOrReadPlaybookDecision({
+    db, lead, runtime, type: "action_approval", policy: searchPolicy,
+    reason: "The Playbook needs permission to search the connected CRM for an exact email match before creating a contact.",
+    leaseToken: claim.lease_token,
+  });
+  if (searchApproval.state === "pending") return "pending";
+  if (searchApproval.state === "denied") return "skipped";
+
+  const searchCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "search_contacts", true);
+  if (!searchCredentials.ok) {
+    if (runtime.definition.review.reviewProviderFailures) {
+      const review = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "provider_failure", policy: searchPolicy,
+        nodeId: provider, operationId: "search_contacts",
+        reason: "CRM exact-match search is blocked until the provider connection and operation approval are verified: " + searchCredentials.code,
+        leaseToken: claim.lease_token,
+      });
+      if (review.state === "pending") return "pending";
+    }
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_sync_blocked",
+      details: { provider, operationId: "search_contacts", errorCode: searchCredentials.code },
+    });
+    return "skipped";
+  }
+
+  const searchOperation = findOperation(provider, "search_contacts", "action");
+  if (!searchOperation) throw new Error("CRM_SEARCH_OPERATION_NOT_REGISTERED");
+  let searchResult: { contacts?: Array<{ contactId: string; email?: string }> };
+  try {
+    searchResult = await searchOperation.run(makeNodeContext({ [provider]: searchCredentials.credentials }), { email: lead.email }) as typeof searchResult;
+  } catch (error) {
+    const code = safeErrorCode(error, "CRM_SEARCH_FAILED");
+    if (runtime.definition.review.reviewProviderFailures) {
+      const review = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "provider_failure", policy: searchPolicy, nodeId: provider, operationId: "search_contacts",
+        reason: "CRM exact-match search failed: " + code, leaseToken: claim.lease_token,
+      });
+      if (review.state === "pending") return "pending";
+    }
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_sync_blocked", details: { provider, operationId: "search_contacts", errorCode: code },
+    });
+    return "skipped";
+  }
+
+  const exactMatches = (searchResult.contacts ?? []).filter((contact) =>
+    typeof contact.email === "string" && contact.email.trim().toLowerCase() === lead.email!.trim().toLowerCase()
+  );
+  await markPlaybookDecisionExecuted(db, lead, searchApproval.decisionId);
+  if (exactMatches.length > 0) {
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_contact_matched",
+      details: { provider, exactMatchCount: exactMatches.length, contactId: exactMatches[0].contactId },
+    });
+    return "matched";
+  }
+
+  const createApproval = await requestOrReadPlaybookDecision({
+    db, lead, runtime, type: "action_approval", policy: createPolicy,
+    reason: "No exact email match was found. The Playbook requests permission to create one CRM contact.",
+    leaseToken: claim.lease_token,
+  });
+  if (createApproval.state === "pending") return "pending";
+  if (createApproval.state === "denied") return "skipped";
+
+  const createCredentials = await approvedCredentials(db, claim.workspace_id, provider, provider, "execute", true);
+  if (!createCredentials.ok) {
+    if (runtime.definition.review.reviewProviderFailures) {
+      const review = await requestOrReadPlaybookDecision({
+        db, lead, runtime, type: "provider_failure", policy: createPolicy,
+        nodeId: provider, operationId: "execute",
+        reason: "CRM contact creation is blocked until the provider connection and operation approval are verified: " + createCredentials.code,
+        leaseToken: claim.lease_token,
+      });
+      if (review.state === "pending") return "pending";
+    }
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_sync_blocked", details: { provider, operationId: "execute", errorCode: createCredentials.code },
+    });
+    return "skipped";
+  }
+
+  const createOperation = findOperation(provider, "execute", "action");
+  if (!createOperation) throw new Error("CRM_CREATE_OPERATION_NOT_REGISTERED");
+  const nameParts = lead.full_name.trim().split(/\s+/);
+  try {
+    const created = await createOperation.run(makeNodeContext({ [provider]: createCredentials.credentials }), {
+      email: lead.email,
+      firstName: nameParts[0] || "Customer",
+      lastName: nameParts.slice(1).join(" ") || "Enquiry",
+      ...(lead.phone ? { phone: lead.phone } : {}),
+    }) as { contactId?: string };
+    if (typeof created?.contactId !== "string" || !created.contactId) throw new Error("CRM_CREATE_RESULT_INVALID");
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_contact_created",
+      details: { provider, contactId: created.contactId, idempotencyKey: "lead:" + lead.id + ":crm:" + provider },
+    });
+    await markPlaybookDecisionExecuted(db, lead, createApproval.decisionId);
+    return "created";
+  } catch (error) {
+    // The next attempt always searches again before creating. That is the
+    // recovery path when the CRM accepted a write but the response was lost.
+    const code = safeErrorCode(error, "CRM_CONTACT_CREATE_FAILED");
+    await db.from("real_estate_lead_activities").insert({
+      workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+      activity_type: "lead.crm_contact_create_failed", details: { provider, errorCode: code },
+    });
+    return "skipped";
+  }
+}
+
 async function processClaim(db: ServiceClient, claim: PipelineClaim) {
   const { data: leadData, error } = await db.from("real_estate_leads")
     .select("*")
@@ -801,6 +937,8 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
 
   const whatsappResult = await sendConsentedWhatsApp(db, claim, lead, runtime, ruleResults);
   if (whatsappResult === "pending") return "blocked";
+  const crmResult = await syncConfiguredCrmContact(db, claim, lead, runtime, ruleResults);
+  if (crmResult === "pending") return "blocked";
 
   await updateClaim(db, claim, {
     pipeline_status: "completed",
