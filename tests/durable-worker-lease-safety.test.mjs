@@ -15,7 +15,7 @@ test("worker aborts provider execution when heartbeat or lease renewal fails", (
 
 test("provider authorization renews the lease immediately before every registered operation", () => {
   assert.match(worker, /authorizeOperation: async[\s\S]*?heartbeat_execution_job[\s\S]*?getWorkerOperationMapping/);
-  assert.match(worker, /executionContext\\(credentials, job\\.payload\\?\\.webhookVerified === true, db, job\\.workspace_id, job, leaseState, activeConnectionIds\\)/);
+  assert.match(worker, /executionContext\(credentials, job\.payload\?\.webhookVerified === true, db, job\.workspace_id, job, leaseState, activeConnectionIds\)/);
 });
 
 test("safe HTTP requests are aborted when the worker lease signal is aborted", () => {
