@@ -5,6 +5,7 @@ import { createFollowupRows, createRealEstateServiceClient } from "@/lib/real-es
 import { scoreRealEstateLead, type RealEstateLeadInput } from "@/lib/real-estate/lead-scoring";
 import { findOperation } from "@/nodes/registry";
 import { getWorkerOperationMapping } from "@/lib/workflows/worker-operation-map";
+import { isProviderLiveEnabled } from "@/lib/workflows/provider-live-gates";
 import type { NodeContext } from "@/nodes/types";
 import {
   getPlaybookPolicy, isPlaybookActionOnSelectedBranch, loadPlaybookRuntime,
@@ -40,7 +41,10 @@ type LeadRow = {
   qualification_summary: string | null;
   suggested_reply: string | null;
   consent_to_contact: boolean;
+  consent_text: string | null;
+  consent_at: string | null;
   contact_preference: string;
+  assigned_agent_id: string | null;
   created_at: string;
   pipeline_attempt_count: number | string;
   agent_notification_status: string;
@@ -129,19 +133,24 @@ function makeNodeContext(credentials: Record<string, Record<string, string>>): N
 async function approvedCredentials(
   db: ServiceClient,
   workspaceId: string,
-  provider: "gemini" | "resend",
-  nodeId: "gemini" | "email",
-  operationId: "qualify_real_estate_lead" | "send_email",
+  provider: string,
+  nodeId: string,
+  operationId: string,
+  requireLiveOptIn = false,
 ): Promise<CredentialResult> {
   const mapping = getWorkerOperationMapping({ kind: "action", nodeId, operationId });
   if (!mapping || mapping.provider !== provider) return { ok: false, code: "PROVIDER_OPERATION_NOT_REGISTERED" };
+  if (requireLiveOptIn && !isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS)) {
+    return { ok: false, code: provider.toUpperCase() + "_LIVE_INTEGRATION_DISABLED" };
+  }
 
-  const [{ data: integration, error: integrationError }, { data: approval, error: approvalError }] = await Promise.all([
+  const [{ data: integrations, error: integrationError }, { data: approval, error: approvalError }] = await Promise.all([
     db.from("workspace_integrations")
       .select("id,status,last_test_status")
       .eq("workspace_id", workspaceId)
       .eq("provider", provider)
-      .maybeSingle(),
+      .order("created_at", { ascending: false })
+      .limit(2),
     db.from("workspace_provider_operation_approvals")
       .select("decision")
       .eq("workspace_id", workspaceId)
@@ -154,7 +163,10 @@ async function approvedCredentials(
       .maybeSingle(),
   ]);
   if (integrationError || approvalError) return { ok: false, code: "PROVIDER_READINESS_LOOKUP_FAILED" };
-  if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed") {
+  if (!integrations?.length) return { ok: false, code: provider.toUpperCase() + "_CONNECTION_NOT_VERIFIED" };
+  if (integrations.length !== 1) return { ok: false, code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED" };
+  const integration = integrations[0];
+  if (integration.status !== "connected" || integration.last_test_status !== "passed") {
     return { ok: false, code: provider.toUpperCase() + "_CONNECTION_NOT_VERIFIED" };
   }
   if (approval?.decision !== "approved") return { ok: false, code: provider.toUpperCase() + "_OPERATION_NOT_APPROVED" };
@@ -163,15 +175,14 @@ async function approvedCredentials(
     .select("encrypted_credentials,encryption_version")
     .eq("integration_id", integration.id)
     .maybeSingle();
-  if (secretError || !secret || secret.encryption_version !== "v1") {
+  if (secretError || !secret || !["v1", "v2"].includes(secret.encryption_version)) {
     return { ok: false, code: provider.toUpperCase() + "_CREDENTIALS_UNAVAILABLE" };
   }
+  const associatedData = secret.encryption_version === "v2"
+    ? workspaceId + ":" + provider + ":" + integration.id
+    : workspaceId + ":" + provider;
   try {
-    const decoded = decryptWorkspaceCredentials(
-      secret.encrypted_credentials,
-      undefined,
-      workspaceId + ":" + provider,
-    );
+    const decoded = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData);
     const credentials = decoded[provider];
     if (!credentials || Object.keys(credentials).length === 0) {
       return { ok: false, code: provider.toUpperCase() + "_CREDENTIALS_INCOMPLETE" };
@@ -181,7 +192,6 @@ async function approvedCredentials(
     return { ok: false, code: provider.toUpperCase() + "_CREDENTIALS_DECRYPT_FAILED" };
   }
 }
-
 async function updateClaim(
   db: ServiceClient,
   claim: PipelineClaim,
@@ -311,6 +321,23 @@ async function ensureQualificationActivity(db: ServiceClient, lead: LeadRow, wor
   if (error) throw new Error("PIPELINE_ACTIVITY_WRITE_FAILED");
 }
 
+async function ensureBackOfficeTask(db: ServiceClient, lead: LeadRow, score: number) {
+  const priority = score >= 80 ? "urgent" : score >= 60 ? "high" : "normal";
+  const { error } = await db.from("real_estate_tasks").upsert({
+    workspace_id: lead.workspace_id,
+    lead_id: lead.id,
+    assigned_agent_id: lead.assigned_agent_id,
+    task_type: "new_enquiry_review",
+    title: "Review and assign new property enquiry",
+    description: "Review the qualification summary, confirm the customer's requirements, and assign the next action. Contact the customer only through the recorded consent channel.",
+    status: "open",
+    priority,
+    due_at: new Date(Date.now() + (score >= 80 ? 15 : 60) * 60 * 1000).toISOString(),
+    idempotency_key: "lead:" + lead.id + ":new-enquiry-review:v1",
+    created_by: null,
+  }, { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true });
+  if (error) throw new Error("REAL_ESTATE_BACK_OFFICE_TASK_FAILED");
+}
 async function ensureFollowupDrafts(db: ServiceClient, lead: LeadRow, qualification: Qualification) {
   if (!lead.consent_to_contact || lead.contact_preference !== "email" || !lead.email) return;
   const rows = createFollowupRows(lead as Parameters<typeof createFollowupRows>[0], new Date(lead.created_at))
@@ -522,6 +549,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
   try {
     await ensureFollowupDrafts(db, lead, qualification);
     await ensureQualificationActivity(db, lead, claim.workspace_id, Number(lead.lead_score));
+    await ensureBackOfficeTask(db, lead, Number(lead.lead_score));
   } catch (error) {
     const code = safeErrorCode(error, "LEAD_PIPELINE_PERSISTENCE_FAILED");
     await retryClaim(db, claim, lead, "pipeline", code, false);
