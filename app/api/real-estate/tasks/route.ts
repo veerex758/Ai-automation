@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
+import { createRealEstateServiceClient } from "@/lib/real-estate/server";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -108,11 +109,12 @@ export async function PATCH(request: NextRequest) {
       }
       update.assigned_agent_id = value;
     }
-    const { data: saved, error: saveError } = await auth.supabase.from("real_estate_tasks")
+    const service = createRealEstateServiceClient();
+    const { data: saved, error: saveError } = await service.from("real_estate_tasks")
       .update(update).eq("id", existing.id).eq("workspace_id", auth.workspace.id)
       .select("id,lead_id,assigned_agent_id,status,priority,due_at,completed_at").single();
     if (saveError) throw saveError;
-    const { error: activityError } = await auth.supabase.from("real_estate_lead_activities").insert({
+    const { error: activityError } = await service.from("real_estate_lead_activities").insert({
       workspace_id: auth.workspace.id,
       lead_id: existing.lead_id,
       actor_user_id: auth.user.id,
