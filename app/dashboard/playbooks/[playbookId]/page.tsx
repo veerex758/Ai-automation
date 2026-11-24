@@ -132,6 +132,7 @@ export default function PlaybookControlRoomPage() {
             <div className="playbook-actions">
               <Link className="playbook-secondary-link" href="/dashboard/real-estate">Open leads</Link>
               <Link className="playbook-secondary-link" href={"/dashboard/playbooks/" + encodeURIComponent(playbookId) + "/preview"}>Safe Preview</Link>
+              <Link className="playbook-secondary-link" href={"/dashboard/playbooks/" + encodeURIComponent(playbookId) + "/inbox"}>Decision Inbox</Link>
               <Link className="playbook-secondary-link" href={"/dashboard/playbooks/" + encodeURIComponent(playbookId) + "/ledger"}>Outcome Ledger</Link>
               <Link className="playbook-primary" href={"/dashboard/workflows/" + encodeURIComponent(playbookId)}>Advanced graph ↗</Link>
             </div>
