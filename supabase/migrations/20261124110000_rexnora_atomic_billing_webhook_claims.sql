@@ -32,14 +32,14 @@ create or replace function public.claim_billing_webhook_event(
 returns table(claimed boolean, claim_token uuid, reason text)
 language plpgsql
 security invoker
-set search_path = public, pg_temp
+set search_path = ''
 as $$
 declare
   v_token uuid;
   v_reason text;
-  v_now timestamptz := now();
+  v_now timestamptz := pg_catalog.now();
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if auth.role() <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is null or p_provider not in ('stripe','paystack')
@@ -59,8 +59,8 @@ begin
 
     update public.billing_recurring_events e
        set payload_hash = case when e.payload_hash ~ '^[a-f0-9]{64}$' then e.payload_hash else p_payload_hash end,
-           claim_token = gen_random_uuid(),
-           claim_expires_at = v_now + make_interval(secs => p_lease_seconds),
+           claim_token = pg_catalog.gen_random_uuid(),
+           claim_expires_at = v_now + pg_catalog.make_interval(secs => p_lease_seconds),
            processing_error = null
      where e.event_key = p_event_key
        and e.provider = p_provider
@@ -92,8 +92,8 @@ begin
 
     update public.billing_webhook_events e
        set payload_hash = coalesce(e.payload_hash,p_payload_hash),
-           claim_token = gen_random_uuid(),
-           claim_expires_at = v_now + make_interval(secs => p_lease_seconds),
+           claim_token = pg_catalog.gen_random_uuid(),
+           claim_expires_at = v_now + pg_catalog.make_interval(secs => p_lease_seconds),
            processing_error = null
      where e.event_key = p_event_key
        and e.provider = 'paystack'
@@ -132,10 +132,10 @@ create or replace function public.complete_billing_webhook_event(
 returns boolean
 language plpgsql
 security invoker
-set search_path = public, pg_temp
+set search_path = ''
 as $$
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if auth.role() <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is null or p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
@@ -144,13 +144,13 @@ begin
 
   if p_provider = 'stripe' then
     update public.billing_recurring_events
-       set processed_at = now(), claim_token = null, claim_expires_at = null,
+       set processed_at = pg_catalog.now(), claim_token = null, claim_expires_at = null,
            processing_error = null
      where event_key = p_event_key and provider = p_provider
        and claim_token = p_claim_token and processed_at is null;
   else
     update public.billing_webhook_events
-       set processed_at = now(), claim_token = null, claim_expires_at = null,
+       set processed_at = pg_catalog.now(), claim_token = null, claim_expires_at = null,
            processing_error = null
      where event_key = p_event_key and provider = 'paystack'
        and claim_token = p_claim_token and processed_at is null;
@@ -168,13 +168,13 @@ create or replace function public.release_billing_webhook_event(
 returns boolean
 language plpgsql
 security invoker
-set search_path = public, pg_temp
+set search_path = ''
 as $$
 declare
   v_error_code text := case when p_error_code ~ '^[A-Z0-9_]{1,80}$'
     then p_error_code else 'PROCESSING_FAILED' end;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if auth.role() <> 'service_role' then
     raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is null or p_provider not in ('stripe','paystack') or p_event_key is null or p_claim_token is null then
