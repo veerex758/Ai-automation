@@ -95,3 +95,9 @@ test("OAuth and provider verification decrypt the exact selected connection",()=
   assert.ok(source.includes("integration.id"));
  }
 });
+
+
+test("Resend PR Preview is explicitly routed to the isolated staging Supabase configuration", () => {
+  const adminConfig = readFileSync(new URL("../lib/supabase/admin.ts", import.meta.url), "utf8");
+  assert.match(adminConfig, /"fix\/resend-connection-domain-status"/);
+});
