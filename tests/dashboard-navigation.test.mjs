@@ -81,3 +81,14 @@ test("Supabase staging-only secret resolution ignores empty placeholder variable
   assert.match(admin, /isRexnoraStagingPreview[\s\S]*CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(admin, /VERCEL_GIT_COMMIT_REF/);
 });
+
+
+test("dashboard sends all new automation creation through outcome-first Playbooks", () => {
+  assert.match(dashboard, /New Playbook/);
+  assert.match(dashboard, /Create a Playbook/);
+  assert.match(dashboard, /href="\/dashboard\/playbooks\/new"/);
+  assert.match(dashboard, /router\.push\("\/dashboard\/playbooks\/new"\)/);
+  assert.doesNotMatch(dashboard, /workflowTemplates|createFromTemplate|openTemplateSetup|Create workflow/);
+  assert.match(dashboard, /async function saveWorkflow[\s\S]*method: "PATCH"/);
+  assert.match(dashboard, /Open builder/);
+});
