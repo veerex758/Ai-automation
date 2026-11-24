@@ -40,6 +40,7 @@ create table if not exists public.real_estate_inspection_bookings (
   lead_id uuid not null references public.real_estate_leads(id) on delete cascade,
   property_id uuid references public.real_estate_properties(id) on delete set null,
   agent_id uuid references public.agents(id) on delete set null,
+  google_connection_id uuid not null references public.google_connections(id) on delete restrict,
   calendar_id varchar(300) not null default 'primary',
   start_at timestamptz not null,
   end_at timestamptz not null,
@@ -60,6 +61,8 @@ create table if not exists public.real_estate_inspection_bookings (
   constraint real_estate_inspection_booking_idempotency_unique unique (workspace_id,idempotency_key)
 );
 
+create index if not exists real_estate_inspection_bookings_google_connection_idx
+  on public.real_estate_inspection_bookings(workspace_id,google_connection_id,status);
 create index if not exists real_estate_inspection_bookings_workspace_time_idx
   on public.real_estate_inspection_bookings(workspace_id,calendar_id,start_at,end_at)
   where status in ('requested','creating','confirmed','unknown');
