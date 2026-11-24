@@ -123,7 +123,7 @@ export function replayPlaybookAgainstLead(playbook: Playbook, steps: Step[], lea
     confidence,
     confidenceThreshold: playbook.review.confidenceThreshold,
     matchedRules: rules.filter((rule) => rule.outcome === "matched").length,
-    requiresReview: reasons.length > 0 || missingRule,
+    requiresReview: reasons.length > 0,
     reviewReasons: reasons,
     rules,
     actions,
