@@ -11,6 +11,8 @@ test("both providers use the atomic database claim instead of read-then-process 
     assert.match(source, /rpc\("claim_billing_webhook_event"/);
     assert.match(source, /rpc\("complete_billing_webhook_event"/);
     assert.match(source, /rpc\("release_billing_webhook_event"/);
+    assert.match(source, /claimRecord\.reason==="in_progress"\|\|claimRecord\.reason==="completed"/);
+    assert.match(source, /WEBHOOK_CLAIM_UNAVAILABLE/);
     assert.match(source, /createHash\("sha256"\)/);
     assert.doesNotMatch(source, /select\("processed_at"\)/);
   }
