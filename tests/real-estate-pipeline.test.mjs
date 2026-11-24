@@ -166,3 +166,12 @@ test("both public-form and manual leads bind to the exact active Playbook versio
   }
 });
 
+
+test("qualified real-estate leads create one idempotent agency review task with score-based priority", () => {
+  assert.match(pipeline, /async function ensureAgencyLeadTask/);
+  assert.match(pipeline, /real_estate_tasks/);
+  assert.match(pipeline, /onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true/);
+  assert.match(pipeline, /real-estate:new-enquiry-review:/);
+  assert.match(pipeline, /score >= 80 \\? "urgent" : score >= 60 \\? "high"/);
+  assert.match(pipeline, /ensureAgencyLeadTask\\(db, lead, qualification\\)/);
+});
