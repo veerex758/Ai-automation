@@ -50,7 +50,7 @@ test("webhook provisioning encrypts secrets and the builder makes activation exp
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
   assert.match(provision, /getAdminSupabaseConfig/);
   assert.match(provision, /adminConfig\.serviceRoleKey/);
-  assert.match(provision, /adminConfig\.url/
+  assert.match(provision, /adminConfig\.url/);
   assert.match(builder, /Activate workflow/);
   assert.match(builder, /JSON\.stringify\(\{ status: "active" \}\)/);
   assert.match(builder, /signingSecret/);
