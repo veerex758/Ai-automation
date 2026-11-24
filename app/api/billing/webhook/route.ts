@@ -90,13 +90,17 @@ export async function POST(request:Request){
   }
 
   if(payment.recurring_setup){
-   const authorization=recurringAuthorization!;
-   const encrypted=encryptWebhookSecret(authorization.authorization_code,recurringEncryptionKey!).toString("base64");
+   const authorization=recurringAuthorization;
+   const authorizationCode=authorization?.authorization_code;
+   const customerEmail=event.data.customer?.email;
+   if(!authorization||typeof authorizationCode!=="string"||!customerEmail||!recurringEncryptionKey)
+    throw new Error("PAYSTACK_RECURRING_AUTHORIZATION_INVALID");
+   const encrypted=encryptWebhookSecret(authorizationCode,recurringEncryptionKey).toString("base64");
    const {error:customerError}=await admin.from("workspace_billing_customers").upsert({
     workspace_id:payment.workspace_id,paystack_customer_code:authorization.customer_code??null,
     paystack_authorization_code_enc:encrypted,
     paystack_authorization_meta:{reusable:true,card_type:authorization.card_type??null,last4:authorization.last4??null,
-     exp_month:authorization.exp_month??null,exp_year:authorization.exp_year??null,email:event.data.customer.email},
+     exp_month:authorization.exp_month??null,exp_year:authorization.exp_year??null,email:customerEmail},
     recurring_provider:"paystack",recurring_enabled:true,updated_at:now
    },{onConflict:"workspace_id"});
    if(customerError)throw customerError;
