@@ -7,7 +7,7 @@ const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 test("Preview admin credentials prefer branch-scoped CODED staging keys and preserve production precedence", async () => {
   const source = await read("../lib/supabase/admin.ts");
   assert.match(source, /const isPreview = process\.env\.VERCEL_ENV === "preview"/);
-  assert.match(source, /process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY\s*\|\|\s*process\.env\.CODED_SUPABASE_SECRET_KEY\s*\|\|\s*process\.env\.SUPABASE_SECRET_KEY\s*\|\|\s*process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(source, /const isRexnoraStagingPreview = isPreview\s*&& process\.env\.VERCEL_GIT_COMMIT_REF === "integration\\/saas-core-stage3-realestate-20261123"/);\n  assert.match(source, /const serviceRoleKey = isRexnoraStagingPreview\s*\? process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY \\|\\| process\.env\.CODED_SUPABASE_SECRET_KEY\s*: isPreview\s*\? process\.env\.SUPABASE_SECRET_KEY \\|\\| process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(source, /: process\.env\.SUPABASE_SECRET_KEY\s*\|\|\s*process\.env\.SUPABASE_SERVICE_ROLE_KEY\s*\|\|\s*process\.env\.CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(source, /if \(!url \|\| !serviceRoleKey\) throw new Error/);
   assert.match(source, /import "server-only"/);
