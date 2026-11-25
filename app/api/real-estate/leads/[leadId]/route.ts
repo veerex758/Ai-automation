@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest, context: Context) {
     if ("consentToContact" in input) {
       if (typeof input.consentToContact !== "boolean") return NextResponse.json({ error: "Consent must be true or false." }, { status: 400, headers });
       update.consent_to_contact = input.consentToContact;
-      if (!input.consentToContact) update.consent_at = null;
+      if (!input.consentToContact) { update.consent_at = null; update.consent_text = null; }
     }
     if (input.customerResponded === true) update.customer_responded_at = new Date().toISOString();
     const agentTookOver = input.agentTakesOver === true || (typeof input.status === "string" && ["contacted","viewing_scheduled","negotiation","won","lost"].includes(input.status));
