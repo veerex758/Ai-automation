@@ -167,7 +167,7 @@ test("CRM search and create must use the same selected connection", () => {
 
 
 test("accepts a business outcome longer than 240 characters up to 4000", () => {
-  const longOutcome = "Qualify and route property enquiries with clear agency follow-up. ".repeat(30).slice(0, 4000);
+  const longOutcome = "Qualify and route property enquiries with clear agency follow-up. ".repeat(100).slice(0, 4000);
   const result = validatePlaybookDefinition({
     ...valid,
     goal: { ...valid.goal, outcome: longOutcome },
