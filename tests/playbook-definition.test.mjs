@@ -166,23 +166,23 @@ test("CRM search and create must use the same selected connection", () => {
 });
 
 
-test("accepts a business outcome longer than 240 characters up to 4000", () => {
-  const longOutcome = "Qualify and route property enquiries with clear agency follow-up. ".repeat(100).slice(0, 4000);
+test("accepts a business outcome longer than 240 characters up to 2000", () => {
+  const longOutcome = "Qualify and route property enquiries with clear agency follow-up. ".repeat(100).slice(0, 2000);
   const result = validatePlaybookDefinition({
     ...valid,
     goal: { ...valid.goal, outcome: longOutcome },
   }, graph, steps);
-  assert.equal(longOutcome.length, 4000);
+  assert.equal(longOutcome.length, 2000);
   assert.equal(result.error, undefined);
-  assert.equal(result.playbook.goal.outcome.length, 4000);
+  assert.equal(result.playbook.goal.outcome.length, 2000);
 });
 
-test("rejects a business outcome longer than 4000 characters", () => {
+test("rejects a business outcome longer than 2000 characters", () => {
   const result = validatePlaybookDefinition({
     ...valid,
-    goal: { ...valid.goal, outcome: "x".repeat(4001) },
+    goal: { ...valid.goal, outcome: "x".repeat(2001) },
   }, graph, steps);
-  assert.match(result.error, /1–4,000 characters/);
+  assert.match(result.error, /1–2,000 characters/);
 });
 
 test("keeps the separate 240-character Playbook rule rationale limit", () => {
