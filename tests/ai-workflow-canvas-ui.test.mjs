@@ -62,8 +62,8 @@ test("Playbook setup layout adapts to phone screens", () => {
 
 
 test("Playbook outcome accepts longer requests", () => {
-  assert.ok(page.includes("maxLength={4000}"));
-  assert.ok(page.includes("outcome.length}/4000 characters"));
+  assert.ok(page.includes("maxLength={2000}"));
+  assert.ok(page.includes("outcome.length}/2000 characters"));
   assert.ok(page.includes("body: JSON.stringify({ prompt, crmProvider })"));
   assert.ok(generatorRoute.includes("contentLength > 24000"));
 });
