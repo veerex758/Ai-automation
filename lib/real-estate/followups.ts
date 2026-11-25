@@ -130,6 +130,17 @@ async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, cla
     },
   };
 
+  // Final database-owned consent and lease gate immediately before provider dispatch.
+  const { data: dispatchAuthorized, error: dispatchAuthorizationError } = await db.rpc(
+    "authorize_real_estate_followup_dispatch",
+    {
+      p_followup_id: claim.id,
+      p_lease_token: claim.lease_token,
+    },
+  );
+  if (dispatchAuthorizationError) throw new Error("FOLLOWUP_DISPATCH_AUTHORIZATION_FAILED");
+  if (dispatchAuthorized !== true) return "cancelled";
+
   let messageId: string;
   try {
     const result = await operation.run(context, {
