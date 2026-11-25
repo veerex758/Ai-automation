@@ -5,7 +5,7 @@ import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
-import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { validateOperationInput, validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
 
 export const runtime = "nodejs";
@@ -158,20 +158,15 @@ export async function POST(request: NextRequest) {
           failingNode: { stepId: step.id, nodeId: step.nodeId, operationId: step.operationId, kind: step.kind },
         }, { status: 422 });
       }
-      const parsedInput = operation.inputSchema.safeParse(step.input);
+      const parsedInput = validateOperationInput(operation, step.input);
       if (!parsedInput.success) {
-        const issues = parsedInput.error.issues.map((issue) => ({
-          path: issue.path.join(".") || "input",
-          message: issue.message,
-        }));
-        const issueSummary = issues.map((issue) => issue.path + ": " + issue.message).join("; ");
+        const issueSummary = parsedInput.issues.map((issue) => issue.path + ": " + issue.message).join("; ");
         return jsonResponse({
           error: `Step "${step.id}" (${step.nodeId}.${step.operationId}) has invalid input: ${issueSummary}`,
           errorCode: "AI_INVALID_NODE_INPUT",
-          failingNode: { stepId: step.id, nodeId: step.nodeId, operationId: step.operationId, kind: step.kind, issues },
+          failingNode: { stepId: step.id, nodeId: step.nodeId, operationId: step.operationId, kind: step.kind, issues: parsedInput.issues },
         }, { status: 422 });
       }
-      step.input = parsedInput.data;
     }
     let definition: { version: 1; nodes: Array<Record<string, unknown>>; edges?: Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }> };
     let executableSteps = registrySteps;
