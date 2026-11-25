@@ -425,7 +425,7 @@ async function sendAgentNotifications(
       "Next action: review the enquiry, assign an agent and contact the customer in line with the recorded consent.",
       dashboardUrl,
     ].join("\n");
-    await operation.run(context, {
+    const providerResult = await operation.run(context, {
       to: recipient,
       subject: "New property enquiry · " + lead.full_name + " · " + score + "/100",
       text,
@@ -435,6 +435,20 @@ async function sendAgentNotifications(
     await updateClaim(db, claim, {
       agent_notification_accepted_recipient_hashes: [...acceptedHashes],
     });
+    const { data: priorAcceptedEvent, error: eventLookupError } = await db.from("real_estate_lead_activities")
+      .select("id").eq("workspace_id", claim.workspace_id).eq("lead_id", lead.id)
+      .eq("activity_type", "lead.agent_notification_accepted")
+      .contains("details", { recipientHash: hash }).limit(1).maybeSingle();
+    if (eventLookupError) throw new Error("AGENCY_NOTIFICATION_AUDIT_LOOKUP_FAILED");
+    if (!priorAcceptedEvent) {
+      const messageId = providerResult && typeof providerResult === "object" && "messageId" in providerResult && typeof providerResult.messageId === "string" ? providerResult.messageId : null;
+      const { error: eventError } = await db.from("real_estate_lead_activities").insert({
+        workspace_id: claim.workspace_id, lead_id: lead.id, actor_user_id: null,
+        activity_type: "lead.agent_notification_accepted",
+        details: { provider: "resend", recipientHash: hash, providerMessageId: messageId, acceptedAt: new Date().toISOString() },
+      });
+      if (eventError) throw new Error("AGENCY_NOTIFICATION_AUDIT_WRITE_FAILED");
+    }
   }
   return { ok: true as const };
 }
