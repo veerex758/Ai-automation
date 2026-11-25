@@ -95,7 +95,7 @@ test("rejects action types outside the real-estate pilot operation set", () => {
     step.nodeId === "email" ? { ...step, operationId: "delete_record" } : step
   );
   const result = validatePlaybookDefinition(valid, graph, unsupportedSteps);
-  assert.match(result.error, /Unsupported real-estate Playbook action: email\\.delete_record/);
+  assert.match(result.error, /Unsupported real-estate Playbook action: email\.delete_record/);
 });
 
 test("requires exactly one supported Gemini qualification action", () => {
