@@ -211,13 +211,13 @@ test("90-day follow-up schedule has five consent-gated email checkpoints and dur
 
 test("all four real-estate starter cards route to the dedicated runtime workflows", () => {
   assert.match(sectionPage, /name:"Instant Speed-to-Lead & Qualification"/);
-  assert.match(sectionPage, /href:"\\/dashboard\\/playbooks\\/new#speed-to-lead"/);
+  assert.ok(sectionPage.includes('href:"/dashboard/playbooks/new#speed-to-lead"'));
   assert.match(sectionPage, /name:"Property Inspection & Calendar Booking"/);
-  assert.match(sectionPage, /href:"\\/dashboard\\/real-estate\\/operations"/);
+  assert.ok(sectionPage.includes('href:"/dashboard/real-estate/operations"'));
   assert.match(sectionPage, /name:"90-Day Buyer & Investor Follow-Up"/);
-  assert.match(sectionPage, /href:"\\/dashboard\\/real-estate#followups"/);
+  assert.ok(sectionPage.includes('href:"/dashboard/real-estate#followups"'));
   assert.match(sectionPage, /name:"Real Estate Back-Office Automation"/);
-  assert.match(sectionPage, /href:"\\/dashboard\\/real-estate\\/operations#tasks"/);
+  assert.ok(sectionPage.includes('href:"/dashboard/real-estate/operations#tasks"'));
 });
 
 test("inspection booking separates availability and reservation from owner-approved Calendar writes", () => {
