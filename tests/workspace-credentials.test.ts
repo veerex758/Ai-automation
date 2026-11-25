@@ -63,7 +63,7 @@ test("workspace credential vault accepts the additional vendor providers with on
     slack: { botToken: "slack-bot-secret" },
     claude: { apiKey: "claude-secret" },
     discord: { botToken: "discord-secret" },
-    whatsapp_business: { accessToken: "wa-secret", phoneNumberId: "123456" },
+    whatsapp_business: { accessToken: "wa-secret", phoneNumberId: "123456", templateName: "real_estate_new_enquiry", templateLanguage: "en_US" },
     sendgrid: { apiKey: "sg-secret", fromEmail: "hello@example.test" },
     mailgun: { apiKey: "mg-secret", domain: "mg.example.test", fromEmail: "hello@example.test" },
     postmark: { serverToken: "pm-secret", fromEmail: "hello@example.test" },

@@ -27,9 +27,9 @@ export function createFollowupRows(lead: {
   const messages = [
     { subject: "We received your property enquiry", message: "Hi " + firstName + ", thanks for contacting us about your " + property + location + ". Our team has received your enquiry and will review your requirements. Reply to this email with any extra details that would help us assist you." },
     { subject: "A quick follow-up on your property enquiry", message: "Hi " + firstName + ", I am following up on your " + action + " enquiry" + location + ". Are you still looking, and is there anything you would like us to clarify about the next steps?" },
-    { subject: "Can we help narrow down your property options?", message: "Hi " + firstName + ", we would be glad to narrow down suitable " + property + " options" + location + ". Has your budget, preferred area or timeline changed since your enquiry?" },
-    { subject: "Checking in on your property search", message: "Hi " + firstName + ", checking whether you are still considering a property" + location + ". We can arrange a conversation or viewing when you are ready. Reply with a convenient time and we will coordinate with an agent." },
-    { subject: "Would you like us to keep your enquiry open?", message: "Hi " + firstName + ", this is our final scheduled check-in about your property enquiry" + location + ". Reply if you would like an agent to continue helping, or let us know if your plans have changed." },
+    { subject: "More options for your property search", message: "Hi " + firstName + ", we would be glad to narrow down suitable " + property + " options" + location + ". Has your budget, preferred area or timeline changed since your enquiry?" },
+    { subject: "A monthly check-in on your property plans", message: "Hi " + firstName + ", checking in on your property plans" + location + ". We can refresh your matches or arrange a conversation with an agent if your requirements have changed." },
+    { subject: "Your property search — 90-day check-in", message: "Hi " + firstName + ", this is our scheduled 90-day check-in about your property enquiry" + location + ". Would you like us to keep helping, update your requirements, or close the enquiry? Reply at any time to let us know." },
   ];
   return buildFollowupSchedule(createdAt).map((schedule, index) => ({
     workspace_id: lead.workspace_id,

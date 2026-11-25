@@ -83,6 +83,9 @@ test("new saves use connection-bound v2 while old v1 records remain compatible",
  assert.ok(worker.includes('secret.encryption_version === "v2"'));
  assert.ok(worker.includes("integration.id"));
  assert.ok(worker.includes('encryption_version: "v2"'));
+ const realEstatePipeline = readFileSync(new URL("../lib/real-estate/pipeline.ts", import.meta.url), "utf8");
+ assert.ok(realEstatePipeline.includes('secret.encryption_version === "v2"'));
+ assert.ok(realEstatePipeline.includes("integration.id"));
 });
 test("OAuth and provider verification decrypt the exact selected connection",()=>{
  const oauth=readFileSync(new URL("../app/api/integrations/oauth/[provider]/callback/route.ts",import.meta.url),"utf8");

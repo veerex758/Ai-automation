@@ -108,12 +108,14 @@ export function matchRealEstateProperties(
 }
 
 export function buildFollowupSchedule(createdAt: Date): Array<{ sequence: number; dueAt: string; delayLabel: string }> {
+  // Five durable queue rows are retained to match the existing database constraint.
+  // Spread them over 90 days so serious buyers and investors are not abandoned after one week.
   const offsets = [
     { sequence: 1, ms: 0, delayLabel: "Immediately" },
-    { sequence: 2, ms: 60 * 60 * 1000, delayLabel: "1 hour" },
-    { sequence: 3, ms: 24 * 60 * 60 * 1000, delayLabel: "24 hours" },
-    { sequence: 4, ms: 3 * 24 * 60 * 60 * 1000, delayLabel: "3 days" },
-    { sequence: 5, ms: 7 * 24 * 60 * 60 * 1000, delayLabel: "7 days" },
+    { sequence: 2, ms: 1 * 24 * 60 * 60 * 1000, delayLabel: "1 day" },
+    { sequence: 3, ms: 7 * 24 * 60 * 60 * 1000, delayLabel: "7 days" },
+    { sequence: 4, ms: 30 * 24 * 60 * 60 * 1000, delayLabel: "30 days" },
+    { sequence: 5, ms: 90 * 24 * 60 * 60 * 1000, delayLabel: "90 days" },
   ];
   return offsets.map((item) => ({ sequence: item.sequence, dueAt: new Date(createdAt.getTime() + item.ms).toISOString(), delayLabel: item.delayLabel }));
 }

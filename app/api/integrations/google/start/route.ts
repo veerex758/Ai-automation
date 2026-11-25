@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   const productValue = request.nextUrl.searchParams.get("product");
   if (!isGoogleProduct(productValue)) {
-    return NextResponse.json({ error: "Choose a supported read-only Google product." }, { status: 400 });
+    return NextResponse.json({ error: "Choose a supported Google product." }, { status: 400 });
   }
   const googleNodeByProduct: Record<string, string> = {
     gmail: "gmail", sheets: "sheets", drive: "google_drive", calendar: "google_calendar",

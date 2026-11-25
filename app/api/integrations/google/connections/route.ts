@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         !hasOnlyApprovedGoogleScopes(product, connection.scopes.join(" "))) {
       await admin.from("google_connections").update({ last_tested_at: new Date().toISOString(), last_test_status: "failed", status: "needs_reauth" })
         .eq("id", connection.id).eq("workspace_id", workspace.id);
-      return NextResponse.json({ ok: false, message: "The saved Google consent does not contain the required read-only product scope. Reconnect this account." }, { status: 409, headers });
+      return NextResponse.json({ ok: false, message: "The saved Google consent does not contain the required product scope. Reconnect this account." }, { status: 409, headers });
     }
     let credentials: GoogleCredentials;
     try { credentials = decryptGoogleCredentials(connection.encrypted_credentials); }
@@ -142,21 +142,39 @@ export async function POST(request: Request) {
     const validIdentity = Boolean(profile && typeof profile === "object" &&
       (profile as { email?: unknown }).email === connection.account_email &&
       (profile as { email_verified?: unknown }).email_verified === true);
+    let validProductAccess = true;
+    if (validIdentity && product === "calendar") {
+      // Verify the exact calendar product scope with a harmless bounded read.
+      // Connection tests must never create, update or invite attendees to events.
+      try {
+        const calendarProbe = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1", {
+          headers: { Authorization: "Bearer " + credentials.access_token },
+          cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000),
+        });
+        validProductAccess = calendarProbe.ok;
+      } catch {
+        validProductAccess = false;
+      }
+    }
+    const validConnection = validIdentity && validProductAccess;
     const testedAt = new Date().toISOString();
     const { error: updateError } = await admin.from("google_connections").update({
       last_tested_at: testedAt,
-      last_test_status: validIdentity ? "passed" : "failed",
-      status: validIdentity ? "connected" : "needs_reauth",
+      last_test_status: validConnection ? "passed" : "failed",
+      status: validConnection ? "connected" : "needs_reauth",
     }).eq("id", connection.id).eq("workspace_id", workspace.id);
     if (updateError) throw updateError;
     if (!validIdentity) return NextResponse.json({ ok: false, message: profileResponse.status === 401
       ? "Google rejected the saved access token. Reconnect this account."
       : "Google identity could not be verified for this saved account. Reconnect it and test again." }, { status: 409, headers });
+    if (!validProductAccess) return NextResponse.json({ ok: false, message: "Google verified the account identity, but the primary Calendar could not be read with the saved permission. Reconnect and test again." }, { status: 409, headers });
     return NextResponse.json({
       ok: true,
       last_tested_at: testedAt,
-      verification: "google_identity_and_product_scope",
-      message: "Google verified this account identity and the exact read-only scope requested by this node. No mailbox, document, calendar or contact data was changed.",
+      verification: product === "calendar" ? "google_identity_and_calendar_read_probe" : "google_identity_and_product_scope",
+      message: product === "calendar"
+        ? "Google verified the account identity and primary Calendar access. The connection test did not create or change any events."
+        : "Google verified this account identity and the exact product scope requested by this node. No provider data was changed.",
     }, { headers });
   } catch {
     return NextResponse.json({ error: "Could not verify this Google connection." }, { status: 500, headers });

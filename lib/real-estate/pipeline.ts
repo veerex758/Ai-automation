@@ -179,14 +179,14 @@ async function approvedCredentials(
     .select("encrypted_credentials,encryption_version")
     .eq("integration_id", integration.id)
     .maybeSingle();
-  if (secretError || !secret || secret.encryption_version !== "v1") {
+  if (secretError || !secret || !["v1", "v2"].includes(secret.encryption_version)) {
     return { ok: false, code: provider.toUpperCase() + "_CREDENTIALS_UNAVAILABLE" };
   }
   try {
     const decoded = decryptWorkspaceCredentials(
       secret.encrypted_credentials,
       undefined,
-      workspaceId + ":" + provider,
+      secret.encryption_version === "v2" ? workspaceId + ":" + provider + ":" + integration.id : workspaceId + ":" + provider,
     );
     const credentials = decoded[provider];
     if (!credentials || Object.keys(credentials).length === 0) {
@@ -305,6 +305,34 @@ function mergeQualification(lead: LeadRow, qualification: Qualification) {
     qualification_error_code: null,
     qualified_at: new Date().toISOString(),
   };
+}
+
+
+async function ensureAgencyLeadTask(db: ServiceClient, lead: LeadRow, qualification: Qualification) {
+  const score = Number(lead.lead_score) || 0;
+  const priority = score >= 80 ? "urgent" : score >= 60 ? "high" : score >= 30 ? "normal" : "low";
+  const dueAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const description = [
+    "Lead score: " + score + "/100 (" + lead.lead_temperature + ")",
+    "AI qualification: " + qualification.summary,
+    "Suggested first response: " + qualification.suggestedReply,
+    "Main concern: " + (qualification.mainConcern ?? "Not identified"),
+    "Next action: assign an agent, review the enquiry and contact the customer using the recorded consent preference.",
+  ].join("\n").slice(0, 4000);
+  const { error } = await db.from("real_estate_tasks").upsert({
+    workspace_id: lead.workspace_id,
+    lead_id: lead.id,
+    assigned_agent_id: null,
+    task_type: "new_enquiry_review",
+    title: ("New enquiry: " + lead.full_name).slice(0, 200),
+    description,
+    status: "open",
+    priority,
+    due_at: dueAt,
+    idempotency_key: "real-estate:new-enquiry-review:" + lead.id,
+    created_by: null,
+  }, { onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true });
+  if (error) throw new Error("AGENCY_LEAD_TASK_WRITE_FAILED");
 }
 
 async function ensureQualificationActivity(db: ServiceClient, lead: LeadRow, workspaceId: string, score: number) {
@@ -548,6 +576,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
 
   try {
     await ensureFollowupDrafts(db, lead, qualification);
+    await ensureAgencyLeadTask(db, lead, qualification);
     await ensureQualificationActivity(db, lead, claim.workspace_id, Number(lead.lead_score));
   } catch (error) {
     const code = safeErrorCode(error, "LEAD_PIPELINE_PERSISTENCE_FAILED");
