@@ -13,6 +13,9 @@ const serviceClient = read("../lib/real-estate/server.ts");
 const followups = read("../lib/real-estate/followups.ts");
 const realEstatePage = read("../app/dashboard/real-estate/page.tsx");
 const playbookPage = read("../app/dashboard/playbooks/new/page.tsx");
+const sectionPage = read("../app/dashboard/section-page.tsx");
+const inspectionRequest = read("../app/api/real-estate/inspections/route.ts");
+const inspectionApproval = read("../app/api/real-estate/inspections/[bookingId]/approve/route.ts");
 const followupsRoute = read("../app/api/cron/real-estate-followups/route.ts");
 const pipelineWorker = read("../app/api/cron/real-estate-pipeline/route.ts");
 const emailNode = read("../nodes/email.ts");
@@ -192,6 +195,34 @@ test("Playbook policy validation evaluates all IF rules before CRM writes", () =
   assert.match(playbookDefinition, /Every deterministic Playbook rule must be evaluated before customer communication or CRM writes/);
 });
 
+
+test("all four real-estate starter cards route to the dedicated runtime workflows", () => {
+  assert.match(sectionPage, /name:"Instant Speed-to-Lead & Qualification"/);
+  assert.match(sectionPage, /href:"\\/dashboard\\/playbooks\\/new#speed-to-lead"/);
+  assert.match(sectionPage, /name:"Property Inspection & Calendar Booking"/);
+  assert.match(sectionPage, /href:"\\/dashboard\\/real-estate\\/operations"/);
+  assert.match(sectionPage, /name:"90-Day Buyer & Investor Follow-Up"/);
+  assert.match(sectionPage, /href:"\\/dashboard\\/real-estate#followups"/);
+  assert.match(sectionPage, /name:"Real Estate Back-Office Automation"/);
+  assert.match(sectionPage, /href:"\\/dashboard\\/real-estate\\/operations#tasks"/);
+});
+
+test("inspection booking separates availability and reservation from owner-approved Calendar writes", () => {
+  assert.match(inspectionRequest, /operations\\.manage/);
+  assert.match(inspectionRequest, /workspace_provider_operation_approvals/);
+  assert.match(inspectionRequest, /operationApproved\\(db, workspace\\.id, "execute"\\)/);
+  assert.match(inspectionRequest, /findOperation\\("google_calendar", "execute", "action"\\)/);
+  assert.match(inspectionRequest, /reserve_real_estate_inspection_booking/);
+  assert.match(inspectionRequest, /customerInviteEmail/);
+  assert.doesNotMatch(inspectionRequest, /findOperation\\("google_calendar", "create_event"/);
+
+  assert.match(inspectionApproval, /workspaceRow\\?\\.owner_id !== user\\.id/);
+  assert.match(inspectionApproval, /"owner", "admin"/);
+  assert.match(inspectionApproval, /operation_id", "create_event"/);
+  assert.match(inspectionApproval, /begin_real_estate_inspection_booking/);
+  assert.match(inspectionApproval, /findOperation\\("google_calendar", "create_event", "action"\\)/);
+  assert.match(inspectionApproval, /booking\\.id\\.replaceAll/);
+});
 
 test("manual lead UI records the customer's actual words and never synthesizes channel consent", () => {
   assert.match(realEstatePage, /consentText:""/);
