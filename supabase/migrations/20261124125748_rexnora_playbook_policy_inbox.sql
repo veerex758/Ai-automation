@@ -183,8 +183,6 @@ begin
   return query select next_status, decision_row.decision_type, decision_row.lead_id,
     decision_row.workflow_id, decision_row.workflow_version, decision_row.workspace_id;
 end;
-$function$
+$function$;
 revoke all on function public.resolve_real_estate_playbook_decision(uuid,uuid,text) from public, anon, authenticated;
 grant execute on function public.resolve_real_estate_playbook_decision(uuid,uuid,text) to service_role;
-revoke all on function public.resolve_real_estate_playbook_decision(uuid,uuid,text,jsonb) from public, anon, authenticated;
-grant execute on function public.resolve_real_estate_playbook_decision(uuid,uuid,text,jsonb) to service_role;
