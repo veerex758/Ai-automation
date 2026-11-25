@@ -52,6 +52,7 @@ type WorkspaceIntegration = {
   updated_at: string;
   last_tested_at?: string | null;
   last_test_status?: string | null;
+  metadata?: { senderDomain?: string | null; senderDomainStatus?: string; credentialCheck?: string } | null;
 };
 
 const oauthProviders = new Set<WorkspaceProvider>([
@@ -202,7 +203,17 @@ function WorkspaceIntegrationManager() {
       const response = await fetch("/api/integrations/workspace/resend/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ connectionId }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Could not test the Resend connection.");
-      setIntegrations(current => current.map(item => item.id === connectionId ? { ...item, status: payload.senderDomainVerified ? "connected" : "needs_attention", last_test_status: "passed" } : item));
+      setIntegrations(current => current.map(item => item.id === connectionId ? {
+        ...item,
+        status: payload.senderDomainVerified ? "connected" : "needs_attention",
+        last_test_status: "passed",
+        metadata: {
+          ...item.metadata,
+          credentialCheck: "passed",
+          senderDomain: payload.senderDomain ?? item.metadata?.senderDomain ?? null,
+          senderDomainStatus: payload.senderDomainStatus ?? "not_found",
+        },
+      } : item));
       setNotice(payload.message ?? "Resend connection checked. No email was sent.");
     } catch (reason) {
       setIntegrations(current => current.map(item => item.id === connectionId
@@ -329,9 +340,15 @@ function WorkspaceIntegrationManager() {
             ? <p className="connections-empty">No workflow provider credentials saved yet.</p>
             : integrations.filter(item => !focusedProvider || item.provider === focusedProvider).map(item => (
               <div className="workspace-integration-saved-row" key={item.id}>
-                <div><strong>{item.display_name}</strong><span>{item.provider} · {item.last_test_status === "passed" && item.status === "connected" ? "verified" : "test required"} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
+                <div><strong>{item.display_name}</strong><span>{item.provider === "resend"
+                  ? item.last_test_status === "passed" && item.metadata?.credentialCheck === "passed"
+                    ? item.status === "connected"
+                      ? "API credentials valid · sender domain verified"
+                      : `API credentials valid · sender domain ${item.metadata.senderDomainStatus === "not_found" ? "not found" : "not verified"}`
+                    : "API credentials not verified"
+                  : item.last_test_status === "passed" && item.status === "connected" ? "verified" : "test required"} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
                 <div className="workspace-integration-row-actions">
-                  <span className={item.status === "connected" && item.last_test_status === "passed" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>
+                  <span className={item.status === "connected" && item.last_test_status === "passed" ? "connection-status" : "status-needs_reauth"}>{item.provider === "resend" && item.last_test_status === "passed" && item.metadata?.credentialCheck === "passed" && item.status !== "connected" ? "domain verification required" : item.status.replace("_", " ")}</span>
                   {item.provider !== "resend" ? <button type="button" onClick={() => testProvider(item.provider, item.id)} disabled={testingProvider !== null}>{testingProvider === item.id ? "Testing…" : "Test"}</button> : <>
                     <button type="button" onClick={() => testResend(item.id)} disabled={testingResend || sendingResendTest}>{testingResend ? "Testing…" : "Test"}</button>
                     <button type="button" onClick={() => sendResendTestEmail(item.id)} disabled={testingResend || sendingResendTest}>{sendingResendTest ? "Sending…" : "Send test email"}</button>
