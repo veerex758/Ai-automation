@@ -216,14 +216,14 @@ export default function NewPlaybookPage() {
           <div className="playbook-panel-heading"><span>01</span><div><h2>Business outcome</h2><p>Write what should improve for your agency, not a list of software steps.</p></div></div>
           <form onSubmit={generate}>
             <label className="playbook-field-label" htmlFor="playbook-outcome">What should Rexnora achieve?</label>
-            <textarea id="playbook-outcome" value={outcome} onChange={(event) => setOutcome(event.target.value)} maxLength={4000} rows={5} required />
+            <textarea id="playbook-outcome" value={outcome} onChange={(event) => setOutcome(event.target.value)} maxLength={2000} rows={5} required />
             <label className="playbook-field-label" htmlFor="playbook-crm-provider" style={{ marginTop: 18 }}>CRM to include in this starter</label>
             <select id="playbook-crm-provider" value={crmProvider} onChange={(event) => setCrmProvider(event.target.value as typeof crmProvider)} style={{ width: "100%", boxSizing: "border-box", marginTop: 8, border: "1px solid #334253", background: "#0c1219", borderRadius: 8, color: "#edf2f8", padding: 12, fontSize: 12 }}>
               <option value="pipedrive">Pipedrive</option>
               <option value="zoho_crm">Zoho CRM</option>
               <option value="freshsales">Freshsales</option>
             </select>
-            <div className="playbook-form-footer"><span>{outcome.length}/4000 characters · Real-estate agencies</span><button className="playbook-primary" type="submit" disabled={generating || !outcome.trim()}>{generating ? "Preparing your draft…" : "Create full starter draft"} <span>→</span></button></div>
+            <div className="playbook-form-footer"><span>{outcome.length}/2000 characters · Real-estate agencies</span><button className="playbook-primary" type="submit" disabled={generating || !outcome.trim()}>{generating ? "Preparing your draft…" : "Create full starter draft"} <span>→</span></button></div>
           </form>
           <p className="playbook-footnote">The starter includes speed-to-lead, Gemini qualification, agency email, consent-gated WhatsApp and your selected CRM. Inspection booking, the five-step 90-day email drip and back-office tasks run through Rexnora’s dedicated Operations and lead pipeline. This screen saves an inactive draft only; connect and test providers, select workspace accounts and approve actions before activation.</p>
         </section>
