@@ -220,7 +220,7 @@ export default function NewPlaybookPage() {
             </select>
             <div className="playbook-form-footer"><span>{outcome.length}/240 · Real-estate agencies</span><button className="playbook-primary" type="submit" disabled={generating || !outcome.trim()}>{generating ? "Preparing your draft…" : "Create full starter draft"} <span>→</span></button></div>
           </form>
-          <p className="playbook-footnote">The starter includes speed-to-lead, Gemini qualification, agency email, consent-gated WhatsApp and your selected CRM. Inspection booking, the five-step 90-day email drip and back-office tasks run through Rexnora's dedicated Operations and lead pipeline. This screen saves an inactive draft only; connect and test providers, select workspace accounts and approve actions before activation.</p>
+          <p className="playbook-footnote">The starter includes speed-to-lead, Gemini qualification, agency email, consent-gated WhatsApp and your selected CRM. Inspection booking, the five-step 90-day email drip and back-office tasks run through Rexnora’s dedicated Operations and lead pipeline. This screen saves an inactive draft only; connect and test providers, select workspace accounts and approve actions before activation.</p>
         </section>
 
         {draft?.definition && draft.registrySteps && <section className="playbook-review">
