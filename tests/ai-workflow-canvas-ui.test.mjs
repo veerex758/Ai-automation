@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const page = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../app/dashboard/playbooks/playbooks.css", import.meta.url), "utf8");
 const controlRoom = readFileSync(new URL("../app/dashboard/playbooks/[playbookId]/page.tsx", import.meta.url), "utf8");
+const generatorRoute = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
 
 test("Playbook authoring starts with a business outcome instead of a canvas", () => {
   assert.match(page, /What outcome should Rexnora handle/);
@@ -57,4 +58,24 @@ test("Playbook setup layout adapts to phone screens", () => {
   assert.match(styles, /@media\(max-width:850px\)/);
   assert.match(styles, /\.playbook-rule-fields\{grid-template-columns:1fr\}/);
   assert.match(styles, /\.playbook-save-row\{flex-direction:column\}/);
+});
+
+
+test("Playbook outcome accepts longer requests", () => {
+  assert.match(page, /maxLength={4000}/);
+  assert.match(page, /outcome.length}\\/4000 characters/);
+  assert.match(page, /body: JSON\\.stringify\\(\\{ prompt, crmProvider \\}\\)/);
+  assert.match(generatorRoute, /contentLength > 24000/);
+});
+
+test("CRM starter uses selected provider operations and reports the failing node", () => {
+  assert.match(page, /step id intake/);
+  assert.match(page, /\\.search_contacts/);
+  assert.match(page, /\\.execute/);
+  assert.match(generatorRoute, /search_contacts/);
+  assert.match(generatorRoute, /firstName:.*payload\\.firstName/);
+  assert.match(generatorRoute, /lastName:.*payload\\.lastName/);
+  assert.match(generatorRoute, /validateOperationInput/);
+  assert.match(generatorRoute, /failingNode:/);
+  assert.match(page, /Failing node:/);
 });
