@@ -58,7 +58,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 export default function NewPlaybookPage() {
   const router = useRouter();
   const [outcome, setOutcome] = useState("Handle every new property enquiry: qualify the lead, notify the agency, send an approved WhatsApp template only with explicit consent, sync the selected CRM, create agent tasks, and support inspection booking and 90-day follow-up.");
-  const outcomeWordCount = outcome.trim() ? outcome.trim().split(/\\s+/).filter(Boolean).length : 0;
+  const outcomeWordCount = outcome.trim() ? outcome.trim().split(/\s+/).filter(Boolean).length : 0;
   const [crmProvider, setCrmProvider] = useState<"pipedrive" | "zoho_crm" | "freshsales">("pipedrive");
   const [draft, setDraft] = useState<GeneratedDraft | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
