@@ -50,6 +50,19 @@ export async function POST(request: NextRequest) {
         (typeof requestedCrmProvider !== "string" || !supportedCrmProviders.includes(requestedCrmProvider as typeof supportedCrmProviders[number]))) {
       return jsonResponse({ error: "Choose a supported CRM for the Playbook starter.", errorCode: "UNSUPPORTED_STARTER_CRM" }, { status: 400 });
     }
+    if (requestedCrmProvider !== undefined) {
+      const playbookOutcome = "playbookOutcome" in body ? body.playbookOutcome : undefined;
+      if (typeof playbookOutcome !== "string" || !playbookOutcome.trim()) {
+        return jsonResponse({ error: "Describe the Playbook business outcome.", errorCode: "PLAYBOOK_OUTCOME_REQUIRED" }, { status: 400 });
+      }
+      const outcomeWords = playbookOutcome.trim().split(/\s+/).filter(Boolean).length;
+      if (playbookOutcome.trim().length > 2000 || outcomeWords > 240) {
+        return jsonResponse({ error: "Keep the Playbook outcome to 2,000 characters and 240 words or fewer.", errorCode: "PLAYBOOK_OUTCOME_TOO_LONG" }, { status: 400 });
+      }
+      if (!body.prompt.includes(playbookOutcome.trim())) {
+        return jsonResponse({ error: "The Playbook outcome does not match the generated request.", errorCode: "PLAYBOOK_OUTCOME_MISMATCH" }, { status: 400 });
+      }
+    }
     if (body.prompt.trim().length > MAX_PROMPT_LENGTH) {
       return jsonResponse({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
     }
