@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const api=readFileSync(new URL("../app/api/real-estate/playbooks/inbox/route.ts",import.meta.url),"utf8");
 const action=readFileSync(new URL("../app/api/real-estate/playbooks/inbox/[decisionId]/route.ts",import.meta.url),"utf8");
-const migration=readFileSync(new URL("../supabase/migrations/20261124120000_rexnora_playbook_policy_inbox.sql",import.meta.url),"utf8");
+const migration=readFileSync(new URL("../supabase/migrations/20261124125748_rexnora_playbook_policy_inbox.sql",import.meta.url),"utf8");
 const page=readFileSync(new URL("../app/dashboard/playbooks/[playbookId]/inbox/page.tsx",import.meta.url),"utf8");
 
 test("Decision Inbox is workspace-scoped and displays only decisions for the selected Playbook",()=>{
