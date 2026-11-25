@@ -14,12 +14,13 @@ export async function GET() {
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const workspaceId = workspace.id;
     const [
-      totalResult, newLeadsResult, qualifiedResult, hotResult, warmResult, coldResult,
+      totalResult, newLeadsResult, qualifiedResult, highScoringResult, hotResult, warmResult, coldResult,
       viewingsResult, wonResult, lostResult, propertiesResult, activePropertiesResult,
       followupsDueResult, agentsResult,
     ] = await Promise.all([
       supabase.from("real_estate_leads").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
       supabase.from("real_estate_leads").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("status", "new"),
+      supabase.from("real_estate_leads").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("qualification_status", "succeeded"),
       supabase.from("real_estate_leads").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).gte("lead_score", 50),
       supabase.from("real_estate_leads").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("lead_temperature", "hot"),
       supabase.from("real_estate_leads").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("lead_temperature", "warm"),
@@ -33,7 +34,7 @@ export async function GET() {
       supabase.from("agents").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
     ]);
     const countError = [
-      totalResult, newLeadsResult, qualifiedResult, hotResult, warmResult, coldResult,
+      totalResult, newLeadsResult, qualifiedResult, highScoringResult, hotResult, warmResult, coldResult,
       viewingsResult, wonResult, lostResult, propertiesResult, activePropertiesResult,
       followupsDueResult, agentsResult,
     ].find((result) => result.error)?.error;
@@ -65,6 +66,7 @@ export async function GET() {
         total: totalResult.count ?? 0,
         newLeads: newLeadsResult.count ?? 0,
         qualified: qualifiedResult.count ?? 0,
+        highScoring: highScoringResult.count ?? 0,
         hot: hotResult.count ?? 0,
         warm: warmResult.count ?? 0,
         cold: coldResult.count ?? 0,
