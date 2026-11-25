@@ -78,7 +78,7 @@ export default function NewPlaybookPage() {
         "Do not add Google Calendar. Inspection booking uses the dedicated owner-approved inspection flow and selected Calendar connection. Customer follow-up uses the durable 90-day service and timestamped email consent; do not generate arbitrary scheduled messages.",
         "Use registered operations only. Gemini extracts and classifies enquiry details; deterministic IF rules route explicit business conditions. Resend may notify only an approved agency inbox. External writes default to ask_first.",
         "Keep the graph connected and simple. Do not omit required actions because an account is not connected. Save an inactive draft only; never activate or execute it."
-      ].join("\\n\\n");
+      ].join("\n\n");
       const response = await fetch("/api/ai/generate-workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
