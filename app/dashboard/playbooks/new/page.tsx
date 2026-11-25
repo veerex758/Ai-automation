@@ -67,19 +67,17 @@ export default function NewPlaybookPage() {
     setNotice("");
     setDraft(null);
     try {
+      // Keep the user-entered outcome (max 240 chars) separate from concise
+      // product constraints. The generator endpoint enforces a 2,000-char cap
+      // on the complete prompt, not just the text entered in this form.
       const prompt = [
-        "Create a real-estate agency Playbook for this business outcome: " + outcome.trim(),
-        "This is the complete Rexnora real-estate starter. Include exactly one supported intake trigger (webhooks.receive_event or manual.start), one Gemini qualify_real_estate_lead action, at least one IF evaluate rule for deterministic routing, one email send_email action addressed only to the agency's approved recipient allowlist, and one whatsapp_business.send_template action for the optional customer response.",
-        "WhatsApp is allowed only as whatsapp_business.send_template using an approved Meta template, a selected verified workspace connection, operation-level approval, E.164 phone number, and timestamped consent whose recorded text explicitly includes WhatsApp. Never send free-form WhatsApp messages. Missing consent must skip the send.",
-        "The selected CRM for this starter is " + crmProvider + ". Include exactly two CRM action steps for this provider: search_contacts by the exact lead email, then execute to create only when no exact match exists. Both must use the same selected workspace connection. Never create a contact on ambiguous search results or after an unknown prior create outcome. Do not add a second CRM provider.",
-        "Do not omit one of the required actions because the agency has not connected its accounts yet. Save the workflow inactive; the agency will select verified workspace connections and approve each operation before activation.",
-        "Do not put Google Calendar create-event actions in the generic Playbook. Property inspection booking uses the dedicated owner-approved inspection booking flow and its selected Google Calendar connection; never bypass that flow.",
-        "Customer follow-up is handled by Rexnora's durable 90-day follow-up service and must only use timestamped recorded email consent. Do not generate arbitrary scheduled customer messages.",
-        "Do not invent integrations, tools, data sources or delivery channels. Use registered Rexnora operations only.",
-        "Gemini may extract and classify enquiry details into structured fields. Use deterministic IF conditions for explicit business rules.",
-        "Resend may notify a specifically approved agency inbox. Customer communication must remain consent-gated and action permissions must default to ask_first for external writes.",
-        "Keep the graph simple and connected. Include a supported intake trigger, qualification, explicit IF branches where needed, and only the external actions required by the stated outcome.",
-        "Return an inactive draft only. Never activate or execute anything."
+        "Create a real-estate agency Playbook for this outcome: " + outcome.trim(),
+        "Use exactly one intake trigger (webhooks.receive_event or manual.start), Gemini qualify_real_estate_lead, an IF evaluate rule for deterministic routing, email send_email to the approved agency recipient allowlist, and whatsapp_business.send_template for optional customer replies.",
+        "WhatsApp: use only an approved Meta template, selected verified workspace connection, operation approval, E.164 phone and timestamped consent explicitly covering WhatsApp. Missing consent skips the send. Never send free-form WhatsApp.",
+        "The selected CRM for this starter is " + crmProvider + ". Use exactly two actions: search_contacts by the exact lead email, then execute to create only when no exact match exists. Use the same selected workspace connection. Never create on ambiguous search or unknown prior create outcome. Do not add another CRM.",
+        "Do not put Google Calendar create-event actions in the generic Playbook. Inspection booking uses the dedicated owner-approved inspection flow and selected Calendar connection. Customer follow-up uses the durable 90-day follow-up service and timestamped email consent; do not generate arbitrary scheduled messages.",
+        "Use registered Rexnora operations only. Gemini extracts and classifies enquiry details; deterministic IF rules route explicit business conditions. Resend may notify only an approved agency inbox. External writes default to ask_first.",
+        "Keep the graph connected and simple. Do not omit required actions because an account is not connected. Save an inactive draft only; never activate or execute anything."
       ].join("\n\n");
       const response = await fetch("/api/ai/generate-workflow", {
         method: "POST",
