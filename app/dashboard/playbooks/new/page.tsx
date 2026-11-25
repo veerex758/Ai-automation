@@ -25,6 +25,7 @@ type GeneratedDraft = {
   summary?: string;
   error?: string;
   errorCode?: string;
+  failingNode?: { stepId?: string | null; nodeId?: string; operationId?: string; kind?: string; issues?: Array<{ path: string; message: string }> };
 };
 type Rule = { id: string; nodeId: string; name: string; rationale: string };
 type ActionPolicy = {
@@ -37,8 +38,16 @@ type ActionPolicy = {
 async function responseJson<T>(response: Response): Promise<T> {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = result && typeof result === "object" && "error" in result ? String(result.error) : "The request could not be completed.";
-    throw new Error(message);
+    const payload = result && typeof result === "object" ? result as { error?: unknown; failingNode?: GeneratedDraft["failingNode"] } : {};
+    const message = typeof payload.error === "string" ? payload.error : "The request could not be completed.";
+    const failing = payload.failingNode;
+    const nodeLabel = failing?.nodeId && failing?.operationId
+      ? `\nFailing node: ${failing.stepId || "unassigned"} (${failing.nodeId}.${failing.operationId})`
+      : "";
+    const issues = failing?.issues?.length
+      ? "\n" + failing.issues.map((issue) => issue.path + ": " + issue.message).join("; ")
+      : "";
+    throw new Error(message + nodeLabel + issues);
   }
   return result as T;
 }
@@ -69,7 +78,7 @@ export default function NewPlaybookPage() {
     try {
       const prompt = [
         "Create a real-estate agency Playbook for this business outcome: " + outcome.trim(),
-        "Use exactly one webhooks.receive_event intake trigger, Gemini qualify_real_estate_lead, an IF evaluate rule, email send_email to the approved agency recipient allowlist, and whatsapp_business.send_template for optional customer replies.",
+        "Use exactly one webhooks.receive_event trigger with step id intake, Gemini qualify_real_estate_lead, an IF evaluate rule, email send_email to the approved agency recipient allowlist, and whatsapp_business.send_template for optional customer replies.",
         "WhatsApp requires an approved Meta template, selected verified connection, operation approval, E.164 phone and timestamped WhatsApp consent. Missing consent skips sending; never send free-form WhatsApp.",
         "Selected CRM: " + crmProvider + ". Use exactly " + crmProvider + ".search_contacts with {email: '{{intake.payload.email}}'}, followed by " + crmProvider + ".execute with {email: '{{intake.payload.email}}', firstName: '{{intake.payload.firstName}}', lastName: '{{intake.payload.lastName}}'}. These are the exact registered operation IDs and required input fields. Keep the same selected connection. Never create on ambiguous search or unknown prior create outcome. Do not add another CRM.",
         "Use the webhook payload fields email, firstName and lastName as CRM inputs; do not invent contact details. The search must precede create, and create is only for a confirmed no-match result.",
