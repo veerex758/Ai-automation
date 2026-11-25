@@ -75,8 +75,8 @@ test("Supabase staging-only secret resolution ignores empty placeholder variable
   const google = await readFile(path("../app/api/integrations/google/connections/route.ts"), "utf8");
   const admin = await readFile(path("../lib/supabase/admin.ts"), "utf8");
   const workspace = await readFile(path("../app/api/integrations/workspace/route.ts"), "utf8");
-  assert.match(google, /getAdminSupabaseConfig/);
-  assert.match(workspace, /getAdminSupabaseConfig/);
+  assert.match(google, /createAdminClient/);
+  assert.match(workspace, /createAdminClient/);
   assert.match(admin, /isRexnoraStagingPreview/);
   assert.match(admin, /isRexnoraStagingPreview[\s\S]*CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(admin, /VERCEL_GIT_COMMIT_REF/);
