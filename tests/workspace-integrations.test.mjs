@@ -19,7 +19,7 @@ test("workspace integration API authenticates and restricts credential managemen
 });
 
 test("workspace integration API exposes metadata only and never reads stored secrets", () => {
-  assert.match(route, /select\("id,provider,status,display_name,last_tested_at,last_test_status,updated_at"\)/);
+  assert.match(route, /select\("id,provider,status,display_name,last_tested_at,last_test_status,updated_at,metadata"\)/);
   assert.doesNotMatch(route, /select\([^\n]*encrypted_credentials/);
   assert.match(route, /Cache-Control.*private, no-store/);
 });
