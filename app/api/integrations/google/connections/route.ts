@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { decryptGoogleCredentials, encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
@@ -19,8 +18,7 @@ export async function GET() {
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     let admin;
     try {
-      const { url, serviceRoleKey } = getAdminSupabaseConfig();
-      admin = createSupabaseClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+      admin = createAdminClient();
     } catch {
       return NextResponse.json({ error: "Connection storage is not configured for this deployment.", code: "CONNECTION_STORAGE_NOT_CONFIGURED" }, { status: 503, headers });
     }
@@ -45,10 +43,7 @@ export async function GET() {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  return createAdminClient();
 }
 
 async function requireWorkspaceAdmin(supabase: Awaited<ReturnType<typeof createClient>>, workspaceId: string, userId: string) {
