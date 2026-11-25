@@ -16,6 +16,7 @@ const playbookPage = read("../app/dashboard/playbooks/new/page.tsx");
 const sectionPage = read("../app/dashboard/section-page.tsx");
 const inspectionRequest = read("../app/api/real-estate/inspections/route.ts");
 const inspectionApproval = read("../app/api/real-estate/inspections/[bookingId]/approve/route.ts");
+const leadScoring = read("../lib/real-estate/lead-scoring.ts");
 const followupsRoute = read("../app/api/cron/real-estate-followups/route.ts");
 const pipelineWorker = read("../app/api/cron/real-estate-pipeline/route.ts");
 const emailNode = read("../nodes/email.ts");
@@ -195,6 +196,18 @@ test("Playbook policy validation evaluates all IF rules before CRM writes", () =
   assert.match(playbookDefinition, /Every deterministic Playbook rule must be evaluated before customer communication or CRM writes/);
 });
 
+
+test("90-day follow-up schedule has five consent-gated email checkpoints and durable outcomes", () => {
+  assert.match(leadScoring, /sequence: 1, ms: 0, delayLabel: "Immediately"/);
+  assert.match(leadScoring, /sequence: 2, ms: 1 \* 24 \* 60 \* 60 \* 1000, delayLabel: "1 day"/);
+  assert.match(leadScoring, /sequence: 3, ms: 7 \* 24 \* 60 \* 60 \* 1000, delayLabel: "7 days"/);
+  assert.match(leadScoring, /sequence: 4, ms: 30 \* 24 \* 60 \* 60 \* 1000, delayLabel: "30 days"/);
+  assert.match(leadScoring, /sequence: 5, ms: 90 \* 24 \* 60 \* 60 \* 1000, delayLabel: "90 days"/);
+  assert.match(followups, /finish_real_estate_followup/);
+  assert.match(followups, /followup\.email_accepted/);
+  assert.match(followups, /sent_at: new Date\(\)\.toISOString\(\)/);
+  assert.match(followups, /idempotencyKey: "real-estate-followup:"/);
+});
 
 test("all four real-estate starter cards route to the dedicated runtime workflows", () => {
   assert.match(sectionPage, /name:"Instant Speed-to-Lead & Qualification"/);
