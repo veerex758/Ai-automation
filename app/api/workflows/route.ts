@@ -6,6 +6,9 @@ import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
+
+const { validatePlaybookDefinition } = playbookDefinition;
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
       ...(Array.isArray(rawDefinition.edges) ? { edges: rawDefinition.edges } : {}),
     };
 
+    let registryStepsForPlaybook: RegisteredWorkflowStep[] | null = null;
     if ("registrySteps" in body) {
       if (!Array.isArray(body.registrySteps) || body.registrySteps.length < 1 || body.registrySteps.length > 30) {
         return NextResponse.json({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
@@ -219,6 +223,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Canvas connections and registered execution steps do not match. Regenerate the draft before saving." }, { status: 422 });
       }
       Object.assign(definitionToSave, { format: "aivanta-registry-v1", steps: checked.steps });
+      registryStepsForPlaybook = checked.steps;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(rawDefinition, "playbook")) {
+      if (!registryStepsForPlaybook) return NextResponse.json({ error: "A Playbook requires a registered execution plan." }, { status: 422 });
+      const checkedPlaybook = validatePlaybookDefinition(rawDefinition.playbook, definitionToSave, registryStepsForPlaybook);
+      if (!checkedPlaybook.playbook) return NextResponse.json({ error: checkedPlaybook.error || "Playbook configuration is invalid." }, { status: 422 });
+      definitionToSave.playbook = checkedPlaybook.playbook;
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);

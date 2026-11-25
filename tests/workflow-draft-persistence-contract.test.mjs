@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const route = readFileSync(new URL("../app/api/workflows/route.ts", import.meta.url), "utf8");
 const validator = readFileSync(new URL("../nodes/validate-steps.ts", import.meta.url), "utf8");
-const builder = readFileSync(new URL("../app/dashboard/builder/page.tsx", import.meta.url), "utf8");
+const setup = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
 
 test("new workflow creation inserts an empty row before saving the validated definition through the RPC", () => {
   const emptyInsert = route.indexOf('.insert({');
@@ -17,7 +17,7 @@ test("new workflow creation inserts an empty row before saving the validated def
   assert.match(route, /Failed to clean up an unsaved workflow draft/);
 });
 
-test("workflow creation validates the submitted graph and persists its matching registered execution plan", () => {
+test("workflow creation validates the graph and persists the matching registered execution plan", () => {
   assert.match(route, /import \{ validateDefinition \} from "@\/lib\/workflows\/validate-definition\.cjs";/);
   assert.match(route, /"definition" in body\s*\? validateDefinition\(body\.definition\)/);
   assert.match(route, /status: 422/);
@@ -32,15 +32,20 @@ test("workflow creation validates the submitted graph and persists its matching 
   assert.match(validator, /operation\.inputSchema\.safeParse\(step\.input\)/);
 });
 
-test("quick-create and template creation receive a valid manual-trigger starter definition", () => {
-  assert.match(route, /: validateDefinition\(\{\s*version: 1,\s*nodes: \[\{\s*id: "trigger-1",\s*type: "trigger",[\s\S]*?settings: \{ event: "manual" \}/);
-  assert.ok(route.includes("p_definition: definitionToSave"));
+test("workflow create path validates Playbook rules and action policies before persistence", () => {
+  assert.match(route, /validatePlaybookDefinition/);
+  assert.match(route, /registryStepsForPlaybook/);
+  assert.match(route, /definitionToSave\.playbook = checkedPlaybook\.playbook/);
 });
 
-test("builder sends a new workflow definition with creation and only patches existing drafts", () => {
-  assert.match(builder, /const isNewWorkflow = !workflowId;/);
-  assert.match(builder, /status: "draft",\s*definition,/);
-  assert.match(builder, /if \(!isNewWorkflow\)\s*\{\s*const saveResponse = await fetch\(\`\/api\/workflows\/\$\{workflowId\}\/definition\`/);
-  assert.match(builder, /Workflow draft saved to your Rexnora workspace/);
-  assert.match(builder, /It has not been activated or executed/);
+test("quick-create still receives a valid manual-trigger starter definition", () => {
+  assert.match(route, /: validateDefinition\(\{\s*version: 1,\s*nodes: \[\{\s*id: "trigger-1",\s*type: "trigger",[\s\S]*?settings: \{ event: "manual" \}/);
+});
+
+test("Playbook setup sends one complete inactive definition with reviewed permissions", () => {
+  assert.match(setup, /const definition = \{ \.\.\.draft\.definition, playbook \}/);
+  assert.match(setup, /status: "draft"/);
+  assert.match(setup, /registrySteps: draft\.registrySteps/);
+  assert.match(setup, /router\.push\("\/dashboard\/playbooks\//);
+  assert.doesNotMatch(setup, /status: "active"|\/activate|\/execute/);
 });

@@ -11,7 +11,7 @@ const headers = { "Cache-Control": "private, no-store" };
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const allowed = <T extends string>(value: unknown, values: readonly T[], fallback: T): T => values.includes(value as T) ? value as T : fallback;
 const text = (value: unknown, max: number) => typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
-type ManualLeadRecord = { id: string; workspace_id: string; source: string; full_name: string; email: string | null; preferred_location: string | null; property_type: string; transaction_type: string; lead_score: number; lead_temperature: string; created_at: string; consent_to_contact: boolean; contact_preference: string };
+type ManualLeadRecord = { id: string; workspace_id: string; source: string; full_name: string; email: string | null; preferred_location: string | null; property_type: string; transaction_type: string; lead_score: number; lead_temperature: string; created_at: string; consent_to_contact: boolean; consent_text: string | null; consent_at: string | null; contact_preference: string };
 
 function parseLead(body: Record<string, unknown>) {
   const fullName = text(body.fullName, 160);
@@ -21,6 +21,13 @@ function parseLead(body: Record<string, unknown>) {
   if (!email && !phone) throw new Error("Provide at least an email address or phone number.");
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Provide a valid email address.");
   if (typeof body.consentToContact !== "boolean") throw new Error("Explicit customer contact consent must be recorded.");
+  const contactPreference = allowed(body.contactPreference, ["email","phone","whatsapp"] as const, "email");
+  const consentText = text(body.consentText, 1000);
+  if (body.consentToContact && (!consentText || (contactPreference === "whatsapp" && !/whatsapp/i.test(consentText)))) {
+    throw new Error(contactPreference === "whatsapp"
+      ? "Record the customer's explicit WhatsApp consent text before selecting WhatsApp contact."
+      : "Record the customer's consent text before enabling follow-up contact.");
+  }
   const budgetMin = body.budgetMin === null || body.budgetMin === undefined || body.budgetMin === "" ? null : Number(body.budgetMin);
   const budgetMax = body.budgetMax === null || body.budgetMax === undefined || body.budgetMax === "" ? null : Number(body.budgetMax);
   if ((budgetMin !== null && (!Number.isFinite(budgetMin) || budgetMin < 0)) || (budgetMax !== null && (!Number.isFinite(budgetMax) || budgetMax < 0)) || (budgetMin !== null && budgetMax !== null && budgetMax < budgetMin) || budgetMin !== null && budgetMin > 1e12 || budgetMax !== null && budgetMax > 1e12) {
@@ -42,9 +49,9 @@ function parseLead(body: Record<string, unknown>) {
     timeframe: allowed(body.timeframe, ["urgent","within_30_days","one_to_three_months","over_three_months","unknown"] as const, "unknown"),
     readiness: allowed(body.readiness, ["cash_ready","pre_approved","financing_needed","researching","unknown"] as const, "unknown"),
     financing_notes: text(body.financingNotes, 500), main_concern: text(body.mainConcern, 500),
-    contact_preference: allowed(body.contactPreference, ["email","phone","whatsapp"] as const, "email"),
+    contact_preference: contactPreference,
     consent_to_contact: body.consentToContact,
-    consent_text: text(body.consentText, 1000),
+    consent_text: body.consentToContact ? consentText : null,
     consent_at: body.consentToContact ? new Date().toISOString() : null,
     status: "new",
     raw_enquiry: isRecord(body.rawEnquiry) ? body.rawEnquiry : {},
@@ -70,7 +77,7 @@ async function ensureLeadSideEffects(
     if (error) throw error;
   }
 
-  if (!lead.consent_to_contact || lead.contact_preference !== "email" || !lead.email) return 0;
+  if (!lead.consent_to_contact || !lead.consent_at || !lead.consent_text || lead.contact_preference !== "email" || !lead.email) return 0;
   // Follow-up queue rows are deliberately read-only to workspace members.
   // Use the server-only service client after this route has authenticated the member
   // and resolved the lead in their workspace.
@@ -93,7 +100,7 @@ export async function GET(request: NextRequest) {
     const search = (params.get("q") ?? "").trim().slice(0, 100);
     const limit = Math.max(1, Math.min(100, Number(params.get("limit") ?? 50) || 50));
     const offset = Math.max(0, Math.min(100000, Number(params.get("offset") ?? 0) || 0));
-    let query = supabase.from("real_estate_leads").select("id,source,full_name,email,phone,transaction_type,property_type,preferred_location,budget_min,budget_max,currency,timeframe,readiness,lead_score,score_factors,lead_temperature,status,assigned_agent_id,consent_to_contact,customer_responded_at,agent_takeover_at,created_at,updated_at", { count: "exact" })
+    let query = supabase.from("real_estate_leads").select("id,source,full_name,email,phone,transaction_type,property_type,preferred_location,budget_min,budget_max,currency,timeframe,readiness,lead_score,score_factors,lead_temperature,status,assigned_agent_id,consent_to_contact,contact_preference,customer_responded_at,agent_takeover_at,created_at,updated_at", { count: "exact" })
       .eq("workspace_id", workspace.id).order("lead_score", { ascending: false }).order("created_at", { ascending: false }).range(offset, offset + limit - 1);
     if (status && ["new","qualified","contacted","viewing_scheduled","negotiation","won","lost"].includes(status)) query = query.eq("status", status);
     if (search) query = query.ilike("full_name", "%" + search.replace(/[%_]/g, "\\$&") + "%");
@@ -132,6 +139,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const { data: activePlaybooks, error: activePlaybookError } = await supabase.from("workflows")
+      .select("id,version").eq("workspace_id", workspace.id).eq("status", "active")
+      .contains("definition", { playbook: { schema: "rexnora.playbook", schemaVersion: 1 } }).limit(2);
+    if (activePlaybookError) throw activePlaybookError;
+    if ((activePlaybooks ?? []).length > 1) throw new Error("MULTIPLE_ACTIVE_PLAYBOOKS_FOR_WORKSPACE");
+    const activePlaybook = activePlaybooks?.[0] ?? null;
+
     const score = scoreRealEstateLead({
       transactionType: lead.transaction_type, propertyType: lead.property_type,
       preferredLocation: lead.preferred_location, budgetMin: lead.budget_min, budgetMax: lead.budget_max,
@@ -139,6 +153,8 @@ export async function POST(request: NextRequest) {
     });
     const { data: created, error } = await supabase.from("real_estate_leads").insert({
       ...lead, workspace_id: workspace.id, created_by: user.id,
+      workflow_id: activePlaybook?.id ?? null,
+      playbook_version: activePlaybook?.version ?? null,
       lead_score: score.score, lead_temperature: score.temperature, score_factors: score.factors,
     }).select("*").single();
     if (error?.code === "23505" && lead.source_event_id) {

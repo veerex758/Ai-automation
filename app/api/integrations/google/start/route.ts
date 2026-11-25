@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getGoogleOAuthConfig, GOOGLE_PRODUCTS, isGoogleProduct } from "@/lib/integrations/google-oauth";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   const productValue = request.nextUrl.searchParams.get("product");
   if (!isGoogleProduct(productValue)) {
-    return NextResponse.json({ error: "Choose a supported read-only Google product." }, { status: 400 });
+    return NextResponse.json({ error: "Choose a supported Google product." }, { status: 400 });
   }
   const googleNodeByProduct: Record<string, string> = {
     gmail: "gmail", sheets: "sheets", drive: "google_drive", calendar: "google_calendar",
@@ -49,11 +49,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "The Google connection ID is invalid." }, { status: 400 });
     }
     if (connectionId) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-      const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY ||
-        process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY;
-      if (!supabaseUrl || !serviceKey) throw new Error("CONNECTION_STORAGE_NOT_CONFIGURED");
-      const admin = createSupabaseClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+      const admin = createAdminClient();
       const { data: selected, error: lookupError } = await admin.from("google_connections").select("id")
         .eq("id", connectionId).eq("workspace_id", workspace.id).eq("provider", "google").eq("product", productValue).maybeSingle();
       if (lookupError) throw lookupError;

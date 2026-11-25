@@ -3,6 +3,7 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 import { findOperation } from "@/nodes/registry";
 import type { NodeContext } from "@/nodes/types";
 import { createRealEstateServiceClient } from "@/lib/real-estate/server";
+import { loadPlaybookRuntime } from "@/lib/playbooks/runtime";
 
 type Claim = {
   id: string;
@@ -38,10 +39,10 @@ async function finish(
 
 async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, claim: Claim) {
   const { data: lead, error: leadError } = await db.from("real_estate_leads")
-    .select("id,full_name,email,contact_preference,consent_to_contact,customer_responded_at,agent_takeover_at,status,last_contacted_at")
+    .select("id,full_name,email,contact_preference,consent_to_contact,consent_text,consent_at,customer_responded_at,agent_takeover_at,status,last_contacted_at,workflow_id,playbook_version")
     .eq("id", claim.lead_id).eq("workspace_id", claim.workspace_id).maybeSingle();
   if (leadError) throw new Error("FOLLOWUP_LEAD_LOOKUP_FAILED");
-  if (!lead || !lead.consent_to_contact || lead.contact_preference !== "email" || !lead.email ||
+  if (!lead || !lead.consent_to_contact || !lead.consent_at || !lead.consent_text || lead.contact_preference !== "email" || !lead.email ||
     lead.customer_responded_at || lead.agent_takeover_at || ["won", "lost"].includes(lead.status)) {
     const { error } = await db.from("real_estate_followups")
       .update({ status: "cancelled", lease_token: null, lease_until: null, last_error_code: "FOLLOWUP_STOP_CONDITION" })
@@ -54,38 +55,56 @@ async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, cla
     return "blocked";
   }
 
+  const runtime = await loadPlaybookRuntime(db, {
+    id: lead.id,
+    workspace_id: claim.workspace_id,
+    workflow_id: lead.workflow_id,
+    playbook_version: lead.playbook_version,
+  });
+  if (runtime.mode === "invalid") {
+    await finish(db, claim, false, null, runtime.reason ?? "FOLLOWUP_PLAYBOOK_INVALID", false);
+    return "blocked";
+  }
+  const selectedConnectionId = runtime.mode === "playbook"
+    ? runtime.steps?.find((step) => step.nodeId === "email" && step.operationId === "send_email")?.connectionId
+    : undefined;
+  let integrationQuery = db.from("workspace_integrations").select("id,status,last_test_status")
+    .eq("workspace_id", claim.workspace_id).eq("provider", "resend");
+  if (selectedConnectionId) integrationQuery = integrationQuery.eq("id", selectedConnectionId);
   const [
-    { data: integration, error: integrationError },
+    { data: integrations, error: integrationError },
     { data: approval, error: approvalError },
   ] = await Promise.all([
-    db.from("workspace_integrations").select("id,status,last_test_status")
-      .eq("workspace_id", claim.workspace_id).eq("provider", "resend").maybeSingle(),
+    integrationQuery.order("created_at", { ascending: false }).limit(selectedConnectionId ? 1 : 2),
     db.from("workspace_provider_operation_approvals").select("decision")
       .eq("workspace_id", claim.workspace_id).eq("provider", "resend")
       .eq("node_id", "email").eq("operation_id", "send_email")
       .order("decided_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (integrationError || approvalError) throw new Error("FOLLOWUP_PROVIDER_CHECK_FAILED");
-  if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed" ||
-    approval?.decision !== "approved") {
+  if (!integrations?.length || integrations.length !== 1) {
+    await finish(db, claim, false, null, integrations?.length ? "WORKSPACE_CONNECTION_SELECTION_REQUIRED" : "RESEND_CONNECTION_OR_APPROVAL_REQUIRED", false);
+    return "blocked";
+  }
+  const integration = integrations[0];
+  if (integration.status !== "connected" || integration.last_test_status !== "passed" || approval?.decision !== "approved") {
     await finish(db, claim, false, null, "RESEND_CONNECTION_OR_APPROVAL_REQUIRED", false);
     return "blocked";
   }
 
   const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
     .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
-  if (secretError || !secret || secret.encryption_version !== "v1") {
+  if (secretError || !secret || !["v1", "v2"].includes(secret.encryption_version)) {
     await finish(db, claim, false, null, "RESEND_CREDENTIALS_UNAVAILABLE", false);
     return "blocked";
   }
 
   let credentials: ReturnType<typeof decryptWorkspaceCredentials>["resend"];
+  const associatedData = secret.encryption_version === "v2"
+    ? claim.workspace_id + ":resend:" + integration.id
+    : claim.workspace_id + ":resend";
   try {
-    credentials = decryptWorkspaceCredentials(
-      secret.encrypted_credentials,
-      undefined,
-      claim.workspace_id + ":resend",
-    ).resend;
+    credentials = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData).resend;
   } catch {
     await finish(db, claim, false, null, "RESEND_CREDENTIALS_DECRYPT_FAILED", false);
     return "blocked";
@@ -129,6 +148,20 @@ async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, cla
       },
     },
   };
+
+  const { data: dispatchAuthorized, error: dispatchAuthorizationError } = await db.rpc("authorize_real_estate_followup_dispatch", {
+    p_workspace_id: claim.workspace_id,
+    p_followup_id: claim.id,
+    p_lease_token: claim.lease_token,
+    p_expected_email: lead.email,
+  });
+  if (dispatchAuthorizationError) {
+    await finish(db, claim, false, null, "FOLLOWUP_DISPATCH_AUTHORIZATION_FAILED", true);
+    return "blocked";
+  }
+  // A false result means the exact lease or a current consent/stop condition
+  // failed its atomic database check. Never call Resend in that case.
+  if (dispatchAuthorized !== true) return "blocked";
 
   let messageId: string;
   try {

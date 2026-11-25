@@ -12,6 +12,8 @@ Do not count catalogue entries as usable integrations. A capability is customer-
 | Email / Resend | Implemented | Selected workspace connection, provider test, explicit live allowlist and recipient policy | Narrow guarded pilot |
 | Slack | Registered | Selected workspace connection; provider approval and live operation allowlist still required | Dry-run unless separately enabled |
 | Gemini text | Registered workspace credential node | Explicit Gemini connection ID, server-side encrypted credential resolution, provider test and operation approval | Guarded pilot path |
+| WhatsApp Business approved template | Registered `send_template` operation, E.164 validation and encrypted template defaults | Explicit provider opt-in + operation approval; customer-channel consent and durable send ledger must be enforced by the calling workflow | Catalogue capability only; not wired into native real-estate pipeline |
+| Google Calendar event create | Registered `create_event`, owned-calendar OAuth scope, harmless connection probe and notifications off by default | Explicit provider opt-in + operation approval; booking slot must be checked and confirmed before event creation | Catalogue capability only; native inspection booking and appointment ledger not complete |
 | Inbound webhook | Signed ingress, replay protection and durable queue | Endpoint/workspace binding, verified ingress marker, per-node account selection and one-attempt live processing | Narrow pilot path; not general availability |
 | HTTP Request | Registered, SSRF-safe transport | Workspace credential + runner policy | Test before customer activation |
 | Schedule | Scheduler infrastructure exists | Trigger/runtime capability is separately gated | Not a universal schedule node |

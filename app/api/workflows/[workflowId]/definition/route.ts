@@ -4,6 +4,9 @@ import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
+
+const { validatePlaybookDefinition } = playbookDefinition;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export async function POST(request: NextRequest, context: { params: Promise<{ workflowId: string }> }) {
@@ -35,6 +38,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const rawDefinition = body.definition as Record<string, unknown>;
     const rawNodes = Array.isArray(rawDefinition.nodes) ? rawDefinition.nodes as Array<Record<string, unknown>> : [];
     const hasRegistryGraph = rawNodes.some((node) => typeof node.registryNodeId === "string" || node.type === "condition");
+    let registryStepsForPlaybook: RegisteredWorkflowStep[] | null = null;
     if (hasRegistryGraph) {
       if (rawNodes.length !== nodes.length) return NextResponse.json({ valid: false, error: "Every executable step must have a matching canvas node." }, { status: 422 });
       if (!Array.isArray(rawDefinition.edges)) return NextResponse.json({ valid: false, error: "Registry workflows must include an explicit connection list." }, { status: 422 });
@@ -52,9 +56,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         const steps = buildRegistrySteps({ nodes: graphNodes, edges });
         const checked = validateRegisteredSteps(steps);
         if (!checked.steps) return NextResponse.json({ valid: false, error: checked.error || "A registered operation failed validation." }, { status: 422 });
+        registryStepsForPlaybook = checked.steps;
       } catch (cause) {
         return NextResponse.json({ valid: false, error: cause instanceof Error ? cause.message : "The workflow graph is invalid." }, { status: 422 });
       }
+    }
+
+    let validatedPlaybook: unknown = null;
+    if (Object.prototype.hasOwnProperty.call(rawDefinition, "playbook")) {
+      if (!registryStepsForPlaybook) return NextResponse.json({ valid: false, error: "A Playbook requires a registered execution plan." }, { status: 422 });
+      const checkedPlaybook = validatePlaybookDefinition(rawDefinition.playbook, validated.definition, registryStepsForPlaybook);
+      if (!checkedPlaybook.playbook) return NextResponse.json({ valid: false, error: checkedPlaybook.error || "Playbook configuration is invalid." }, { status: 422 });
+      validatedPlaybook = checkedPlaybook.playbook;
     }
 
     return NextResponse.json({
@@ -64,7 +77,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         actions: nodes.filter((node) => node.type === "action").length,
         conditions: nodes.filter((node) => node.type === "condition").length,
       },
-      checks: ["definition schema", "step IDs and types", "trigger placement", "step limits", "step configuration", ...(hasRegistryGraph ? ["registered operation schemas", "graph connectivity", "conditional branch paths"] : [])],
+      checks: ["definition schema", "step IDs and types", "trigger placement", "step limits", "step configuration", ...(hasRegistryGraph ? ["registered operation schemas", "graph connectivity", "conditional branch paths"] : []), ...(validatedPlaybook ? ["Playbook rules and action permission bindings"] : [])],
+      playbook: validatedPlaybook,
       executed: false,
       saved: false,
     });
@@ -106,12 +120,21 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
     // nodes. Preserve the registry execution plan separately so a saved graph
     // can round-trip through GET without silently degrading to legacy nodes.
     let registryPlan: Record<string, unknown> = {};
+    let registryStepsForPlaybook: RegisteredWorkflowStep[] | null = null;
     if (stored?.format === "aivanta-registry-v1") {
       const checkedRegistry = validateRegisteredSteps(stored.steps);
       if (!checkedRegistry.steps) {
         return NextResponse.json({ error: "This saved registry workflow needs repair before it can be edited.", detail: checkedRegistry.error }, { status: 409 });
       }
+      registryStepsForPlaybook = checkedRegistry.steps;
       registryPlan = { format: "aivanta-registry-v1", steps: checkedRegistry.steps };
+    }
+    let savedPlaybook: unknown = null;
+    if (stored?.playbook !== undefined) {
+      if (!registryStepsForPlaybook) return NextResponse.json({ error: "This saved Playbook is missing its registered execution plan and needs repair." }, { status: 409 });
+      const checkedPlaybook = validatePlaybookDefinition(stored.playbook, valid.definition ?? starterDefinition, registryStepsForPlaybook);
+      if (!checkedPlaybook.playbook) return NextResponse.json({ error: "This saved Playbook needs repair before it can be edited.", detail: checkedPlaybook.error }, { status: 409 });
+      savedPlaybook = checkedPlaybook.playbook;
     }
     return NextResponse.json({
       workflow: { id: data.id, name: data.name, description: data.description, status: data.status, version: data.version },
@@ -137,6 +160,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ wo
         }),
         ...(stored && Array.isArray(stored.edges) ? { edges: stored.edges } : {}),
         ...registryPlan,
+        ...(savedPlaybook ? { playbook: savedPlaybook } : {}),
       },
     });
   } catch (error) {
@@ -162,6 +186,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       return NextResponse.json({ error: "A workflow definition is required." }, { status: 400 });
     }
     const requestBody = body as Record<string, unknown>;
+    const rawDefinition = requestBody.definition && typeof requestBody.definition === "object" && !Array.isArray(requestBody.definition)
+      ? requestBody.definition as Record<string, unknown>
+      : {};
+    const { data: existingWorkflow, error: existingWorkflowError } = await supabase.from("workflows")
+      .select("definition").eq("id", workflowId).maybeSingle();
+    if (existingWorkflowError) throw existingWorkflowError;
+    const existingDefinition = existingWorkflow?.definition && typeof existingWorkflow.definition === "object" && !Array.isArray(existingWorkflow.definition)
+      ? existingWorkflow.definition as Record<string, unknown>
+      : {};
+    const hasExplicitPlaybook = Object.prototype.hasOwnProperty.call(rawDefinition, "playbook");
+    const playbookInput = hasExplicitPlaybook ? rawDefinition.playbook : existingDefinition.playbook;
+    const hasPlaybook = hasExplicitPlaybook || existingDefinition.playbook !== undefined;
     const validated = validateDefinition(requestBody.definition);
     if (!validated.definition) return NextResponse.json({ error: validated.error }, { status: 400 });
 
@@ -181,6 +217,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         : {}),
     };
     const legacyNodes = validated.definition.nodes;
+    let registryStepsForPlaybook: RegisteredWorkflowStep[] | null = null;
     const canBridgeLegacyDefinition = legacyNodes[0]?.type === "trigger" &&
       legacyNodes[0].settings.event === "manual" &&
       legacyNodes.slice(1).every((node) => node.type === "action" &&
@@ -248,6 +285,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         format: "aivanta-registry-v1",
         steps: persistedSteps,
       };
+      registryStepsForPlaybook = persistedSteps;
+    }
+
+    let savedPlaybook: unknown = null;
+    if (hasPlaybook) {
+      if (!registryStepsForPlaybook) return NextResponse.json({ error: "A Playbook requires a registered execution plan." }, { status: 422 });
+      const checkedPlaybook = validatePlaybookDefinition(playbookInput, definitionToSave, registryStepsForPlaybook);
+      if (!checkedPlaybook.playbook) return NextResponse.json({ error: checkedPlaybook.error || "Playbook configuration is invalid." }, { status: 422 });
+      savedPlaybook = checkedPlaybook.playbook;
+      definitionToSave = { ...definitionToSave, playbook: savedPlaybook };
     }
 
     const { data, error } = await supabase.rpc("save_workflow_definition", {
@@ -262,7 +309,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
     }
     const saved = Array.isArray(data) ? data[0] : data;
     if (!saved) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
-    return NextResponse.json({ success: true, version: saved.saved_version, definition: validated.definition, registry: shouldSaveRegistry ? { format: "aivanta-registry-v1", steps: (definitionToSave.steps as RegisteredWorkflowStep[]) } : null });
+    return NextResponse.json({ success: true, version: saved.saved_version, definition: { ...validated.definition, ...(savedPlaybook ? { playbook: savedPlaybook } : {}) }, registry: shouldSaveRegistry ? { format: "aivanta-registry-v1", steps: (definitionToSave.steps as RegisteredWorkflowStep[]) } : null });
   } catch (error) {
     console.error("Failed to save Aivanta workflow definition:", error);
     return NextResponse.json({ error: "Could not save workflow steps. Try again." }, { status: 500 });

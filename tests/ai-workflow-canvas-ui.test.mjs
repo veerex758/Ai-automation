@@ -2,45 +2,59 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const page = readFileSync(new URL("../app/dashboard/builder/page.tsx", import.meta.url), "utf8");
-const styles = readFileSync(new URL("../app/dashboard/builder/builder.css", import.meta.url), "utf8");
+const page = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../app/dashboard/playbooks/playbooks.css", import.meta.url), "utf8");
+const controlRoom = readFileSync(new URL("../app/dashboard/playbooks/[playbookId]/page.tsx", import.meta.url), "utf8");
 
-test("AI-generated workflow preview renders connected, reviewable node cards", () => {
-  const previewStart = page.indexOf('{aiPreview && <div className="ai-workflow-preview">');
-  const applyStart = page.indexOf(">Apply draft to canvas", previewStart);
-  assert.notEqual(previewStart, -1);
-  assert.notEqual(applyStart, -1);
-  const preview = page.slice(previewStart, applyStart);
-  assert.match(preview, /className="ai-node-canvas"/);
-  assert.match(preview, /className="ai-node-legend" aria-label="Node type legend"/);
-  assert.match(preview, /ai-legend-trigger/);
-  assert.match(preview, /ai-legend-action/);
-  assert.match(preview, /ai-legend-condition/);
-  assert.match(preview, /role="list"/);
-  assert.match(preview, /ai-generated-node ai-generated-node-/);
-  assert.match(preview, /className="ai-node-connector"/);
-  assert.match(preview, /Needs review/);
-  assert.match(preview, /ai-node-scroll-hint/);
-  assert.doesNotMatch(preview, /Object\.entries\(node\.settings\)/);
-  assert.doesNotMatch(page, /Object\.entries\(node\.settings\)/);
-  assert.match(page, /settings: \{ \.\.\.node\.settings \}/);
+test("Playbook authoring starts with a business outcome instead of a canvas", () => {
+  assert.match(page, /What outcome should Rexnora handle/);
+  assert.match(page, /What should Rexnora achieve/);
+  assert.match(page, /industry: "real_estate"/);
+  assert.match(page, /api\/ai\/generate-workflow/);
+  assert.match(page, /Use registered Rexnora operations only/);
+  assert.match(page, /whatsapp_business\.send_template/);
+  assert.match(page, /selected CRM for this starter is/);
+  assert.match(page, /search_contacts by the exact lead email, then execute to create only when no exact match exists/);
+  assert.match(page, /Do not put Google Calendar create-event actions in the generic Playbook/);
+  assert.match(page, /durable 90-day follow-up service/);
 });
 
-test("main builder canvas distinguishes node types and exposes selection state", () => {
-  assert.match(page, /node-kind-" \+ step\.kind\.toLowerCase\(\)/);
-  assert.match(page, /aria-pressed=\{selected === step\.id\}/);
-  assert.match(page, /aria-label=\{"Select " \+ step\.kind\.toLowerCase\(\)/);
-  assert.match(styles, /\.flow-node-wrap>\.builder-node\.node-kind-trigger\{border-top-color:#8fba5b\}/);
-  assert.match(styles, /\.flow-node-wrap>\.builder-node\.node-kind-action\{border-top-color:#85a9cc\}/);
-  assert.match(styles, /\.flow-node-wrap>\.builder-node\.node-kind-condition\{border-top-color:#b4a0dd\}/);
-  assert.match(styles, /@media\(prefers-reduced-motion:reduce\)/);
+test("business rules are linked to actual generated graph condition nodes", () => {
+  assert.match(page, /filter\(\(node\) => node\.type === "condition"\)/);
+  assert.match(page, /nodeId: node\.id/);
+  assert.match(page, /Business rules/);
+  assert.match(page, /source of truth/);
 });
 
-test("AI preview has an accessible horizontal scroll hint and responsive canvas", () => {
-  assert.match(page, /aria-describedby="ai-node-scroll-hint"/);
-  assert.match(page, /id="ai-node-scroll-hint"/);
-  assert.match(styles, /\.ai-node-connector\{position:relative;/);
-  assert.match(styles, /@media\(max-width:640px\)/);
-  assert.match(styles, /\.ai-node-scroll-hint\{display:block/);
-  assert.match(styles, /\.ai-node-canvas\{[^}]*overflow-x:auto/s);
+test("every registered action exposes the three explicit permission modes", () => {
+  assert.match(page, /Auto — after all checks/);
+  assert.match(page, /Ask me first/);
+  assert.match(page, /Never allow/);
+  assert.match(page, /permission: step\.nodeId === "gemini" \? "auto" as const : "ask_first" as const/);
+});
+
+test("review thresholds and exception paths are explicit before draft save", () => {
+  assert.match(page, /confidenceThreshold: confidence/);
+  assert.match(page, /reviewMissingFields/);
+  assert.match(page, /reviewWhenNoRuleMatches/);
+  assert.match(page, /reviewProviderFailures/);
+  assert.match(page, /useState\(true\)/);
+});
+
+test("setup creates an inactive draft and routes guarded activation through the Control Room", () => {
+  assert.match(page, /status: "draft"/);
+  assert.match(page, /const definition = \{ \.\.\.draft\.definition, playbook \}/);
+  assert.match(page, /registrySteps: draft\.registrySteps/);
+  assert.match(page, /Save Playbook draft/);
+  assert.match(page, /Open the Control Room to test and activate it after the server verifies/);
+  assert.doesNotMatch(page, /status: "active"|\/activate|\/execute|\/dispatch/);
+  assert.match(controlRoom, /Activate Playbook/);
+  assert.match(controlRoom, /method: "PATCH"/);
+  assert.match(controlRoom, /Activation is checked server-side/);
+});
+
+test("Playbook setup layout adapts to phone screens", () => {
+  assert.match(styles, /@media\(max-width:850px\)/);
+  assert.match(styles, /\.playbook-rule-fields\{grid-template-columns:1fr\}/);
+  assert.match(styles, /\.playbook-save-row\{flex-direction:column\}/);
 });
