@@ -15,8 +15,24 @@ test("extracts JSON and optional markdown fences safely", () => {
 });
 test("rejects empty and oversized prompts before calling provider", async () => {
   await assert.rejects(generateWorkflow({ prompt: " ", env }), /AI_PROMPT_REQUIRED/);
-  await assert.rejects(generateWorkflow({ prompt: "x".repeat(2001), env }), /AI_PROMPT_TOO_LONG/);
+  await assert.rejects(generateWorkflow({ prompt: "x".repeat(6001), env }), /AI_PROMPT_TOO_LONG/);
 });
+test("accepts a detailed request longer than the old 240-character limit", async () => {
+  const longPrompt = "Describe a detailed multi-stage CRM and lead qualification workflow. ".repeat(45);
+  assert.ok(longPrompt.length > 240 && longPrompt.length < 6000);
+  const result = await generateWorkflow({
+    prompt: longPrompt,
+    mode: "registry",
+    nodeCatalog: [],
+    env,
+    fetchImpl: fakeFetch({ choices: [{ message: { content: JSON.stringify({
+      registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }],
+      edges: [],
+    }) } }] }),
+  });
+  assert.equal(result.registrySteps.length, 1);
+});
+
 test("requires server-side AI credentials", async () => {
   await assert.rejects(generateWorkflow({ prompt: "Create a task", env: {} }), /AI_NOT_CONFIGURED/);
 });
