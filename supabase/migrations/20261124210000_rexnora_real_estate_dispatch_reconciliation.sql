@@ -255,7 +255,7 @@ create or replace function public.resolve_real_estate_playbook_decision(
   p_decision_id uuid,
   p_actor_user_id uuid,
   p_decision text,
-  p_corrections jsonb
+  p_corrections jsonb default '{}'::jsonb
 )
 returns table (
   result_status text,
