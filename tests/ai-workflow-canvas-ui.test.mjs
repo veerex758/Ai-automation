@@ -76,6 +76,7 @@ test("CRM starter uses selected provider operations and reports the failing node
   assert.ok(generatorRoute.includes("payload.firstName"));
   assert.ok(generatorRoute.includes("payload.lastName"));
   assert.ok(generatorRoute.includes("validateOperationInput"));
+  assert.ok(generatorRoute.includes("validateCrmSearchCreateGuard"));
   assert.ok(generatorRoute.includes("failingNode:"));
   assert.ok(page.includes("Failing node:"));
 });
