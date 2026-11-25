@@ -172,6 +172,6 @@ test("qualified real-estate leads create one idempotent agency review task with 
   assert.match(pipeline, /real_estate_tasks/);
   assert.match(pipeline, /onConflict: "workspace_id,idempotency_key", ignoreDuplicates: true/);
   assert.match(pipeline, /real-estate:new-enquiry-review:/);
-  assert.match(pipeline, /score >= 80 \\? "urgent" : score >= 60 \\? "high"/);
+  assert.ok(pipeline.includes('const priority = score >= 80 ? "urgent" : score >= 60 ? "high" : score >= 30 ? "normal" : "low";'));
   assert.ok(pipeline.includes("await ensureAgencyLeadTask(db, lead, qualification);"));
 });
