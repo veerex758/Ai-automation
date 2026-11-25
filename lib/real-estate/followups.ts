@@ -149,6 +149,35 @@ async function sendOne(db: ReturnType<typeof createRealEstateServiceClient>, cla
     },
   };
 
+  // Re-read consent and the exact active lease immediately before provider dispatch.
+  // This narrows the withdrawal race; the database still needs an atomic dispatch
+  // authorization RPC for a strict no-send-after-withdrawal guarantee.
+  const [latestLeadResult, activeFollowupResult] = await Promise.all([
+    db.from("real_estate_leads")
+      .select("consent_to_contact,consent_text,consent_at,contact_preference,customer_responded_at,agent_takeover_at,status,email")
+      .eq("id", claim.lead_id).eq("workspace_id", claim.workspace_id).maybeSingle(),
+    db.from("real_estate_followups")
+      .select("id")
+      .eq("id", claim.id).eq("workspace_id", claim.workspace_id)
+      .eq("status", "sending").eq("lease_token", claim.lease_token).maybeSingle(),
+  ]);
+  if (latestLeadResult.error || activeFollowupResult.error) {
+    await finish(db, claim, false, null, "FOLLOWUP_FINAL_DISPATCH_CHECK_FAILED", false);
+    return "blocked";
+  }
+  const latestLead = latestLeadResult.data;
+  if (!latestLead || !activeFollowupResult.data || !latestLead.consent_to_contact ||
+      !latestLead.consent_text || !latestLead.consent_at || latestLead.contact_preference !== "email" ||
+      !latestLead.email || latestLead.email !== lead.email || latestLead.customer_responded_at ||
+      latestLead.agent_takeover_at || ["won", "lost"].includes(latestLead.status)) {
+    const { error } = await db.from("real_estate_followups")
+      .update({ status: "cancelled", lease_token: null, lease_until: null, last_error_code: "FOLLOWUP_STOP_CONDITION" })
+      .eq("id", claim.id).eq("workspace_id", claim.workspace_id)
+      .eq("status", "sending").eq("lease_token", claim.lease_token);
+    if (error) throw new Error("FOLLOWUP_FINAL_DISPATCH_CANCEL_FAILED");
+    return "cancelled";
+  }
+
   let messageId: string;
   try {
     const result = await operation.run(context, {
