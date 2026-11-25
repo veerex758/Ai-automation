@@ -29,7 +29,7 @@ function referenceSample(schemaValue: unknown): unknown {
 
 function materializeReferences(value: unknown, schemaValue: unknown): unknown {
   if (typeof value === "string") {
-    const match = value.match(/^\\{\\{([a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})+)\\}\\}$/);
+    const match = value.match(/^\{\{([a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})+)\}\}$/);
     if (!match) return value;
     const segments = match[1].split(".");
     if (segments.some((segment) => ["__proto__", "prototype", "constructor"].includes(segment))) return value;
