@@ -7,6 +7,9 @@ import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateOperationInput, validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
+
+const { validateCrmSearchCreateGuard } = playbookDefinition;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -294,6 +297,16 @@ export async function POST(request: NextRequest) {
       }
       const checked = validateRegisteredSteps(rebuilt);
       if (!checked.steps) return jsonResponse({ error: "Generated registry graph failed validation: " + (checked.error || "unknown registry validation error") }, { status: 422 });
+      if (typeof requestedCrmProvider === "string") {
+        const crmGuard = validateCrmSearchCreateGuard(checked.steps);
+        if (crmGuard) {
+          return jsonResponse({
+            error: crmGuard.error,
+            errorCode: "STARTER_CRM_CREATE_NOT_GUARDED",
+            failingNode: crmGuard.failingNode ?? { stepId: null, nodeId: requestedCrmProvider, operationId: "execute", kind: "action" },
+          }, { status: 422 });
+        }
+      }
       executableSteps = checked.steps;
     }
     // Only bill a completed, registry-validated generation. Provider errors and
