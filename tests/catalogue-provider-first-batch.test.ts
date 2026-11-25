@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { findNode, findOperation } from "../nodes/registry";
 import { validateOperationInput } from "../nodes/validate-steps";
+import { buildRegistrySteps } from "../lib/workflows/build-registry-steps";
 
 const logger = { info() {}, error() {} };
 
@@ -360,4 +361,32 @@ test("real-estate CRM starter uses registered operations and schema-required fie
     assert.equal(validateOperationInput(create, { email: "{{intake.payload.email}}", firstName: "{{intake.payload.firstName}}", lastName: "{{intake.payload.lastName}}" }).success, true);
     assert.equal(validateOperationInput(create, { email: "{{intake.payload.email}}" }).success, false);
   }
+});
+
+test("workflow builder rejects unconfigured CRM providers instead of silently substituting Slack", () => {
+  assert.throws(() => buildRegistrySteps({
+    nodes: [
+      { id: "start", type: "trigger", title: "Start", settings: {} },
+      { id: "crm", type: "action", title: "Create CRM contact", settings: { provider: "pipedrive" } },
+    ],
+    edges: [{ id: "next-1", source: "start", target: "crm", label: "next" }],
+  }), /No registered operation is configured/);
+});
+
+test("workflow builder preserves explicit registered CRM operation IDs and required inputs", () => {
+  const steps = buildRegistrySteps({
+    nodes: [
+      { id: "start", type: "trigger", title: "Start", settings: {} },
+      {
+        id: "crm-search", type: "action", title: "Find CRM contact",
+        settings: { provider: "pipedrive" },
+        registryNodeId: "pipedrive", registryOperationId: "search_contacts",
+        registryInput: { email: "{{start.payload.email}}" },
+      },
+    ],
+    edges: [{ id: "next-1", source: "start", target: "crm-search", label: "next" }],
+  });
+  assert.equal(steps[1].nodeId, "pipedrive");
+  assert.equal(steps[1].operationId, "search_contacts");
+  assert.deepEqual(steps[1].input, { email: "{{start.payload.email}}" });
 });
