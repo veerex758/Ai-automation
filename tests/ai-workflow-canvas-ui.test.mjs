@@ -63,9 +63,13 @@ test("Playbook setup layout adapts to phone screens", () => {
 
 test("Playbook outcome accepts longer requests", () => {
   assert.ok(page.includes("MAX_OUTCOME_CHARACTERS = 2000"));
-  assert.ok(page.includes("MAX_OUTCOME_WORDS = 240"));\n  assert.ok(page.includes("outcomeWordCount"));\n  assert.ok(page.includes("playbookOutcome: outcome.trim()"));
-  assert.ok(page.includes("body: JSON.stringify({ prompt, crmProvider })"));
-  assert.ok(generatorRoute.includes("contentLength > 24000"));\n  assert.ok(generatorRoute.includes("outcomeWords > 240"));\n  assert.ok(generatorRoute.includes("playbookOutcome"));
+  assert.ok(page.includes("MAX_OUTCOME_WORDS = 240"));
+  assert.ok(page.includes("outcomeWordCount"));
+  assert.ok(page.includes("playbookOutcome: outcome.trim()"));
+  assert.ok(page.includes("body: JSON.stringify({ prompt, crmProvider, playbookOutcome: outcome.trim() })"));
+  assert.ok(generatorRoute.includes("contentLength > 24000"));
+  assert.ok(generatorRoute.includes("outcomeWords > 240"));
+  assert.ok(generatorRoute.includes("playbookOutcome"));
 });
 
 test("CRM starter uses selected provider operations and reports the failing node", () => {
