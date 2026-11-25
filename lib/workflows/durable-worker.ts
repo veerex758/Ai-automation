@@ -37,7 +37,7 @@ function client() {
   });
 }
 
-async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct, connectionId?: string): Promise<string> {
+export async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct, connectionId?: string): Promise<string> {
   if (!connectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
   let query = db.from("google_connections").select("id,encrypted_credentials,expires_at,status,scopes,last_test_status")
     .eq("workspace_id", workspaceId).eq("provider", "google").eq("product", product)

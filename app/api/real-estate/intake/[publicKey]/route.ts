@@ -8,7 +8,7 @@ export const dynamic="force-dynamic";
 export const maxDuration=60;
 type Context={params:Promise<{publicKey:string}>};
 type Form={id:string;workspace_id:string;default_source:string;allowed_origins:string[];enabled:boolean};
-type IntakeLead = { id: string; workspace_id: string; source: string; full_name: string; email: string | null; preferred_location: string | null; property_type: string; transaction_type: string; lead_score: number; created_at: string; consent_to_contact: boolean; contact_preference: string };
+type IntakeLead = { id: string; workspace_id: string; source: string; full_name: string; email: string | null; preferred_location: string | null; property_type: string; transaction_type: string; lead_score: number; created_at: string; consent_to_contact: boolean; consent_text: string | null; consent_at: string | null; contact_preference: string };
 const isRecord=(v:unknown):v is Record<string,unknown>=>Boolean(v&&typeof v==="object"&&!Array.isArray(v));
 function originHeaders(origin:string|null,form:Form){
  const h:Record<string,string>={"Cache-Control":"no-store","Vary":"Origin"};
@@ -38,7 +38,7 @@ async function ensurePublicLeadSideEffects(
   });
   if(error)throw error;
  }
- if(!lead.consent_to_contact||lead.contact_preference!=="email"||!lead.email)return 0;
+ if(!lead.consent_to_contact||!lead.consent_at||!lead.consent_text||lead.contact_preference!=="email"||!lead.email)return 0;
  const rows=createFollowupRows(lead as Parameters<typeof createFollowupRows>[0],new Date(lead.created_at));
  const {error:queueError}=await db.from("real_estate_followups")
   .upsert(rows,{onConflict:"lead_id,sequence",ignoreDuplicates:true});
@@ -68,6 +68,12 @@ export async function POST(request:NextRequest,context:Context){
   const idempotencyKey=(request.headers.get("idempotency-key")??(typeof body.sourceEventId==="string"?body.sourceEventId:"")).trim();
   if(!/^[A-Za-z0-9._:-]{8,200}$/.test(idempotencyKey))return NextResponse.json({error:"Provide a unique Idempotency-Key header (8–200 safe characters)."} ,{status:400,headers});
   if(!fullName||(!email&&!phone)||typeof body.consentToContact!=="boolean")return NextResponse.json({error:"Name, email or phone, and an explicit contact-consent choice are required."},{status:400,headers});
+  const enumValue=<T extends string>(value:unknown,values:readonly T[],fallback:T):T=>typeof value==="string"&&values.includes(value as T)?value as T:fallback;
+const contactPreference=enumValue(body.contactPreference,["email","phone","whatsapp"] as const,"email");
+  const consentText=typeof body.consentText==="string"?body.consentText.trim().slice(0,1000):"";
+  if(body.consentToContact && (!consentText || (contactPreference==="whatsapp" && !/whatsapp/i.test(consentText)))) {
+    return NextResponse.json({error:contactPreference==="whatsapp" ? "Record the customer's explicit WhatsApp consent text before selecting WhatsApp contact." : "Record the customer's consent text before enabling follow-up contact."},{status:400,headers});
+  }
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return NextResponse.json({error:"Enter a valid email address."},{status:400,headers});
   const ip=request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()??"unknown";
   const ipHash=createHash("sha256").update(publicKey+":"+ip).digest("hex").slice(0,32);
@@ -91,12 +97,11 @@ export async function POST(request:NextRequest,context:Context){
   const bedrooms=body.bedrooms===undefined||body.bedrooms===null||body.bedrooms===""?null:Number(body.bedrooms);
   if((budgetMin!==null&&(!Number.isFinite(budgetMin)||budgetMin<0||budgetMin>1e12))||(budgetMax!==null&&(!Number.isFinite(budgetMax)||budgetMax<0||budgetMax>1e12))||(budgetMin!==null&&budgetMax!==null&&budgetMax<budgetMin)||!/^[A-Z]{3}$/.test(currency)||
     (bedrooms!==null&&(!Number.isInteger(bedrooms)||bedrooms<0||bedrooms>50)))return NextResponse.json({error:"Invalid budget, currency or bedroom count."},{status:400,headers});
-  const enumValue=<T extends string>(value:unknown,values:readonly T[],fallback:T):T=>typeof value==="string"&&values.includes(value as T)?value as T:fallback;
+  
   const transactionType=enumValue(body.transactionType,["buy","rent","invest","sell","unknown"] as const,"unknown");
   const propertyType=enumValue(body.propertyType,["apartment","house","land","commercial","other","unknown"] as const,"unknown");
   const timeframe=enumValue(body.timeframe,["urgent","within_30_days","one_to_three_months","over_three_months","unknown"] as const,"unknown");
   const readiness=enumValue(body.readiness,["cash_ready","pre_approved","financing_needed","researching","unknown"] as const,"unknown");
-  const contactPreference=enumValue(body.contactPreference,["email","phone","whatsapp"],"email");
   const preferredLocation=typeof body.preferredLocation==="string"?body.preferredLocation.trim().slice(0,200):null;
   const leadInput: RealEstateLeadInput = {transactionType,propertyType,preferredLocation,budgetMin,budgetMax,timeframe,readiness,email,phone};
   const {data:activePlaybooks,error:activePlaybookError}=await db.from("workflows").select("id,version")
@@ -115,7 +120,7 @@ export async function POST(request:NextRequest,context:Context){
    timeframe,readiness,financing_notes:typeof body.financingNotes==="string"?body.financingNotes.slice(0,500):null,
    main_concern:typeof body.mainConcern==="string"?body.mainConcern.slice(0,500):null,
    contact_preference:contactPreference,consent_to_contact:body.consentToContact,
-   consent_text:typeof body.consentText==="string"?body.consentText.slice(0,1000):null,
+   consent_text:body.consentToContact?consentText:null,
    consent_at:body.consentToContact?new Date().toISOString():null,status:"new",
    qualification:{},raw_enquiry:{message:typeof body.message==="string"?body.message.slice(0,6000):"",formId:form.id},
    lead_score:score.score,lead_temperature:score.temperature,score_factors:score.factors,

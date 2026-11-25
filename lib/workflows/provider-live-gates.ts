@@ -10,7 +10,7 @@ const providerPackIds = new Set<string>(PROVIDER_PACK_LIVE_IDS);
 const providerPackOperations: Readonly<Record<string, ReadonlySet<string>>> = {
   discord: new Set(["execute", "get_channel"]),
   telegram: new Set(["execute", "get_chat"]),
-  whatsapp_business: new Set(["execute", "get_phone_number"]),
+  whatsapp_business: new Set(["execute", "get_phone_number", "send_template"]),
 };
 
 export function providerPackLiveId(step: ProviderPackStep): string | null {

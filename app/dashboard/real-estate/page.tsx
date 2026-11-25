@@ -14,7 +14,7 @@ type Activity={id:string;lead_id:string;activity_type:string;details:Record<stri
 type Detail={lead:Lead;activities:Activity[];followups:Array<Omit<Followup,"lead">>};
 type Tab="leads"|"properties"|"followups"|"forms";
 const emptyStats:Stats={total:0,newLeads:0,qualified:0,hot:0,warm:0,cold:0,viewings:0,won:0,lost:0,properties:0,activeProperties:0,followupsDue:0,agents:0};
-const blankLead={fullName:"",email:"",phone:"",transactionType:"buy",propertyType:"apartment",preferredLocation:"",budgetMin:"",budgetMax:"",currency:"USD",timeframe:"unknown",readiness:"unknown",contactPreference:"email",consentToContact:false};
+const blankLead={fullName:"",email:"",phone:"",transactionType:"buy",propertyType:"apartment",preferredLocation:"",budgetMin:"",budgetMax:"",currency:"USD",timeframe:"unknown",readiness:"unknown",contactPreference:"email",consentToContact:false,consentText:""};
 const blankProperty={reference:"",title:"",propertyType:"apartment",transactionType:"sale",location:"",price:"",currency:"USD",bedrooms:"",availabilityStatus:"available",listingUrl:""};
 async function requestJson<T>(url:string,init?:RequestInit):Promise<T>{
  const response=await fetch(url,{...init,cache:"no-store",headers:{"Content-Type":"application/json",...(init?.headers??{})}});
@@ -55,6 +55,7 @@ export default function RealEstatePage(){
   finally{setLoading(false);}
  },[]);
  useEffect(()=>{void load()},[load]);
+ useEffect(()=>{if(window.location.hash==="#followups")setTab("followups")},[]);
 
  const visibleLeads=useMemo(()=>leads.filter(lead=>(lead.full_name+" "+(lead.email??"")+" "+(lead.preferred_location??"")).toLowerCase().includes(search.toLowerCase())&&(statusFilter==="all"||lead.status===statusFilter)),[leads,search,statusFilter]);
  async function showLead(lead:Lead){
@@ -77,7 +78,7 @@ export default function RealEstatePage(){
  async function createLead(event:FormEvent<HTMLFormElement>){
   event.preventDefault();setBusy(true);setError("");setNotice("");
   try{
-   const body={...leadForm,budgetMin:leadForm.budgetMin===""?null:Number(leadForm.budgetMin),budgetMax:leadForm.budgetMax===""?null:Number(leadForm.budgetMax),source:"manual",consentText:leadForm.consentToContact?"Customer explicitly agreed to receive email follow-ups.":null};
+   const body={...leadForm,budgetMin:leadForm.budgetMin===""?null:Number(leadForm.budgetMin),budgetMax:leadForm.budgetMax===""?null:Number(leadForm.budgetMax),source:"manual",consentText:leadForm.consentToContact?leadForm.consentText.trim():null};
    await requestJson("/api/real-estate/leads",{method:"POST",body:JSON.stringify(body)});
    setLeadForm(blankLead);setShowLeadForm(false);setNotice("Lead created.");await load();
   }catch(cause){setError(cause instanceof Error?cause.message:"Lead creation failed.");}
@@ -135,7 +136,7 @@ export default function RealEstatePage(){
   <section className="dashboard-main">
    <header className="dashboard-topbar"><div className="breadcrumbs">Workspace / <strong>Real Estate</strong></div><span className="environment-badge">Lead engine</span></header>
    <div className="dashboard-content re-content">
-    <div className="re-heading"><div><div className="dash-eyebrow">REAL ESTATE WORKSPACE</div><h1>Lead Management</h1><p>Capture enquiries, prioritize serious prospects and keep every agent action visible.</p></div><button className="re-primary" onClick={()=>{setShowLeadForm(true);setShowPropertyForm(false);setShowIntakeForm(false)}}>＋ Add lead</button></div>
+    <div className="re-heading"><div><div className="dash-eyebrow">REAL ESTATE WORKSPACE</div><h1>Lead Management</h1><p>Capture enquiries, prioritize serious prospects and keep every agent action visible.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><a className="re-secondary" href="/dashboard/real-estate/operations">Operations</a><button className="re-primary" onClick={()=>{setShowLeadForm(true);setShowPropertyForm(false);setShowIntakeForm(false)}}>＋ Add lead</button></div></div>
     {error&&<div className="re-alert re-error" role="alert">{error}</div>}
     {notice&&<div className="re-alert" role="status">{notice}<button onClick={()=>setNotice("")} aria-label="Dismiss message">×</button></div>}
     {oneTimeKey&&<section className="re-key-card"><div><strong>New website intake key — shown once</strong><p>Save this key securely. It will not be displayed again.</p></div><div className="re-key-value"><span>{oneTimeKey.publicKey}</span><button onClick={()=>void copy(oneTimeKey.publicKey)}>Copy key</button></div><div className="re-key-value"><span>{oneTimeKey.endpoint}</span><button onClick={()=>void copy(window.location.origin+oneTimeKey.endpoint)}>Copy endpoint</button></div><button className="re-link" onClick={()=>setOneTimeKey(null)}>Dismiss</button></section>}
@@ -174,9 +175,9 @@ export default function RealEstatePage(){
     </section>}
 
     {tab==="followups"&&<section className="re-panel">
-     <div className="re-panel-head"><div><h2>Follow-up sequence</h2><p>Only customers who explicitly consented to email follow-up enter this queue.</p></div><span className="re-muted-tag">Email only</span></div>
+     <div className="re-panel-head"><div><h2>Follow-up sequence</h2><p>Long-term nurture for consenting email leads. Sending stops when a customer responds, withdraws consent, or an agent takes over.</p></div><span className="re-muted-tag">Email only</span></div>
      <div className="re-table-wrap"><table className="re-table"><thead><tr><th>Customer</th><th>Sequence</th><th>Due at</th><th>State</th><th>Attempts</th><th>Provider result</th></tr></thead><tbody>
-      {followups.map(f=><tr key={f.id}><td><strong>{f.lead?.full_name??"Unknown lead"}</strong><small>{f.lead?.email??""}</small></td><td>{["Immediately","1 hour","24 hours","3 days","7 days"][f.sequence-1]??("Step "+f.sequence)}</td><td>{dateLabel(f.due_at)}</td><td><span className={"re-status "+f.status}>{label(f.status)}</span></td><td>{f.attempt_count}/{f.max_attempts}</td><td>{f.last_error_code??(f.sent_at?"Accepted "+dateLabel(f.sent_at):"—")}</td></tr>)}
+      {followups.map(f=><tr key={f.id}><td><strong>{f.lead?.full_name??"Unknown lead"}</strong><small>{f.lead?.email??""}</small></td><td>{["Immediately","1 day","7 days","30 days","90 days"][f.sequence-1]??("Step "+f.sequence)}</td><td>{dateLabel(f.due_at)}</td><td><span className={"re-status "+f.status}>{label(f.status)}</span></td><td>{f.attempt_count}/{f.max_attempts}</td><td>{f.last_error_code??(f.sent_at?"Accepted "+dateLabel(f.sent_at):"—")}</td></tr>)}
       {!loading&&!followups.length&&<tr><td colSpan={6} className="re-empty">No follow-ups scheduled.</td></tr>}
      </tbody></table></div>
      <p className="re-footnote">Live delivery remains off until workspace Resend is tested and approved, the server feature switches are enabled, and a scheduler invokes the follow-up worker at least every five minutes. Provider acceptance is not the same as confirmed delivery.</p>
@@ -211,7 +212,7 @@ export default function RealEstatePage(){
   {showLeadForm&&<div className="re-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setShowLeadForm(false)}}><form className="re-modal" onSubmit={createLead}>
    <div className="re-modal-head"><div><h2>Add enquiry</h2><p>Record what the customer actually supplied. Unknown details stay unknown.</p></div><button type="button" onClick={()=>setShowLeadForm(false)} aria-label="Close">×</button></div>
    <div className="re-form-grid"><label>Customer name<input required maxLength={160} value={leadForm.fullName} onChange={e=>setLeadForm({...leadForm,fullName:e.target.value})}/></label><label>Email<input type="email" value={leadForm.email} onChange={e=>setLeadForm({...leadForm,email:e.target.value})}/></label><label>Phone<input value={leadForm.phone} onChange={e=>setLeadForm({...leadForm,phone:e.target.value})}/></label><label>Intent<select value={leadForm.transactionType} onChange={e=>setLeadForm({...leadForm,transactionType:e.target.value})}><option value="buy">Buying</option><option value="rent">Renting</option><option value="invest">Investing</option><option value="sell">Selling</option><option value="unknown">Unknown</option></select></label><label>Property type<select value={leadForm.propertyType} onChange={e=>setLeadForm({...leadForm,propertyType:e.target.value})}>{["apartment","house","land","commercial","other","unknown"].map(x=><option key={x} value={x}>{label(x)}</option>)}</select></label><label>Preferred location<input value={leadForm.preferredLocation} onChange={e=>setLeadForm({...leadForm,preferredLocation:e.target.value})}/></label><label>Budget minimum<input type="number" min="0" value={leadForm.budgetMin} onChange={e=>setLeadForm({...leadForm,budgetMin:e.target.value})}/></label><label>Budget maximum<input type="number" min="0" value={leadForm.budgetMax} onChange={e=>setLeadForm({...leadForm,budgetMax:e.target.value})}/></label><label>Currency<input maxLength={3} value={leadForm.currency} onChange={e=>setLeadForm({...leadForm,currency:e.target.value.toUpperCase()})}/></label><label>Timeline<select value={leadForm.timeframe} onChange={e=>setLeadForm({...leadForm,timeframe:e.target.value})}>{["urgent","within_30_days","one_to_three_months","over_three_months","unknown"].map(x=><option key={x} value={x}>{label(x)}</option>)}</select></label><label>Financial readiness<select value={leadForm.readiness} onChange={e=>setLeadForm({...leadForm,readiness:e.target.value})}>{["cash_ready","pre_approved","financing_needed","researching","unknown"].map(x=><option key={x} value={x}>{label(x)}</option>)}</select></label><label>Preferred contact<select value={leadForm.contactPreference} onChange={e=>setLeadForm({...leadForm,contactPreference:e.target.value})}><option value="email">Email</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option></select></label></div>
-   <label className="re-consent"><input type="checkbox" checked={leadForm.consentToContact} onChange={e=>setLeadForm({...leadForm,consentToContact:e.target.checked})}/> Customer explicitly agreed to receive follow-up messages. This must be recorded, not assumed.</label>
+   <label className="re-consent"><input type="checkbox" checked={leadForm.consentToContact} onChange={e=>setLeadForm({...leadForm,consentToContact:e.target.checked})}/> I confirm the customer explicitly agreed to be contacted through the selected channel. WhatsApp requires explicit WhatsApp consent.</label><label className="re-consent" style={{display:"block"}}>Record the customer’s actual consent wording<textarea maxLength={1000} rows={3} required={leadForm.consentToContact} value={leadForm.consentText} onChange={e=>setLeadForm({...leadForm,consentText:e.target.value})} placeholder="Write the words the customer used. For WhatsApp, the wording must explicitly mention WhatsApp." /></label>
    <div className="re-form-actions"><button className="re-primary" disabled={busy}>Save enquiry</button><button className="re-plain" type="button" onClick={()=>setShowLeadForm(false)}>Cancel</button></div>
   </form></div>}
 

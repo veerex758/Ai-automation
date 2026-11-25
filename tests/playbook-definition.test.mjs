@@ -95,7 +95,7 @@ test("rejects action types outside the real-estate pilot operation set", () => {
     step.nodeId === "email" ? { ...step, operationId: "delete_record" } : step
   );
   const result = validatePlaybookDefinition(valid, graph, unsupportedSteps);
-  assert.match(result.error, /supports only Gemini lead qualification/);
+  assert.ok(result.error.includes("Unsupported real-estate Playbook action: email.delete_record"));
 });
 
 test("requires exactly one supported Gemini qualification action", () => {
@@ -127,5 +127,5 @@ test("rejects Switch operations until the Playbook replay and worker support the
     steps[3],
   ];
   const result = validatePlaybookDefinition(valid, graph, switchSteps);
-  assert.match(result.error, /Unsupported action: switch\.select_route/);
+  assert.ok(result.error.includes("Unsupported real-estate Playbook action: switch.select_route"));
 });
