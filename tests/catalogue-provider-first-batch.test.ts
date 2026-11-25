@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { findNode, findOperation } from "../nodes/registry";
+import { validateOperationInput } from "../nodes/validate-steps";
 
 const logger = { info() {}, error() {} };
 
@@ -346,4 +347,17 @@ test("Close get_contact retrieves a single contact with Basic API-key auth", asy
   assert.equal(request.url, "https://api.close.com/api/v1/contact/cont_1234567890/");
   assert.equal(request.headers.Authorization, "Basic " + Buffer.from("close-test-key:").toString("base64"));
   assert.deepEqual(result, { contactId: "cont_1234567890", name: "Ada Lovelace", email: "ada@example.test", phone: "+15550001111", leadId: "lead_1234567890" });
+});
+
+
+test("real-estate CRM starter uses registered operations and schema-required fields", () => {
+  for (const provider of ["pipedrive", "zoho_crm", "freshsales"]) {
+    const search = findOperation(provider, "search_contacts", "action");
+    const create = findOperation(provider, "execute", "action");
+    assert.ok(search);
+    assert.ok(create);
+    assert.equal(validateOperationInput(search, { email: "{{intake.payload.email}}" }).success, true);
+    assert.equal(validateOperationInput(create, { email: "{{intake.payload.email}}", firstName: "{{intake.payload.firstName}}", lastName: "{{intake.payload.lastName}}" }).success, true);
+    assert.equal(validateOperationInput(create, { email: "{{intake.payload.email}}" }).success, false);
+  }
 });
