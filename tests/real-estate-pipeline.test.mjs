@@ -213,7 +213,7 @@ test("inspection booking separates availability and reservation from owner-appro
   assert.match(inspectionRequest, /operationApproved\\(db, workspace\\.id, "execute"\\)/);
   assert.match(inspectionRequest, /findOperation\\("google_calendar", "execute", "action"\\)/);
   assert.match(inspectionRequest, /reserve_real_estate_inspection_booking/);
-  assert.match(inspectionRequest, /customerInviteEmail/);
+  assert.match(inspectionRequest, /p_customer_invite_email/);
   assert.doesNotMatch(inspectionRequest, /findOperation\\("google_calendar", "create_event"/);
 
   assert.match(inspectionApproval, /workspaceRow\\?\\.owner_id !== user\\.id/);
