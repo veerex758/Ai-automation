@@ -24,7 +24,7 @@ function safeAuthErrorMessage(error: unknown, mode: "signin" | "signup") {
   if (status >= 500 || error instanceof TypeError) return "The authentication service is temporarily unavailable. Please try again shortly.";
   return mode === "signup"
     ? "We couldn’t create your account. Check your details or try again shortly."
-    : "We couldn’t sign you in. Check your details or try again shortly.";
+    : "We couldn’t complete sign-in. Check your details and try again.";
 }
 
 export default function LoginPage() {
