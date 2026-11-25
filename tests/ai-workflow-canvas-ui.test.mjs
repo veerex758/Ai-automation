@@ -14,7 +14,7 @@ test("Playbook authoring starts with a business outcome instead of a canvas", ()
   assert.match(page, /Use registered Rexnora operations only/);
   assert.match(page, /whatsapp_business\.send_template/);
   assert.match(page, /selected CRM for this starter is/);
-  assert.match(page, /search_contacts by the exact lead email before execute creates a contact/);
+  assert.match(page, /search_contacts by the exact lead email, then execute to create only when no exact match exists/);
   assert.match(page, /Do not put Google Calendar create-event actions in the generic Playbook/);
   assert.match(page, /durable 90-day follow-up service/);
 });
