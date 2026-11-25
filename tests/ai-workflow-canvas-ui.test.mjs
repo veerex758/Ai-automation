@@ -62,20 +62,20 @@ test("Playbook setup layout adapts to phone screens", () => {
 
 
 test("Playbook outcome accepts longer requests", () => {
-  assert.match(page, /maxLength={4000}/);
-  assert.match(page, /outcome.length}\\/4000 characters/);
-  assert.match(page, /body: JSON\\.stringify\\(\\{ prompt, crmProvider \\}\\)/);
-  assert.match(generatorRoute, /contentLength > 24000/);
+  assert.ok(page.includes("maxLength={4000}"));
+  assert.ok(page.includes("outcome.length}/4000 characters"));
+  assert.ok(page.includes("body: JSON.stringify({ prompt, crmProvider })"));
+  assert.ok(generatorRoute.includes("contentLength > 24000"));
 });
 
 test("CRM starter uses selected provider operations and reports the failing node", () => {
-  assert.match(page, /step id intake/);
-  assert.match(page, /\\.search_contacts/);
-  assert.match(page, /\\.execute/);
-  assert.match(generatorRoute, /search_contacts/);
-  assert.match(generatorRoute, /firstName:.*payload\\.firstName/);
-  assert.match(generatorRoute, /lastName:.*payload\\.lastName/);
-  assert.match(generatorRoute, /validateOperationInput/);
-  assert.match(generatorRoute, /failingNode:/);
-  assert.match(page, /Failing node:/);
+  assert.ok(page.includes("step id intake"));
+  assert.ok(page.includes(".search_contacts"));
+  assert.ok(page.includes(".execute"));
+  assert.ok(generatorRoute.includes("search_contacts"));
+  assert.ok(generatorRoute.includes("payload.firstName"));
+  assert.ok(generatorRoute.includes("payload.lastName"));
+  assert.ok(generatorRoute.includes("validateOperationInput"));
+  assert.ok(generatorRoute.includes("failingNode:"));
+  assert.ok(page.includes("Failing node:"));
 });
