@@ -56,3 +56,8 @@ test("consent withdrawal stops un-authorized sends but does not rewrite an alrea
   assert.match(hardening, /dispatch_consent_at = null/);
   assert.match(hardening, /dispatch_consent_text = null/);
 });
+
+test("follow-up queue claim casts varchar subject/message to declared text return columns", () => {
+  const claimFix = read("../supabase/migrations/20261125150000_rexnora_followup_claim_return_types.sql");
+  assert.match(claimFix, /f\.subject::text, f\.message::text/);
+});
