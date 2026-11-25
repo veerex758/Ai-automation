@@ -257,3 +257,36 @@ test("real-estate starter requires the complete configured action bundle and one
   assert.match(playbookPage, /Create full starter draft/);
   assert.match(playbookPage, /never activate or execute anything/i);
 });
+
+
+test("Gemini follow-up drafts match the actual 90-day delivery schedule", () => {
+  const gemini = read("../nodes/gemini.ts");
+  assert.match(gemini, /immediate, 1 day, 7 days, 30 days, 90 days/);
+  assert.doesNotMatch(gemini, /immediate, 1 hour, 24 hours, 3 days, 7 days/);
+});
+
+test("lead qualification and Resend acceptance are recorded as agency-visible activity outcomes", () => {
+  assert.match(pipeline, /summary: qualification\.summary/);
+  assert.match(pipeline, /suggestedReply: qualification\.suggestedReply/);
+  assert.match(pipeline, /confidence: qualification\.confidence/);
+  assert.match(pipeline, /lead\.agent_notification_accepted/);
+  assert.match(pipeline, /providerMessageId: messageId/);
+  assert.match(realEstatePage, /Gemini qualification/);
+  assert.match(realEstatePage, /Notification:/);
+});
+
+test("withdrawn consent wording is cleared and follow-up worker rechecks consent at final dispatch", () => {
+  const leadRoute = read("../app/api/real-estate/leads/[leadId]/route.ts");
+  assert.match(leadRoute, /update\.consent_at = null; update\.consent_text = null/);
+  const dispatchGuard = followups.slice(followups.indexOf("Re-read consent and the exact active lease immediately before provider dispatch"));
+  assert.match(dispatchGuard, /latestLead\.consent_to_contact/);
+  assert.match(dispatchGuard, /latestLead\.consent_at/);
+  assert.match(dispatchGuard, /latestLead\.customer_responded_at/);
+  assert.match(dispatchGuard, /lease_token", claim\.lease_token/);
+});
+
+test("dashboard AI-qualified metric is based on successful Gemini qualification, not lead score", () => {
+  const dashboard = read("../app/api/real-estate/dashboard/route.ts");
+  assert.match(dashboard, /eq\("qualification_status", "succeeded"\)/);
+  assert.match(dashboard, /highScoring: highScoringResult\.count/);
+});
