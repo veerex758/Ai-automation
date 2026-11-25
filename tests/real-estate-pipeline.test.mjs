@@ -221,20 +221,20 @@ test("all four real-estate starter cards route to the dedicated runtime workflow
 });
 
 test("inspection booking separates availability and reservation from owner-approved Calendar writes", () => {
-  assert.match(inspectionRequest, /operations\\.manage/);
-  assert.match(inspectionRequest, /workspace_provider_operation_approvals/);
-  assert.match(inspectionRequest, /operationApproved\\(db, workspace\\.id, "execute"\\)/);
-  assert.match(inspectionRequest, /findOperation\\("google_calendar", "execute", "action"\\)/);
-  assert.match(inspectionRequest, /reserve_real_estate_inspection_booking/);
-  assert.match(inspectionRequest, /p_customer_invite_email/);
-  assert.doesNotMatch(inspectionRequest, /findOperation\\("google_calendar", "create_event"/);
+  assert.ok(inspectionRequest.includes('"operations.manage"'));
+  assert.ok(inspectionRequest.includes("workspace_provider_operation_approvals"));
+  assert.ok(inspectionRequest.includes('operationApproved(db, workspace.id, "execute")'));
+  assert.ok(inspectionRequest.includes('findOperation("google_calendar", "execute", "action")'));
+  assert.ok(inspectionRequest.includes("reserve_real_estate_inspection_booking"));
+  assert.ok(inspectionRequest.includes("p_customer_invite_email"));
+  assert.ok(!inspectionRequest.includes('findOperation("google_calendar", "create_event"'));
 
-  assert.match(inspectionApproval, /workspaceRow\\?\\.owner_id !== user\\.id/);
-  assert.match(inspectionApproval, /"owner", "admin"/);
-  assert.match(inspectionApproval, /operation_id", "create_event"/);
-  assert.match(inspectionApproval, /begin_real_estate_inspection_booking/);
-  assert.match(inspectionApproval, /findOperation\\("google_calendar", "create_event", "action"\\)/);
-  assert.match(inspectionApproval, /booking\\.id\\.replaceAll/);
+  assert.ok(inspectionApproval.includes("workspaceRow?.owner_id !== user.id"));
+  assert.ok(inspectionApproval.includes('["owner", "admin"]'));
+  assert.ok(inspectionApproval.includes('eq("operation_id", "create_event")'));
+  assert.ok(inspectionApproval.includes("begin_real_estate_inspection_booking"));
+  assert.ok(inspectionApproval.includes('findOperation("google_calendar", "create_event", "action")'));
+  assert.ok(inspectionApproval.includes('booking.id.replaceAll("-", "").toLowerCase()'));
 });
 
 test("manual lead UI records the customer's actual words and never synthesizes channel consent", () => {
