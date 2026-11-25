@@ -205,7 +205,7 @@ test("90-day follow-up schedule has five consent-gated email checkpoints and dur
   assert.match(leadScoring, /sequence: 5, ms: 90 \* 24 \* 60 \* 60 \* 1000, delayLabel: "90 days"/);
   assert.match(followups, /finish_real_estate_followup/);
   assert.match(followups, /followup\.email_accepted/);
-  assert.match(followups, /sent_at: new Date\(\)\.toISOString\(\)/);
+  assert.match(followups, /providerMessageId: messageId/);
   assert.match(followups, /idempotencyKey: "real-estate-followup:"/);
 });
 
