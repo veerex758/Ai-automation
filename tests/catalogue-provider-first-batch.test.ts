@@ -117,7 +117,7 @@ test("Google Calendar create_event inserts a bounded event with no invite emails
     endDateTime: "2026-11-27T10:45:00+01:00",
     timeZone: "Africa/Lagos",
     attendeeEmails: ["agent@example.test"],
-  });
+  }) as { id: string; status: string; htmlLink: string };
   assert.equal(request.method, "POST");
   const requestedUrl = new URL(request.url);
   assert.equal(requestedUrl.searchParams.get("sendUpdates"), "none");
