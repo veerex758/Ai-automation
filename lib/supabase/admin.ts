@@ -9,22 +9,21 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  */
 export function getAdminSupabaseConfig() {
   const isPreview = process.env.VERCEL_ENV === "preview";
-  // Preview branches may carry either the Rexnora CODED_* staging credentials
-  // or the shared SUPABASE_* names. Prefer the explicit CODED_* pair so a
-  // branch-scoped staging key wins over any project-wide fallback. Production
-  // keeps its established precedence unchanged.
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    || process.env.CODED_SUPABASE_URL
-    || process.env.NEXT_PUBLIC_CODED_SUPABASE_URL;
-  const serviceRoleKey = isPreview
-    ? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY
-      || process.env.CODED_SUPABASE_SECRET_KEY
-      || process.env.SUPABASE_SECRET_KEY
-      || process.env.SUPABASE_SERVICE_ROLE_KEY
-    : process.env.SUPABASE_SECRET_KEY
-      || process.env.SUPABASE_SERVICE_ROLE_KEY
-      || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY
-      || process.env.CODED_SUPABASE_SECRET_KEY;
+  const isRexnoraStagingPreview = isPreview
+    && process.env.VERCEL_GIT_COMMIT_REF === "integration/saas-core-stage3-realestate-20261123";
+  const url = isPreview
+    ? process.env.NEXT_PUBLIC_SUPABASE_URL
+    : process.env.NEXT_PUBLIC_SUPABASE_URL
+      || process.env.CODED_SUPABASE_URL
+      || process.env.NEXT_PUBLIC_CODED_SUPABASE_URL;
+  const serviceRoleKey = isRexnoraStagingPreview
+    ? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SECRET_KEY
+    : isPreview
+      ? process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+      : process.env.SUPABASE_SECRET_KEY
+        || process.env.SUPABASE_SERVICE_ROLE_KEY
+        || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY
+        || process.env.CODED_SUPABASE_SECRET_KEY;
   if (!url || !serviceRoleKey) throw new Error("Supabase admin client is not configured.");
   return { url, serviceRoleKey };
 }
