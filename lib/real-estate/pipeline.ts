@@ -313,7 +313,7 @@ function mergeQualification(lead: LeadRow, qualification: Qualification) {
   };
 }
 
-async function ensureQualificationActivity(db: ServiceClient, lead: LeadRow, workspaceId: string, score: number) {
+async function ensureQualificationActivity(db: ServiceClient, lead: LeadRow, workspaceId: string, score: number, qualification: Qualification) {
   const { data: existing, error: lookupError } = await db.from("real_estate_lead_activities")
     .select("id")
     .eq("workspace_id", workspaceId)
@@ -328,7 +328,7 @@ async function ensureQualificationActivity(db: ServiceClient, lead: LeadRow, wor
     lead_id: lead.id,
     actor_user_id: null,
     activity_type: "lead.ai_qualified",
-    details: { score, source: "gemini", numericScore: "deterministic" },
+    details: { score, source: "gemini", numericScore: "deterministic", summary: qualification.summary, suggestedReply: qualification.suggestedReply, confidence: qualification.confidence ?? null, reason: qualification.reason, mainConcern: qualification.mainConcern, missingInformation: qualification.missingInformation, qualifiedAt: new Date().toISOString() },
   });
   if (error) throw new Error("PIPELINE_ACTIVITY_WRITE_FAILED");
 }
@@ -962,7 +962,7 @@ async function processClaim(db: ServiceClient, claim: PipelineClaim) {
 
   try {
     await ensureFollowupDrafts(db, lead, qualification);
-    await ensureQualificationActivity(db, lead, claim.workspace_id, Number(lead.lead_score));
+    await ensureQualificationActivity(db, lead, claim.workspace_id, Number(lead.lead_score), qualification);
     await ensureBackOfficeTask(db, lead);
   } catch (error) {
     const code = safeErrorCode(error, "LEAD_PIPELINE_PERSISTENCE_FAILED");
