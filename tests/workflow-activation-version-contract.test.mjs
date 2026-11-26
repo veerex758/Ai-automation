@@ -8,7 +8,7 @@ test("activation validates and atomically updates only the exact workflow versio
   assert.match(route, /let activationVersion: number \| null = null/);
   assert.match(route, /activationVersion = candidate\.version/);
   assert.match(route, /\.eq\("version", activationVersion\)/);
-  assert.match(route, /Playbook changed while activation checks are running/);
+  assert.match(route, /PLAYBOOK_VERSION_CHANGED_DURING_ACTIVATION/);
   assert.match(route, /status: 409/);
 });
 
