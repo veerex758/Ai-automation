@@ -23,7 +23,7 @@ test("Playbook authoring sends a business outcome while trusted starter rules st
   assert.match(generator, /Do not add Google Calendar create-event actions/);
   assert.match(generator, /durable 90-day follow-up service/);
   assert.match(generator, /Use only registered Rexnora nodes and operations/);
-});;
+});
 
 test("business rules are linked to actual generated graph condition nodes", () => {
   assert.match(page, /filter\(\(node\) => node\.type === "condition"\)/);
