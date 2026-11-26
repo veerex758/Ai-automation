@@ -14,6 +14,8 @@ test("Playbook authoring sends a business outcome while trusted starter rules st
   assert.ok(page.includes("/api/ai/generate-workflow"));
   assert.ok(page.includes("maxLength={240}"));
   assert.ok(page.includes("prompt: outcome.trim()"));
+  assert.ok(page.includes('starterType: "real_estate"'));
+  assert.ok(page.includes("crmProvider,"));
   assert.ok(!page.includes("const prompt = ["));
 
   assert.match(generator, /TRUSTED REAL-ESTATE STARTER CONTRACT/);
