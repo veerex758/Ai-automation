@@ -105,7 +105,9 @@ test("follow-up delivery goes through the registered Resend operation with a sta
   assert.match(followups, /findOperation\("email", "send_email", "action"\)/);
   assert.match(followups, /idempotencyKey: "real-estate-followup:"/);
   assert.doesNotMatch(followups, /fetch\("https:\/\/api\.resend\.com\/emails"/);
-  assert.match(emailNode, /EMAIL_PROVIDER_UNAVAILABLE/);
+  assert.match(emailNode, /EMAIL_CONNECTION_REQUIRED/);
+  assert.match(emailNode, /EMAIL_PROVIDER_TRANSIENT_FAILURE/);
+  assert.match(emailNode, /EMAIL_PROVIDER_REJECTED/);
 });
 
 test("public and authenticated lead creation trigger the durable pipeline and repair duplicate side effects", () => {
