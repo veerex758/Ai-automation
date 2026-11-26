@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       prompt: body.prompt,
       nodeCatalog,
       mode: "registry",
-      starterType: starterType === "real_estate" ? starterType : null,
+      starterType: starterType === "real_estate" ? starterType : undefined,
       crmProvider: starterType === "real_estate" ? requestedCrmProvider as string : undefined,
     });
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
