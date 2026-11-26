@@ -12,6 +12,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const MAX_REAL_ESTATE_OUTCOME_LENGTH = 240;
+const REAL_ESTATE_CRM_PROVIDERS = new Set(["pipedrive", "zoho_crm", "freshsales"]);
+
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request.headers.get("x-request-id"));
   const startedAt = Date.now();
@@ -41,8 +44,23 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
     }
     if (!body.prompt.trim()) return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
-    if (body.prompt.trim().length > MAX_PROMPT_LENGTH) {
-      return jsonResponse({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
+
+    const starterType = "starterType" in body ? body.starterType : undefined;
+    if (starterType !== undefined && starterType !== "real_estate") {
+      return jsonResponse({ error: "The requested workflow starter is not supported." }, { status: 400 });
+    }
+    const requestedCrmProvider = "crmProvider" in body ? body.crmProvider : "pipedrive";
+    if (starterType === "real_estate" &&
+        (typeof requestedCrmProvider !== "string" || !REAL_ESTATE_CRM_PROVIDERS.has(requestedCrmProvider))) {
+      return jsonResponse({ error: "Choose a supported CRM for the real-estate starter." }, { status: 400 });
+    }
+
+    const promptLimit = starterType === "real_estate" ? MAX_REAL_ESTATE_OUTCOME_LENGTH : MAX_PROMPT_LENGTH;
+    if (body.prompt.trim().length > promptLimit) {
+      const message = starterType === "real_estate"
+        ? `Keep the business outcome to ${MAX_REAL_ESTATE_OUTCOME_LENGTH} characters or fewer.`
+        : `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.`;
+      return jsonResponse({ error: message }, { status: 400 });
     }
 
     const { getOrCreateDefaultWorkspace } = await import("@/lib/supabase/workspace");
@@ -94,7 +112,13 @@ export async function POST(request: NextRequest) {
         unsupportedCapabilities: unsupportedCapabilities.map((issue) => issue.capability),
       }, { status: 422 });
     }
-    const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog, mode: "registry" });
+    const result = await generateWorkflow({
+      prompt: body.prompt,
+      nodeCatalog,
+      mode: "registry",
+      starterType: starterType === "real_estate" ? starterType : null,
+      crmProvider: starterType === "real_estate" ? requestedCrmProvider as string : undefined,
+    });
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
     const registrySteps = result.registrySteps;
     if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return jsonResponse({ error: "The generated plan did not pass registry validation." }, { status: 422 });
