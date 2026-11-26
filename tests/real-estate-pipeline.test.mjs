@@ -13,6 +13,7 @@ const serviceClient = read("../lib/real-estate/server.ts");
 const followups = read("../lib/real-estate/followups.ts");
 const realEstatePage = read("../app/dashboard/real-estate/page.tsx");
 const playbookPage = read("../app/dashboard/playbooks/new/page.tsx");
+const playbookGenerator = read("../lib/workflows/ai-workflow-generator.cjs");
 const sectionPage = read("../app/dashboard/section-page.tsx");
 const inspectionRequest = read("../app/api/real-estate/inspections/route.ts");
 const inspectionApproval = read("../app/api/real-estate/inspections/[bookingId]/approve/route.ts");
@@ -257,5 +258,8 @@ test("real-estate starter requires the complete configured action bundle and one
   assert.match(playbookPage, /crmCreateIndex <= crmSearchIndex/);
   assert.match(playbookPage, /No draft was saved; generate it again/);
   assert.match(playbookPage, /Create full starter draft/);
-  assert.match(playbookPage, /never activate or execute anything/i);
+  assert.match(playbookGenerator, /never activate or execute anything/i);
+  assert.match(playbookGenerator, /TRUSTED REAL-ESTATE STARTER CONTRACT/);
+  assert.match(playbookGenerator, /timestamped recorded consent/);
+  assert.match(playbookGenerator, /approved agency recipient allowlist/);
 });
