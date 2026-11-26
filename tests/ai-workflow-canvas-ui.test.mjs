@@ -3,21 +3,27 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const page = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
+const generator = readFileSync(new URL("../lib/workflows/ai-workflow-generator.cjs", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../app/dashboard/playbooks/playbooks.css", import.meta.url), "utf8");
 const controlRoom = readFileSync(new URL("../app/dashboard/playbooks/[playbookId]/page.tsx", import.meta.url), "utf8");
 
-test("Playbook authoring starts with a business outcome instead of a canvas", () => {
+test("Playbook authoring sends a business outcome while trusted starter rules stay server-side", () => {
   assert.match(page, /What outcome should Rexnora handle/);
   assert.match(page, /What should Rexnora achieve/);
   assert.match(page, /industry: "real_estate"/);
-  assert.match(page, /api\/ai\/generate-workflow/);
-  assert.match(page, /Use registered Rexnora operations only/);
-  assert.match(page, /whatsapp_business\.send_template/);
-  assert.match(page, /selected CRM for this starter is/);
-  assert.match(page, /search_contacts by the exact lead email, then execute to create only when no exact match exists/);
-  assert.match(page, /Do not put Google Calendar create-event actions in the generic Playbook/);
-  assert.match(page, /durable 90-day follow-up service/);
-});
+  assert.match(page, /api\\/ai\\/generate-workflow/);
+  assert.match(page, /maxLength=\\{240\\}/);
+  assert.match(page, /prompt: outcome\\.trim\\(\\),\\s*starterType: "real_estate",\\s*crmProvider/);
+  assert.doesNotMatch(page, /const prompt = \\[/);
+
+  assert.match(generator, /TRUSTED REAL-ESTATE STARTER CONTRACT/);
+  assert.match(generator, /whatsapp_business\\.send_template/);
+  assert.match(generator, /selected CRM provider is/);
+  assert.match(generator, /search_contacts by exact lead email/);
+  assert.match(generator, /Do not add Google Calendar create-event actions/);
+  assert.match(generator, /durable 90-day follow-up service/);
+  assert.match(generator, /Use only registered Rexnora nodes and operations/);
+});;
 
 test("business rules are linked to actual generated graph condition nodes", () => {
   assert.match(page, /filter\(\(node\) => node\.type === "condition"\)/);
