@@ -167,7 +167,7 @@ test("CRM search and create must use the same selected connection", () => {
 
 
 test("accepts a business outcome up to 2000 characters and 240 words", () => {
-  const longOutcome = "123456789 ".repeat(199) + "123456789";
+  const longOutcome = "123456789 ".repeat(199) + "1234567890";
   const result = validatePlaybookDefinition({
     ...valid,
     goal: { ...valid.goal, outcome: longOutcome },
