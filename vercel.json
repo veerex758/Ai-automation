@@ -1,10 +1,6 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "schedules": {
-    "internal-scheduler-daily": {
-      "schedule": "0 9 * * *",
-      "path": "/api/internal/scheduler",
-      "requestMethod": "GET"
-    },
     "billing-reconcile": {
       "schedule": "0 10 * * *",
       "path": "/api/internal/billing/reconcile",
@@ -24,10 +20,29 @@
       "schedule": "30 12 * * *",
       "path": "/api/internal/billing/paystack-renewals",
       "requestMethod": "POST"
+    },
+    "workflow-scheduler-tick": {
+      "schedule": "*/30 * * * *",
+      "path": "/api/internal/scheduler",
+      "requestMethod": "GET",
+      "timezone": "UTC"
+    },
+    "durable-worker-recovery": {
+      "schedule": "*/30 * * * *",
+      "function": "api/worker-sweep",
+      "timezone": "UTC"
     }
   },
   "functions": {
     "api/real-estate-automation.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "schedule/v1beta"
+        }
+      ]
+    },
+    "api/worker-sweep.ts": {
+      "maxDuration": 60,
       "experimentalTriggers": [
         {
           "type": "schedule/v1beta"

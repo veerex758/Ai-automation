@@ -237,6 +237,34 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[], option
   return null;
 }
 
+
+/**
+ * Live retries are opt-in by operation. Resend is the only currently enabled
+ * external write because it honors Idempotency-Key for 24 hours. Gemini may be
+ * repeated on a pre-checkpoint crash (and can incur another model charge), but
+ * it does not create a customer-facing side effect. Unknown operations fail closed.
+ */
+const RETRY_SAFE_LIVE_OPERATIONS = new Set([
+  "email.send_email",
+  "gemini.qualify_real_estate_lead", "gemini.generate_text",
+  "if.evaluate", "switch.select_route", "merge.merge_inputs",
+  "set_fields.merge_fields", "json_parse.parse", "filter.filter_items",
+  "aggregate.calculate", "date_time.current_time", "loop.iterate",
+  "deduplicate.unique", "sort.sort_items", "split_batches.split",
+  "crypto_hash.hash", "template.render", "csv_parse.parse",
+  "csv_stringify.stringify", "markdown_html.convert", "text_transform.transform",
+  "regex.match", "array_ops.operate", "object_ops.operate", "math.calculate",
+  "uuid.generate", "base64.convert", "date_add.add", "date_format.format",
+  "json_encode.encode",
+]);
+
+export function durableLiveRetryAttempts(steps: RegisteredWorkflowStep[]): number {
+  if (!Array.isArray(steps) || !steps.some((step) =>
+    step.kind === "action" && step.nodeId === "email" && step.operationId === "send_email")) return 1;
+  return steps.every((step) => step.kind === "trigger" ||
+    RETRY_SAFE_LIVE_OPERATIONS.has(step.nodeId + "." + step.operationId)) ? 3 : 1;
+}
+
 function safeWebhookTriggerOutput(job: Job): Record<string, unknown> {
   const input = isRecord(job.payload?.input) ? job.payload.input : {};
   return {
@@ -273,6 +301,7 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
   return {
     credentials,
     signal: leaseState.controller.signal,
+    getIdempotencyKey: (stepId: string) => `rexnora:${job.id}:${stepId}`,
     logger: {
       info(message, meta) { console.info("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
       error(message, meta) { console.error("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
@@ -296,7 +325,11 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
       if (leaseState.lost || leaseState.controller.signal.aborted) throw new Error("EXECUTION_LEASE_LOST");
       const { data: cancellation, error: cancellationError } = await db.from("execution_jobs")
         .select("cancel_requested_at").eq("id", job.id).eq("lease_token", job.lease_token).maybeSingle();
-      if (cancellationError) throw new Error("EXECUTION_LEASE_CHECK_FAILED");
+      if (cancellationError) {
+        leaseState.lost = true;
+        leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
+        throw new Error("EXECUTION_LEASE_LOST");
+      }
       if (cancellation?.cancel_requested_at) {
         leaseState.cancelled = true;
         leaseState.controller.abort(new Error("EXECUTION_CANCELLED"));
@@ -355,7 +388,7 @@ async function persistCheckpoint(
   if (error) throw new Error("CHECKPOINT_WRITE_FAILED");
 }
 
-export async function runDurableWorker() {
+async function runDurableWorkerPass() {
   let db: DbClient;
   try { db = client(); } catch {
     throw new Error("WORKER_DATABASE_NOT_CONFIGURED");
@@ -681,7 +714,11 @@ export async function runDurableWorker() {
       succeeded++;
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
-      if (outcome === "EXECUTION_CANCELLED") {
+      if (leaseState.lost || outcome === "EXECUTION_LEASE_LOST" || outcome === "EXECUTION_LEASE_CHECK_FAILED") {
+        // A worker that cannot prove it still owns the lease must not finalize
+        // or retry itself. The database lease expiry is the recovery authority.
+        leaseLost++;
+      } else if (outcome === "EXECUTION_CANCELLED") {
         const { data: cancelledResult, error: cancelError } = await db.rpc("finish_cancelled_execution_job", {
           p_job_id: job.id, p_lease_token: job.lease_token,
         });
@@ -707,6 +744,46 @@ export async function runDurableWorker() {
       });
     }
   }
-  if (data.length === 0) await db.rpc("record_execution_worker_heartbeat", { p_worker_id: workerId, p_status: "idle", p_job_id: null, p_error_code: null });
+  if (data.length === 0) {
+    await db.rpc("record_execution_worker_heartbeat", {
+      p_worker_id: workerId,
+      p_status: "idle",
+      p_job_id: null,
+      p_error_code: null,
+    });
+  }
+
+  const { error: finalErrorDispatchError } = await db.rpc(
+    "dispatch_pending_execution_error_events",
+    { p_limit: 25 },
+  );
+  if (finalErrorDispatchError) {
+    console.warn("Rexnora worker could not flush workflow error events after processing.");
+  }
   return { claimed: data.length, succeeded, retried, deadLettered, leaseLost, cancelled };
+}
+
+/**
+ * Drain due work within a strict invocation budget. A 10-second wait covers
+ * both database retry delays (5s then 10s), and retry_wait rows are prioritized
+ * by the claim RPC. The database remains authoritative if this invocation ends.
+ */
+export async function runDurableWorker() {
+  const total = { claimed: 0, succeeded: 0, retried: 0, deadLettered: 0, leaseLost: 0, cancelled: 0 };
+  const deadline = Date.now() + 50_000;
+  for (let pass = 0; pass < 25 && Date.now() < deadline; pass++) {
+    const result = await runDurableWorkerPass();
+    total.claimed += result.claimed;
+    total.succeeded += result.succeeded;
+    total.retried += result.retried;
+    total.deadLettered += result.deadLettered;
+    total.leaseLost += result.leaseLost;
+    total.cancelled += result.cancelled;
+    if (result.claimed === 0) break;
+    if (result.retried > 0) {
+      if (Date.now() + 10_000 >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+    }
+  }
+  return total;
 }
