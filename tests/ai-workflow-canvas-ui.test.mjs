@@ -19,7 +19,7 @@ test("Playbook authoring sends a business outcome while trusted starter rules st
   assert.ok(!page.includes("const prompt = ["));
 
   assert.match(generator, /TRUSTED REAL-ESTATE STARTER CONTRACT/);
-  assert.match(generator, /whatsapp_business\\.send_template/);
+  assert.ok(generator.includes("whatsapp_business.send_template"));
   assert.match(generator, /selected CRM provider is/);
   assert.match(generator, /search_contacts by exact lead email/);
   assert.match(generator, /Do not add Google Calendar create-event actions/);
