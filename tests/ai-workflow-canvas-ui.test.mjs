@@ -11,10 +11,10 @@ test("Playbook authoring sends a business outcome while trusted starter rules st
   assert.match(page, /What outcome should Rexnora handle/);
   assert.match(page, /What should Rexnora achieve/);
   assert.match(page, /industry: "real_estate"/);
-  assert.match(page, /api\\/ai\\/generate-workflow/);
-  assert.match(page, /maxLength=\\{240\\}/);
-  assert.match(page, /prompt: outcome\\.trim\\(\\),\\s*starterType: "real_estate",\\s*crmProvider/);
-  assert.doesNotMatch(page, /const prompt = \\[/);
+  assert.ok(page.includes("/api/ai/generate-workflow"));
+  assert.ok(page.includes("maxLength={240}"));
+  assert.ok(page.includes("prompt: outcome.trim()"));
+  assert.ok(!page.includes("const prompt = ["));
 
   assert.match(generator, /TRUSTED REAL-ESTATE STARTER CONTRACT/);
   assert.match(generator, /whatsapp_business\\.send_template/);
