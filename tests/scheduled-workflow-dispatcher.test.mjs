@@ -21,10 +21,17 @@ test("protects the scheduler endpoint with a timing-safe server secret check", (
   assert.ok(adminConfig.includes("process.env.SUPABASE_SERVICE_ROLE_KEY"));
 });
 
-test("durably queues scheduled work for the dry-run worker", () => {
+test("durably queues scheduled work with an explicit environment-gated execution mode", () => {
   assert.ok(route.includes("const claimLimit = 10"));
   assert.ok(route.includes("const leaseSeconds = 300"));
   assert.ok(route.includes('"dispatch_workflow_execution"'));
+  assert.ok(route.includes('p_execution_mode: executionMode'));
+  assert.ok(route.includes('AIVANTA_SCHEDULED_LIVE_EXECUTION_ENABLED'));
+  assert.ok(route.includes('AIVANTA_LIVE_EXECUTION_ENABLED'));
+  assert.ok(route.includes('AIVANTA_WORKFLOW_SCHEDULER_ENABLED'));
+  assert.ok(route.includes('validateDurableLiveSteps'));
+  assert.ok(route.includes('durableLiveRetryAttempts'));
+  assert.ok(route.includes('after(async () =>'));
   assert.ok(route.includes('"schedule:" + claim.schedule_id'));
   assert.ok(route.includes('p_payload: { input: scheduledInput, source: "schedule"'));
   assert.ok(!route.includes("runDryRun"));

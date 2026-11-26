@@ -10,6 +10,7 @@ const worker = readFileSync(new URL("../app/api/internal/worker/route.ts", impor
 const workerService = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatch/route.ts", import.meta.url), "utf8");
 const liveModeMigration = readFileSync(new URL("../supabase/migrations/20261102090000_aivanta_live_durable_execution_mode.sql", import.meta.url), "utf8");
+const reliabilityMigration = readFileSync(new URL("../supabase/migrations/20261124130000_rexnora_execution_reliability_retries.sql", import.meta.url), "utf8");
 const utilityMigration = readFileSync(new URL("../supabase/migrations/20261105045346_aivanta_utility_execution_hardening.sql", import.meta.url), "utf8");
 const utilityIndexesMigration = readFileSync(new URL("../supabase/migrations/20261105045900_aivanta_utility_execution_indexes.sql", import.meta.url), "utf8");
 const runPanel = readFileSync(new URL("../app/dashboard/workflows/[workflowId]/run-test-panel.tsx", import.meta.url), "utf8");
@@ -139,9 +140,11 @@ test("authenticated dispatch wakes the server-side durable worker after queuing"
   assert.match(dispatch, /queue remains the source of truth/);
 });
 
-test("live queue dispatch is explicit and limited to one attempt", () => {
+test("live queue retries are bounded by a server-approved retry policy", () => {
   assert.match(liveModeMigration, /execution_mode text not null default 'dry_run'/);
-  assert.match(liveModeMigration, /case when p_execution_mode = 'live' then 1 else p_max_attempts end/);
+  assert.match(reliabilityMigration, /when p_execution_mode = 'live' then least\(p_max_attempts, 3\)/);
+  assert.match(reliabilityMigration, /EMAIL_PROVIDER_TRANSIENT_FAILURE/);
+  assert.match(reliabilityMigration, /LIVE_RETRY_WINDOW_EXPIRED/);
   assert.match(liveModeMigration, /p_execution_mode/);
   assert.match(liveModeMigration, /existing_job\.workflow_id <> p_workflow_id or existing_job\.execution_mode <> p_execution_mode/);
   assert.match(dispatch, /requestBody\.mode/);

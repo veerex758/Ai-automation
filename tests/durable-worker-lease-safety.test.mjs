@@ -11,6 +11,8 @@ test("worker aborts provider execution when heartbeat or lease renewal fails", (
   assert.match(worker, /leaseState\.controller\.abort\(new Error\("EXECUTION_LEASE_LOST"\)\)/);
   assert.match(worker, /heartbeat_execution_job/);
   assert.match(worker, /EXECUTION_LEASE_LOST/);
+  assert.match(worker, /if \(leaseState\.lost \|\| outcome === "EXECUTION_LEASE_LOST"/);
+  assert.match(worker, /leaseState\.controller\.abort\(new Error\("EXECUTION_LEASE_LOST"\)\)/);
 });
 
 test("provider authorization renews the lease immediately before every registered operation", () => {

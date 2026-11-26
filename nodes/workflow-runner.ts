@@ -128,7 +128,8 @@ export async function executeRegisteredWorkflow(args: {
         if (args.dryRun) {
           // Switch / Route is deterministic and side-effect-free, so evaluate it
           // during validation to predict branch selection without running providers.
-          if (step.nodeId === "switch" && step.operationId === "select_route") {
+          if ((step.nodeId === "switch" && step.operationId === "select_route") ||
+              (step.nodeId === "if" && step.operationId === "evaluate")) {
             const output = operation.outputSchema.parse(await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput));
             await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated", output });
             return { simulated: true as const, output };
@@ -137,13 +138,19 @@ export async function executeRegisteredWorkflow(args: {
           return { simulated: true as const };
         }
         await args.context.authorizeOperation?.({ nodeId: step.nodeId, operationId: step.operationId, kind: step.kind });
-        // Credentials are looked up immediately before each operation so two
+// Credentials are looked up immediately before each operation so two
         // nodes using the same provider may safely select different accounts.
         await args.context.resolveStepCredentials?.({
-          nodeId: step.nodeId, operationId: step.operationId, kind: step.kind,
+          nodeId: step.nodeId,
+          operationId: step.operationId,
+          kind: step.kind,
           ...(step.connectionId ? { connectionId: step.connectionId } : {}),
         });
-        const output = await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput);
+        const output = await operation.run({
+          ...args.context,
+          previousOutputs: localOutputs,
+          idempotencyKey: args.context.getIdempotencyKey?.(checkpointStep.id),
+        }, validatedInput);
         const parsed = operation.outputSchema.parse(output);
         await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "succeeded", output: parsed });
         return { simulated: false as const, output: parsed };

@@ -4,6 +4,7 @@ import { runDurableWorker } from "@/lib/workflows/durable-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET ?? process.env.AIVANTA_WORKER_SECRET;
@@ -14,6 +15,9 @@ function authorized(request: NextRequest) {
 }
 
 async function tick(request: NextRequest) {
+  if (process.env.AIVANTA_DURABLE_WORKER_SCHEDULE_ENABLED !== "true") {
+    return NextResponse.json({ error: "Durable worker sweeps are disabled in this environment." }, { status: 503 });
+  }
   if (!authorized(request)) {
     return NextResponse.json({ error: "Unauthorized or worker secret not configured." }, { status: 401 });
   }
