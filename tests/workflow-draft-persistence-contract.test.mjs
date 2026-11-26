@@ -29,7 +29,7 @@ test("workflow creation validates the graph and persists the matching registered
   assert.match(route, /const checked = validateRegisteredSteps\(rebuilt\)/);
   assert.match(route, /Canvas connections and registered execution steps do not match/);
   assert.match(validator, /findOperation\(step\.nodeId, step\.operationId, step\.kind\)/);
-  assert.match(validator, /operation\.inputSchema\.safeParse\(step\.input\)/);
+  assert.match(validator, /validateOperationInput\(operation, step\.input\)/);
 });
 
 test("workflow create path validates Playbook rules and action policies before persistence", () => {

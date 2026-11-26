@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const page = readFileSync(new URL("../app/dashboard/playbooks/new/page.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../app/dashboard/playbooks/playbooks.css", import.meta.url), "utf8");
 const controlRoom = readFileSync(new URL("../app/dashboard/playbooks/[playbookId]/page.tsx", import.meta.url), "utf8");
+const generatorRoute = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
 
 test("Playbook authoring starts with a business outcome instead of a canvas", () => {
   assert.match(page, /What outcome should Rexnora handle/);
@@ -57,4 +58,29 @@ test("Playbook setup layout adapts to phone screens", () => {
   assert.match(styles, /@media\(max-width:850px\)/);
   assert.match(styles, /\.playbook-rule-fields\{grid-template-columns:1fr\}/);
   assert.match(styles, /\.playbook-save-row\{flex-direction:column\}/);
+});
+
+
+test("Playbook outcome accepts longer requests", () => {
+  assert.ok(page.includes("MAX_OUTCOME_CHARACTERS = 2000"));
+  assert.ok(page.includes("MAX_OUTCOME_WORDS = 240"));
+  assert.ok(page.includes("outcomeWordCount"));
+  assert.ok(page.includes("playbookOutcome: outcome.trim()"));
+  assert.ok(page.includes("body: JSON.stringify({ prompt, crmProvider, playbookOutcome: outcome.trim() })"));
+  assert.ok(generatorRoute.includes("contentLength > 24000"));
+  assert.ok(generatorRoute.includes("outcomeWords > 240"));
+  assert.ok(generatorRoute.includes("playbookOutcome"));
+});
+
+test("CRM starter uses selected provider operations and reports the failing node", () => {
+  assert.ok(page.includes("step id intake"));
+  assert.ok(page.includes(".search_contacts"));
+  assert.ok(page.includes(".execute"));
+  assert.ok(generatorRoute.includes("search_contacts"));
+  assert.ok(generatorRoute.includes("payload.firstName"));
+  assert.ok(generatorRoute.includes("payload.lastName"));
+  assert.ok(generatorRoute.includes("validateOperationInput"));
+  assert.ok(generatorRoute.includes("validateCrmSearchCreateGuard"));
+  assert.ok(generatorRoute.includes("failingNode:"));
+  assert.ok(page.includes("Failing node:"));
 });

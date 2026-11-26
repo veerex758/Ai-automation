@@ -5,8 +5,11 @@ import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
-import { validateRegisteredSteps } from "@/nodes/validate-steps";
+import { validateOperationInput, validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
+
+const { validateCrmSearchCreateGuard } = playbookDefinition;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const contentLength = Number(request.headers.get("content-length") || 0);
-    if (contentLength > 12000) {
+    if (contentLength > 24000) {
       return jsonResponse({ error: "Request is too large. Shorten your workflow description." }, { status: 413 });
     }
 
@@ -41,6 +44,25 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
     }
     if (!body.prompt.trim()) return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
+    const requestedCrmProvider = "crmProvider" in body ? body.crmProvider : undefined;
+    const supportedCrmProviders = ["pipedrive", "zoho_crm", "freshsales"] as const;
+    if (requestedCrmProvider !== undefined &&
+        (typeof requestedCrmProvider !== "string" || !supportedCrmProviders.includes(requestedCrmProvider as typeof supportedCrmProviders[number]))) {
+      return jsonResponse({ error: "Choose a supported CRM for the Playbook starter.", errorCode: "UNSUPPORTED_STARTER_CRM" }, { status: 400 });
+    }
+    if (requestedCrmProvider !== undefined) {
+      const playbookOutcome = "playbookOutcome" in body ? body.playbookOutcome : undefined;
+      if (typeof playbookOutcome !== "string" || !playbookOutcome.trim()) {
+        return jsonResponse({ error: "Describe the Playbook business outcome.", errorCode: "PLAYBOOK_OUTCOME_REQUIRED" }, { status: 400 });
+      }
+      const outcomeWords = playbookOutcome.trim().split(/\s+/).filter(Boolean).length;
+      if (playbookOutcome.trim().length > 2000 || outcomeWords > 240) {
+        return jsonResponse({ error: "Keep the Playbook outcome to 2,000 characters and 240 words or fewer.", errorCode: "PLAYBOOK_OUTCOME_TOO_LONG" }, { status: 400 });
+      }
+      if (!body.prompt.includes(playbookOutcome.trim())) {
+        return jsonResponse({ error: "The Playbook outcome does not match the generated request.", errorCode: "PLAYBOOK_OUTCOME_MISMATCH" }, { status: 400 });
+      }
+    }
     if (body.prompt.trim().length > MAX_PROMPT_LENGTH) {
       return jsonResponse({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
     }
@@ -98,6 +120,46 @@ export async function POST(request: NextRequest) {
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
     const registrySteps = result.registrySteps;
     if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return jsonResponse({ error: "The generated plan did not pass registry validation." }, { status: 422 });
+    const typedSteps = registrySteps as Array<{ id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: unknown }>;
+    if (typeof requestedCrmProvider === "string") {
+      const crmNodeIds = ["pipedrive", "zoho_crm", "freshsales"];
+      const crmSteps = typedSteps.filter((step) => crmNodeIds.includes(step.nodeId));
+      const otherCrm = crmSteps.find((step) => step.nodeId !== requestedCrmProvider);
+      if (otherCrm) {
+        return jsonResponse({
+          error: `Step "${otherCrm.id}" uses ${otherCrm.nodeId}.${otherCrm.operationId}; this starter selected ${requestedCrmProvider}. Remove the extra CRM.`,
+          errorCode: "STARTER_CRM_MISMATCH",
+          failingNode: { stepId: otherCrm.id, nodeId: otherCrm.nodeId, operationId: otherCrm.operationId, kind: otherCrm.kind },
+        }, { status: 422 });
+      }
+      const intake = typedSteps.find((step) => step.kind === "trigger" && step.nodeId === "webhooks" && step.operationId === "receive_event");
+      if (!intake) {
+        return jsonResponse({
+          error: "The selected CRM needs a webhooks.receive_event intake step so email, firstName and lastName can come from the lead payload.",
+          errorCode: "STARTER_CRM_INTAKE_REQUIRED",
+          failingNode: { stepId: null, nodeId: "webhooks", operationId: "receive_event", kind: "trigger" },
+        }, { status: 422 });
+      }
+      const searchStep = crmSteps.find((step) => step.nodeId === requestedCrmProvider && step.operationId === "search_contacts");
+      const createStep = crmSteps.find((step) => step.nodeId === requestedCrmProvider && step.operationId === "execute");
+      if (crmSteps.length !== 2 || !searchStep || !createStep ||
+          typedSteps.indexOf(searchStep) >= typedSteps.indexOf(createStep)) {
+        const missingOperation = !searchStep ? "search_contacts" : !createStep ? "execute" : createStep.operationId;
+        return jsonResponse({
+          error: `The selected CRM requires exactly ${requestedCrmProvider}.search_contacts followed by ${requestedCrmProvider}.execute. The generated plan is missing or misordering ${missingOperation}.`,
+          errorCode: "STARTER_CRM_OPERATIONS_INVALID",
+          failingNode: { stepId: (!searchStep ? null : !createStep ? null : createStep.id), nodeId: requestedCrmProvider, operationId: missingOperation, kind: "action" },
+        }, { status: 422 });
+      }
+      const leadEmail = `{{${intake.id}.payload.email}}`;
+      searchStep.input = { ...(searchStep.input && typeof searchStep.input === "object" && !Array.isArray(searchStep.input) ? searchStep.input as Record<string, unknown> : {}), email: leadEmail };
+      createStep.input = {
+        ...(createStep.input && typeof createStep.input === "object" && !Array.isArray(createStep.input) ? createStep.input as Record<string, unknown> : {}),
+        email: leadEmail,
+        firstName: `{{${intake.id}.payload.firstName}}`,
+        lastName: `{{${intake.id}.payload.lastName}}`,
+      };
+    }
     const seen = new Set<string>();
     for (let index = 0; index < registrySteps.length; index++) {
       const step = registrySteps[index] as { id?: unknown; nodeId?: unknown; operationId?: unknown; kind?: unknown; input?: unknown };
@@ -105,7 +167,22 @@ export async function POST(request: NextRequest) {
       seen.add(step.id);
       if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
       const operation = findOperation(step.nodeId, step.operationId, step.kind as "trigger" | "action");
-      if (!operation || !operation.inputSchema.safeParse(step.input).success) return jsonResponse({ error: "The generated plan contains invalid node input. Try a simpler request." }, { status: 422 });
+      if (!operation) {
+        return jsonResponse({
+          error: `Step "${step.id}" references unregistered operation ${step.nodeId}.${step.operationId}.`,
+          errorCode: "AI_UNKNOWN_NODE_OPERATION",
+          failingNode: { stepId: step.id, nodeId: step.nodeId, operationId: step.operationId, kind: step.kind },
+        }, { status: 422 });
+      }
+      const parsedInput = validateOperationInput(operation, step.input);
+      if (!parsedInput.success) {
+        const issueSummary = parsedInput.issues.map((issue) => issue.path + ": " + issue.message).join("; ");
+        return jsonResponse({
+          error: `Step "${step.id}" (${step.nodeId}.${step.operationId}) has invalid input: ${issueSummary}`,
+          errorCode: "AI_INVALID_NODE_INPUT",
+          failingNode: { stepId: step.id, nodeId: step.nodeId, operationId: step.operationId, kind: step.kind, issues: parsedInput.issues },
+        }, { status: 422 });
+      }
     }
     let definition: { version: 1; nodes: Array<Record<string, unknown>>; edges?: Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }> };
     let executableSteps = registrySteps;
@@ -227,11 +304,22 @@ export async function POST(request: NextRequest) {
           })),
           edges,
         });
-      } catch {
-        return jsonResponse({ error: "The generated workflow graph could not be validated. Try describing the branches more clearly." }, { status: 422 });
+      } catch (cause) {
+        const detail = cause instanceof Error ? cause.message : "Unknown graph validation error";
+        return jsonResponse({ error: "Generated workflow graph failed validation: " + detail }, { status: 422 });
       }
       const checked = validateRegisteredSteps(rebuilt);
-      if (!checked.steps) return jsonResponse({ error: checked.error || "The generated graph did not pass registry validation." }, { status: 422 });
+      if (!checked.steps) return jsonResponse({ error: "Generated registry graph failed validation: " + (checked.error || "unknown registry validation error") }, { status: 422 });
+      if (typeof requestedCrmProvider === "string") {
+        const crmGuard = validateCrmSearchCreateGuard(checked.steps);
+        if (crmGuard) {
+          return jsonResponse({
+            error: crmGuard.error,
+            errorCode: "STARTER_CRM_CREATE_NOT_GUARDED",
+            failingNode: crmGuard.failingNode ?? { stepId: null, nodeId: requestedCrmProvider, operationId: "execute", kind: "action" },
+          }, { status: 422 });
+        }
+      }
       executableSteps = checked.steps;
     }
     // Only bill a completed, registry-validated generation. Provider errors and

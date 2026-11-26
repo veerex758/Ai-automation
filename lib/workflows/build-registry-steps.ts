@@ -17,13 +17,25 @@ const conditionOperators: Record<string, string> = {
 
 function actionFor(node: BuilderNode) {
   const provider = node.settings.provider ?? "internal";
-  const nodeId = node.registryNodeId ?? (provider === "email" ? "email" : provider === "slack" ? "slack" : provider === "openai" ? "openai" : provider === "gemini" ? "gemini" : "slack");
-  const operationId = node.registryOperationId ?? (provider === "email" ? "send_email" : provider === "slack" ? "send_message" : provider === "openai" || provider === "gemini" ? "generate_text" : "send_message");
+  const defaultNodeIds: Record<string, string> = {
+    email: "email", slack: "slack", openai: "openai", gemini: "gemini",
+  };
+  const defaultOperationIds: Record<string, string> = {
+    email: "send_email", slack: "send_message", openai: "generate_text", gemini: "generate_text",
+  };
+  const nodeId = node.registryNodeId ?? defaultNodeIds[provider];
+  const operationId = node.registryOperationId ?? defaultOperationIds[provider];
+  if (!nodeId || !operationId) {
+    throw new Error(`No registered operation is configured for provider "${provider}" on step "${node.id}". Select a registered node and operation.`);
+  }
+  const requiresExplicitInput = !["email", "slack", "openai", "gemini"].includes(provider);
+  if (requiresExplicitInput && !node.registryInput) {
+    throw new Error(`Step "${node.id}" (${nodeId}.${operationId}) requires explicit registry input. Configure every required field before building the workflow.`);
+  }
   const input = node.registryInput ?? (provider === "email"
     ? { to: node.settings.recipient ?? "", subject: node.title, text: node.settings.message ?? node.title }
     : provider === "slack" ? { message: node.settings.message ?? node.title }
-    : provider === "openai" || provider === "gemini" ? { prompt: node.settings.message ?? node.title }
-    : { message: node.settings.message ?? node.title });
+    : { prompt: node.settings.message ?? node.title });
   return { nodeId, operationId, input };
 }
 
