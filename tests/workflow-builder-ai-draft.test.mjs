@@ -89,3 +89,15 @@ test("AI-generated graph drafts remain review-only and are not auto-executed", (
   assert.match(page, /async function saveDefinition\(\)/);
   assert.match(page, /async function activateWorkflow\(\)/);
 });
+
+
+test("AI draft retry is an explicit user action and reuses the saved prompt", () => {
+  assert.match(page, /aiDraftRetryPrompt/);
+  assert.match(page, /aiDraftRetryable/);
+  assert.match(page, /generateDraftOnCanvas\(retryPrompt\?: string\)/);
+  assert.match(page, /generateDraftOnCanvas\(aiDraftRetryPrompt\)/);
+  assert.match(page, /Retry AI draft/);
+  assert.match(page, /disabled=\{aiDraftGenerating\}/);
+  assert.match(page, /setAiDraftRetryPrompt\(prompt\)/);
+  assert.match(page, /setAiDraftRetryPrompt\(""\)/);
+});

@@ -29,3 +29,19 @@ test("provider and invalid-graph failures occur before customer credit metering"
   assert.match(route, /AI_PROVIDER_OVERLOADED/);
   assert.ok(route.includes('errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR"'));
 });
+
+
+test("Gemini cooldown and repeated transient provider failures are gated before credit metering", () => {
+  const circuitGate = route.indexOf('circuitClient.rpc("get_ai_provider_circuit_state"');
+  const generation = route.indexOf("await generateWorkflow(");
+  const circuitFailureWrite = route.indexOf('circuitClient.rpc("record_ai_provider_circuit_result"');
+  const graphValidation = route.indexOf("validateRegisteredSteps(rebuilt)");
+  const consume = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
+  assert.ok(circuitGate >= 0 && generation > circuitGate);
+  assert.ok(circuitFailureWrite > generation && circuitFailureWrite < consume);
+  assert.ok(graphValidation > generation && consume > graphValidation);
+  assert.match(route, /AI_PROVIDER_COOLDOWN/);
+  assert.match(route, /AI_PROVIDER_CIRCUIT_UNAVAILABLE/);
+  assert.match(route, /No Rexnora AI credit was charged/);
+  assert.equal((route.match(/consume_ai_generation_usage/g) || []).length, 1);
+});
