@@ -6,6 +6,9 @@ import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
+
+const { validatePlaybookDefinition } = playbookDefinition;
 
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 
@@ -27,6 +30,7 @@ function presentWorkflow(row: {
   description: string;
   status: string;
   updated_at: string;
+  definition?: unknown;
 }) {
   return {
     id: row.id,
@@ -38,7 +42,15 @@ function presentWorkflow(row: {
     updated: formatUpdatedAt(row.updated_at),
     icon: "✳",
     tone: "lime",
+    isPlaybook: isPlaybookDefinition(row.definition),
   };
+}
+
+function isPlaybookDefinition(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = (value as Record<string, unknown>).playbook;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+  return (candidate as Record<string, unknown>).schema === "rexnora.playbook";
 }
 
 export async function GET() {
@@ -58,7 +70,7 @@ export async function GET() {
     }
     const { data, error } = await supabase
       .from("workflows")
-      .select("id, name, description, status, updated_at")
+      .select("id, name, description, status, updated_at, definition")
       .eq("workspace_id", workspace.id)
       .order("updated_at", { ascending: false });
 
@@ -68,9 +80,9 @@ export async function GET() {
       workflows: (data ?? []).map(presentWorkflow),
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    console.error("Failed to load Aivanta workflows:", error);
+    console.error("Failed to load Rexnora workflows:", error);
     return NextResponse.json(
-      { error: "Could not load workflows. Check the Aivanta database configuration and try again." },
+      { error: "Could not load workflows. Check the Rexnora database configuration and try again." },
       { status: 500, headers: { "Cache-Control": "private, no-store" } },
     );
   }
@@ -161,6 +173,7 @@ export async function POST(request: NextRequest) {
       ...(Array.isArray(rawDefinition.edges) ? { edges: rawDefinition.edges } : {}),
     };
 
+    let registryStepsForPlaybook: RegisteredWorkflowStep[] | null = null;
     if ("registrySteps" in body) {
       if (!Array.isArray(body.registrySteps) || body.registrySteps.length < 1 || body.registrySteps.length > 30) {
         return NextResponse.json({ error: "Registry workflows require between 1 and 30 steps." }, { status: 400 });
@@ -219,6 +232,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Canvas connections and registered execution steps do not match. Regenerate the draft before saving." }, { status: 422 });
       }
       Object.assign(definitionToSave, { format: "aivanta-registry-v1", steps: checked.steps });
+      registryStepsForPlaybook = checked.steps;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(rawDefinition, "playbook")) {
+      if (!registryStepsForPlaybook) return NextResponse.json({ error: "A Playbook requires a registered execution plan." }, { status: 422 });
+      const checkedPlaybook = validatePlaybookDefinition(rawDefinition.playbook, definitionToSave, registryStepsForPlaybook);
+      if (!checkedPlaybook.playbook) return NextResponse.json({ error: checkedPlaybook.error || "Playbook configuration is invalid." }, { status: 422 });
+      definitionToSave.playbook = checkedPlaybook.playbook;
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
@@ -284,9 +305,9 @@ export async function POST(request: NextRequest) {
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
-    console.error("Failed to create Aivanta workflow:", error);
+    console.error("Failed to create Rexnora workflow:", error);
     return NextResponse.json(
-      { error: "Could not save this workflow. Check the Aivanta database configuration and try again." },
+      { error: "Could not save this workflow. Check the Rexnora database configuration and try again." },
       { status: 500, headers: { "Cache-Control": "private, no-store" } },
     );
   }

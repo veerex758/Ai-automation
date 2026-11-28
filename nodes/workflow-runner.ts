@@ -7,6 +7,8 @@ export type RegisteredWorkflowStep = {
   operationId: string;
   kind: "trigger" | "action";
   input: unknown;
+  /** Metadata-only ID of a connection owned by this workflow's workspace. */
+  connectionId?: string;
   branch?: { fromStepId: string; route: string };
   /** OR across paths; predicates inside each path are ANDed. */
   branchPaths?: Array<Array<{ fromStepId: string; route: string }>>;
@@ -89,7 +91,7 @@ export async function executeRegisteredWorkflow(args: {
     seen.add(step.id);
     if (completedStepIds.has(step.id)) {
       if (Array.isArray(outputs[step.id])) loopOutputs.set(step.id, outputs[step.id] as unknown[]);
-      results.push({ stepId: step.id, status: args.dryRun ? "simulated" : "succeeded", output: outputs[step.id] });
+      results.push({ stepId: step.id, status: "succeeded", output: outputs[step.id] });
       continue;
     }
     const branchPaths = step.branchPaths ?? (step.branch ? [[step.branch]] : undefined);
@@ -124,10 +126,10 @@ export async function executeRegisteredWorkflow(args: {
         const position = ++checkpointPosition;
         await args.onStepStart?.(checkpointStep, position, validatedInput);
         if (args.dryRun) {
-          // IF and Switch are deterministic, side-effect-free operations. Evaluate
-          // them during validation so dry-runs prove the selected branch without
-          // invoking external providers.
-          if ((step.nodeId === "if" && step.operationId === "evaluate") || (step.nodeId === "switch" && step.operationId === "select_route")) {
+          // Switch / Route is deterministic and side-effect-free, so evaluate it
+          // during validation to predict branch selection without running providers.
+          if ((step.nodeId === "switch" && step.operationId === "select_route") ||
+              (step.nodeId === "if" && step.operationId === "evaluate")) {
             const output = operation.outputSchema.parse(await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput));
             await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "simulated", output });
             return { simulated: true as const, output };
@@ -136,7 +138,19 @@ export async function executeRegisteredWorkflow(args: {
           return { simulated: true as const };
         }
         await args.context.authorizeOperation?.({ nodeId: step.nodeId, operationId: step.operationId, kind: step.kind });
-        const output = await operation.run({ ...args.context, previousOutputs: localOutputs }, validatedInput);
+// Credentials are looked up immediately before each operation so two
+        // nodes using the same provider may safely select different accounts.
+        await args.context.resolveStepCredentials?.({
+          nodeId: step.nodeId,
+          operationId: step.operationId,
+          kind: step.kind,
+          ...(step.connectionId ? { connectionId: step.connectionId } : {}),
+        });
+        const output = await operation.run({
+          ...args.context,
+          previousOutputs: localOutputs,
+          idempotencyKey: args.context.getIdempotencyKey?.(checkpointStep.id),
+        }, validatedInput);
         const parsed = operation.outputSchema.parse(output);
         await args.onStepComplete?.(checkpointStep, position, { stepId: checkpointStep.id, status: "succeeded", output: parsed });
         return { simulated: false as const, output: parsed };

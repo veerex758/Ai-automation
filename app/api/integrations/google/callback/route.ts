@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
 import { decryptGoogleCredentials, encryptGoogleCredentials, type GoogleCredentials } from "@/lib/integrations/google-credentials";
-import { getGoogleOAuthConfig, hasOnlyApprovedGoogleScopes, isGoogleProduct } from "@/lib/integrations/google-oauth";
+import { GOOGLE_PRODUCTS, getGoogleOAuthConfig, hasOnlyApprovedGoogleScopes, isGoogleProduct } from "@/lib/integrations/google-oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function connectionsUrl(request: NextRequest, status: string) {
-  const response = NextResponse.redirect(new URL(`/dashboard/connections?google=${encodeURIComponent(status)}`, request.url));
+  const query = new URLSearchParams({ google: status });
+  const product = request.cookies.get("aivanta_google_oauth_product")?.value;
+  const node = request.cookies.get("aivanta_google_oauth_node")?.value;
+  if (product && ["gmail", "sheets", "drive", "calendar", "docs", "forms", "youtube", "contacts"].includes(product)) query.set("googleProduct", product);
+  if (node && /^[a-z_]{2,40}$/.test(node)) query.set("node", node);
+  const response = NextResponse.redirect(new URL(`/dashboard/connections?${query.toString()}`, request.url));
   response.headers.set("Cache-Control", "no-store");
   return response;
 }
@@ -17,7 +23,7 @@ function connectionsUrl(request: NextRequest, status: string) {
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const clearCookies = (response: NextResponse) => {
-    for (const name of ["aivanta_google_oauth_state", "aivanta_google_oauth_verifier", "aivanta_google_oauth_product", "aivanta_google_oauth_user"]) {
+    for (const name of ["aivanta_google_oauth_state", "aivanta_google_oauth_verifier", "aivanta_google_oauth_product", "aivanta_google_oauth_user", "aivanta_google_oauth_node", "aivanta_google_oauth_connection"]) {
       response.cookies.set(name, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/integrations/google", maxAge: 0 });
     }
     return response;
@@ -32,6 +38,7 @@ export async function GET(request: NextRequest) {
   const verifier = request.cookies.get("aivanta_google_oauth_verifier")?.value;
   const product = request.cookies.get("aivanta_google_oauth_product")?.value;
   const initiatingUserId = request.cookies.get("aivanta_google_oauth_user")?.value;
+  const targetConnectionId = request.cookies.get("aivanta_google_oauth_connection")?.value || undefined;
 
   if (!state || !expectedState) {
     console.warn("[google-oauth] state cookie or response state missing", { responseStatePresent: Boolean(state), stateCookiePresent: Boolean(expectedState) });
@@ -102,11 +109,15 @@ export async function GET(request: NextRequest) {
     }
 
     const workspace = await getOrCreateDefaultWorkspace(supabase);
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CODED_SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return clearCookies(connectionsUrl(request, "server_not_configured"));
+    const { data: membership, error: membershipError } = await supabase.from("workspace_members")
+      .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
+    if (membershipError || !membership || !["owner", "admin"].includes(membership.role)) {
+      return clearCookies(connectionsUrl(request, "permission_denied"));
     }
+    let adminConfig: ReturnType<typeof getAdminSupabaseConfig>;
+    try { adminConfig = getAdminSupabaseConfig(); }
+    catch { return clearCookies(connectionsUrl(request, "server_not_configured")); }
+    const { url: supabaseUrl, serviceRoleKey } = adminConfig;
 
     // Service-role client is server-only. Every query is explicitly scoped to the
     // authenticated user's resolved workspace and actor; tokens are never selected back.
@@ -117,34 +128,51 @@ export async function GET(request: NextRequest) {
     // Google may omit refresh_token on a subsequent consent. Preserve an existing
     // refresh token for this exact user/workspace/product/account rather than
     // accidentally replacing a durable connection with an access-token-only one.
-    const { data: existing, error: existingError } = await admin.from("google_connections")
-      .select("encrypted_credentials")
+    if (targetConnectionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetConnectionId)) {
+      return clearCookies(connectionsUrl(request, "connection_target_invalid"));
+    }
+    let existingQuery = admin.from("google_connections")
+      .select("id,account_email,encrypted_credentials")
       .eq("workspace_id", workspace.id)
-      .eq("connected_by", user.id)
       .eq("provider", "google")
-      .eq("product", product)
-      .eq("account_email", profile.email)
-      .maybeSingle();
-    if (existingError) return clearCookies(connectionsUrl(request, "save_failed"));
-    if (!credentials.refresh_token && existing?.encrypted_credentials) {
+      .eq("product", product);
+    existingQuery = targetConnectionId
+      ? existingQuery.eq("id", targetConnectionId)
+      : existingQuery.eq("connected_by", user.id).eq("account_email", profile.email);
+    const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+    if (existingError || (targetConnectionId && !existing)) return clearCookies(connectionsUrl(request, "save_failed"));
+    if (!credentials.refresh_token && existing?.encrypted_credentials && existing.account_email === profile.email) {
       const previousCredentials = decryptGoogleCredentials(existing.encrypted_credentials);
       if (previousCredentials.refresh_token) credentials.refresh_token = previousCredentials.refresh_token;
     }
 
-    const { error: saveError } = await admin.from("google_connections").upsert({
-      workspace_id: workspace.id,
-      connected_by: user.id,
+    const connectionValues = {
+      ...(targetConnectionId ? {} : { workspace_id: workspace.id, connected_by: user.id }),
       provider: "google",
       product,
       account_email: profile.email,
-      scopes: (typeof raw.scope === "string" ? raw.scope : "").split(" ").filter(Boolean),
+      scopes: typeof raw.scope === "string" ? raw.scope.split(/\s+/).filter(Boolean) : [...GOOGLE_PRODUCTS[product].scopes],
       encrypted_credentials: encryptGoogleCredentials(credentials),
       expires_at: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : null,
       status: "connected",
+      last_tested_at: null,
+      last_test_status: null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: "workspace_id,provider,product,account_email,connected_by" });
-
-    if (saveError) return clearCookies(connectionsUrl(request, "save_failed"));
+    };
+    if (targetConnectionId) {
+      const { data: updated, error: updateError } = await admin.from("google_connections")
+        .update(connectionValues)
+        .eq("id", targetConnectionId).eq("workspace_id", workspace.id)
+        .eq("provider", "google").eq("product", product).select("id").maybeSingle();
+      if (updateError || !updated) return clearCookies(connectionsUrl(request, "save_failed"));
+    } else {
+      const { error: saveError } = await admin.from("google_connections").upsert({
+        ...connectionValues,
+        workspace_id: workspace.id,
+        connected_by: user.id,
+      }, { onConflict: "workspace_id,provider,product,account_email,connected_by" });
+      if (saveError) return clearCookies(connectionsUrl(request, "save_failed"));
+    }
     return clearCookies(connectionsUrl(request, "connected"));
   } catch {
     // Deliberately do not log OAuth response bodies, codes, or credentials.

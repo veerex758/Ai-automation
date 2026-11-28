@@ -6,8 +6,10 @@ import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { getWorkerProvider } from "@/lib/workflows/worker-operation-map";
+import playbookDefinition from "@/lib/playbooks/definition.cjs";
 import type { RegisteredWorkflowStep } from "@/nodes/workflow-runner";
 
+const { validatePlaybookDefinition } = playbookDefinition;
 const allowedStatuses = new Set(["draft", "active", "paused", "archived"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -98,6 +100,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       .select("workspace_id").eq("id", workflowId).maybeSingle();
     if (workflowAccessError) throw workflowAccessError;
     if (!workflowAccess) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+    let activationVersion: number | null = null;
     const requiredPermission = updates.status === "active" ? "workflows.execute" : "workflows.edit";
     if (!(await hasWorkspacePermission(auth.supabase, workflowAccess.workspace_id, auth.user.id, requiredPermission))) {
       return NextResponse.json({ error: "Workspace " + requiredPermission + " permission required." }, { status: 403 });
@@ -108,13 +111,61 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         .from("workflows").select("id,workspace_id,version,definition").eq("id", workflowId).maybeSingle();
       if (candidateError) throw candidateError;
       if (!candidate) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
+      activationVersion = candidate.version;
       if (process.env.AIVANTA_LIVE_EXECUTION_ENABLED !== "true") {
         return NextResponse.json({ error: "Live execution is disabled by the server. The workflow was not activated." }, { status: 503 });
       }
 
       let steps: RegisteredWorkflowStep[];
       const stored = candidate.definition as Record<string, unknown> | null;
-      if (stored?.format === "aivanta-registry-v1") {
+      if (stored?.playbook !== undefined) {
+        // The real-estate worker currently implements exactly one safe Playbook
+        // runtime: Gemini qualification, deterministic IF rules and optional
+        // Resend agency notification. Do not activate unsupported provider steps.
+        if (process.env.REAL_ESTATE_PIPELINE_ENABLED !== "true") {
+          return NextResponse.json({
+            error: "The real-estate Playbook worker is disabled on this deployment. No activation was performed.",
+            code: "REAL_ESTATE_PIPELINE_DISABLED",
+          }, { status: 503 });
+        }
+        if (stored.format !== "aivanta-registry-v1") {
+          return NextResponse.json({ error: "Playbooks must use the registered workflow format.", code: "PLAYBOOK_FORMAT_INVALID" }, { status: 422 });
+        }
+        const graph = validateDefinition(stored);
+        if (!graph.definition) {
+          return NextResponse.json({ error: graph.error || "Playbook graph is invalid.", code: "PLAYBOOK_GRAPH_INVALID" }, { status: 422 });
+        }
+        const registered = validateRegisteredSteps(stored.steps);
+        if (!registered.steps) {
+          return NextResponse.json({ error: registered.error || "Playbook operations are invalid.", code: "PLAYBOOK_OPERATIONS_INVALID" }, { status: 422 });
+        }
+        const policy = validatePlaybookDefinition(stored.playbook, graph.definition, registered.steps);
+        if (!policy.playbook) {
+          return NextResponse.json({ error: policy.error || "Playbook rules and permissions are invalid.", code: "PLAYBOOK_POLICY_INVALID" }, { status: 422 });
+        }
+        steps = registered.steps as RegisteredWorkflowStep[];
+        const hasAgencyEmailAction = steps.some((step) =>
+          step.kind === "action" && step.nodeId === "email" && step.operationId === "send_email"
+        );
+        if (hasAgencyEmailAction) {
+          const { data: approvedRecipients, error: recipientsError } = await auth.supabase
+            .from("real_estate_notification_recipients")
+            .select("email")
+            .eq("workspace_id", candidate.workspace_id)
+            .eq("active", true)
+            .limit(25);
+          if (recipientsError) throw recipientsError;
+          const validRecipients = (approvedRecipients ?? []).filter((recipient) =>
+            typeof recipient.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email.trim())
+          );
+          if (!validRecipients.length) {
+            return NextResponse.json({
+              error: "Add and approve at least one agency alert recipient in the Real Estate workspace before activating this Playbook.",
+              code: "AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED",
+            }, { status: 409 });
+          }
+        }
+      } else if (stored?.format === "aivanta-registry-v1") {
         const checked = validateRegisteredSteps(stored.steps);
         if (!checked.steps) return NextResponse.json({ error: checked.error || "Workflow registry definition is invalid." }, { status: 422 });
         steps = checked.steps;
@@ -138,7 +189,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         }
       }
 
-      const livePolicyError = validateDurableLiveSteps(steps);
+      const livePolicyError = validateDurableLiveSteps(steps, { skipEmailRecipientAllowlist: (candidate.definition as Record<string, unknown> | null)?.playbook !== undefined });
       if (livePolicyError) {
         return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
       }
@@ -162,26 +213,44 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
         return NextResponse.json({ error: "Run a successful safe test of every registered step in this exact workflow version before activating it." }, { status: 409 });
       }
 
-      const providers = [...new Set(steps.map((step) => getWorkerProvider(step)).filter((provider): provider is string => Boolean(provider)))];
       const googleProducts: Record<string, string> = {
         gmail: "gmail", sheets: "sheets", google_drive: "drive", google_calendar: "calendar",
         google_docs: "docs", google_forms: "forms", youtube: "youtube", google_contacts: "contacts",
       };
-      for (const provider of providers) {
+      for (const step of steps) {
+        const provider = getWorkerProvider(step);
+        if (!provider || provider === "rss_feed") continue;
+        if (!step.connectionId || !uuidPattern.test(step.connectionId)) {
+          return NextResponse.json({
+            error: "Select a verified account for every " + provider + " step before activation.",
+            code: "WORKSPACE_CONNECTION_SELECTION_REQUIRED",
+            stepId: step.id,
+          }, { status: 409 });
+        }
         if (googleProducts[provider]) {
           const { data: connection, error } = await auth.supabase.from("google_connections")
-            .select("id,status").eq("workspace_id", candidate.workspace_id)
-            .eq("product", googleProducts[provider]).eq("status", "connected").limit(1).maybeSingle();
+            .select("id,status,last_test_status")
+            .eq("id", step.connectionId).eq("workspace_id", candidate.workspace_id)
+            .eq("provider", "google").eq("product", googleProducts[provider])
+            .eq("status", "connected").eq("last_test_status", "passed").maybeSingle();
           if (error) throw error;
-          if (!connection) return NextResponse.json({ error: "Connect and verify the " + provider + " integration before activating this workflow." }, { status: 409 });
+          if (!connection) return NextResponse.json({
+            error: "The selected " + provider + " account is not connected, verified, or owned by this workspace.",
+            code: "WORKSPACE_CONNECTION_NOT_VERIFIED",
+            stepId: step.id,
+          }, { status: 409 });
         } else {
           const { data: connection, error } = await auth.supabase.from("workspace_integrations")
-            .select("id,status,last_test_status").eq("workspace_id", candidate.workspace_id)
-            .eq("provider", provider).maybeSingle();
+            .select("id,status,last_test_status")
+            .eq("id", step.connectionId).eq("workspace_id", candidate.workspace_id)
+            .eq("provider", provider).eq("status", "connected").eq("last_test_status", "passed")
+            .maybeSingle();
           if (error) throw error;
-          if (!connection || connection.status !== "connected" || connection.last_test_status !== "passed") {
-            return NextResponse.json({ error: "Connect and successfully test the " + provider + " integration before activating this workflow." }, { status: 409 });
-          }
+          if (!connection) return NextResponse.json({
+            error: "The selected " + provider + " account is not connected, verified, or owned by this workspace.",
+            code: "WORKSPACE_CONNECTION_NOT_VERIFIED",
+            stepId: step.id,
+          }, { status: 409 });
         }
       }
 
@@ -199,14 +268,26 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
       }
     }
 
-    const { data, error } = await auth.supabase
+    // Activation must apply to the exact version that passed all checks above.
+    // If another request saves a new definition during validation, the version
+    // predicate prevents that unreviewed version from becoming active.
+    let updateQuery = auth.supabase
       .from("workflows")
       .update(updates)
       .eq("id", workflowId)
+      .eq("workspace_id", workflowAccess.workspace_id);
+    if (activationVersion !== null) updateQuery = updateQuery.eq("version", activationVersion);
+    const { data, error } = await updateQuery
       .select("id, name, description, status, updated_at")
       .maybeSingle();
 
     if (error) throw error;
+    if (!data && activationVersion !== null) {
+      return NextResponse.json({
+        error: "The Playbook changed while activation checks were running. Reload, test and review the latest saved version before activating it.",
+        code: "PLAYBOOK_VERSION_CHANGED_DURING_ACTIVATION",
+      }, { status: 409 });
+    }
     if (!data) return NextResponse.json({ error: "Workflow not found or you do not have access to it." }, { status: 404 });
     return NextResponse.json({ workflow: presentWorkflow(data) });
   } catch (error) {

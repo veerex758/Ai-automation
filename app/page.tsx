@@ -27,7 +27,7 @@ function DashboardPreview() {
   <div className="rx-preview-main">
    <div className="rx-preview-top"><div className="rx-search"><span>⌕</span>Search workflows...<kbd>⌘ K</kbd></div><div className="rx-top-actions"><span>♧</span><i>R</i></div></div>
    <section className="rx-welcome-panel">
-    <div className="rx-welcome-copy"><span className="rx-welcome-chip">✦ Your work, connected</span><h2>Automate smarter,<br/><em>move faster.</em></h2><p>Connect your tools. Build a workflow.<br/>Keep every step in view.</p><div><Link href="/dashboard">Create Workflow →</Link><Link href="/dashboard/templates">Explore Templates</Link></div></div>
+    <div className="rx-welcome-copy"><span className="rx-welcome-chip">✦ Your work, connected</span><h2>Automate smarter,<br/><em>move faster.</em></h2><p>Connect your tools. Build a workflow.<br/>Keep every step in view.</p><div><Link href="/dashboard/playbooks/new">Create a Playbook →</Link><Link href="/dashboard/templates">Explore Templates</Link></div></div>
     <div className="rx-orbit-art"><span className="rx-orbit-ring"/><img src="/rexnora-mark.svg" alt="Rexnora mark"/></div>
    </section>
    <div className="rx-preview-stats">
@@ -70,7 +70,7 @@ export default function Home() {
   </section>
   <section className="rx-lower" id="platform">
    <DashboardPreview/>
-   <div className="rx-platform-copy"><span className="rx-automation-eyebrow">ONE PLATFORM. LESS BUSYWORK.</span><h2>Build. Automate. <span>Scale.</span></h2><p>Bring your everyday tools and processes together. Let Rexnora help turn repetitive work into workflows your team can understand and control.</p><div className="rx-accent-rule"/><div className="rx-feature-grid">{features.map(([icon,title,description])=><article key={title}><span>{icon}</span><b>{title}</b><small>{description}</small></article>)}</div><Link className="rx-platform-cta" href="/dashboard">Build your first workflow <span>→</span></Link></div>
+   <div className="rx-platform-copy"><span className="rx-automation-eyebrow">ONE PLATFORM. LESS BUSYWORK.</span><h2>Build. Automate. <span>Scale.</span></h2><p>Bring your everyday tools and processes together. Let Rexnora help turn repetitive work into workflows your team can understand and control.</p><div className="rx-accent-rule"/><div className="rx-feature-grid">{features.map(([icon,title,description])=><article key={title}><span>{icon}</span><b>{title}</b><small>{description}</small></article>)}</div><Link className="rx-platform-cta" href="/dashboard/playbooks/new">Create your first Playbook <span>→</span></Link></div>
   </section>
  </main>;
 }

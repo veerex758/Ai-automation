@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
+import { randomUUID } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -7,31 +9,41 @@ import { decryptWorkspaceCredentials } from "@/lib/integrations/workspace-creden
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// This endpoint is deliberately fixed to Resend's test sender and the account
-// email explicitly approved for this one-time setup test. Never accept a
-// recipient or sender from the browser.
+// This endpoint sends only to the authenticated, verified workspace member's
+// email address. The browser cannot choose a recipient or sender.
 const TEST_SENDER = "onboarding@resend.dev";
-const TEST_RECIPIENT = "sundayezekielm069@gmail.com";
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, {
+  let config: ReturnType<typeof getAdminSupabaseConfig>;
+  try { config = getAdminSupabaseConfig(); }
+  catch { throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED"); }
+  return createSupabaseClient(config.url, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
+    if (!user.email || !user.email_confirmed_at) {
+      return json({ error: "Verify your account email before sending a Resend setup test." }, 409);
+    }
+    const testRecipient = user.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testRecipient)) {
+      return json({ error: "The verified account email is not a valid test recipient." }, 409);
+    }
 
+    const body = await request.json().catch(() => null) as { connectionId?: unknown } | null;
+    const requestedConnectionId = typeof body?.connectionId === "string" ? body.connectionId : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedConnectionId)) {
+      return json({ error: "Choose a saved Resend connection before sending a test email." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: membership, error: membershipError } = await supabase.from("workspace_members")
       .select("role").eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
@@ -42,18 +54,19 @@ export async function POST(_request: NextRequest) {
 
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id").eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
+      .select("id").eq("id", requestedConnectionId).eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save your Resend connection before sending a test email." }, 404);
 
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
-      .select("encrypted_credentials").eq("integration_id", integration.id).maybeSingle();
+      .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
-    if (!secret?.encrypted_credentials) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
+    if (!secret?.encrypted_credentials || !["v1", "v2"].includes(secret.encryption_version)) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
 
     let credentials: Record<string, string>;
     try {
-      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspace.id}:resend`);
+      const associatedData = secret.encryption_version === "v2" ? `${workspace.id}:resend:${integration.id}` : `${workspace.id}:resend`;
+      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData);
       credentials = decrypted.resend;
     } catch {
       return json({ error: "Aivanta could not decrypt this saved credential. Check the workspace encryption key." }, 503);
@@ -71,11 +84,11 @@ export async function POST(_request: NextRequest) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
           "User-Agent": "Aivanta/0.1",
-          "Idempotency-Key": `aivanta-resend-setup-test-${workspace.id}`,
+          "Idempotency-Key": `aivanta-resend-setup-test-${workspace.id}-${integration.id}-${user.id}-${randomUUID()}`,
         },
         body: JSON.stringify({
           from: TEST_SENDER,
-          to: [TEST_RECIPIENT],
+          to: [testRecipient],
           subject: "Aivanta · Resend connection test",
           text: "This is a one-time test email confirming that Aivanta can send through your Resend account. No workflow was executed.",
         }),
@@ -108,10 +121,10 @@ export async function POST(_request: NextRequest) {
     }
     return json({
       status: "accepted",
-      recipient: TEST_RECIPIENT,
+      recipient: testRecipient,
       sender: TEST_SENDER,
       emailId: typeof payload.id === "string" ? payload.id : null,
-      message: "Resend accepted the test email for delivery to your account address. No workflow was executed.",
+      message: "Resend accepted the test email for delivery to your verified account email. No workflow was executed.",
     });
   } catch {
     return json({ error: "Could not send the Resend test email. No workflow was executed." }, 500);

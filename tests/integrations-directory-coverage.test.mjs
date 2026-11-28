@@ -13,6 +13,7 @@ const connectionTestSource = readFileSync("app/api/integrations/workspace/test/r
 const workerSource = readFileSync("lib/workflows/durable-worker.ts", "utf8");
 const resendTestSource = readFileSync("app/api/integrations/workspace/resend/test/route.ts", "utf8");
 const saveRouteSource = readFileSync("app/api/integrations/workspace/route.ts", "utf8");
+const connectionMigrationSource = readFileSync("supabase/migrations/20261122190000_rexnora_workspace_integration_connections.sql", "utf8");
 
 test("all 100 directory entries have official brand artwork or an explicit native icon path", () => {
   const ids = [...catalogSource.matchAll(/"id": "([^"]+)"/g)].map((match) => match[1]);
@@ -47,8 +48,9 @@ test("new provider-pack connection checks remain read-only and fail closed when 
 
 test("durable live execution requires both a connected integration and a passed credential test", () => {
   assert.match(workerSource, /select\("id,status,last_test_status"\)/);
-  assert.match(workerSource, /integration\.status !== "connected" \|\| integration\.last_test_status !== "passed"/);
-  assert.match(directorySource, /record\.last_test_status === "passed"/);
+  assert.match(workerSource, /\.eq\("workspace_id", workspaceId\)\.eq\("provider", provider\)[\s\S]*?\.eq\("id", selectedConnectionId\)[\s\S]*?\.eq\("status", "connected"\)\.eq\("last_test_status", "passed"\)/);
+  assert.match(workerSource, /if \(!selectedConnectionId\) throw new Error\("WORKSPACE_CONNECTION_SELECTION_REQUIRED"\)/);
+  assert.match(directorySource, /item\.last_test_status === "passed"/);
   assert.match(directorySource, /liveExecutionEnabled && liveProvidersEnabled\.includes\(providerPermissionKey\)/);
   assert.match(directorySource, /state === "connected" && livePermissionEnabled/);
 });
@@ -65,13 +67,15 @@ test("every credential provider has a non-destructive verification path or an ex
   assert.match(connectionTestSource, /Perplexity does not expose a safe read-only credential check/);
 });
 
-test("saving or re-testing credentials invalidates any previous success before the next live run", () => {
-  assert.ok(saveRouteSource.indexOf('const { data: existing') < saveRouteSource.indexOf('db.rpc("save_workspace_integration_credentials"'));
-  assert.match(saveRouteSource, /last_test_status: null/);
+test("saving or re-testing credentials invalidates the selected connection before a live run", () => {
+  assert.match(saveRouteSource, /db\.rpc\("save_workspace_integration_connection"/);
+  assert.match(saveRouteSource, /p_connection_id: connectionId/);
+  assert.match(saveRouteSource, /p_create_new: requestedConnectionId === undefined/);
+  assert.match(connectionMigrationSource, /set status\s*=\s*'needs_attention'[\s\S]*last_test_status\s*=\s*null/i);
+  assert.match(connectionMigrationSource, /where wi\.id\s*=\s*p_connection_id[\s\S]*and wi\.workspace_id\s*=\s*p_workspace_id[\s\S]*and wi\.provider\s*=\s*p_provider/i);
   assert.match(connectionTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
   assert.match(resendTestSource, /status: "needs_attention", last_tested_at: null, last_test_status: null/);
 });
-
 
 test("the Integrations directory exposes all 122 executable nodes separately from 100 provider entries", () => {
   assert.match(catalogRouteSource, /getExecutableNodeCatalog/);

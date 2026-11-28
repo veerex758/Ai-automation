@@ -9,13 +9,17 @@ type Props = { catalog: CatalogNode[]; kind: "trigger" | "action"; nodeId: strin
 
 export default function RegistryOperationSettings({ catalog, kind, nodeId, operationId, input, onChange }: Props) {
   const available = useMemo(() => catalog.filter((node) => (kind === "trigger" ? node.triggers : node.actions).length), [catalog, kind]);
-  const selectedNode = catalog.find((node) => node.id === nodeId) ?? available[0];
+  // Never silently replace a saved operation with the first catalog entry. A stale or
+  // unsupported selection must remain visible until the user explicitly chooses one.
+  const selectedNode = available.find((node) => node.id === nodeId);
   const operations = selectedNode ? (kind === "trigger" ? selectedNode.triggers : selectedNode.actions) : [];
-  const operation = operations.find((item) => item.id === operationId) ?? operations[0];
+  const operation = operations.find((item) => item.id === operationId);
+  const nodeMissing = !selectedNode;
+  const operationMissing = Boolean(selectedNode) && !operation;
   const properties = operation?.inputSchema.properties ?? {};
   const required = operation?.inputSchema.required ?? [];
   function chooseNode(nextNodeId: string) {
-    const nextNode = catalog.find((node) => node.id === nextNodeId);
+    const nextNode = available.find((node) => node.id === nextNodeId);
     const nextOperation = (kind === "trigger" ? nextNode?.triggers : nextNode?.actions)?.[0];
     if (!nextNode || !nextOperation) return;
     onChange(nextNode.id, nextOperation.id, Object.fromEntries(Object.entries(nextOperation.inputSchema.properties ?? {}).map(([key, field]) => [key, field.default ?? ""])));
@@ -29,13 +33,18 @@ export default function RegistryOperationSettings({ catalog, kind, nodeId, opera
   return <section className="step-config-fields">
     <div className="config-section-title">Registered {kind} operation</div>
     <label htmlFor={kind + "-registry-node"}>App / node</label>
-    <select id={kind + "-registry-node"} value={selectedNode?.id ?? ""} onChange={(event) => chooseNode(event.target.value)}>
+    <select id={kind + "-registry-node"} value={nodeMissing ? "" : selectedNode.id} onChange={(event) => chooseNode(event.target.value)}>
+      <option value="" disabled>{nodeMissing ? "Saved app / node is unavailable — choose one" : "Choose an app / node"}</option>
       {available.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
     </select>
     <label htmlFor={kind + "-registry-operation"}>Operation</label>
-    <select id={kind + "-registry-operation"} value={operation?.id ?? ""} onChange={(event) => chooseOperation(event.target.value)}>
+    <select id={kind + "-registry-operation"} value={operationMissing || !operation ? "" : operation.id} onChange={(event) => chooseOperation(event.target.value)} disabled={!selectedNode}>
+      <option value="" disabled>{operationMissing ? "Saved operation is unavailable — choose one" : "Choose an operation"}</option>
       {operations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
     </select>
+    {(nodeMissing || operationMissing) && <p className="config-note" role="alert">{nodeMissing
+      ? "This saved app or node is no longer available in the registry. Choose a supported app / node to continue; Rexnora has not substituted another operation."
+      : "This saved operation is no longer available for the selected app. Choose a supported operation to continue; Rexnora has not substituted another operation."}</p>}
     {operation && <><p className="config-note">{operation.description}</p><div className="config-section-title">Operation inputs</div>
       {Object.entries(properties).map(([key, field]) => {
         const value = input[key] ?? field.default ?? "";

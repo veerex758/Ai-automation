@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { decryptWorkspaceCredentials, encryptWorkspaceCredentials } from "../lib/integrations/workspace-credentials";
+import { decryptWorkspaceCredentials, encryptWorkspaceCredentials, encryptWorkspaceCredentialsV2 } from "../lib/integrations/workspace-credentials";
 
 const key = randomBytes(32).toString("base64");
 
@@ -63,7 +63,7 @@ test("workspace credential vault accepts the additional vendor providers with on
     slack: { botToken: "slack-bot-secret" },
     claude: { apiKey: "claude-secret" },
     discord: { botToken: "discord-secret" },
-    whatsapp_business: { accessToken: "wa-secret", phoneNumberId: "123456" },
+    whatsapp_business: { accessToken: "wa-secret", phoneNumberId: "123456", templateName: "real_estate_new_enquiry", templateLanguage: "en_US" },
     sendgrid: { apiKey: "sg-secret", fromEmail: "hello@example.test" },
     mailgun: { apiKey: "mg-secret", domain: "mg.example.test", fromEmail: "hello@example.test" },
     postmark: { serverToken: "pm-secret", fromEmail: "hello@example.test" },
@@ -232,4 +232,16 @@ test("credential encryption rejects absent, malformed, and wrong-length key mate
     if (prior === undefined) delete process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY;
     else process.env.AIVANTA_CREDENTIALS_ENCRYPTION_KEY = prior;
   }
+});
+
+
+test("v2 credentials are cryptographically bound to workspace, provider and connection ID", () => {
+ const credentials={resend:{apiKey:"re_test_connection_a",fromEmail:"automation@example.test"}};
+ const aad="workspace-a:resend:11111111-1111-4111-8111-111111111111";
+ const envelope=encryptWorkspaceCredentialsV2(credentials,aad,key);
+ assert.match(envelope,/^v2\./);
+ assert.deepEqual(decryptWorkspaceCredentials(envelope,key,aad),credentials);
+ assert.throws(()=>decryptWorkspaceCredentials(envelope,key,"workspace-a:resend:22222222-2222-4222-8222-222222222222"));
+ assert.throws(()=>decryptWorkspaceCredentials(envelope,key,"workspace-b:resend:11111111-1111-4111-8111-111111111111"));
+ assert.throws(()=>decryptWorkspaceCredentials(envelope,key));
 });

@@ -15,7 +15,15 @@ type RegistryCatalog = { id: string; name: string; icon?: string; category?: str
 type NodeType = "trigger" | "action" | "condition";
 type WorkflowNode = { id: string; type: NodeType; title: string; description: string; settings: Record<string, string>; registryNodeId?: string; registryOperationId?: string; registryInput?: Record<string, unknown>; position?: { x: number; y: number } };
 type WorkflowEdge = { id: string; source: string; target: string; label: "true" | "false" | "next" };
-type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
+type PlaybookDefinition = {
+  schema: "rexnora.playbook";
+  schemaVersion: 1;
+  goal: { industry: "real_estate"; outcome: string };
+  rules: Array<{ id: string; nodeId: string; name: string; rationale: string }>;
+  actionPolicies: Array<{ stepId: string; nodeId: string; operationId: string; permission: "auto" | "ask_first" | "never" }>;
+  review: { confidenceThreshold: number; reviewMissingFields: boolean; reviewWhenNoRuleMatches: boolean; reviewProviderFailures: boolean };
+};
+type Definition = { version: 1; nodes: WorkflowNode[]; edges?: WorkflowEdge[]; playbook?: PlaybookDefinition };
 type Workflow = { id: string; name: string; description: string; status: string; version: number };
 type WorkflowVersion = { version: number; created_at: string };
 
@@ -42,6 +50,9 @@ export default function WorkflowBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [aiDraftRetryPrompt, setAiDraftRetryPrompt] = useState("");
+  const [aiDraftRetryable, setAiDraftRetryable] = useState(false);
+  const [aiDraftGenerating, setAiDraftGenerating] = useState(false);
   const [versions, setVersions] = useState<WorkflowVersion[]>([]);
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
   const [validating, setValidating] = useState(false);
@@ -235,6 +246,8 @@ export default function WorkflowBuilderPage() {
 
   function beginNodeDrag(event: ReactPointerEvent<HTMLDivElement>, node: WorkflowNode, index: number) {
     if ((event.target as HTMLElement).closest("button")) return;
+    // Select on pointer-down so a touch drag also opens this node's inspector.
+    setSelectedId(node.id);
     const point = nodePosition(node, index);
     dragState.current = { id: node.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: point.x, originY: point.y, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -253,24 +266,51 @@ export default function WorkflowBuilderPage() {
   function endNodeDrag(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragState.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!drag.moved) setSelectedId(drag.id);
-    else setNotice("Node position updated. Save your changes to keep this layout.");
+    // Pointer capture can suppress click after drag; keep the dragged node selected.
+    setSelectedId(drag.id);
+    if (drag.moved) setNotice("Node moved. Its settings are open below; save to keep the new position.");
     dragState.current = null;
   }
 
   function connectNodes(source: string, target: string, label: "true" | "false" | "next") {
-    if (source === target) return;
-    const duplicate = (definition.edges ?? []).some((edge) => edge.source === source && edge.target === target && edge.label === label);
-    if (duplicate) { setNotice("Those nodes are already connected."); setConnectingFrom(null); return; }
+    if (source === target) {
+      setNotice("A node cannot connect to itself.");
+      setConnectingFrom(null);
+      return;
+    }
     const sourceNode = definition.nodes.find((node) => node.id === source);
-    if (!sourceNode || (label !== "next" && sourceNode.type !== "condition")) return;
+    if (!sourceNode) {
+      setNotice("The source node no longer exists. Select it again.");
+      setConnectingFrom(null);
+      return;
+    }
+    const outgoing = (definition.edges ?? []).filter((edge) => edge.source === source);
+    const duplicate = outgoing.some((edge) => edge.target === target && edge.label === label);
+    if (duplicate) {
+      setNotice("Those nodes are already connected.");
+      setConnectingFrom(null);
+      return;
+    }
+    if (sourceNode.type === "condition") {
+      if (label === "next") {
+        setNotice("Choose the True or False branch before connecting an IF node.");
+        setConnectingFrom(null);
+        return;
+      }
+      if (outgoing.length >= 2 || outgoing.some((edge) => edge.label === label)) {
+        setNotice("An IF node can have one True destination and one False destination. Remove or edit an existing branch first.");
+        setConnectingFrom(null);
+        return;
+      }
+    } else if (label !== "next" || outgoing.length >= 1) {
+      setNotice("This node already has its single Next connection. Only IF nodes can split into two paths.");
+      setConnectingFrom(null);
+      return;
+    }
     draftRevision.current += 1;
     setValidation(null);
     setDefinition((current) => ({
       ...current,
-      // Branch destinations should be positioned from the condition's
-      // output lane. Clearing an old fixed coordinate lets nodePosition
-      // derive the correct upper/lower branch location from the new edge.
       nodes: current.nodes.map((node) => node.id !== target || label === "next"
         ? node
         : { ...node, position: undefined }),
@@ -278,6 +318,34 @@ export default function WorkflowBuilderPage() {
     }));
     setConnectingFrom(null);
     setNotice("Connection added. Save your changes when ready.");
+  }
+
+  function startConnectionFrom(nodeId: string) {
+    const sourceNode = definition.nodes.find((node) => node.id === nodeId);
+    if (!sourceNode) return;
+    const outgoing = (definition.edges ?? []).filter((edge) => edge.source === nodeId);
+    let label: "true" | "false" | "next" = "next";
+    if (sourceNode.type === "condition") {
+      if (!outgoing.some((edge) => edge.label === "true")) label = "true";
+      else if (!outgoing.some((edge) => edge.label === "false")) label = "false";
+      else {
+        setSelectedId(nodeId);
+        setConnectingFrom(null);
+        setNotice("Both IF branches are already connected. Edit or remove a branch before adding another.");
+        return;
+      }
+    } else if (outgoing.length) {
+      setSelectedId(nodeId);
+      setConnectingFrom(null);
+      setNotice("This node already has its Next connection. Only IF nodes can split into two paths.");
+      return;
+    }
+    setSelectedId(nodeId);
+    setConnectionLabel(label);
+    setConnectingFrom(nodeId);
+    setNotice(sourceNode.type === "condition"
+      ? `Connecting the ${label.toUpperCase()} branch. Select a destination node's input handle, or use Connect to node below.`
+      : "Select a destination node's input handle, or use Connect to node below.");
   }
 
   function updateSelected(updates: Partial<Pick<WorkflowNode, "title" | "description">>) {
@@ -299,9 +367,13 @@ export default function WorkflowBuilderPage() {
     }));
   }
 
-  async function generateDraftOnCanvas() {
-    const prompt = window.prompt("Describe the workflow to draft:");
-    if (!prompt?.trim()) return;
+  async function generateDraftOnCanvas(retryPrompt?: string) {
+    const enteredPrompt = retryPrompt ?? window.prompt("Describe the workflow to draft:");
+    const prompt = enteredPrompt?.trim() ?? "";
+    if (!prompt || aiDraftGenerating) return;
+    setAiDraftRetryPrompt(prompt);
+    setAiDraftRetryable(false);
+    setAiDraftGenerating(true);
     setError(""); setNotice("Generating a reviewable draft…");
     try {
       const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
@@ -309,8 +381,23 @@ export default function WorkflowBuilderPage() {
         definition?: Definition;
         registrySteps?: Array<{ id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> }>;
         error?: string;
+        errorCode?: string;
+        retryAfterSeconds?: number;
       };
-      if (!response.ok) throw new Error(payload.error || "AI could not create a draft.");
+      if (!response.ok) {
+        const retryableCodes = new Set([
+          "AI_PROVIDER_OVERLOADED", "AI_RATE_LIMITED", "AI_PROVIDER_COOLDOWN",
+          "AI_PROVIDER_CIRCUIT_UNAVAILABLE", "AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE",
+        ]);
+        const retryAfterHeader = Number(response.headers.get("Retry-After") || 0);
+        const retryAfterSeconds = Number(payload.retryAfterSeconds) > 0
+          ? Number(payload.retryAfterSeconds) : retryAfterHeader;
+        setAiDraftRetryable(retryableCodes.has(String(payload.errorCode)) || response.status === 429 || response.status >= 500);
+        const providerError = payload.error || "AI could not create a draft.";
+        throw new Error(retryAfterSeconds > 0
+          ? providerError + " Retry is available in about " + Math.ceil(retryAfterSeconds) + " seconds."
+          : providerError);
+      }
 
       // Registry generation returns executable, schema-validated steps separately
       // from its legacy placeholder definition. Build the canvas from those steps
@@ -353,8 +440,16 @@ export default function WorkflowBuilderPage() {
       if (!generated?.nodes?.length) throw new Error("AI could not create a reviewable workflow draft.");
       const normalized = { ...generated, edges: generated.edges ?? generated.nodes.slice(1).map((node, index) => ({ id: "ai-edge-" + index, source: generated.nodes[index].id, target: node.id, label: "next" as const })) };
       draftRevision.current += 1; setValidation(null); setDefinition(normalized); setSelectedId(normalized.nodes[0]?.id ?? "");
+      setAiDraftRetryPrompt("");
+      setAiDraftRetryable(false);
       setNotice("AI draft loaded onto the canvas. Review and edit it, then Save workflow; it has not been executed.");
-    } catch (e) { setError(e instanceof Error ? e.message : "AI draft generation failed."); setNotice(""); }
+    } catch (e) {
+      if (e instanceof TypeError) setAiDraftRetryable(true);
+      setError(e instanceof Error ? e.message : "AI draft generation failed.");
+      setNotice("");
+    } finally {
+      setAiDraftGenerating(false);
+    }
   }
 
   function addRegisteredNode(kind: "trigger" | "action", nodeId: string) {
@@ -601,12 +696,12 @@ export default function WorkflowBuilderPage() {
 
   return (
     <main className="builder-shell" onClick={(event) => { const link = (event.target as HTMLElement).closest("a.side-link"); if (isDirty && link && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>
-        <DashboardSidebar activePage="builder" />
+        <DashboardSidebar activePage="playbooks" />
       <section className="workflow-builder-main">
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : `${workflow?.status ?? "Draft"} · v${workflow?.version ?? "—"}`}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button>{workflow?.status === "active" ? <button className="builder-validate" onClick={() => void pauseWorkflow()} disabled={activating || isDirty}>{activating ? "Pausing…" : "Pause workflow"}</button> : <button className="builder-save" onClick={() => void activateWorkflow()} disabled={activating || isDirty || saving || validating || restoringVersion !== null}>{activating ? "Activating…" : "Activate workflow"}</button>}</div>
+        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : `${workflow?.status ?? "Draft"} · v${workflow?.version ?? "—"}`}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating || aiDraftGenerating}>{aiDraftGenerating ? "Generating…" : "AI draft"}</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button>{workflow?.status === "active" ? <button className="builder-validate" onClick={() => void pauseWorkflow()} disabled={activating || isDirty}>{activating ? "Pausing…" : "Pause workflow"}</button> : <button className="builder-save" onClick={() => void activateWorkflow()} disabled={activating || isDirty || saving || validating || restoringVersion !== null}>{activating ? "Activating…" : "Activate workflow"}</button>}</div>
       </header>
 
       <div className="builder-layout">
@@ -614,7 +709,7 @@ export default function WorkflowBuilderPage() {
           <div className="builder-heading"><div><div className="builder-eyebrow">WORKFLOW DESIGNER</div><h1>{workflow?.name ?? "Workflow builder"}</h1><p>{workflow?.description || "Connect steps into a clear, repeatable process."}</p><a className="builder-test-link builder-test-link-prominent" href="#workflow-test-panel">↓ Find safe test panel</a></div><span className="builder-mode"><i /> Draft mode</span></div>
           {notice && <div className="builder-notice" role="status">{notice}</div>}
           {validation && <div className={`builder-validation ${validation.valid ? "validation-pass" : "validation-fail"}`} role="status"><span className="validation-mark">{validation.valid ? "✓" : "!"}</span><div><strong>{validation.valid ? "Draft checks passed" : "Draft needs attention"}</strong><p>{validation.message}</p>{validation.counts && <small>{validation.counts.triggers} trigger · {validation.counts.actions} actions · {validation.counts.conditions} conditions</small>}<small>Checked {new Date(validation.checkedAt).toLocaleTimeString()}</small></div></div>}
-          {error && <div className="builder-error-banner" role="alert">{error}</div>}
+          {error && <div className="builder-error-banner" role="alert"><span>{error}</span>{aiDraftRetryable && aiDraftRetryPrompt && <button type="button" className="builder-validate" onClick={() => void generateDraftOnCanvas(aiDraftRetryPrompt)} disabled={aiDraftGenerating}>{aiDraftGenerating ? "Retrying…" : "Retry AI draft"}</button>}</div>}
           {webhookProvision && <section className="builder-notice" role="status"><strong>Webhook endpoint created — copy these details now</strong><p>POST {typeof window !== "undefined" ? window.location.origin : ""}{webhookProvision.path}</p><p>Signing secret: <code>{webhookProvision.signingSecret}</code></p><p>{webhookProvision.signature.header}: {webhookProvision.signature.format}</p><p>Event ID header: {webhookProvision.signature.eventIdHeader} · Event type header: {webhookProvision.signature.eventTypeHeader}</p><p>Signed message: <code>{webhookProvision.signature.signedMessage}</code></p><button type="button" className="builder-validate" onClick={() => void navigator.clipboard.writeText((typeof window !== "undefined" ? window.location.origin : "") + webhookProvision.path)}>Copy webhook URL</button><button type="button" className="builder-validate" onClick={() => void navigator.clipboard.writeText(webhookProvision.signingSecret)}>Copy signing secret</button><small>The signing secret is shown once. Store it securely; refreshing this page will not reveal it again.</small></section>}
           <RunTestPanel
             workflowId={workflowId}
@@ -715,7 +810,10 @@ export default function WorkflowBuilderPage() {
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (!connectingFrom) { setNotice("Choose an output handle first."); return; }
+                          if (!connectingFrom) {
+                            setNotice("Start from the output handle on the right side of a source node, then choose this node as the destination.");
+                            return;
+                          }
                           connectNodes(connectingFrom, node.id, connectionLabel);
                         }}
                       />
@@ -733,11 +831,7 @@ export default function WorkflowBuilderPage() {
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          setSelectedId(node.id);
-                          setConnectingFrom(node.id);
-                          setNotice(node.type === "condition"
-                            ? "Choose True or False in the connection editor, then select a destination input handle."
-                            : "Select a destination input handle.");
+                          startConnectionFrom(node.id);
                         }}
                       />
                     </div>
@@ -750,12 +844,16 @@ export default function WorkflowBuilderPage() {
                 {definition.nodes.length === 0 && <div className="builder-empty"><strong>Start with a trigger</strong><button onClick={() => { const trigger = { ...starterDefinition.nodes[0], id: `trigger-${Date.now().toString(36)}` }; setDefinition({ version: 1, nodes: [trigger], edges: [] }); setSelectedId(trigger.id); }}>Add trigger</button></div>}
               </div>
             </div>
-            <div className="canvas-footnote">Use the safe test panel to evaluate conditions and inspect simulated step results. External actions remain disabled.</div>
+            <div className="canvas-footnote">Tap a node to select it; dragging also selects it. Use Fit and zoom to inspect the graph. The selected node&apos;s settings are below.</div>
           </div>
         </section>
 
-        <aside className="builder-panel">
-          <div className="panel-header"><div><span className="panel-kicker">CONFIGURATION</span><h2>Step settings</h2></div><span className="panel-sliders">☷</span></div>
+        <div className="builder-mobile-edit-shortcut">
+          <span>{selectedNode ? `Selected: ${selectedNode.title}` : "No node selected"}</span>
+          <button type="button" disabled={!selectedNode} onClick={() => document.getElementById("node-settings-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Edit selected node</button>
+        </div>
+        <aside className="builder-panel" id="node-settings-panel">
+          <div className="panel-header"><div><span className="panel-kicker">CONFIGURATION</span><h2>{selectedNode ? `Edit: ${selectedNode.title}` : "Step settings"}</h2><p className="panel-selected-hint">{selectedNode ? "Selected node · changes apply only to this step" : "Select a node on the canvas to edit it."}</p></div><span className="panel-sliders">☷</span></div>
           {selectedNode ? <div className="panel-content">
             <div className={`selected-type type-${selectedNode.type}`}><span>{nodeMeta[selectedNode.type].icon}</span><div><strong>{nodeMeta[selectedNode.type].label}</strong><small>{nodeMeta[selectedNode.type].help}</small></div></div>
             <label htmlFor="step-title">Step name</label><input id="step-title" maxLength={80} value={selectedNode.title} onChange={(event) => updateSelected({ title: event.target.value })} />
@@ -776,10 +874,11 @@ export default function WorkflowBuilderPage() {
             <div className="panel-divider" />
             <section className="graph-connection-editor" aria-label="Node connections">
               <div className="config-section-title">Connections</div>
-              <p className="config-note">Connect this node to another node. Conditions can create true and false paths.</p>
+              <p className="config-note">Start at this node&apos;s output and choose a destination. Regular nodes allow one Next connection; IF nodes allow one True and one False connection.</p>
+               {selectedNode.type === "condition" && <div className="branch-connection-status"><span className={(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "true") ? "branch-connected" : ""}>True: {(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "true") ? "connected" : "not connected"}</span><span className={(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "false") ? "branch-connected" : ""}>False: {(definition.edges ?? []).some((edge) => edge.source === selectedNode.id && edge.label === "false") ? "connected" : "not connected"}</span></div>}
               {(definition.edges ?? []).filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).map((edge) => <div className="graph-edge-row" key={edge.id}><span><b>{edge.label === "next" ? "Next" : edge.label.toUpperCase()}</b> · {definition.nodes.find((node) => node.id === edge.source)?.title} → {definition.nodes.find((node) => node.id === edge.target)?.title}</span><button type="button" aria-label="Remove connection" onClick={() => { draftRevision.current += 1; setValidation(null); setDefinition((current) => ({ ...current, edges: (current.edges ?? []).filter((item) => item.id !== edge.id) })); }}>×</button></div>)}
               {selectedNode.type === "condition" && <><label htmlFor="connection-branch">Branch label</label><select id="connection-branch" value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value as "true" | "false" | "next")}><option value="true">True path</option><option value="false">False path</option></select></>}
-              <button type="button" className="builder-validate" onClick={() => { setConnectingFrom(selectedNode.id); setConnectionLabel(selectedNode.type === "condition" ? connectionLabel : "next"); setNotice("Select an input handle on the destination node."); }}>Start connection from this node</button>
+              <button type="button" className="builder-validate" onClick={() => startConnectionFrom(selectedNode.id)}>Start connection from this node</button>
               <label htmlFor="connect-target">Connect to node</label>
               <select id="connect-target" defaultValue="" onChange={(event) => { const target = event.target.value; if (target) connectNodes(selectedNode.id, target, selectedNode.type === "condition" ? connectionLabel : "next"); event.currentTarget.value = ""; }}>
                 <option value="">Choose destination…</option>{definition.nodes.filter((node) => node.id !== selectedNode.id).map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}

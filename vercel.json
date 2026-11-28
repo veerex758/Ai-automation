@@ -1,16 +1,60 @@
 {
-  "crons": [
-    {
-      "path": "/api/internal/scheduler",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/internal/billing/reconcile",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/internal/operations/alerts",
-      "schedule": "0 11 * * *"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true,
+      "integration/saas-core-stage3-realestate-20261123": true
     }
-  ]
+  },
+  "schedules": {
+    "billing-reconcile": {
+      "schedule": "0 10 * * *",
+      "path": "/api/internal/billing/reconcile",
+      "requestMethod": "POST"
+    },
+    "operations-alerts": {
+      "schedule": "0 11 * * *",
+      "path": "/api/internal/operations/alerts",
+      "requestMethod": "POST"
+    },
+    "real-estate-automation": {
+      "schedule": "*/15 * * * *",
+      "function": "api/real-estate-automation",
+      "timezone": "Africa/Lagos"
+    },
+    "paystack-recurring-renewals": {
+      "schedule": "30 12 * * *",
+      "path": "/api/internal/billing/paystack-renewals",
+      "requestMethod": "POST"
+    },
+    "workflow-scheduler-tick": {
+      "schedule": "*/30 * * * *",
+      "path": "/api/internal/scheduler",
+      "requestMethod": "GET",
+      "timezone": "UTC"
+    },
+    "durable-worker-recovery": {
+      "schedule": "*/30 * * * *",
+      "function": "api/worker-sweep",
+      "timezone": "UTC"
+    }
+  },
+  "functions": {
+    "api/real-estate-automation.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "schedule/v1beta"
+        }
+      ]
+    },
+    "api/worker-sweep.ts": {
+      "maxDuration": 60,
+      "experimentalTriggers": [
+        {
+          "type": "schedule/v1beta"
+        }
+      ]
+    }
+  }
 }

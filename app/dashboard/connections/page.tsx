@@ -12,6 +12,8 @@ type Connection = {
   scopes: string[];
   status: "connected" | "needs_reauth" | "revoked";
   expires_at: string | null;
+  last_tested_at?: string | null;
+  last_test_status?: string | null;
 };
 
 const statusMessages: Record<string, string> = {
@@ -48,7 +50,15 @@ type WorkspaceIntegration = {
   display_name: string;
   status: string;
   updated_at: string;
+  last_tested_at?: string | null;
+  last_test_status?: string | null;
 };
+
+const oauthProviders = new Set<WorkspaceProvider>([
+  "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "intercom",
+  "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok",
+  "dropbox", "asana", "todoist", "bitbucket",
+]);
 
 const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{ name: string; label: string; type: string; required?: boolean }> }> = {
   openai: { label: "OpenAI", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
@@ -128,7 +138,7 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
   perplexity: { label: "Perplexity", fields: [{ name: "apiKey", label: "API key", type: "password" }] },
   discord: { label: "Discord", fields: [{ name: "botToken", label: "Bot token", type: "password" }] },
   telegram: { label: "Telegram", fields: [{ name: "botToken", label: "Bot token", type: "password" }] },
-  whatsapp_business: { label: "WhatsApp Business", fields: [{ name: "accessToken", label: "System user access token", type: "password" }, { name: "phoneNumberId", label: "Phone number ID", type: "text" }] },
+  whatsapp_business: { label: "WhatsApp Business", fields: [{ name: "accessToken", label: "System user access token", type: "password" }, { name: "phoneNumberId", label: "Phone number ID", type: "text" }, { name: "templateName", label: "Approved template name (optional default)", type: "text" }, { name: "templateLanguage", label: "Template language, e.g. en_US (optional default)", type: "text" }] },
   sendgrid: { label: "SendGrid", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
   mailgun: { label: "Mailgun", fields: [{ name: "apiKey", label: "API key", type: "password" }, { name: "domain", label: "Sending domain", type: "text" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
   postmark: { label: "Postmark", fields: [{ name: "serverToken", label: "Server token", type: "password" }, { name: "fromEmail", label: "Verified sender email", type: "email" }] },
@@ -146,6 +156,9 @@ const providerFields: Record<WorkspaceProvider, { label: string; fields: Array<{
 function WorkspaceIntegrationManager() {
   const [integrations, setIntegrations] = useState<WorkspaceIntegration[]>([]);
   const [provider, setProvider] = useState<WorkspaceProvider>("gemini");
+  const [focusedProvider, setFocusedProvider] = useState<WorkspaceProvider | null>(null);
+  const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState(providerFields.gemini.label);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -157,9 +170,15 @@ function WorkspaceIntegrationManager() {
 
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("provider");
+    const params = new URLSearchParams(window.location.search);
+    const oauthStatus = params.get("oauth");
+    if (oauthStatus === "connected") setNotice("OAuth authorization completed. Test the saved account before using it in a live workflow.");
+    else if (oauthStatus === "failed") setError("OAuth authorization did not complete. Check the provider configuration and try again.");
+    const requested = params.get("provider");
     if (requested && Object.prototype.hasOwnProperty.call(providerFields, requested)) {
       setProvider(requested as WorkspaceProvider);
+      setFocusedProvider(requested as WorkspaceProvider);
+      setDisplayName(providerFields[requested as WorkspaceProvider].label);
       setValues({});
     }
   }, []);
@@ -175,47 +194,50 @@ function WorkspaceIntegrationManager() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function testResend() {
+  async function testResend(connectionId: string) {
     setTestingResend(true);
     setError("");
     setNotice("");
     try {
-      const response = await fetch("/api/integrations/workspace/resend/test", { method: "POST" });
+      const response = await fetch("/api/integrations/workspace/resend/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ connectionId }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Could not test the Resend connection.");
-      setIntegrations(current => current.map(item => item.provider === "resend" ? { ...item, status: payload.senderDomainVerified ? "connected" : "needs_attention" } : item));
+      setIntegrations(current => current.map(item => item.id === connectionId ? { ...item, status: payload.senderDomainVerified ? "connected" : "needs_attention", last_test_status: "passed" } : item));
       setNotice(payload.message ?? "Resend connection checked. No email was sent.");
     } catch (reason) {
+      setIntegrations(current => current.map(item => item.id === connectionId
+        ? { ...item, status: "needs_attention", last_test_status: "failed" }
+        : item));
       setError(reason instanceof Error ? reason.message : "Could not test the Resend connection.");
     } finally {
       setTestingResend(false);
     }
   }
 
-  async function testProvider(provider: WorkspaceProvider) {
-    setTestingProvider(provider);
+  async function testProvider(provider: WorkspaceProvider, connectionId: string) {
+    setTestingProvider(connectionId);
     setError("");
     setNotice("");
     try {
       const response = await fetch("/api/integrations/workspace/test", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, integrationId: connectionId }),
       });
       const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload.message ?? payload.error ?? "Connection check failed.");
-      setIntegrations(current => current.map(item => item.provider === provider ? { ...item, status: "connected" } : item));
+      setIntegrations(current => current.map(item => item.id === connectionId ? { ...item, status: "connected", last_test_status: "passed" } : item));
       setNotice(payload.message ?? "Credential authenticated. No workflow was executed.");
     } catch (reason) {
-      setIntegrations(current => current.map(item => item.provider === provider ? { ...item, status: "needs_attention" } : item));
+      setIntegrations(current => current.map(item => item.id === connectionId ? { ...item, status: "needs_attention", last_test_status: "failed" } : item));
       setError(reason instanceof Error ? reason.message : "Could not test this connection.");
     } finally { setTestingProvider(null); }
   }
 
-  async function sendResendTestEmail() {
+  async function sendResendTestEmail(connectionId: string) {
     setSendingResendTest(true);
     setError("");
     setNotice("");
     try {
-      const response = await fetch("/api/integrations/workspace/resend/test-email", { method: "POST" });
+      const response = await fetch("/api/integrations/workspace/resend/test-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ connectionId }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Could not send the Resend test email.");
       setNotice(payload.message ?? `Resend accepted a test email for ${payload.recipient}.`);
@@ -224,6 +246,43 @@ function WorkspaceIntegrationManager() {
     } finally {
       setSendingResendTest(false);
     }
+  }
+
+  async function disconnectConnection(connectionId: string) {
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/workspace", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Could not disconnect this account.");
+      setIntegrations(current => current.filter(item => item.id !== connectionId));
+      if (editingConnectionId === connectionId) {
+        setEditingConnectionId(null);
+        setValues({});
+      }
+      setNotice("Connection removed from this workspace. Workflow nodes using it will fail closed until another verified account is selected.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not disconnect this account.");
+    }
+  }
+
+  function rotateConnection(item: WorkspaceIntegration) {
+    setProvider(item.provider);
+    setFocusedProvider(item.provider);
+    setEditingConnectionId(item.id);
+    setDisplayName(item.display_name);
+    setValues({});
+    setNotice("Enter replacement credentials. The existing secret is never revealed; saving invalidates its previous test.");
+  }
+
+  function addAnotherConnection() {
+    setEditingConnectionId(null);
+    setDisplayName(providerFields[provider].label);
+    setValues({});
+    setNotice("Add a separate account. Existing connections will remain available to workflow nodes.");
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -235,13 +294,16 @@ function WorkspaceIntegrationManager() {
       const response = await fetch("/api/integrations/workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, displayName: providerFields[provider].label, credentials: Object.fromEntries(Object.entries(values).filter(([, value]) => value.trim())) }),
+        body: JSON.stringify({ provider, connectionId: editingConnectionId ?? undefined, displayName: displayName.trim() || providerFields[provider].label, credentials: Object.fromEntries(Object.entries(values).filter(([, value]) => value.trim())) }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Could not save this integration.");
       const saved = payload.integration as WorkspaceIntegration;
-      setIntegrations(current => [saved, ...current.filter(item => item.provider !== provider)]);
+      setIntegrations(current => editingConnectionId
+        ? current.map(item => item.id === editingConnectionId ? saved : item)
+        : [saved, ...current]);
       setValues({});
+      setEditingConnectionId(null);
       setNotice("Connection saved securely. The secret is encrypted and will not be shown again.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save this integration.");
@@ -256,23 +318,37 @@ function WorkspaceIntegrationManager() {
         <div><h2>Workflow connections</h2><p>Save provider credentials to this workspace. They are encrypted at rest and only decrypted by the server during an authorized run.</p></div>
         <span>{integrations.length} saved</span>
       </div>
-      <p className="connections-footnote">Google connections use Rexnora-managed OAuth. For other OAuth-based providers, this manager currently accepts a manually issued access token; provider-specific consent screens and automatic token refresh are not yet available. A token must pass its read-only connection test before live execution is permitted.</p>
+      <p className="connections-footnote">Google and supported OAuth providers use their official consent screens. You can add a separate account or reconnect a selected saved account; each callback is bound to the active workspace and account ID. Every saved connection must pass its provider test before live execution is permitted.</p>
       {notice && <p className="connections-notice" role="status">{notice}</p>}
       {error && <p className="connections-error" role="alert">{error}</p>}
       <div className="workspace-integration-layout">
         <div className="workspace-integration-saved">
-          <h3>Saved connections</h3>
+          <h3>{focusedProvider ? `${providerFields[focusedProvider].label} accounts` : "Saved connections"}</h3>
+          <button type="button" onClick={addAnotherConnection}>Add another account</button>
           {loading ? <p className="connections-empty">Loading connections…</p> : integrations.length === 0
             ? <p className="connections-empty">No workflow provider credentials saved yet.</p>
-            : integrations.map(item => (
+            : integrations.filter(item => !focusedProvider || item.provider === focusedProvider).map(item => (
               <div className="workspace-integration-saved-row" key={item.id}>
-                <div><strong>{item.display_name}</strong><span>{item.provider} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
-                <div className="workspace-integration-row-actions"><span className={item.status === "connected" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>{item.provider !== "resend" && <button type="button" onClick={() => testProvider(item.provider)} disabled={testingProvider !== null}>{testingProvider === item.provider ? "Testing…" : "Test connection"}</button>}{item.provider === "resend" && <><button type="button" onClick={testResend} disabled={testingResend || sendingResendTest}>{testingResend ? "Testing…" : "Test connection"}</button><button type="button" onClick={sendResendTestEmail} disabled={testingResend || sendingResendTest}>{sendingResendTest ? "Sending test…" : "Send test email"}</button></>}</div>
+                <div><strong>{item.display_name}</strong><span>{item.provider} · {item.last_test_status === "passed" && item.status === "connected" ? "verified" : "test required"} · updated {new Date(item.updated_at).toLocaleDateString()}</span></div>
+                <div className="workspace-integration-row-actions">
+                  <span className={item.status === "connected" && item.last_test_status === "passed" ? "connection-status" : "status-needs_reauth"}>{item.status.replace("_", " ")}</span>
+                  {item.provider !== "resend" ? <button type="button" onClick={() => testProvider(item.provider, item.id)} disabled={testingProvider !== null}>{testingProvider === item.id ? "Testing…" : "Test"}</button> : <>
+                    <button type="button" onClick={() => testResend(item.id)} disabled={testingResend || sendingResendTest}>{testingResend ? "Testing…" : "Test"}</button>
+                    <button type="button" onClick={() => sendResendTestEmail(item.id)} disabled={testingResend || sendingResendTest}>{sendingResendTest ? "Sending…" : "Send test email"}</button>
+                  </>}
+                  <button type="button" onClick={() => rotateConnection(item)}>Rotate</button>
+                  <button type="button" onClick={() => void disconnectConnection(item.id)}>Disconnect</button>
+                </div>
               </div>
             ))}
         </div>
         <form className="workspace-integration-form" onSubmit={save}>
-          <h3>Add or update a connection</h3>
+          <h3>{editingConnectionId ? "Rotate saved connection" : "Add a connection"}</h3>
+           {focusedProvider && oauthProviders.has(focusedProvider) && (
+             <Link className="connection-button" href={`/api/integrations/oauth/${focusedProvider}/start${editingConnectionId ? `?connectionId=${encodeURIComponent(editingConnectionId)}` : ""}` }>
+               {editingConnectionId ? "Reconnect this account with OAuth" : "Connect another OAuth account"} ↗
+             </Link>
+           )}
           <label htmlFor="workspace-provider">Provider</label>
           <select id="workspace-provider" value={provider} onChange={event => { setProvider(event.target.value as WorkspaceProvider); setValues({}); }}>
             {Object.entries(providerFields).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
@@ -304,6 +380,8 @@ export default function ConnectionsPage() {
   const [errorCode, setErrorCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [focusedGoogleProduct, setFocusedGoogleProduct] = useState<string | null>(null);
+  const [focusedNode, setFocusedNode] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -314,6 +392,10 @@ export default function ConnectionsPage() {
     if (nextWorkflow) { setWorkflowId(nextWorkflow); try { window.sessionStorage.setItem("aivanta-return-workflow", nextWorkflow); } catch { /* State remains available on this page. */ } }
     const status = params.get("google");
     if (status) setNotice(statusMessages[status] ?? "Google authorization returned.");
+    const product = params.get("googleProduct");
+    if (product) setFocusedGoogleProduct(product);
+    const node = params.get("node");
+    if (node) setFocusedNode(node);
     fetch("/api/integrations/google/connections", { cache: "no-store" })
       .then(async response => {
         const payload = await response.json().catch(() => null);
@@ -328,48 +410,111 @@ export default function ConnectionsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function testGoogleConnection(connectionId: string) {
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/google/connections", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ connectionId }),
+      });
+      const payload = await response.json();
+      setConnections(current => current.map(item => item.id === connectionId
+        ? { ...item, status: response.ok ? "connected" : "needs_reauth", last_test_status: response.ok ? "passed" : "failed" }
+        : item));
+      if (!response.ok || !payload.ok) throw new Error(payload.message || payload.error || "Google account test failed.");
+      setNotice(payload.message);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Google account test failed.");
+    }
+  }
+
+  async function disconnectGoogleConnection(connectionId: string) {
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/google/connections", {
+        method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ connectionId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Could not disconnect this Google account.");
+      setConnections(current => current.filter(item => item.id !== connectionId));
+      setNotice(payload.message || "Google account disconnected.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not disconnect this Google account.");
+    }
+  }
+
+  const googleNodeByProduct: Record<string, string> = {
+    gmail: "gmail", sheets: "sheets", drive: "google_drive", calendar: "google_calendar",
+    docs: "google_docs", forms: "google_forms", youtube: "youtube", contacts: "google_contacts",
+  };
+  const googleStartHref = (product: string, connectionId?: string) => `/api/integrations/google/start?product=${encodeURIComponent(product)}&node=${encodeURIComponent(focusedNode || googleNodeByProduct[product] || "")}${connectionId ? `&connectionId=${encodeURIComponent(connectionId)}` : ""}`;
+  const visibleGoogleConnections = connections.filter(connection => !focusedGoogleProduct || connection.product === focusedGoogleProduct);
+
   return (
     <main className="app-shell connections-shell"><DashboardSidebar activePage="connections" /><section className="dashboard-main"><header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><strong>Connected accounts</strong></div></header><div className="dashboard-content"><div className="connections-page">
       <section className="connections-hero">
         <div className="connections-eyebrow">YOUR WORKSPACE, CONNECTED</div>
-        <h1>Connected accounts.</h1>
+        <h1>{focusedGoogleProduct ? `Connect ${({ gmail: "Gmail", sheets: "Google Sheets", drive: "Google Drive", calendar: "Google Calendar", docs: "Google Docs", forms: "Google Forms", youtube: "YouTube", contacts: "Google Contacts" } as Record<string, string>)[focusedGoogleProduct] ?? "Google"}` : "Connected accounts."}</h1>
         {workflowId && <Link className="connections-return" href={`/dashboard/workflows/${workflowId}`}>Return to your workflow <span aria-hidden="true">→</span></Link>}
         <p>Authorize services using their official sign-in screens. Rexnora never asks for your provider password.</p>
+        {focusedGoogleProduct && <Link className="connections-return" href="/dashboard/connections">View all workspace connections →</Link>}
       </section>
 
       {notice && <p className="connections-notice" role="status">{notice}</p>}
       {error && <div className="connections-error" role="alert"><strong>Connections unavailable</strong><p>{error}</p><small>Diagnostic: {errorCode || "CONNECTIONS_UNAVAILABLE"}</small>{diagnosticHelp[errorCode] && <p>{diagnosticHelp[errorCode]}</p>}<button type="button" onClick={() => window.location.reload()}>Try again</button></div>}
 
       <section className="connections-grid" aria-label="Available integrations">
+        {(!focusedGoogleProduct || focusedGoogleProduct === "gmail") && (
         <article className="connection-card">
           <div className="connection-icon google-icon" aria-hidden="true">G</div>
           <div className="connection-card-copy"><h2>Gmail</h2><p>Authorize access to read messages. Sending email is not enabled by this permission.</p></div>
           <span className="connection-scope">READ ONLY</span>
-          <a className="connection-button" href="/api/integrations/google/start?product=gmail">Connect Gmail <span aria-hidden="true">↗</span></a>
+          <a className="connection-button" href={googleStartHref("gmail")}>Connect Gmail <span aria-hidden="true">↗</span></a>
         </article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "sheets") && (
         <article className="connection-card">
           <div className="connection-icon sheets-icon" aria-hidden="true">▦</div>
           <div className="connection-card-copy"><h2>Google Sheets</h2><p>Authorize read-only access to spreadsheets. Editing cells requires a separate permission rollout.</p></div>
           <span className="connection-scope">READ ONLY</span>
-          <a className="connection-button" href="/api/integrations/google/start?product=sheets">Connect Sheets <span aria-hidden="true">↗</span></a>
+          <a className="connection-button" href={googleStartHref("sheets")}>Connect Sheets <span aria-hidden="true">↗</span></a>
         </article>
-        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Drive</h2><p>Read file metadata and search Drive. No file edits or deletes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=drive">Connect Drive <span aria-hidden="true">↗</span></a></article>
-        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Calendar</h2><p>Read calendar events in a selected time window. No event changes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=calendar">Connect Calendar <span aria-hidden="true">↗</span></a></article>
-        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Docs</h2><p>Read document metadata and content structure. No document edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=docs">Connect Docs <span aria-hidden="true">↗</span></a></article>
-        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Forms</h2><p>Read form titles and question metadata. No response or form edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=forms">Connect Forms <span aria-hidden="true">↗</span></a></article>
-        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">▶</div><div className="connection-card-copy"><h2>YouTube</h2><p>Search videos and read channel metadata. No publishing actions.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=youtube">Connect YouTube <span aria-hidden="true">↗</span></a></article>
-        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Contacts</h2><p>Read contact names, email addresses and phone numbers.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href="/api/integrations/google/start?product=contacts">Connect Contacts <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "drive") && (
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Drive</h2><p>Read file metadata and search Drive. No file edits or deletes.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("drive")}>Connect Drive <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "calendar") && (
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Calendar</h2><p>Read events and create events on calendars you own. Reconnect to grant the new event-writing permission.</p></div><span className="connection-scope">READ + WRITE</span><a className="connection-button" href={googleStartHref("calendar")}>Connect Calendar <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "docs") && (
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Docs</h2><p>Read document metadata and content structure. No document edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("docs")}>Connect Docs <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "forms") && (
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Forms</h2><p>Read form titles and question metadata. No response or form edits.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("forms")}>Connect Forms <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "youtube") && (
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">▶</div><div className="connection-card-copy"><h2>YouTube</h2><p>Search videos and read channel metadata. No publishing actions.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("youtube")}>Connect YouTube <span aria-hidden="true">↗</span></a></article>
+        )}
+        {(!focusedGoogleProduct || focusedGoogleProduct === "contacts") && (
+        <article className="connection-card"><div className="connection-icon google-icon" aria-hidden="true">G</div><div className="connection-card-copy"><h2>Google Contacts</h2><p>Read contact names, email addresses and phone numbers.</p></div><span className="connection-scope">READ ONLY</span><a className="connection-button" href={googleStartHref("contacts")}>Connect Contacts <span aria-hidden="true">↗</span></a></article>
+        )}
       </section>
 
-      <WorkspaceIntegrationManager />
+      {!focusedGoogleProduct && <WorkspaceIntegrationManager />}
 
       <section className="connections-list">
         <div className="connections-list-heading"><div><h2>Connected accounts</h2><p>Only account details and permission names are shown here. Tokens never reach the browser.</p></div><span>{connections.length} {connections.length === 1 ? "connection" : "connections"}</span></div>
-        {loading ? <p className="connections-empty">Loading connections…</p> : connections.length === 0 ? <p className="connections-empty">No Google accounts connected yet.</p> : connections.map(connection => (
+        {loading ? <p className="connections-empty">Loading connections…</p> : connections.length === 0 ? <p className="connections-empty">No Google accounts connected yet.</p> : visibleGoogleConnections.map(connection => (
           <article className="connection-row" key={connection.id}>
             <div className={`connection-icon ${connection.product === "gmail" ? "google-icon" : "sheets-icon"}`} aria-hidden="true">{connection.product === "gmail" ? "G" : "▦"}</div>
-            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{({ gmail: "Gmail", sheets: "Google Sheets", drive: "Google Drive", calendar: "Google Calendar", docs: "Google Docs", forms: "Google Forms", youtube: "YouTube", contacts: "Google Contacts" } as Record<string, string>)[connection.product]} · {connection.scopes.length} permissions</span></div>
+            <div className="connection-row-copy"><strong>{connection.account_email}</strong><span>{({ gmail: "Gmail", sheets: "Google Sheets", drive: "Google Drive", calendar: "Google Calendar", docs: "Google Docs", forms: "Google Forms", youtube: "YouTube", contacts: "Google Contacts" } as Record<string, string>)[connection.product]} · {connection.scopes.length} permissions · {connection.last_test_status === "passed" ? "verified" : "test required"}</span></div>
             <span className={`connection-status status-${connection.status}`}>{connection.status.replace("_", " ")}</span>
+            <div className="workspace-integration-row-actions">
+              <button type="button" onClick={() => void testGoogleConnection(connection.id)}>Test account</button>
+              <a className="connection-button" href={googleStartHref(connection.product, connection.id)}>Reconnect this account / rotate</a>
+              <button type="button" onClick={() => void disconnectGoogleConnection(connection.id)}>Disconnect</button>
+            </div>
           </article>
         ))}
       </section>

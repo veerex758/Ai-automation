@@ -1,20 +1,74 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
-import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
+import { generateWorkflow, repairRegistryStepInputs, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
+import { calculateGraphPositions } from "@/lib/workflows/graph-layout.cjs";
+import { aiGateway } from "@/lib/ai/gateway";
+import { validateWorkflowPlannerEnvelope } from "@/lib/ai/validation/workflow-schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const MAX_REAL_ESTATE_OUTCOME_LENGTH = 240;
+const REAL_ESTATE_CRM_PROVIDERS = new Set(["pipedrive", "zoho_crm", "freshsales"]);
+
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request.headers.get("x-request-id"));
   const startedAt = Date.now();
+  let latestSuccessfulProvider = "gemini";
+  let latestSuccessfulModel = "";
+  let latestAttemptProvider = "gemini";
+  let latestAttemptModel = "";
+  let providerAttemptObserver: ((attempt: {
+    provider?: string; model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
+    providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
+  }) => void) | undefined;
+  const aiAttemptBudget = {
+    remainingProviderAttempts: 8,
+    totalProviderAttempts: 0,
+    deadlineAt: startedAt + 54_000,
+  };
+  const providerUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const gatewayGenerateStructured = async (args: {
+    task: "workflow_generation" | "workflow_schema_repair";
+    systemPrompt: string;
+    prompt: string;
+  }) => {
+    const result = await aiGateway.generateStructured(
+      {
+        systemPrompt: args.systemPrompt,
+        prompt: args.prompt,
+        maxOutputTokens: 2200,
+        ...(args.task === "workflow_generation"
+          ? { validate: (value: unknown, provider) => validateWorkflowPlannerEnvelope(value, "registry", provider || "gemini") }
+          : {}),
+      },
+      {
+        task: args.task,
+        operationId: requestId,
+        signal: request.signal,
+        timeoutMs: 16_000,
+        deadlineAt: aiAttemptBudget.deadlineAt,
+        attemptBudget: aiAttemptBudget,
+        onProviderAttempt: (attempt) => providerAttemptObserver?.(attempt),
+      },
+    );
+    providerUsage.inputTokens += result.usage.inputTokens;
+    providerUsage.outputTokens += result.usage.outputTokens;
+    providerUsage.totalTokens += result.usage.totalTokens;
+    return {
+      parsed: result.output,
+      modelUsed: result.model,
+      fallbackUsed: result.fallbackUsed,
+      usage: providerUsage,
+    };
+  };
   const jsonResponse = (body: unknown, init?: ResponseInit) => {
     const response = NextResponse.json(body, init);
     response.headers.set("x-request-id", requestId);
@@ -41,8 +95,23 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
     }
     if (!body.prompt.trim()) return jsonResponse({ error: "Describe the workflow you want to create." }, { status: 400 });
-    if (body.prompt.trim().length > MAX_PROMPT_LENGTH) {
-      return jsonResponse({ error: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` }, { status: 400 });
+
+    const starterType = "starterType" in body ? body.starterType : undefined;
+    if (starterType !== undefined && starterType !== "real_estate") {
+      return jsonResponse({ error: "The requested workflow starter is not supported." }, { status: 400 });
+    }
+    const requestedCrmProvider = "crmProvider" in body ? body.crmProvider : "pipedrive";
+    if (starterType === "real_estate" &&
+        (typeof requestedCrmProvider !== "string" || !REAL_ESTATE_CRM_PROVIDERS.has(requestedCrmProvider))) {
+      return jsonResponse({ error: "Choose a supported CRM for the real-estate starter." }, { status: 400 });
+    }
+
+    const promptLimit = starterType === "real_estate" ? MAX_REAL_ESTATE_OUTCOME_LENGTH : MAX_PROMPT_LENGTH;
+    if (body.prompt.trim().length > promptLimit) {
+      const message = starterType === "real_estate"
+        ? `Keep the business outcome to ${MAX_REAL_ESTATE_OUTCOME_LENGTH} characters or fewer.`
+        : `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.`;
+      return jsonResponse({ error: message }, { status: 400 });
     }
 
     const { getOrCreateDefaultWorkspace } = await import("@/lib/supabase/workspace");
@@ -94,18 +163,150 @@ export async function POST(request: NextRequest) {
         unsupportedCapabilities: unsupportedCapabilities.map((issue) => issue.capability),
       }, { status: 422 });
     }
-    const result = await generateWorkflow({ prompt: body.prompt, nodeCatalog, mode: "registry" });
+
+    const onProviderAttempt = (attempt: {
+      provider?: string; model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
+      providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
+    }) => {
+      const provider = attempt.provider || "gemini";
+      latestAttemptProvider = provider;
+      latestAttemptModel = typeof attempt.model === "string" ? attempt.model : latestAttemptModel;
+      const status = Number(attempt.status);
+      const failure = status >= 400 || Boolean(attempt.errorCode);
+      const providerCode = attempt.errorCode ||
+        (status === 429 ? "AI_RATE_LIMITED"
+          : status === 401 || status === 403 ? "AI_PROVIDER_AUTH_ERROR"
+          : status === 503 ? "AI_PROVIDER_OVERLOADED"
+          : status >= 400 ? "AI_PROVIDER_ERROR" : undefined);
+      if (!failure && status < 400) {
+        latestSuccessfulProvider = provider;
+        latestSuccessfulModel = typeof attempt.model === "string" ? attempt.model : latestSuccessfulModel;
+      }
+      logOperationalEvent({
+        event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+        outcome: failure ? "failure" : "success",
+        statusCode: Number.isSafeInteger(status) && status >= 400 ? status : failure ? 502 : 200,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        ...(providerCode ? { errorCode: providerCode } : {}),
+        provider,
+        ...(typeof attempt.model === "string" ? { model: attempt.model } : {}),
+        ...(Number.isSafeInteger(attempt.attempt) ? { providerAttempt: attempt.attempt } : {}),
+        ...(Number.isSafeInteger(attempt.retryAfterMs) ? { retryAfterMs: attempt.retryAfterMs } : {}),
+        providerStatus: status,
+        ...(attempt.providerReason ? { providerReason: attempt.providerReason } : {}),
+        ...(attempt.providerType ? { providerType: attempt.providerType } : {}),
+        ...(attempt.providerRequestId ? { providerRequestId: attempt.providerRequestId } : {}),
+        fallbackUsed: attempt.fallbackUsed === true,
+      }, status >= 400 ? console.error : console.info);
+    };
+    providerAttemptObserver = onProviderAttempt;
+
+    const result: Awaited<ReturnType<typeof generateWorkflow>> = await generateWorkflow({
+      prompt: body.prompt,
+      nodeCatalog,
+      mode: "registry",
+      starterType: starterType === "real_estate" ? starterType : undefined,
+      crmProvider: starterType === "real_estate" ? requestedCrmProvider as string : undefined,
+      onProviderAttempt,
+      gatewayGenerateStructured,
+    });
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
-    const registrySteps = result.registrySteps;
+    const registrySteps = result.registrySteps as Array<{
+      id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: unknown;
+      [key: string]: unknown;
+    }>;
     if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return jsonResponse({ error: "The generated plan did not pass registry validation." }, { status: 422 });
     const seen = new Set<string>();
+    const invalidInputs: Array<{
+      id: string; nodeId: string; operationId: string; kind: "trigger" | "action";
+      input: Record<string, unknown>; validationIssues: Array<{ path: string; code: string }>;
+    }> = [];
     for (let index = 0; index < registrySteps.length; index++) {
-      const step = registrySteps[index] as { id?: unknown; nodeId?: unknown; operationId?: unknown; kind?: unknown; input?: unknown };
-      if (!step || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) || typeof step.nodeId !== "string" || typeof step.operationId !== "string" || !["trigger", "action"].includes(String(step.kind)) || !step.input || typeof step.input !== "object" || Array.isArray(step.input)) return jsonResponse({ error: "The generated plan contains an invalid step envelope." }, { status: 422 });
+      const step = registrySteps[index];
+      if (!step || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) ||
+          typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
+          !["trigger", "action"].includes(String(step.kind)) ||
+          !step.input || typeof step.input !== "object" || Array.isArray(step.input)) {
+        return jsonResponse({ error: "The generated plan contains an invalid step envelope." }, { status: 422 });
+      }
       seen.add(step.id);
-      if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
-      const operation = findOperation(step.nodeId, step.operationId, step.kind as "trigger" | "action");
-      if (!operation || !operation.inputSchema.safeParse(step.input).success) return jsonResponse({ error: "The generated plan contains invalid node input. Try a simpler request." }, { status: 422 });
+      if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) {
+        return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
+      }
+      const operation = findOperation(step.nodeId, step.operationId, step.kind);
+      if (!operation) {
+        return jsonResponse({
+          error: "Gemini selected " + step.nodeId + "." + step.operationId + ", which is not in Rexnora's executable node registry. No draft was saved and no AI credit was charged. Retry with registered integrations only.",
+          errorCode: "AI_NODE_NOT_REGISTERED",
+        }, { status: 422 });
+      }
+      const inputValidation = operation.inputSchema.safeParse(step.input);
+      if (!inputValidation.success) {
+        invalidInputs.push({
+          id: step.id,
+          nodeId: step.nodeId,
+          operationId: step.operationId,
+          kind: step.kind,
+          input: step.input as Record<string, unknown>,
+          validationIssues: inputValidation.error.issues.slice(0, 8).map((issue) => ({
+            path: issue.path.map(String).join("."),
+            code: issue.code,
+          })),
+        });
+      }
+    }
+
+    // One bounded repair attempt is allowed only for schema-invalid inputs of
+    // operations that are already present in the executable registry. Node IDs,
+    // operation IDs, step count and graph edges remain immutable.
+    if (invalidInputs.length) {
+      let repairedInputs: Array<{ id: string; input: Record<string, unknown> }>;
+      try {
+        repairedInputs = await repairRegistryStepInputs({
+          prompt: body.prompt,
+          invalidSteps: invalidInputs,
+          nodeCatalog,
+          onProviderAttempt,
+          gatewayGenerateStructured,
+        }) as Array<{ id: string; input: Record<string, unknown> }>;
+      } catch (repairError) {
+        const status = repairError && typeof repairError === "object" && "providerStatus" in repairError
+          ? Number((repairError as { providerStatus?: unknown }).providerStatus) : null;
+        const code = repairError instanceof Error ? repairError.message : "";
+        const transient = (status !== null && [408, 429, 500, 502, 503, 504].includes(status)) ||
+          ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE"].includes(code);
+        if (transient) throw repairError;
+        return jsonResponse({
+          error: "Gemini supplied invalid inputs for registered operations and the single schema-repair attempt did not produce a valid repair. No draft was saved and no AI credit was charged.",
+          errorCode: "AI_NODE_INPUT_REPAIR_FAILED",
+          invalidOperations: invalidInputs.map((step) => ({ stepId: step.id, nodeId: step.nodeId, operationId: step.operationId })),
+        }, { status: 422 });
+      }
+
+      const repairsById = new Map(repairedInputs.map((repair) => [repair.id, repair.input]));
+      if (repairsById.size !== invalidInputs.length || invalidInputs.some((step) => !repairsById.has(step.id))) {
+        return jsonResponse({
+          error: "Gemini's schema repair did not return exactly the invalid operation inputs. No draft was saved and no AI credit was charged.",
+          errorCode: "AI_NODE_INPUT_REPAIR_FAILED",
+        }, { status: 422 });
+      }
+      for (const step of registrySteps) {
+        const repairedInput = repairsById.get(step.id);
+        if (!repairedInput) continue;
+        const operation = findOperation(step.nodeId, step.operationId, step.kind);
+        if (!operation) {
+          return jsonResponse({ error: "A registry operation changed during schema repair. No draft was saved and no AI credit was charged.", errorCode: "AI_NODE_NOT_REGISTERED" }, { status: 422 });
+        }
+        const validation = operation.inputSchema.safeParse(repairedInput);
+        if (!validation.success) {
+          return jsonResponse({
+            error: "Gemini's single schema-repair attempt still returned invalid input for " + step.nodeId + "." + step.operationId + ". No draft was saved and no AI credit was charged.",
+            errorCode: "AI_NODE_INPUT_INVALID",
+            validationIssues: validation.error.issues.slice(0, 8).map((issue) => ({ path: issue.path.map(String).join("."), code: issue.code })),
+          }, { status: 422 });
+        }
+        step.input = validation.data;
+      }
     }
     let definition: { version: 1; nodes: Array<Record<string, unknown>>; edges?: Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }> };
     let executableSteps = registrySteps;
@@ -132,6 +333,19 @@ export async function POST(request: NextRequest) {
         edges.push({ id: edge.id, source: edge.source, target: edge.target, label: edge.label as "next" | "true" | "false" });
       }
       const outgoing = new Map([...ids].map((id) => [id, edges.filter((edge) => edge.source === id)]));
+      // Reject malformed topology before it reaches the canvas. Only registered
+      // IF operations may branch; regular triggers/actions have one Next edge.
+      for (const step of registrySteps as Array<{ id: string; nodeId: string; operationId: string }>) {
+        const nodeEdges = outgoing.get(step.id) ?? [];
+        const isCondition = step.nodeId === "if" && step.operationId === "evaluate";
+        if (!isCondition && (nodeEdges.length > 1 || nodeEdges.some((edge) => edge.label !== "next"))) {
+          return jsonResponse({ error: "The generated graph branches from a regular step. Only IF nodes may create True and False paths. Generate the draft again." }, { status: 422 });
+        }
+        if (isCondition && nodeEdges.length > 0 &&
+            (nodeEdges.length !== 2 || nodeEdges.filter((edge) => edge.label === "true").length !== 1 || nodeEdges.filter((edge) => edge.label === "false").length !== 1)) {
+          return jsonResponse({ error: "The generated IF node must have exactly one True path and one False path." }, { status: 422 });
+        }
+      }
       const visited = new Set<string>();
       const queue = [String((registrySteps[0] as { id: string }).id)];
       while (queue.length) {
@@ -149,34 +363,10 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-      const graphDepthById = new Map<string, number>();
-      const graphLaneById = new Map<string, number>();
-      // Lay the graph out left-to-right. IF true/false edges split into upper
-      // and lower lanes; following actions inherit their branch lane.
-      const unresolvedGraphSteps = new Set((registrySteps as Array<{ id: string }>).map((step) => step.id));
-      // Resolve parents before children so layout is independent of the order
-      // in which the model happened to list its registered steps.
-      for (let pass = 0; pass < registrySteps.length && unresolvedGraphSteps.size > 0; pass += 1) {
-        let resolvedAny = false;
-        for (const step of registrySteps as Array<{ id: string }>) {
-          if (!unresolvedGraphSteps.has(step.id)) continue;
-          const incoming = edges.filter((edge) => edge.target === step.id);
-          if (incoming.some((edge) => !graphDepthById.has(edge.source))) continue;
-          const depth = incoming.length
-            ? Math.max(...incoming.map((edge) => graphDepthById.get(edge.source) ?? 0)) + 1
-            : 0;
-          const lanes = incoming.map((edge) => {
-            const sourceLane = graphLaneById.get(edge.source) ?? 0;
-            return sourceLane + (edge.label === "true" ? -1 : edge.label === "false" ? 1 : 0);
-          });
-          const lane = lanes.length ? lanes.reduce((sum, value) => sum + value, 0) / lanes.length : 0;
-          graphDepthById.set(step.id, depth);
-          graphLaneById.set(step.id, Math.max(-1, Math.min(1, lane)));
-          unresolvedGraphSteps.delete(step.id);
-          resolvedAny = true;
-        }
-        if (!resolvedAny) break;
-      }
+      const graphPositions = calculateGraphPositions(
+        registrySteps as Array<{ id: string }>,
+        edges,
+      );
       const graphNodes = registrySteps.map((raw) => {
         const step = raw as { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
         const provider = nodeCatalog.find((item) => item.id === step.nodeId);
@@ -188,8 +378,7 @@ export async function POST(request: NextRequest) {
           : isCondition
             ? { field: String(step.input.value ?? ""), operator: conditionOperator, value: step.input.compareTo === undefined ? "" : String(step.input.compareTo) }
             : { provider: "internal", operation: "create_task" };
-        const depth = graphDepthById.get(step.id) ?? 0;
-        const lane = graphLaneById.get(step.id) ?? 0;
+        const position = graphPositions.get(step.id) ?? { x: 160, y: 330 };
         return {
           id: step.id,
           type: step.kind === "trigger" ? "trigger" : isCondition ? "condition" : "action",
@@ -199,7 +388,7 @@ export async function POST(request: NextRequest) {
           registryNodeId: step.nodeId,
           registryOperationId: step.operationId,
           registryInput: step.input,
-          position: { x: 160 + depth * 320, y: 330 + lane * 220 },
+          position,
         };
       });
       definition = { version: 1, nodes: graphNodes, edges };
@@ -238,32 +427,45 @@ export async function POST(request: NextRequest) {
       }, { status: 402 });
     }
 
-    const { providerModelUsed, providerFallbackUsed, ...publicResult } = result;
+    const { providerModelUsed, providerFallbackUsed, providerUsage, ...publicResult } = result;
     logOperationalEvent({
       event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
       outcome: "success", statusCode: 200,
       durationMs: Math.max(0, Date.now() - startedAt),
-      provider: "gemini", model: providerModelUsed || (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
+      provider: latestSuccessfulProvider, model: latestSuccessfulModel || providerModelUsed || (latestSuccessfulProvider === "groq"
+        ? (process.env.GROQ_AI_MODEL || "openai/gpt-oss-120b").trim()
+        : (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim()),
       fallbackUsed: providerFallbackUsed === true,
+      providerInputTokens: providerUsage?.inputTokens,
+      providerOutputTokens: providerUsage?.outputTokens,
+      providerTotalTokens: providerUsage?.totalTokens,
     });
     return jsonResponse({ ...publicResult, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
-      AI_NOT_CONFIGURED: { status: 503, message: "Gemini workflow generation is not configured. Add the server-side GEMINI_API_KEY. No Rexnora AI credit was charged." },
+      AI_NOT_CONFIGURED: { status: 503, message: "No configured AI provider is available for this task. Check the server-side provider keys. No Rexnora AI credit was charged." },
+      AI_PROVIDER_DISABLED: { status: 503, message: "No eligible AI provider is available for this request. No Rexnora AI credit was charged." },
       AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid. No Rexnora AI credit was charged." },
       AI_PROMPT_REQUIRED: { status: 400, message: "Describe the workflow you want to create." },
       AI_PROMPT_TOO_LONG: { status: 400, message: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` },
-      AI_TIMEOUT: { status: 504, message: "Gemini did not respond within the request time limit. No Rexnora AI credit was charged. Please try again." },
-      AI_PROVIDER_UNAVAILABLE: { status: 502, message: "Gemini could not be reached. No Rexnora AI credit was charged. Please try again." },
-      AI_PROVIDER_OVERLOADED: { status: 503, message: "Gemini is temporarily overloaded after bounded retries. No Rexnora AI credit was charged. Please try again shortly." },
-      AI_PROVIDER_AUTH_ERROR: { status: 502, message: "Gemini rejected its server credentials. This is a server configuration issue; no Rexnora AI credit was charged." },
-      AI_RATE_LIMITED: { status: 429, message: "Gemini's rate limit was reached. No Rexnora AI credit was charged. Wait a moment and try again." },
-      AI_PROVIDER_ERROR: { status: 502, message: "Gemini could not complete this request. No Rexnora AI credit was charged." },
-      AI_INVALID_RESPONSE: { status: 502, message: "Gemini returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
-      AI_EMPTY_RESPONSE: { status: 502, message: "Gemini returned no workflow. No Rexnora AI credit was charged. Please try again." },
-      AI_INVALID_JSON: { status: 502, message: "Gemini returned an invalid workflow format. No Rexnora AI credit was charged. Please try again." },
-      AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Aivanta's safety and validation rules. No Rexnora AI credit was charged. Try describing a simpler workflow." },
+      AI_TIMEOUT: { status: 504, message: "The available AI providers did not respond within the request time limit. No Rexnora AI credit was charged. Please try again." },
+      AI_PROVIDER_UNAVAILABLE: { status: 502, message: "The available AI providers could not be reached. No Rexnora AI credit was charged. Please try again." },
+      AI_PROVIDER_OVERLOADED: { status: 503, message: "The available AI providers are temporarily overloaded after bounded retries. No Rexnora AI credit was charged. Please try again shortly." },
+      AI_PROVIDER_COOLDOWN: { status: 503, message: "The available AI provider is temporarily cooling down while its health probe completes. No Rexnora AI credit was charged." },
+      AI_PROVIDER_CIRCUIT_UNAVAILABLE: { status: 503, message: "Shared AI provider health storage is temporarily unavailable. No Rexnora AI credit was charged. Please retry shortly." },
+      AI_PROVIDER_AUTH_ERROR: { status: 502, message: "The available AI provider credentials were rejected. This is a server configuration issue; no Rexnora AI credit was charged." },
+      AI_RATE_LIMITED: { status: 429, message: "The available AI providers reached their rate limits. No Rexnora AI credit was charged. Wait a moment and try again." },
+      AI_PROVIDER_ERROR: { status: 502, message: "The available AI provider could not complete this request. No Rexnora AI credit was charged." },
+      AI_INVALID_RESPONSE: { status: 502, message: "The AI provider returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
+      AI_EMPTY_RESPONSE: { status: 502, message: "The AI provider returned no usable workflow content. No Rexnora AI credit was charged. Please try again." },
+      AI_INVALID_JSON: { status: 502, message: "The AI provider returned an invalid workflow format. No Rexnora AI credit was charged. Please try again." },
+      AI_INVALID_OUTPUT: { status: 422, message: "The AI provider returned an output that Rexnora could not safely validate. No Rexnora AI credit was charged." },
+      AI_INVALID_REQUEST: { status: 502, message: "The AI provider request configuration is invalid. No Rexnora AI credit was charged." },
+      AI_SAFETY_REJECTED: { status: 422, message: "The AI provider declined this request for safety reasons. No Rexnora AI credit was charged." },
+      AI_DEADLINE_EXCEEDED: { status: 504, message: "AI generation exceeded its request deadline. No Rexnora AI credit was charged. Please retry." },
+      AI_ATTEMPT_LIMIT_REACHED: { status: 503, message: "The AI provider attempt budget was exhausted. No Rexnora AI credit was charged. Please retry shortly." },
+      AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Rexnora's safety and validation rules. No Rexnora AI credit was charged. Try describing a simpler workflow." },
     };
     const mapped = responses[code] || { status: 502, message: "Workflow generation failed safely. Please try again." };
     if (mapped.status >= 500 || (error && typeof error === "object" && "providerStatus" in error)) {
@@ -272,19 +474,27 @@ export async function POST(request: NextRequest) {
         outcome: "failure", statusCode: mapped.status,
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
-        provider: "gemini",
-        model: error && typeof error === "object" && "providerModel" in error && typeof (error as { providerModel?: unknown }).providerModel === "string"
+        provider: latestAttemptProvider,
+        model: latestAttemptModel || (error && typeof error === "object" && "providerModel" in error && typeof (error as { providerModel?: unknown }).providerModel === "string"
           ? (error as { providerModel: string }).providerModel
-          : (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
+          : (latestAttemptProvider === "groq" ? (process.env.GROQ_AI_MODEL || "openai/gpt-oss-120b").trim() : (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim())),
         providerStatus: error && typeof error === "object" && "providerStatus" in error ? Number((error as { providerStatus?: unknown }).providerStatus) : undefined,
         providerReason: error && typeof error === "object" && "providerReason" in error ? (error as { providerReason?: unknown }).providerReason : undefined,
         providerType: error && typeof error === "object" && "providerType" in error ? (error as { providerType?: unknown }).providerType : undefined,
         providerRequestId: error && typeof error === "object" && "providerRequestId" in error ? (error as { providerRequestId?: unknown }).providerRequestId : undefined,
+        providerAttempt: error && typeof error === "object" && "providerAttempts" in error ? Number((error as { providerAttempts?: unknown }).providerAttempts) : undefined,
       }, console.error);
     }
-    return jsonResponse({
+    const response = jsonResponse({
       error: mapped.message,
       errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
     }, { status: mapped.status });
+    if (error && typeof error === "object" && "retryAfterMs" in error) {
+      const retryAfterMs = Number((error as { retryAfterMs?: unknown }).retryAfterMs);
+      if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+        response.headers.set("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+      }
+    }
+    return response;
   }
 }

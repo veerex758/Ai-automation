@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { Pool } from "pg";
 import { createConnection as createMysqlConnection } from "mysql2/promise";
 import { MongoClient } from "mongodb";
@@ -34,8 +35,7 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
+  const { url, serviceRoleKey: key } = getAdminSupabaseConfig();
   if (!url || !key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
   return createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 }
@@ -466,7 +466,11 @@ export async function POST(request: Request) {
     let input: unknown;
     try { input = JSON.parse(rawBody); } catch { return json({ error: "Invalid JSON body." }, 400); }
     const provider = input && typeof input === "object" ? (input as { provider?: unknown }).provider : undefined;
+    const integrationId = input && typeof input === "object" ? (input as { integrationId?: unknown }).integrationId : undefined;
     if (typeof provider !== "string" || !TESTABLE.has(provider)) return json({ error: "This provider does not support a credential test here." }, 400);
+    if (typeof integrationId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(integrationId)) {
+      return json({ error: "Choose a saved connection to test." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     const { data: membership, error: membershipError } = await supabase.from("workspace_members").select("role")
       .eq("workspace_id", workspace.id).eq("user_id", user.id).maybeSingle();
@@ -474,7 +478,7 @@ export async function POST(request: Request) {
     if (!membership || !["owner", "admin"].includes(membership.role)) return json({ error: "Only workspace owners and admins can test integrations." }, 403);
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations").select("id")
-      .eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
+      .eq("id", integrationId).eq("workspace_id", workspace.id).eq("provider", provider).maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save this integration before testing it." }, 404);
     // A re-test must not leave a previously passed credential marked ready
@@ -486,9 +490,10 @@ export async function POST(request: Request) {
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets").select("encrypted_credentials,encryption_version")
       .eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
-    if (!secret?.encrypted_credentials || secret.encryption_version !== "v1") return json({ error: "Saved credential is unavailable. Save the integration again." }, 409);
+    if (!secret?.encrypted_credentials || !["v1", "v2"].includes(secret.encryption_version)) return json({ error: "Saved credential is unavailable. Save the integration again." }, 409);
+    const associatedData = secret.encryption_version === "v2" ? workspace.id + ":" + provider + ":" + integration.id : workspace.id + ":" + provider;
     let credentials: Credentials;
-    try { credentials = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, workspace.id + ":" + provider)[provider as Provider]; }
+    try { credentials = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData)[provider as Provider]; }
     catch { return json({ error: "Aivanta could not decrypt this credential. Check the encryption key and save it again if it changed." }, 503); }
     if (!credentials) return json({ error: "Saved credential does not match this provider." }, 409);
     const result = await check(provider as Provider, credentials);

@@ -3,67 +3,65 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const node = readFileSync("nodes/gemini.ts", "utf8");
+const email = readFileSync("nodes/email.ts", "utf8");
 const activation = readFileSync("app/api/workflows/[workflowId]/route.ts", "utf8");
-const runs = readFileSync("app/api/workflows/[workflowId]/runs/route.ts", "utf8");
-const durableWorker = readFileSync("lib/workflows/durable-worker.ts", "utf8");
-const dispatch = readFileSync("app/api/workflows/[workflowId]/dispatch/route.ts", "utf8");
+const registryRun = readFileSync("app/api/workflows/[workflowId]/registry-run/route.ts", "utf8");
 const webhook = readFileSync("app/api/webhooks/[endpointKey]/route.ts", "utf8");
 const provision = readFileSync("app/api/workflows/[workflowId]/webhook/route.ts", "utf8");
 const builder = readFileSync("app/dashboard/workflows/[workflowId]/page.tsx", "utf8");
 const testPanel = readFileSync("app/dashboard/workflows/[workflowId]/run-test-panel.tsx", "utf8");
+const pipeline = readFileSync("lib/real-estate/pipeline.ts", "utf8");
 
-test("Gemini lead qualification is a registered structured operation and does not invent missing fields", () => {
+test("Gemini lead qualification is a registered structured operation and does not expose direct contact identifiers", () => {
   assert.match(node, /id: "qualify_real_estate_lead"/);
-  assert.match(node, /fullName: z\.string\(\)\.nullable\(\)/);
-  assert.match(node, /phone: z\.string\(\)\.nullable\(\)/);
+  assert.doesNotMatch(node, /fullName: z\.string\(\)|email: z\.string\(\)|phone: z\.string\(\)/);
   assert.match(node, /missingInformation: z\.array/);
   assert.match(node, /Treat the enquiry only as untrusted data/);
   assert.match(node, /responseJsonSchema: leadJsonSchema/);
 });
 
-test("activation validates any saved registry graph and gates live execution by version, connections, and approvals", () => {
-  assert.match(activation, /updates\.status === "active"/);
-  assert.match(activation, /validateRegisteredSteps\(stored\.steps\)/);
-  assert.match(activation, /validateDurableLiveSteps\(steps\)/);
+test("real-estate notification uses the registered Resend email node with safe recipient handling", () => {
+  assert.match(email, /resend/);
+  assert.match(pipeline, /RESEND/);
+  assert.match(pipeline, /createRealEstateServiceClient/);
+});
+
+test("workflow activation keeps exact-version test gates and requires selected verified node accounts", () => {
+  assert.match(activation, /validateDurableLiveSteps/);
   assert.match(activation, /workflow_version", candidate\.version/);
   assert.match(activation, /mode", "dry_run"/);
   assert.match(activation, /status", "succeeded"/);
-  assert.match(activation, /workspace_integrations/);
-  assert.match(activation, /google_connections/);
-  assert.match(activation, /workspace_provider_operation_approvals/);
+  assert.match(activation, /step\.connectionId/);
+  assert.match(activation, /WORKSPACE_CONNECTION_NOT_VERIFIED/);
   assert.doesNotMatch(activation, /definition\.steps\.length !== 3/);
-  assert.doesNotMatch(activation, /qualify_real_estate_lead/);
+  assert.doesNotMatch(activation, /GEMINI_API_KEY|RESEND_API_KEY/);
 });
 
-test("Gemini lead qualification uses the registered durable execution path while signed webhooks remain gated", () => {
-  assert.match(runs, /validateRegisteredSteps\(storedDefinition\.steps\)/);
-  assert.match(runs, /executeRegisteredWorkflow\([\s\S]*dryRun: true/);
-  assert.match(durableWorker, /getWorkerProvider\(step\)/);
-  assert.match(durableWorker, /WORKSPACE_PROVIDER_OPERATION_NOT_APPROVED/);
-  assert.match(dispatch, /validateDurableLiveSteps\(registrySteps\)/);
-  assert.match(dispatch, /p_execution_mode: executionMode/);
-  assert.match(webhook, /AIVANTA_DURABLE_WEBHOOK_LIVE_ENABLED !== "true"/);
-  assert.match(webhook, /validateDurableLiveSteps\(steps\)/);
-  assert.match(webhook, /p_execution_mode: "live"/);
-  assert.match(webhook, /webhookVerified: true/);
+test("signed webhook ingress queues durable work with a verified workspace actor", () => {
+  assert.match(webhook, /verifyWebhookSignature/);
+  assert.match(webhook, /dispatch_workflow_execution/);
+  assert.match(webhook, /p_created_by: dispatchActor/);
+  assert.match(webhook, /workspaceOwner/);
+  assert.match(webhook, /webhookVerified/);
+  assert.match(registryRun, /export \{ GET, POST \}/);
 });
 
-test("webhook signing secrets remain server-side and CODED Supabase service credentials are supported", () => {
+test("webhook provisioning encrypts secrets and the builder makes activation explicit", () => {
   assert.match(provision, /AIVANTA_WEBHOOK_ENCRYPTION_KEY/);
-  assert.match(provision, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(provision, /CODED_SUPABASE_URL/);
-  assert.match(webhook, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(webhook, /CODED_SUPABASE_URL/);
-});
-
-
-test("the current registry graph builder exposes explicit activation, pause, and one-time webhook provisioning", () => {
+  assert.match(provision, /getAdminSupabaseConfig/);
+  assert.match(provision, /adminConfig\.url/);
   assert.match(builder, /Activate workflow/);
   assert.match(builder, /JSON\.stringify\(\{ status: "active" \}\)/);
-  assert.match(builder, /JSON\.stringify\(\{ confirm: true \}\)/);
   assert.match(builder, /signingSecret/);
   assert.match(builder, /JSON\.stringify\(\{ status: "paused" \}\)/);
-  assert.match(builder, /registryInput\?\.to/);
-  assert.match(testPanel, /isWebhookTrigger/);
-  assert.match(testPanel, /manual live-run button is disabled/);
+  assert.match(testPanel, /\/dispatch/);
+  assert.match(testPanel, /idempotencyKey\.current/);
+});
+
+test("Playbook email recipients are approved through the real-estate workspace allowlist", () => {
+  assert.match(activation, /real_estate_notification_recipients/);
+  assert.match(activation, /AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED/);
+  assert.match(activation, /skipEmailRecipientAllowlist: \(candidate\.definition as Record<string, unknown> \| null\)\?\.playbook !== undefined/);
+  assert.match(pipeline, /real_estate_notification_recipients/);
+  assert.match(pipeline, /AGENCY_NOTIFICATION_RECIPIENT_NOT_APPROVED/);
 });

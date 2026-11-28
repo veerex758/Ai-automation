@@ -87,8 +87,23 @@ test("Google OAuth scope validation allows only identity plus the requested read
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email " + sheets), false);
   assert.equal(hasOnlyApprovedGoogleScopes("gmail", "openid email " + gmail + " https://www.googleapis.com/auth/gmail.send"), false);
   assert.equal(hasOnlyApprovedGoogleScopes("sheets", "openid email profile " + sheets), true);
+  const calendar = "https://www.googleapis.com/auth/calendar.events.owned";
+  assert.equal(hasOnlyApprovedGoogleScopes("calendar", "openid email profile " + calendar), true);
+  assert.equal(hasOnlyApprovedGoogleScopes("calendar", "openid email https://www.googleapis.com/auth/calendar.readonly"), false);
+  assert.equal(hasOnlyApprovedGoogleScopes("calendar", "openid email " + calendar + " https://www.googleapis.com/auth/calendar.events"), false);
   assert.equal(hasOnlyApprovedGoogleScopes("sheets", "openid email " + gmail), false);
   assert.equal(hasOnlyApprovedGoogleScopes("sheets", 42), false);
+});
+
+test("Google Calendar connection verification probes a real calendar read and never creates events", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../app/api/integrations/google/connections/route.ts", import.meta.url), "utf8");
+  assert.match(source, /calendarProbe = await fetch\("https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/primary\/events\?maxResults=1"/);
+  assert.match(source, /validProductAccess = calendarProbe\.ok/);
+  assert.match(source, /last_test_status: validConnection \? "passed" : "failed"/);
+  assert.match(source, /calendar_read_probe/);
+  assert.doesNotMatch(source, /calendarProbe[\s\S]{0,500}method:\s*"POST"/);
+  assert.match(source, /did not create or change any events/);
 });
 
 test("Google OAuth configuration requires HTTPS and the exact callback path", async () => {
@@ -132,7 +147,8 @@ test("restore caller environment after this test file", () => {
 
 test("each newly supported Google product accepts only its exact read-only scope", async () => {
   const { GOOGLE_PRODUCTS, hasOnlyApprovedGoogleScopes } = await loadTypeScript("../lib/integrations/google-oauth.ts");
-  for (const product of ["drive", "calendar", "docs", "forms", "youtube", "contacts"]) {
+  assert.equal(GOOGLE_PRODUCTS.calendar.scopes[0], "https://www.googleapis.com/auth/calendar.events.owned");
+  for (const product of ["drive", "docs", "forms", "youtube", "contacts"]) {
     const scope = GOOGLE_PRODUCTS[product].scopes[0];
     assert.match(scope, /\.readonly$/);
     assert.equal(hasOnlyApprovedGoogleScopes(product, "openid email profile " + scope), true);
@@ -166,7 +182,7 @@ test("Google OAuth callback validates state before token exchange and clears coo
 
 test("provider OAuth callback stores tokens using server-only CODED Supabase credentials", async () => {
   const callback = await readFile(new URL("../app/api/integrations/oauth/[provider]/callback/route.ts", import.meta.url), "utf8");
-  assert.match(callback, /NEXT_PUBLIC_SUPABASE_URL \?\? process\.env\.CODED_SUPABASE_URL/);
-  assert.match(callback, /CODED_SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(callback, /CODED_SUPABASE_SECRET_KEY/);
+  assert.match(callback, /getAdminSupabaseConfig/);
+  assert.match(callback, /const \{ url, serviceRoleKey: key \} = getAdminSupabaseConfig\(\)/);
+  assert.doesNotMatch(callback, /process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
 });

@@ -34,7 +34,7 @@ test("workflow API resolves workspace only after authentication and avoids cachi
   assert.match(route, /if \(userError \|\| !user\)/);
   assert.match(route, /const workspace = await getOrCreateDefaultWorkspace\(supabase\)/);
   assert.match(route, /Cache-Control": "private, no-store"/);
-  assert.match(route, /Could not load workflows\. Check the Aivanta database configuration and try again\./);
-  assert.match(route, /Could not save this workflow\. Check the Aivanta database configuration and try again\./);
+  assert.match(route, /Could not load workflows\. Check the Rexnora database configuration and try again\./);
+  assert.match(route, /Could not save this workflow\. Check the Rexnora database configuration and try again\./);
   assert.doesNotMatch(route, /return NextResponse\.json\(\{ error: error\.message/);
 });

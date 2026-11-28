@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import "./billing.css";
 import BillingCheckout from "./billing-checkout";
 import BillingStripeCheckout from "./billing-stripe-checkout";
+import BillingStripeSubscription from "./billing-stripe-subscription";
+import BillingPaystackMandate from "./billing-paystack-mandate";
+import BillingTaxInvoice from "./billing-tax-invoice";
 import DashboardSidebar from "../dashboard-sidebar";
 
 type CheckoutOption = { slug: string; amount_minor: number; currency: string };
@@ -39,7 +42,7 @@ type BillingData = {
     status: string;
     usage: Record<string, number>;
     limits: Record<string, number | null>;
-    billing: { checkout_enabled: boolean; stripe_checkout_enabled?: boolean };
+    billing: { checkout_enabled: boolean; stripe_checkout_enabled?: boolean; stripe_subscription_enabled?: boolean; paystack_recurring_enabled?: boolean };
   };
   payments?: Payment[];
   plans: Plan[];
@@ -95,7 +98,7 @@ export default function BillingPage() {
   useEffect(() => { void loadBilling(); }, [loadBilling]);
 
   const cancelSubscription = async () => {
-    if (!window.confirm("Schedule this workspace subscription to end after the current paid period?")) return;
+    if (!window.confirm("Stop automatic renewal for this workspace? Future provider charges will be disabled. Your current paid access remains available until the paid period ends.")) return;
     setCanceling(true);
     setBillingMessage("");
     setError("");
@@ -162,7 +165,8 @@ export default function BillingPage() {
 
     <section className="billing-panel">
       <h2>Usage this month</h2>
-      <p>Usage is measured against your workspace entitlements and resets on the first day of each calendar month.</p>\n      <p>{data.entitlements.limits.workflow_execution==null?"Custom executions":`${data.entitlements.limits.workflow_execution.toLocaleString()} executions included`} · {data.entitlements.limits.ai_credit==null?"Custom AI credits":`${data.entitlements.limits.ai_credit.toLocaleString()} AI credits included`}</p>
+      <p>Usage is measured against your workspace entitlements and resets on the first day of each calendar month.</p>
+      <p>{data.entitlements.limits.workflow_execution==null?"Custom executions":`${data.entitlements.limits.workflow_execution.toLocaleString()} executions included`} · {data.entitlements.limits.ai_credit==null?"Custom AI credits":`${data.entitlements.limits.ai_credit.toLocaleString()} AI credits included`}</p>
       {metrics.map(metric => {
         const used = Math.max(0, data.entitlements.usage[metric.key] ?? 0);
         const limit = data.entitlements.limits[metric.key];
@@ -198,6 +202,8 @@ export default function BillingPage() {
                     <small className="billing-configured-price">{money(option.amount_minor, option.currency)} · {option.slug.endsWith("annual") ? "annual" : "monthly"}</small>
                     <BillingCheckout plan={option.slug} enabled={data.entitlements.billing.checkout_enabled} />
                     <BillingStripeCheckout plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} />
+                    <BillingStripeSubscription plan={option.slug} enabled={Boolean(data.entitlements.billing.stripe_subscription_enabled)} amountMinor={option.amount_minor} currency={option.currency} />
+                    <BillingPaystackMandate plan={option.slug} enabled={Boolean(data.entitlements.billing.paystack_recurring_enabled)} amountMinor={option.amount_minor} currency={option.currency} />
                   </div>)
                 : <span className="billing-current-label">Checkout not configured</span>}
         </article>)}
@@ -212,7 +218,10 @@ export default function BillingPage() {
             <div><strong>{payment.plan_slug.replaceAll("-", " ")}</strong><small>{date(payment.created_at)}</small></div>
             <span>{money(payment.amount_minor, payment.currency)} · {payment.provider}</span>
             <span className={`billing-payment-status ${payment.status}`}>{payment.status.replaceAll("_", " ")}</span>
-            {payment.status === "success" && <a className="billing-receipt-link" href={"/api/billing/invoices/" + payment.id} target="_blank" rel="noreferrer">View receipt ↗</a>}
+            {payment.status === "success" && <>
+              <a className="billing-receipt-link" href={"/api/billing/invoices/" + payment.id} target="_blank" rel="noreferrer">View receipt ↗</a>
+              <BillingTaxInvoice paymentId={payment.id} />
+            </>}
             {(payment.status === "failed" || payment.status === "abandoned") && <div className="billing-payment-retry"><BillingCheckout plan={payment.plan_slug} enabled={data.entitlements.billing.checkout_enabled} /><BillingStripeCheckout plan={payment.plan_slug} enabled={Boolean(data.entitlements.billing.stripe_checkout_enabled)} /></div>}
           </div>)}</div>
         : <p>No payments have been recorded for this workspace yet.</p>}

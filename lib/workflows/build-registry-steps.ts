@@ -9,7 +9,10 @@ type BuilderEdge = { id: string; source: string; target: string; label: "true" |
 type BuilderDefinition = { nodes: BuilderNode[]; edges?: BuilderEdge[] };
 
 const conditionOperators: Record<string, string> = {
-  equals: "equals", contains: "contains", greater_than: "greater_than", less_than: "less_than", is_set: "exists",
+  equals: "equals", not_equals: "not_equals", contains: "contains",
+  greater_than: "greater_than", greater_or_equal: "greater_or_equal",
+  less_than: "less_than", less_or_equal: "less_or_equal",
+  is_set: "exists", exists: "exists", is_empty: "is_empty",
 };
 
 function actionFor(node: BuilderNode) {
@@ -89,10 +92,18 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
 
   for (const node of nodes) {
     const nodeEdges = outgoing.get(node.id) ?? [];
-    if (nodeEdges.length && node.type === "condition") {
-      if (!nodeEdges.some((edge) => edge.label === "true") || !nodeEdges.some((edge) => edge.label === "false")) {
-        throw new Error("Every IF or Switch node with downstream work needs true and false paths.");
+    if (node.type === "condition") {
+      if (nodeEdges.length && (
+        nodeEdges.length !== 2 ||
+        nodeEdges.filter((edge) => edge.label === "true").length !== 1 ||
+        nodeEdges.filter((edge) => edge.label === "false").length !== 1
+      )) {
+        throw new Error("Every IF or Switch node with downstream work needs exactly one true path and one false path.");
       }
+    } else if (nodeEdges.length > 1) {
+      throw new Error("Only IF or Switch nodes can have multiple outgoing connections: " + node.title + ".");
+    } else if (nodeEdges.some((edge) => edge.label !== "next")) {
+      throw new Error("Only IF or Switch nodes can create true/false connections.");
     }
   }
 
@@ -128,9 +139,14 @@ export function buildRegistrySteps(definition: BuilderDefinition): RegisteredWor
       const operator = conditionOperators[rawOperator];
       if (!operator) throw new Error("Choose a supported condition operator for: " + node.title);
       const rawValue = node.settings.value ?? "";
-      const compareTo = ["greater_than", "less_than"].includes(operator) && rawValue.trim() !== "" && Number.isFinite(Number(rawValue)) ? Number(rawValue) : rawValue;
+      // Ordered comparisons are numeric when the configured threshold is a
+      // finite number. Do not restrict this to a short list of lead fields:
+      // custom webhook payloads (for example, score or age) must retain their
+      // numeric type or the strict IF evaluator will silently choose false.
+      const numericComparison = ["greater_than", "greater_or_equal", "less_than", "less_or_equal"].includes(operator);
+      const compareTo = numericComparison && rawValue.trim() !== "" && Number.isFinite(Number(rawValue)) ? Number(rawValue) : rawValue;
       nodeId = "if"; operationId = "evaluate"; kind = "action";
-      input = { value: reference, operator, ...(operator === "exists" ? {} : { compareTo }) };
+      input = { value: reference, operator, ...(["exists", "is_empty"].includes(operator) ? {} : { compareTo }) };
     } else {
       const action = actionFor(node);
       nodeId = action.nodeId; operationId = action.operationId; kind = "action"; input = action.input;

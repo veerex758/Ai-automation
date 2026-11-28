@@ -21,10 +21,16 @@ test("prepaid Paystack cancellation preserves access until paid-through date", (
   assert.match(migration, /no_active_paid_subscription/);
 });
 
-test("cancellation API requires an authenticated workspace and delegates authorization to the database", () => {
+test("cancellation API requires an authenticated workspace billing manager and retains the database guard", () => {
   assert.match(route, /auth\.getUser\(\)/);
   assert.match(route, /getOrCreateDefaultWorkspace/);
+  assert.match(route, /getWorkspaceRole\(supabase,workspace\.id,user\.id\)/);
+  assert.match(route, /canManageWorkspaceBilling\(role\)/);
+  assert.match(route, /status:\s*403/);
   assert.match(route, /request_workspace_subscription_cancellation/);
-  assert.match(route, /status: 403/);
-  assert.match(route, /status: 409/);
+  assert.match(route, /status:\s*409/);
+  assert.ok(
+    route.indexOf("canManageWorkspaceBilling(role)") < route.indexOf("createAdminClient();"),
+    "workspace billing authorization must run before the privileged admin client is created"
+  );
 });

@@ -129,7 +129,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
       setActiveJobId(jobId);
       let finalJob: { status: string; attempts: number; last_error_code?: string | null; cancel_requested_at?: string | null } | null = null;
       let checkpoints: LiveRunResult["checkpoints"] = [];
-      for (let attempt = 0; attempt < 30; attempt++) {
+      for (let attempt = 0; attempt < 60; attempt++) {
         await new Promise(resolve => window.setTimeout(resolve, 1000));
         const statusResponse = await fetch(`/api/workflows/${workflowId}/executions/${jobId}`, { cache: "no-store" });
         const statusData = await statusResponse.json();
@@ -201,7 +201,7 @@ export default function RunTestPanel({ workflowId, hasUnsavedChanges, workflowSt
         </button>}
         {liveNotice && <p className="dry-run-hint" role="status">{liveNotice}</p>}
         {liveError && <p className="dry-run-error" role="alert">{liveError}</p>}
-        {liveResult && <div className="live-run-success" role="status"><strong>Durable execution {liveResult.status}</strong><span>Run {liveResult.runId.slice(0, 8)} · {liveResult.attempts} attempt(s) · {liveResult.checkpoints.length} checkpoints</span><p>{liveResult.status === "succeeded" ? "The workflow completed. Its actual step results are saved in run history." : liveResult.status === "cancelled" ? "The execution was cancelled. Completed checkpoints remain in run history." : `The workflow stopped and was not automatically replayed. ${liveResult.errorCode ? `Error: ${liveResult.errorCode}. ` : ""}Check run history before deciding what to do next.`}</p></div>}
+        {liveResult && <div className="live-run-success" role="status"><strong>Durable execution {liveResult.status}</strong><span>Run {liveResult.runId.slice(0, 8)} · {liveResult.attempts} attempt(s) · {liveResult.checkpoints.length} checkpoints</span><p>{liveResult.status === "succeeded" ? "The workflow completed. Its actual step results are saved in run history." : liveResult.status === "cancelled" ? "The execution was cancelled. Completed checkpoints remain in run history." : `The workflow exhausted its approved retry policy and was moved to dead-letter. ${liveResult.errorCode ? `Error: ${liveResult.errorCode}. ` : ""}Check run history and reconcile any provider outcome before starting a new live run.`}</p></div>}
       </div>}
       {isWebhookTrigger && <p className="dry-run-hint">This workflow is webhook-triggered. Live runs start only from a correctly signed inbound event; the manual live-run button is disabled.</p>}
       {result && <div className="dry-run-results" role="status">

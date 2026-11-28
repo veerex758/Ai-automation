@@ -17,7 +17,7 @@ test("Paystack reconciliation verifies pending transactions and runs lifecycle s
  assert.ok(billingRoute.includes("expire_workspace_subscriptions"));
 });
 test("daily Vercel cron invokes protected billing reconciliation",()=>{
- assert.ok(vercel.crons.some(c=>c.path==="/api/internal/billing/reconcile"));
+ assert.ok(Object.values(vercel.schedules ?? {}).some((schedule) => schedule.path === "/api/internal/billing/reconcile"));
 });
 test("payment receipt is workspace scoped and only available for verified payments",()=>{
  assert.ok(invoice.includes('eq("workspace_id",workspace.id)'));

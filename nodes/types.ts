@@ -15,8 +15,14 @@ export type NodeContext = {
   previousOutputs: Readonly<Record<string, unknown>>;
   /** Aborted when the durable worker loses its lease. */
   signal?: AbortSignal;
+  /** Stable per-job/per-step provider key used only by adapters that support idempotent writes. */
+  idempotencyKey?: string;
+  /** Derives a stable provider key from a persisted checkpoint step ID. */
+  getIdempotencyKey?: (stepId: string) => string;
   /** Worker-side authorization hook, called immediately before every live provider handler. */
   authorizeOperation?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action" }) => Promise<void>;
+  /** Resolve the exact workspace connection selected on this workflow step. Never resolves credentials in the browser. */
+  resolveStepCredentials?: (args: { nodeId: string; operationId: string; kind: "trigger" | "action"; connectionId?: string }) => Promise<void>;
   webhook?: { verified: boolean };
   /** Shared atomic rate-limit backend. Missing backend fails closed. */
   rateLimit?: { consume(args: { key: string; limit: number; windowMs: number }): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> };

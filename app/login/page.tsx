@@ -7,6 +7,26 @@ import { createClient } from "@/lib/supabase/client";
 import { safeInternalPath } from "@/lib/auth/safe-internal-path";
 import "./login.css";
 
+function safeAuthErrorMessage(error: unknown, mode: "signin" | "signup") {
+  const candidate = error && typeof error === "object" ? error as { code?: unknown; status?: unknown; message?: unknown } : {};
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const status = typeof candidate.status === "number" ? candidate.status : 0;
+
+  if (message.includes("Supabase is not configured")) return "Workspace authentication is not configured for this deployment. Please try again later.";
+  if (code === "invalid_credentials") return "Email or password is incorrect. Check your details and try again.";
+  if (code === "email_not_confirmed") return "Please confirm your email address before signing in.";
+  if (code === "user_already_exists" || code === "email_exists") return "An account already exists with this email. Try signing in instead.";
+  if (code === "weak_password") return "Choose a stronger password and try again.";
+  if (code === "email_address_invalid") return "Enter a valid email address.";
+  if (code === "signup_disabled") return "New account creation is temporarily unavailable.";
+  if (code === "over_email_send_rate_limit" || code === "over_request_rate_limit") return "Too many attempts. Wait a little and try again.";
+  if (status >= 500 || error instanceof TypeError) return "The authentication service is temporarily unavailable. Please try again shortly.";
+  return mode === "signup"
+    ? "We couldn’t create your account. Check your details or try again shortly."
+    : "We couldn’t complete sign-in. Check your details and try again.";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -61,8 +81,15 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (caught) {
-      // Do not expose provider/auth internals in the browser UI.
-      setError("We couldn’t complete sign-in. Check your details and try again.");
+      const candidate = caught && typeof caught === "object" ? caught as { code?: unknown; status?: unknown; name?: unknown } : {};
+      // Log only non-sensitive diagnostic metadata; never log credentials or email.
+      console.warn("[auth] request failed", {
+        mode,
+        code: typeof candidate.code === "string" ? candidate.code : "unknown",
+        status: typeof candidate.status === "number" ? candidate.status : null,
+        errorName: typeof candidate.name === "string" ? candidate.name : "Error",
+      });
+      setError(safeAuthErrorMessage(caught, mode));
     } finally {
       setBusy(false);
     }

@@ -6,6 +6,7 @@ const route = readFileSync(
   new URL("../app/api/internal/scheduler/route.ts", import.meta.url),
   "utf8",
 );
+const adminConfig = readFileSync(new URL("../lib/supabase/admin.ts", import.meta.url), "utf8");
 const migration = readFileSync(
   new URL("../supabase/migrations/20261011091000_scheduled_workflow_dispatcher.sql", import.meta.url),
   "utf8",
@@ -15,14 +16,22 @@ test("protects the scheduler endpoint with a timing-safe server secret check", (
   assert.ok(route.includes("timingSafeEqual"));
   assert.ok(route.includes("process.env.CRON_SECRET"));
   assert.ok(route.includes('request.headers.get("authorization")'));
-  assert.ok(route.includes("SUPABASE_SECRET_KEY"));
-  assert.ok(route.includes("SUPABASE_SERVICE_ROLE_KEY"));
+  assert.ok(route.includes("getAdminSupabaseConfig"));
+  assert.ok(adminConfig.includes("process.env.SUPABASE_SECRET_KEY"));
+  assert.ok(adminConfig.includes("process.env.SUPABASE_SERVICE_ROLE_KEY"));
 });
 
-test("durably queues scheduled work for the dry-run worker", () => {
+test("durably queues scheduled work with an explicit environment-gated execution mode", () => {
   assert.ok(route.includes("const claimLimit = 10"));
   assert.ok(route.includes("const leaseSeconds = 300"));
   assert.ok(route.includes('"dispatch_workflow_execution"'));
+  assert.ok(route.includes('p_execution_mode: executionMode'));
+  assert.ok(route.includes('AIVANTA_SCHEDULED_LIVE_EXECUTION_ENABLED'));
+  assert.ok(route.includes('AIVANTA_LIVE_EXECUTION_ENABLED'));
+  assert.ok(route.includes('AIVANTA_WORKFLOW_SCHEDULER_ENABLED'));
+  assert.ok(route.includes('validateDurableLiveSteps'));
+  assert.ok(route.includes('durableLiveRetryAttempts'));
+  assert.ok(route.includes('after(async () =>'));
   assert.ok(route.includes('"schedule:" + claim.schedule_id'));
   assert.ok(route.includes('p_payload: { input: scheduledInput, source: "schedule"'));
   assert.ok(!route.includes("runDryRun"));

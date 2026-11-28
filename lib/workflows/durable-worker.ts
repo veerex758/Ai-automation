@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { decryptWorkspaceCredentials, encryptWorkspaceCredentials, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
+import { decryptWorkspaceCredentials, encryptWorkspaceCredentialsV2, type WorkspaceCredentials } from "@/lib/integrations/workspace-credentials";
 import { PROVIDER_OAUTH_CONFIG, refreshProviderOAuthToken } from "@/lib/integrations/provider-oauth";
 import { decryptGoogleCredentials, encryptGoogleCredentials } from "@/lib/integrations/google-credentials";
 import { GOOGLE_PRODUCTS, type GoogleProduct } from "@/lib/integrations/google-oauth";
@@ -28,21 +29,25 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 function client() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || ! key) throw new Error("WORKER_DATABASE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, {
+  let config: ReturnType<typeof getAdminSupabaseConfig>;
+  try { config = getAdminSupabaseConfig(); }
+  catch { throw new Error("WORKER_DATABASE_NOT_CONFIGURED"); }
+  return createSupabaseClient(config.url, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
 
-async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct): Promise<string> {
-  const { data: connection, error } = await db.from("google_connections")
-    .select("id,encrypted_credentials,expires_at,status,scopes")
-    .eq("workspace_id", workspaceId).eq("product", product).eq("status", "connected")
-    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+export async function googleAccessToken(db: DbClient, workspaceId: string, product: GoogleProduct, connectionId?: string): Promise<string> {
+  if (!connectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+  let query = db.from("google_connections").select("id,encrypted_credentials,expires_at,status,scopes,last_test_status")
+    .eq("workspace_id", workspaceId).eq("provider", "google").eq("product", product)
+    .eq("status", "connected").eq("last_test_status", "passed");
+  if (connectionId) query = query.eq("id", connectionId);
+  const { data: connections, error } = await query.order("updated_at", { ascending: false }).limit(2);
   if (error) throw new Error("GOOGLE_CONNECTION_LOOKUP_FAILED");
-  if (!connection) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (!connections?.length) throw new Error(product.toUpperCase() + "_CONNECTION_REQUIRED");
+  if (connections.length > 1) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+  const connection = connections[0];
   const requiredScope = GOOGLE_PRODUCTS[product].scopes[0];
   if (!Array.isArray(connection.scopes) || !connection.scopes.includes(requiredScope)) {
     throw new Error("GOOGLE_SCOPE_MISMATCH");
@@ -63,7 +68,7 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
     cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) {
-    await db.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", connection.id);
+    await db.from("google_connections").update({ status: "needs_reauth", updated_at: new Date().toISOString() }).eq("id", connection.id).eq("workspace_id", workspaceId);
     throw new Error("GOOGLE_REAUTH_REQUIRED");
   }
   const token = await response.json() as { access_token?: unknown; expires_in?: unknown; scope?: unknown; token_type?: unknown };
@@ -82,7 +87,10 @@ async function googleAccessToken(db: DbClient, workspaceId: string, product: Goo
   return updated.access_token;
 }
 
-async function workspaceCredentials(db: DbClient, workspaceId: string, providers: Set<string>): Promise<WorkspaceCredentials> {
+async function workspaceCredentials(
+  db: DbClient, workspaceId: string, providers: Set<string>,
+  selectedConnectionIds: ReadonlyMap<string, string> = new Map(),
+): Promise<WorkspaceCredentials> {
   const credentials: WorkspaceCredentials = {};
   for (const provider of providers) {
     const googleProductByProvider: Record<string, GoogleProduct> = {
@@ -92,24 +100,32 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
     const googleProduct = googleProductByProvider[provider];
     if (provider === "rss_feed") { credentials[provider] = {}; continue; }
     if (googleProduct) {
-      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct) };
+      credentials[provider] = { accessToken: await googleAccessToken(db, workspaceId, googleProduct, selectedConnectionIds.get(provider)) };
       continue;
     }
     if (!["openai", "gemini", "resend", "slack", "http", "notion", "hubspot", "twilio", "shopify", "stripe", "linear", "elevenlabs", "stability_ai", "hugging_face", "pinecone", "microsoft_teams", "salesforce", "pipedrive", "zoho_crm", "freshsales", "close", "apollo", "intercom", "jira", "asana", "trello", "clickup", "monday", "todoist", "airtable", "bitbucket", "netlify", "woocommerce", "paypal", "paddle", "lemon_squeezy", "square", "razorpay", "zoom", "cal_com", "twilio_voice", "docusign", "x_twitter", "linkedin", "facebook_pages", "instagram", "tiktok", "mailchimp", "typeform", "supabase", "postgresql", "mysql", "mongodb", "redis", "firebase", "dropbox", "aws_s3", "cloudflare_r2", "claude", "mistral", "groq", "perplexity", "discord", "telegram", "whatsapp_business", "sendgrid", "mailgun", "postmark", "github", "gitlab", "sentry", "vercel", "calendly", "zendesk", "freshdesk", "serpapi", "openweather"].includes(provider)) {
       throw new Error("WORKSPACE_INTEGRATION_UNSUPPORTED");
     }
-    const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider).maybeSingle();
+    const selectedConnectionId = selectedConnectionIds.get(provider);
+    if (!selectedConnectionId) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+    const integrationQuery = db.from("workspace_integrations")
+      .select("id,status,last_test_status").eq("workspace_id", workspaceId).eq("provider", provider)
+      .eq("id", selectedConnectionId)
+      .eq("status", "connected").eq("last_test_status", "passed");
+    const { data: integrations, error: integrationError } = await integrationQuery.order("created_at", { ascending: false }).limit(2);
     if (integrationError) throw new Error("WORKSPACE_INTEGRATION_LOOKUP_FAILED");
-    if (!integration || integration.status !== "connected" || integration.last_test_status !== "passed") {
+    if (!integrations?.length) {
       throw new Error(provider === "resend" ? "EMAIL_CONNECTION_REQUIRED" : provider.toUpperCase() + "_CONNECTION_REQUIRED");
     }
+    if (integrations.length > 1) throw new Error("WORKSPACE_CONNECTION_SELECTION_REQUIRED");
+    const integration = integrations[0];
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
       .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw new Error("WORKSPACE_CREDENTIAL_LOOKUP_FAILED");
-    if (!secret || secret.encryption_version !== "v1") throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
+    if (!secret || !["v1", "v2"].includes(secret.encryption_version)) throw new Error("WORKSPACE_CREDENTIALS_NOT_CONFIGURED");
     let decrypted: WorkspaceCredentials;
-    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspaceId}:${provider}`); }
+    const associatedData = secret.encryption_version === "v2" ? `${workspaceId}:${provider}:${integration.id}` : `${workspaceId}:${provider}`;
+    try { decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData); }
     catch { throw new Error("WORKSPACE_CREDENTIALS_DECRYPT_FAILED"); }
     if (!decrypted[provider]) throw new Error("WORKSPACE_CREDENTIAL_PROVIDER_MISMATCH");
     let providerCredentials = decrypted[provider];
@@ -134,9 +150,9 @@ async function workspaceCredentials(db: DbClient, workspaceId: string, providers
             ...(typeof refreshed.token_type === "string" ? { tokenType: refreshed.token_type } : {}),
             ...(typeof refreshed.scope === "string" ? { scope: refreshed.scope } : {}),
           };
-          const encrypted = encryptWorkspaceCredentials({ [provider]: providerCredentials }, undefined, `${workspaceId}:${provider}`);
+          const encrypted = encryptWorkspaceCredentialsV2({ [provider]: providerCredentials }, `${workspaceId}:${provider}:${integration.id}`);
           const { error: refreshSaveError } = await db.from("workspace_integration_secrets").update({
-            encrypted_credentials: encrypted, encryption_version: "v1", updated_at: new Date().toISOString(),
+            encrypted_credentials: encrypted, encryption_version: "v2", updated_at: new Date().toISOString(),
           }).eq("integration_id", integration.id);
           if (refreshSaveError) throw new Error("OAUTH_TOKEN_REFRESH_SAVE_FAILED");
         } catch {
@@ -180,7 +196,7 @@ function liveStepAllowed(step: RegisteredWorkflowStep): boolean {
   return isProviderLiveEnabled(provider, process.env.AIVANTA_LIVE_INTEGRATIONS);
 }
 
-export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): string | null {
+export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[], options: { skipEmailRecipientAllowlist?: boolean } = {}): string | null {
   if (!Array.isArray(steps) || steps.length < 1 || steps.length > 30 ||
       steps.filter((step) => step.kind === "action").length > MAX_LIVE_ACTION_STEPS) {
     return "LIVE_WORKFLOW_STEP_LIMIT_EXCEEDED";
@@ -198,9 +214,11 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
   const emailSteps = steps.filter((step) => step.nodeId === "email" && step.operationId === "send_email");
   const allowedEmailRecipients = new Set((process.env.AIVANTA_LIVE_EMAIL_RECIPIENTS ?? "")
     .split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
-  for (const step of emailSteps) {
-    const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
-    if (!to || to.includes("{{") || !allowedEmailRecipients.has(to)) return "LIVE_EMAIL_RECIPIENT_NOT_ALLOWED";
+  if (!options.skipEmailRecipientAllowlist) {
+    for (const step of emailSteps) {
+      const to = isRecord(step.input) && typeof step.input.to === "string" ? step.input.to.trim().toLowerCase() : "";
+      if (!to || to.includes("{{") || !allowedEmailRecipients.has(to)) return "LIVE_EMAIL_RECIPIENT_NOT_ALLOWED";
+    }
   }
 
   const voiceSteps = steps.filter((step) => step.nodeId === "twilio_voice" && step.operationId === "execute");
@@ -217,6 +235,34 @@ export function validateDurableLiveSteps(steps: RegisteredWorkflowStep[]): strin
     return "LIVE_PUBLISHING_NOT_ENABLED";
   }
   return null;
+}
+
+
+/**
+ * Live retries are opt-in by operation. Resend is the only currently enabled
+ * external write because it honors Idempotency-Key for 24 hours. Gemini may be
+ * repeated on a pre-checkpoint crash (and can incur another model charge), but
+ * it does not create a customer-facing side effect. Unknown operations fail closed.
+ */
+const RETRY_SAFE_LIVE_OPERATIONS = new Set([
+  "email.send_email",
+  "gemini.qualify_real_estate_lead", "gemini.generate_text",
+  "if.evaluate", "switch.select_route", "merge.merge_inputs",
+  "set_fields.merge_fields", "json_parse.parse", "filter.filter_items",
+  "aggregate.calculate", "date_time.current_time", "loop.iterate",
+  "deduplicate.unique", "sort.sort_items", "split_batches.split",
+  "crypto_hash.hash", "template.render", "csv_parse.parse",
+  "csv_stringify.stringify", "markdown_html.convert", "text_transform.transform",
+  "regex.match", "array_ops.operate", "object_ops.operate", "math.calculate",
+  "uuid.generate", "base64.convert", "date_add.add", "date_format.format",
+  "json_encode.encode",
+]);
+
+export function durableLiveRetryAttempts(steps: RegisteredWorkflowStep[]): number {
+  if (!Array.isArray(steps) || !steps.some((step) =>
+    step.kind === "action" && step.nodeId === "email" && step.operationId === "send_email")) return 1;
+  return steps.every((step) => step.kind === "trigger" ||
+    RETRY_SAFE_LIVE_OPERATIONS.has(step.nodeId + "." + step.operationId)) ? 3 : 1;
 }
 
 function safeWebhookTriggerOutput(job: Job): Record<string, unknown> {
@@ -255,6 +301,7 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
   return {
     credentials,
     signal: leaseState.controller.signal,
+    getIdempotencyKey: (stepId: string) => `rexnora:${job.id}:${stepId}`,
     logger: {
       info(message, meta) { console.info("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
       error(message, meta) { console.error("[queue-node]", redactSensitiveData(message, knownCredentialValues(credentials)), redactSensitiveData(meta ?? {}, knownCredentialValues(credentials))); },
@@ -278,7 +325,11 @@ function executionContext(credentials: WorkspaceCredentials, webhookVerified: bo
       if (leaseState.lost || leaseState.controller.signal.aborted) throw new Error("EXECUTION_LEASE_LOST");
       const { data: cancellation, error: cancellationError } = await db.from("execution_jobs")
         .select("cancel_requested_at").eq("id", job.id).eq("lease_token", job.lease_token).maybeSingle();
-      if (cancellationError) throw new Error("EXECUTION_LEASE_CHECK_FAILED");
+      if (cancellationError) {
+        leaseState.lost = true;
+        leaseState.controller.abort(new Error("EXECUTION_LEASE_LOST"));
+        throw new Error("EXECUTION_LEASE_LOST");
+      }
       if (cancellation?.cancel_requested_at) {
         leaseState.cancelled = true;
         leaseState.controller.abort(new Error("EXECUTION_CANCELLED"));
@@ -337,7 +388,7 @@ async function persistCheckpoint(
   if (error) throw new Error("CHECKPOINT_WRITE_FAILED");
 }
 
-export async function runDurableWorker() {
+async function runDurableWorkerPass() {
   let db: DbClient;
   try { db = client(); } catch {
     throw new Error("WORKER_DATABASE_NOT_CONFIGURED");
@@ -429,12 +480,23 @@ export async function runDurableWorker() {
             ? { ...step, input: { ...(isRecord(step.input) ? step.input : {}), ...(job.payload.input as Record<string, unknown>) } }
             : step);
         }
-        const requiredProviders = new Set(steps.map(providerForStep).filter((value): value is string => Boolean(value) && value !== "rss_feed"));
-        const credentials = job.execution_mode === "live"
-          ? await workspaceCredentials(db, job.workspace_id, requiredProviders)
-          : {};
-        executionSecrets = knownCredentialValues(credentials);
+        // Resolve exactly the saved connection for each provider step at execution time.
+        // The mutable credentials map is server-only and is populated immediately
+        // before a live provider operation; no implicit/default account is selected.
+        const credentials: WorkspaceCredentials = {};
         const context = executionContext(credentials, job.payload?.webhookVerified === true, db, job.workspace_id, job, leaseState);
+        context.resolveStepCredentials = async ({ nodeId, operationId, kind, connectionId }) => {
+          if (job.execution_mode !== "live") return;
+          const step = { nodeId, operationId, kind, connectionId } as RegisteredWorkflowStep;
+          const provider = providerPackLiveId(step) ?? getWorkerProvider(step);
+          if (!provider || provider === "rss_feed") return;
+          const resolved = await workspaceCredentials(
+            db, job.workspace_id, new Set([provider]),
+            connectionId ? new Map([[provider, connectionId]]) : new Map(),
+          );
+          Object.assign(credentials, resolved);
+          executionSecrets = knownCredentialValues(credentials);
+        };
         const { data: savedCheckpoints, error: checkpointReadError } = await db.from("execution_checkpoints")
           .select("step_id,status,output").eq("job_id", job.id).eq("status", "succeeded");
         if (checkpointReadError || !Array.isArray(savedCheckpoints)) throw new Error("CHECKPOINT_READ_FAILED");
@@ -652,7 +714,11 @@ export async function runDurableWorker() {
       succeeded++;
     } catch (error) {
       outcome = error instanceof Error && /^[A-Z0-9_]{1,64}$/.test(error.message) ? error.message : "EXECUTION_FAILED";
-      if (outcome === "EXECUTION_CANCELLED") {
+      if (leaseState.lost || outcome === "EXECUTION_LEASE_LOST" || outcome === "EXECUTION_LEASE_CHECK_FAILED") {
+        // A worker that cannot prove it still owns the lease must not finalize
+        // or retry itself. The database lease expiry is the recovery authority.
+        leaseLost++;
+      } else if (outcome === "EXECUTION_CANCELLED") {
         const { data: cancelledResult, error: cancelError } = await db.rpc("finish_cancelled_execution_job", {
           p_job_id: job.id, p_lease_token: job.lease_token,
         });
@@ -678,6 +744,46 @@ export async function runDurableWorker() {
       });
     }
   }
-  if (data.length === 0) await db.rpc("record_execution_worker_heartbeat", { p_worker_id: workerId, p_status: "idle", p_job_id: null, p_error_code: null });
+  if (data.length === 0) {
+    await db.rpc("record_execution_worker_heartbeat", {
+      p_worker_id: workerId,
+      p_status: "idle",
+      p_job_id: null,
+      p_error_code: null,
+    });
+  }
+
+  const { error: finalErrorDispatchError } = await db.rpc(
+    "dispatch_pending_execution_error_events",
+    { p_limit: 25 },
+  );
+  if (finalErrorDispatchError) {
+    console.warn("Rexnora worker could not flush workflow error events after processing.");
+  }
   return { claimed: data.length, succeeded, retried, deadLettered, leaseLost, cancelled };
+}
+
+/**
+ * Drain due work within a strict invocation budget. A 10-second wait covers
+ * both database retry delays (5s then 10s), and retry_wait rows are prioritized
+ * by the claim RPC. The database remains authoritative if this invocation ends.
+ */
+export async function runDurableWorker() {
+  const total = { claimed: 0, succeeded: 0, retried: 0, deadLettered: 0, leaseLost: 0, cancelled: 0 };
+  const deadline = Date.now() + 50_000;
+  for (let pass = 0; pass < 25 && Date.now() < deadline; pass++) {
+    const result = await runDurableWorkerPass();
+    total.claimed += result.claimed;
+    total.succeeded += result.succeeded;
+    total.retried += result.retried;
+    total.deadLettered += result.deadLettered;
+    total.leaseLost += result.leaseLost;
+    total.cancelled += result.cancelled;
+    if (result.claimed === 0) break;
+    if (result.retried > 0) {
+      if (Date.now() + 10_000 >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+    }
+  }
+  return total;
 }

@@ -7,11 +7,12 @@ const dispatch = readFileSync(new URL("../app/api/workflows/[workflowId]/dispatc
 const worker = readFileSync(new URL("../lib/workflows/durable-worker.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/20261031100000_aivanta_durable_execution_queue.sql", import.meta.url), "utf8");
 
-test("legacy registry live-run alias delegates to safe tests or durable dispatch", () => {
-  assert.match(legacyRoute, /safeRun\(forwarded, context\)/);
-  assert.match(legacyRoute, /dispatch\(forwarded, context\)/);
-  assert.match(legacyRoute, /Mode must be live or dry_run/);
-  assert.match(legacyRoute, /payload\.mode === "dry_run" && payload\.dryRun === false/);
+test("legacy synchronous live-run endpoint rejects execution and requires durable dispatch", () => {
+  assert.match(legacyRoute, /Synchronous live execution is disabled/);
+  assert.match(legacyRoute, /DURABLE_DISPATCH_REQUIRED/);
+  assert.match(legacyRoute, /statusCode: 409/);
+  assert.doesNotMatch(legacyRoute, /safeRun|dispatch\(/);
+  assert.match(dispatch, /dispatch_workflow_execution/);
 });
 
 test("durable dispatch requires a UUID idempotency key before queueing", () => {

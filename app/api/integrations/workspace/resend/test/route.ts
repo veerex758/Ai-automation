@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspace } from "@/lib/supabase/workspace";
@@ -12,10 +13,10 @@ function json(body: unknown, status = 200) {
 }
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || ! key) throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, {
+  let config: ReturnType<typeof getAdminSupabaseConfig>;
+  try { config = getAdminSupabaseConfig(); }
+  catch { throw new Error("INTEGRATION_DATABASE_NOT_CONFIGURED"); }
+  return createSupabaseClient(config.url, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
@@ -25,7 +26,7 @@ function senderDomain(fromEmail: string) {
   return match?.[1]?.toLowerCase() ?? null;
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   let workspaceId: string | null = null;
   let integrationId: string | null = null;
   try {
@@ -33,6 +34,11 @@ export async function POST(_request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ error: "Authentication required." }, 401);
 
+    const body = await request.json().catch(() => null) as { connectionId?: unknown } | null;
+    const requestedConnectionId = typeof body?.connectionId === "string" ? body.connectionId : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedConnectionId)) {
+      return json({ error: "Choose a saved Resend connection to test." }, 400);
+    }
     const workspace = await getOrCreateDefaultWorkspace(supabase);
     workspaceId = workspace.id;
     const { data: membership, error: membershipError } = await supabase.from("workspace_members")
@@ -44,7 +50,7 @@ export async function POST(_request: NextRequest) {
 
     const db = serviceClient();
     const { data: integration, error: integrationError } = await db.from("workspace_integrations")
-      .select("id,display_name").eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
+      .select("id,display_name").eq("id", requestedConnectionId).eq("workspace_id", workspace.id).eq("provider", "resend").maybeSingle();
     if (integrationError) throw integrationError;
     if (!integration) return json({ error: "Save your Resend connection before testing it." }, 404);
     const { error: invalidateError } = await db.from("workspace_integrations").update({
@@ -54,13 +60,14 @@ export async function POST(_request: NextRequest) {
     integrationId = integration.id;
 
     const { data: secret, error: secretError } = await db.from("workspace_integration_secrets")
-      .select("encrypted_credentials").eq("integration_id", integration.id).maybeSingle();
+      .select("encrypted_credentials,encryption_version").eq("integration_id", integration.id).maybeSingle();
     if (secretError) throw secretError;
-    if (!secret?.encrypted_credentials) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
+    if (!secret?.encrypted_credentials || !["v1", "v2"].includes(secret.encryption_version)) return json({ error: "The saved Resend credential is unavailable. Save the connection again." }, 409);
 
     let credentials: Record<string, string>;
     try {
-      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, `${workspace.id}:resend`);
+      const associatedData = secret.encryption_version === "v2" ? `${workspace.id}:resend:${integration.id}` : `${workspace.id}:resend`;
+      const decrypted = decryptWorkspaceCredentials(secret.encrypted_credentials, undefined, associatedData);
       credentials = decrypted.resend;
     } catch {
       return json({ error: "Aivanta could not decrypt this saved credential. Check the workspace encryption key and save the connection again if it changed." }, 503);
@@ -84,7 +91,7 @@ export async function POST(_request: NextRequest) {
       const timedOut = error instanceof Error && error.name === "AbortError";
       await db.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
-      }).eq("id", integration.id);
+      }).eq("id", integration.id).eq("workspace_id", workspace.id);
       return json({ error: timedOut ? "Resend did not respond within 8 seconds. Check the connection and try again." : "Aivanta could not reach Resend. Check the server network and try again." }, 502);
     } finally {
       clearTimeout(timeout);
@@ -95,13 +102,13 @@ export async function POST(_request: NextRequest) {
       const message = status === 401
         ? "Resend rejected this API key. Check the key and save the correct one."
         : status === 403
-          ? "Resend denied access to the domain check. Use a key with domain-read access, or verify the key's permissions in Resend."
+          ? "Resend denied access to domain listing. This can happen with a Sending access key and does not by itself mean the key is invalid. Use the explicit Send test email action in Connections to verify sending access."
           : status === 429
             ? "Resend rate-limited the connection check. Wait a moment and try again."
             : "Resend could not complete the connection check.";
       await db.from("workspace_integrations").update({
         status: "needs_attention", last_tested_at: new Date().toISOString(), last_test_status: "failed",
-      }).eq("id", integration.id);
+      }).eq("id", integration.id).eq("workspace_id", workspace.id);
       return json({ error: message }, status === 429 ? 429 : 502);
     }
 
@@ -145,7 +152,7 @@ export async function POST(_request: NextRequest) {
         const db = serviceClient();
         await db.from("workspace_integrations").update({
           last_tested_at: new Date().toISOString(), last_test_status: "failed",
-        }).eq("id", integrationId);
+        }).eq("id", integrationId).eq("workspace_id", workspaceId);
       } catch { /* preserve the sanitized response */ }
     }
     return json({ error: "Could not complete the Resend connection check. No email was sent." }, 500);

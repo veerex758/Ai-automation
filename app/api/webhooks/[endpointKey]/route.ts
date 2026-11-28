@@ -1,24 +1,25 @@
 import { createHash } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { after, NextResponse, type NextRequest } from "next/server";
 import { runDurableWorker } from "@/lib/workflows/durable-worker";
 import { decryptWebhookSecret } from "@/lib/webhooks/secret-crypto";
 import { verifyWebhookSignature } from "@/lib/webhooks/verify-signature";
-import { validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
+import { durableLiveRetryAttempts, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_EVENT_AGE_SECONDS = 300;
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("WEBHOOK_SERVICE_DATABASE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  let config: ReturnType<typeof getAdminSupabaseConfig>;
+  try { config = getAdminSupabaseConfig(); }
+  catch { throw new Error("WEBHOOK_SERVICE_DATABASE_NOT_CONFIGURED"); }
+  return createSupabaseClient(config.url, config.serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 async function readBoundedBody(request: NextRequest): Promise<Buffer | null> {
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ en
       p_created_by: dispatchActor,
       p_idempotency_key: "webhook:" + endpoint.id + ":" + eventKey,
       p_payload: { input: eventInput, source: "webhook", webhookVerified: true, endpointId: endpoint.id, payloadSha256 },
-      p_max_attempts: 1,
+      p_max_attempts: durableLiveRetryAttempts(steps),
       p_execution_mode: "live",
     });
     const queued = dispatch as Record<string, unknown> | null;

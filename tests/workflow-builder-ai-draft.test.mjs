@@ -79,17 +79,25 @@ test("workflow builder preserves generated step order as explicit editable graph
   assert.match(page, /label: "next" as const/);
 });
 
-test("AI Assistant creates an inactive validated draft and opens the visual Builder immediately", () => {
-  assert.match(assistant, /Generate on visual canvas/);
-  assert.match(assistant, /status: "draft"/);
-  assert.match(assistant, /router\.push/);
-  assert.match(assistant, /dashboard\/workflows/);
-  assert.match(assistant, /REXNORA AI WORKFLOW DESIGNER/);
-  assert.doesNotMatch(assistant, /generated-node|Review validated draft in Builder/);
+test("legacy AI Assistant authoring redirects into outcome-first Playbook setup", () => {
+  assert.match(assistant, /redirect\("\/dashboard\/playbooks\/new"\)/);
+  assert.doesNotMatch(assistant, /Generate on visual canvas|REXNORA AI WORKFLOW DESIGNER/);
 });
 
 test("AI-generated graph drafts remain review-only and are not auto-executed", () => {
   assert.match(page, /Review and edit it, then Save workflow; it has not been executed\./);
   assert.match(page, /async function saveDefinition\(\)/);
   assert.match(page, /async function activateWorkflow\(\)/);
+});
+
+
+test("AI draft retry is an explicit user action and reuses the saved prompt", () => {
+  assert.match(page, /aiDraftRetryPrompt/);
+  assert.match(page, /aiDraftRetryable/);
+  assert.match(page, /generateDraftOnCanvas\(retryPrompt\?: string\)/);
+  assert.match(page, /generateDraftOnCanvas\(aiDraftRetryPrompt\)/);
+  assert.match(page, /Retry AI draft/);
+  assert.match(page, /disabled=\{aiDraftGenerating\}/);
+  assert.match(page, /setAiDraftRetryPrompt\(prompt\)/);
+  assert.match(page, /setAiDraftRetryPrompt\(""\)/);
 });

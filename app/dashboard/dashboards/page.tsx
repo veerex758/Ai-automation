@@ -72,7 +72,7 @@ export default function DashboardsPage(){
  const gridClass=layout.replace("_","-");
  return <main className="dashboards-shell">
   <header className="dashboards-header">
-   <div><Link href="/dashboard">← Workspace</Link><p>WORKSPACE ANALYTICS</p><h1>Dashboard Builder</h1><span>Build saved views from live Aivanta workspace data.</span></div>
+   <div><Link href="/dashboard">← Workspace</Link><p>WORKSPACE ANALYTICS</p><h1>Dashboard Builder</h1><span>Build saved views from live Rexnora workspace data.</span></div>
    <div className="dashboards-actions"><button onClick={()=>void load()} disabled={loading}>↻ Refresh data</button><button className="primary" onClick={startNew}>＋ New dashboard</button></div>
   </header>
   {notice&&<p className="dashboards-notice" role="status">{notice}</p>}
@@ -90,7 +90,7 @@ export default function DashboardsPage(){
      </div>
      <div className="widget-toolbar"><strong>Widgets</strong><select defaultValue="" onChange={e=>{if(e.target.value)addWidget(e.target.value);e.target.value="";}}><option value="" disabled>＋ Add a live metric widget</option>{catalog.filter(c=>!widgets.some(w=>w.metric===c.metric)).map(c=><option key={c.metric} value={c.metric}>{c.title}</option>)}</select></div>
      <div className={"dashboard-widget-grid "+gridClass}>
-      {widgets.map(w=><article className="dashboard-widget" key={w.id}><div><small>LIVE WORKSPACE METRIC</small><button onClick={()=>removeWidget(w.id)} aria-label={"Remove "+w.title}>×</button></div><h3>{w.title}</h3><strong>{w.metric==="success_rate"?(metrics[w.metric]||0)+"%":(metrics[w.metric]||0).toLocaleString()}</strong><span>Source: Aivanta workspace records</span></article>)}
+      {widgets.map(w=><article className="dashboard-widget" key={w.id}><div><small>LIVE WORKSPACE METRIC</small><button onClick={()=>removeWidget(w.id)} aria-label={"Remove "+w.title}>×</button></div><h3>{w.title}</h3><strong>{w.metric==="success_rate"?(metrics[w.metric]||0)+"%":(metrics[w.metric]||0).toLocaleString()}</strong><span>Source: Rexnora workspace records</span></article>)}
       {!widgets.length&&<p className="widget-empty">Add a metric widget to begin building this dashboard.</p>}
      </div>
      <footer className="dashboards-footer"><span>{refreshed?"Data refreshed "+new Date(refreshed).toLocaleTimeString():"Metrics refresh on demand."}</span><div><button onClick={()=>void deleteDashboard()} disabled={!selected||creating||busy}>Delete</button><button className="primary" onClick={()=>void save()} disabled={busy||!name.trim()}>{busy?"Saving…":"Save dashboard"}</button></div></footer>

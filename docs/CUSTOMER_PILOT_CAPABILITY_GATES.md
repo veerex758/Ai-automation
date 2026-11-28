@@ -8,11 +8,13 @@ Do not count catalogue entries as usable integrations. A capability is customer-
 
 | Capability | Runtime | Execution boundary | Pilot status |
 |---|---|---|---|
-| Manual trigger | Registered | Live route has explicit policy | Guarded |
-| Email / Resend | Implemented | Server flag + recipient allowlist | Narrow guarded live |
-| Slack | Registered | Not enabled in live allowlist | Dry-run / registry execution only |
-| Gemini text | Registered workspace credential node | Provider call occurs only in registered runner; no general live activation claim | Connected test / draft |
-| Inbound webhook | Signature verification and ingress plumbing | Workflow dispatch still requires its own persisted, guarded path | Do not market as generally live |
+| Manual trigger | Registered | Live dispatch through the durable queue; every provider node requires a selected workspace connection | Guarded |
+| Email / Resend | Implemented | Selected workspace connection, provider test, explicit live allowlist and recipient policy | Narrow guarded pilot |
+| Slack | Registered | Selected workspace connection; provider approval and live operation allowlist still required | Dry-run unless separately enabled |
+| Gemini text | Registered workspace credential node | Explicit Gemini connection ID, server-side encrypted credential resolution, provider test and operation approval | Guarded pilot path |
+| WhatsApp Business approved template | Registered `send_template` operation, E.164 validation and encrypted template defaults | Explicit provider opt-in + operation approval; customer-channel consent and durable send ledger must be enforced by the calling workflow | Catalogue capability only; not wired into native real-estate pipeline |
+| Google Calendar event create | Registered `create_event`, owned-calendar OAuth scope, harmless connection probe and notifications off by default | Explicit provider opt-in + operation approval; booking slot must be checked and confirmed before event creation | Catalogue capability only; native inspection booking and appointment ledger not complete |
+| Inbound webhook | Signed ingress, replay protection and durable queue | Endpoint/workspace binding, verified ingress marker, per-node account selection and one-attempt live processing | Narrow pilot path; not general availability |
 | HTTP Request | Registered, SSRF-safe transport | Workspace credential + runner policy | Test before customer activation |
 | Schedule | Scheduler infrastructure exists | Trigger/runtime capability is separately gated | Not a universal schedule node |
 
@@ -20,7 +22,7 @@ Do not count catalogue entries as usable integrations. A capability is customer-
 
 The builder and AI generator must never imply an operation can run live unless it:
 1. Exists in the TypeScript runtime registry with strict input/output schemas.
-2. Uses workspace-scoped credentials or an explicitly documented server-managed pilot credential.
+2. Stores a selected workspace connection ID on the node; secrets are encrypted and resolved only by the server worker.
 3. Is allowed by the production execution policy and explicit activation.
 4. Has dry-run, error reporting, run history, idempotency, and deactivation coverage.
 5. Explains permissions, external side effects, and provider charges before activation.
@@ -31,9 +33,9 @@ Use explicit capability states: `live_guarded`, `dry_run_only`, `coming_soon`, a
 
 Target: **capture an enquiry, qualify it, and notify a business owner**.
 
-Before calling it a live customer automation, verify an authenticated workspace inbound trigger, customer-approved AI prompt/data policy, configured notification action, safe test then explicit activation, run history/failure recovery, usage measurement, and a reliable off switch.
+Before calling it a live customer automation, verify an authenticated workspace inbound trigger, customer-approved AI prompt/data policy, individually selected and successfully tested Gemini and Resend accounts, safe test then explicit activation, run history/failure recovery, usage measurement, and a reliable off switch.
 
-Until that exact path passes end-to-end staging, position it as a design-partner preview—not production lead management. Never claim a dry-run sent a notification or processed a real lead.
+Direct synchronous legacy live-run routes are disabled. Live execution must use the registered workflow format and durable dispatch so each provider node's selected connection is checked again at execution time. Until that exact path passes end-to-end staging with real Gemini and Resend accounts, position it as a design-partner preview—not production lead management. Never claim a dry-run sent a notification or processed a real lead.
 
 ## Implementation order
 

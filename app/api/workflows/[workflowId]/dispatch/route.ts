@@ -1,13 +1,15 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { getAdminSupabaseConfig } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hasWorkspacePermission } from "@/lib/supabase/permissions";
 import { validateDefinition } from "@/lib/workflows/validate-definition.cjs";
-import { runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
+import { durableLiveRetryAttempts, runDurableWorker, validateDurableLiveSteps } from "@/lib/workflows/durable-worker";
 import { findOperation } from "@/nodes/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -31,10 +33,10 @@ function isRegistryDefinition(value: unknown): boolean {
 }
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.CODED_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SERVICE_ROLE_KEY ?? process.env.CODED_SUPABASE_SECRET_KEY;
-  if (!url || !key) throw new Error("QUEUE_DATABASE_NOT_CONFIGURED");
-  return createSupabaseClient(url, key, {
+  let config: ReturnType<typeof getAdminSupabaseConfig>;
+  try { config = getAdminSupabaseConfig(); }
+  catch { throw new Error("QUEUE_DATABASE_NOT_CONFIGURED"); }
+  return createSupabaseClient(config.url, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
@@ -76,6 +78,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     if (!(await hasWorkspacePermission(userDb, workflow.workspace_id, user.id, "workflows.execute"))) return NextResponse.json({ error: "Workspace workflows.execute permission required." }, { status: 403 });
     if (workflow.status !== "active") return NextResponse.json({ error: "Only active workflows can be dispatched." }, { status: 409 });
     const registryFormat = isRecord(workflow.definition) && workflow.definition.format === "aivanta-registry-v1";
+    let maxAttempts = executionMode === "live" ? 1 : 5;
     if (registryFormat) {
       if (!isRegistryDefinition(workflow.definition)) {
         return NextResponse.json({ error: "Registry workflow definition is invalid." }, { status: 422 });
@@ -86,6 +89,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         if (livePolicyError) {
           return NextResponse.json({ error: "This workflow is not approved for live execution.", code: livePolicyError }, { status: 403 });
         }
+        maxAttempts = durableLiveRetryAttempts(registrySteps);
       }
     } else {
       const validated = validateDefinition(workflow.definition);
@@ -105,6 +109,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         if (!recipient || recipient.includes("{{") || !allowedRecipients.has(recipient)) {
           return NextResponse.json({ error: "The email recipient must be a literal address on the server allowlist." }, { status: 403 });
         }
+        maxAttempts = 3;
       }
     }
 
@@ -116,7 +121,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       p_created_by: user.id,
       p_idempotency_key: idempotencyKey,
       p_payload: { input },
-      p_max_attempts: executionMode === "live" ? 1 : 5,
+      p_max_attempts: maxAttempts,
       p_execution_mode: executionMode,
     });
     if (error || !data || typeof data !== "object") throw error ?? new Error("DISPATCH_RESULT_INVALID");
