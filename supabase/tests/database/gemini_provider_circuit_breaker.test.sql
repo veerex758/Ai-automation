@@ -22,7 +22,7 @@ select ok(
 delete from private.ai_provider_circuit_breakers where provider='gemini';
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
 
 select is(
   public.get_ai_provider_circuit_state('gemini')->>'state',
