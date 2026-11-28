@@ -29,6 +29,7 @@ type GeneratedDraft = {
 type RetryRequest = {
   prompt: string;
   crmProvider: "pipedrive" | "zoho_crm" | "freshsales";
+  operationId: string;
   retryAfterSeconds: number;
 };
 const RETRYABLE_GATEWAY_ERRORS = new Set([
@@ -73,8 +74,9 @@ export default function NewPlaybookPage() {
   const [saving, setSaving] = useState(false);
   const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
 
-  async function generateDraft(prompt: string, selectedCrmProvider: typeof crmProvider) {
+  async function generateDraft(prompt: string, selectedCrmProvider: typeof crmProvider, retryOperationId?: string) {
     if (!prompt.trim() || generating) return;
+    const operationId = retryOperationId ?? window.crypto.randomUUID();
     setGenerating(true);
     setError("");
     setNotice("");
@@ -83,7 +85,7 @@ export default function NewPlaybookPage() {
     try {
       const response = await fetch("/api/ai/generate-workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "Idempotency-Key": operationId },
         body: JSON.stringify({
           prompt: prompt.trim(),
           starterType: "real_estate",
@@ -99,6 +101,7 @@ export default function NewPlaybookPage() {
           setRetryRequest({
             prompt,
             crmProvider: selectedCrmProvider,
+            operationId,
             retryAfterSeconds: Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
               ? Math.min(300, Math.ceil(retryAfterHeader))
               : 0,
@@ -159,6 +162,14 @@ export default function NewPlaybookPage() {
       setDraft(generated);
       setNotice("Draft generated. Review every rule and action permission before saving.");
     } catch (cause) {
+      if (cause instanceof TypeError) {
+        setRetryRequest({
+          prompt,
+          crmProvider: selectedCrmProvider,
+          operationId,
+          retryAfterSeconds: 0,
+        });
+      }
       setError(cause instanceof Error ? cause.message : "Playbook generation failed safely.");
     } finally {
       setGenerating(false);
@@ -232,7 +243,7 @@ export default function NewPlaybookPage() {
         </div>
 
         {error && <div className="playbook-alert error" role="alert">{error}</div>}
-        {retryRequest && <div className="playbook-retry" role="group" aria-label="Retry AI generation"><p>{retryRequest.retryAfterSeconds > 0 ? `The provider asked us to wait about ${retryRequest.retryAfterSeconds} seconds before retrying.` : "The provider failure did not charge an AI credit. You can retry the same request."}</p><button className="playbook-primary" type="button" onClick={() => void generateDraft(retryRequest.prompt, retryRequest.crmProvider)} disabled={generating}>{generating ? "Retrying generation…" : "Retry AI generation"}</button></div>}
+        {retryRequest && <div className="playbook-retry" role="group" aria-label="Retry AI generation"><p>{retryRequest.retryAfterSeconds > 0 ? `The provider asked us to wait about ${retryRequest.retryAfterSeconds} seconds before retrying.` : "The provider failure did not charge an AI credit. You can retry the same request."}</p><button className="playbook-primary" type="button" onClick={() => void generateDraft(retryRequest.prompt, retryRequest.crmProvider, retryRequest.operationId)} disabled={generating}>{generating ? "Retrying generation…" : "Retry AI generation"}</button></div>}
         {notice && <div className="playbook-alert" role="status">{notice}</div>}
 
         <section className="playbook-panel">
