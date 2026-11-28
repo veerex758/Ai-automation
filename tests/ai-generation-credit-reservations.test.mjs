@@ -4,12 +4,15 @@ import { readFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
-const [migration, route, builder, playbook, safeLog] = await Promise.all([
+const [migration, route, builder, playbook, safeLog, providerTypes, gemini, groq] = await Promise.all([
   read("supabase/migrations/20261128130000_rexnora_ai_generation_credit_reservations.sql"),
   read("app/api/ai/generate-workflow/route.ts"),
   read("app/dashboard/workflows/[workflowId]/page.tsx"),
   read("app/dashboard/playbooks/new/page.tsx"),
   read("lib/observability/safe-log.cjs"),
+  read("lib/ai/types.ts"),
+  read("lib/ai/providers/gemini.ts"),
+  read("lib/ai/providers/groq.ts"),
 ]);
 
 test("credit reservations are private, workspace-scoped, and unavailable to browser table access", () => {
@@ -117,4 +120,19 @@ test("logical operation IDs are retained in safe logs without exposing customer 
   assert.match(safeLog, /record\.operationId = value/);
   assert.match(route, /operationId, route: "\/api\/ai\/generate-workflow"/);
   assert.match(safeLog, /SAFE_REQUEST_ID\.test\(value\)/);
+});
+
+
+test("provider usage from rejected structured output is retained separately from customer credits", () => {
+  assert.match(providerTypes, /inputTokens\?: number/);
+  assert.match(providerTypes, /outputTokens\?: number/);
+  assert.match(providerTypes, /totalTokens\?: number/);
+  assert.match(gemini, /inputTokens: result\.usage\.inputTokens/);
+  assert.match(gemini, /reportOutputResult\(context, result, error\)/);
+  assert.match(groq, /inputTokens: result\.usage\.inputTokens/);
+  assert.match(groq, /reportOutput\(context, result, error\)/);
+  assert.match(route, /Number\.isSafeInteger\(attempt\.inputTokens\)/);
+  assert.match(route, /Number\.isSafeInteger\(attempt\.outputTokens\)/);
+  assert.match(route, /providerUsageByModel\.set\(usageKey, recordedUsage\)/);
+  assert.doesNotMatch(route.slice(route.indexOf("const result = await aiGateway.generateStructured"), route.indexOf("const jsonResponse")), /providerUsageByModel\.set/);
 });
