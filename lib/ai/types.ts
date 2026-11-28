@@ -66,6 +66,11 @@ export type AIRequestBudget = {
   remainingProviderAttempts: number;
   deadlineAt: number;
   totalProviderAttempts?: number;
+  /** Operation-wide hard cap shared by generation and any controlled repair. */
+  maxProviderAttempts?: number;
+  /** Provider-specific hard cap shared by all gateway calls for this operation. */
+  maxAttemptsPerProvider?: number;
+  providerAttempts?: Partial<Record<AIProviderId, number>>;
 };
 
 export type AIRequestContext = {
