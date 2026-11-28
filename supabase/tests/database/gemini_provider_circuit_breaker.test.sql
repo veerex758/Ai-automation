@@ -54,7 +54,7 @@ select is(
   'a rate-limit response opens the circuit immediately'
 );
 select ok(
-  (public.get_ai_provider_circuit_state('gemini')->>'retryAfterMs')::bigint between 1000 and 5000,
+  (public.get_ai_provider_circuit_state('gemini')->>'retryAfterMs')::bigint between 1 and 1000,
   '429 cooldown respects the provider retry-after window'
 );
 -- Wait for the short test-only Retry-After window to expire, retaining the
