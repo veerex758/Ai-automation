@@ -34,7 +34,7 @@ function parseCli(argv: string[]): Cli {
     throw new Error("Pass --task=<" + AI_QUALITY_TASKS.join("|") + ">; use one task per benchmark run.");
   }
   if (!["gemini", "groq"].includes(provider)) throw new Error("Cloudflare benchmarking is disabled until its provider adapter and compatibility gates are enabled. Choose gemini or groq.");
-  const recoveryProbes = Number(values.get("recovery-probes") ?? "3");
+  const recoveryProbes = Number(values.get("recovery-probes") ?? "4");
   if (!Number.isSafeInteger(recoveryProbes) || recoveryProbes < 3 || recoveryProbes > 10) {
     throw new Error("--recovery-probes must be an integer from 3 to 10.");
   }
@@ -175,7 +175,7 @@ async function runRecoveryProbe(
   registry.register(faultOnce(provider));
   const modelVariable = provider.id === "gemini" ? "GEMINI_AI_MODEL" : "GROQ_AI_MODEL";
   const probeEnv = {
-    ...env, [modelVariable]: model, NODE_ENV: "test", AI_PRIMARY_PROVIDER: provider.id, AI_FAILOVER_ORDER: "",
+    ...env, [modelVariable]: model, NODE_ENV: "test", AI_PRIMARY_PROVIDER: provider.id, AI_FAILOVER_ORDER: "",\n    AI_QUALITY_REQUIRE_PRIMARY_QUALIFICATION: "false",
     AI_CIRCUIT_FAILURE_THRESHOLD: "5",
   };
   const gateway = createAIGateway(
