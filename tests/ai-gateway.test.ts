@@ -853,3 +853,49 @@ test("provider retries and schema repair share one operation budget and one post
   assert.doesNotMatch(usageModule, /consume_ai_generation_usage/);
   assert.match(usageModule, /Provider token\/cost telemetry only/);
 });
+
+
+test("gateway fails over from malformed Gemini structured JSON to validated Groq output", async () => {
+  let geminiCalls = 0;
+  let groqCalls = 0;
+  const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" };
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => {
+      geminiCalls += 1;
+      return fakeFetch({
+        choices: [{ message: { content: '{"registrySteps":' }, finish_reason: "stop" }],
+      })();
+    },
+  }));
+  registry.register(createGroqProvider({
+    env: groqEnv,
+    fetchImpl: async () => {
+      groqCalls += 1;
+      return fakeFetch({
+        choices: [{ message: { content: '{"registrySteps":[{"id":"start"}],"edges":[]}', refusal: null }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 4, completion_tokens: 5, total_tokens: 9 },
+      })();
+    },
+  }));
+  const gateway = createAIGateway(registry, { ...env, ...groqEnv });
+  const result = await gateway.generateStructured(
+    { prompt: "Return a valid workflow plan." },
+    {
+      ...context,
+      task: "workflow_generation",
+      validate: (value) => {
+        assert.deepEqual(value, { registrySteps: [{ id: "start" }], edges: [] });
+        return value;
+      },
+    },
+  );
+
+  assert.equal(result.provider, "groq");
+  assert.equal(result.fallbackUsed, true);
+  assert.deepEqual(result.output, { registrySteps: [{ id: "start" }], edges: [] });
+  assert.deepEqual(result.usage, { inputTokens: 4, outputTokens: 5, totalTokens: 9 });
+  assert.equal(geminiCalls, 1);
+  assert.equal(groqCalls, 1);
+});
