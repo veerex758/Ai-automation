@@ -10,7 +10,7 @@
 ## Failure and retry policy
 - 429: honour a valid `Retry-After` value and perform at most one bounded retry on the same provider. If that provider remains rate-limited, switch to the next eligible provider. A long retry delay is not slept through when it exceeds the inline-wait or global-deadline budget.
 - 503, 500, 502, 504 and 408: at most three calls to the current provider's primary model with exponential backoff and full jitter, then one configured same-provider model fallback when eligible, then cross-provider failover.
-- Timeout: retry only while the shared request deadline permits; when the deadline is reached, stop without starting another provider.
+- Timeout: retry only while the shared request deadline permits. If the next backoff or `Retry-After` would consume the remaining deadline, skip the sleep and try another provider while time remains; stop only once the overall deadline is exhausted.
 - Network failure: do not repeat the same unreachable request; try the next eligible provider.
 - 401/403: mark that provider's configuration unhealthy for a five-minute process-local cooldown and try the next eligible provider. The active workflow endpoint also uses the persistent Gemini Supabase circuit. The process-local cooldown for other providers is an optimisation, not a durable cross-instance health record.
 - 400/404/413/422 invalid requests: stop; do not send an identical invalid request to another provider.
@@ -35,7 +35,7 @@
 - Credentials, prompts, response bodies, and raw provider errors are not included in diagnostic events.
 
 ## Provider health
-- Authentication failures are exposed by `listProviders()` as an unhealthy provider during the local cooldown.
+- Authentication failures are exposed by `listProviders()` as an unhealthy provider during the five-minute cooldown held by that gateway instance. The production `aiGateway` singleton shares this process-local hint across requests in a warm instance; separately constructed gateway instances remain isolated.
 - The workflow generation endpoint consults the persistent Gemini Supabase circuit before selecting a provider; if Gemini is cooling down or the circuit service is unavailable, Gemini is excluded and eligible alternates can still be tried.
 - Persistent shared health state for Groq and Cloudflare has not yet been wired. Do not treat the process-local health hint as a cross-instance circuit breaker.
 
