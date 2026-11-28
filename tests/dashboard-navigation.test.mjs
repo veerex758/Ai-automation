@@ -84,6 +84,13 @@ test("Supabase staging-only secret resolution ignores empty placeholder variable
   assert.match(admin, /isRexnoraStagingPreview/);
   assert.match(admin, /isRexnoraStagingPreview[\s\S]*CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(admin, /VERCEL_GIT_COMMIT_REF/);
+  for (const source of [server, middleware, browser]) {
+    assert.match(source, /firstConfiguredValue/);
+    assert.match(source, /\.trim\(\)\.length > 0/);
+  }
+  assert.match(server, /process\.env\.CODED_SUPABASE_URL/);
+  assert.match(server, /process\.env\.CODED_SUPABASE_ANON_KEY/);
+  assert.match(middleware, /process\.env\.CODED_SUPABASE_URL/);
 });
 
 
