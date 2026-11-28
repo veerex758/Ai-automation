@@ -931,7 +931,7 @@ test("rolling circuit failure rate opens only the affected provider and a succes
   assert.equal(blocked.state, "open");
 
   const originalNow = Date.now;
-  let fakeNow = originalNow() + 2_000;
+  const fakeNow = originalNow() + 2_000;
   Date.now = () => fakeNow;
   try {
     const probe = await store.acquire("gemini", policy);
