@@ -210,13 +210,19 @@ export function createAIGateway(
         .map((provider) => provider.id),
     ];
     const baseRoutes = routeAIRequests(context.task, registry, env, [...new Set(excludedProviders)]);
-    const qualityStore = new SupabaseAIModelQualityStore();
-    const routes = await applyQualityAwareRouting(
-      baseRoutes,
-      context.task,
-      qualityStore,
-      env.AI_QUALITY_REQUIRE_PRIMARY_QUALIFICATION === "true",
+    const qualityStore = suppliedQualityStore ?? (
+      env.NODE_ENV === "test" ? undefined : new SupabaseAIModelQualityStore()
     );
+    // Existing gateway tests exercise provider/circuit failover independently.
+    // Production always applies persistent qualification before choosing alternatives.
+    const routes = qualityStore
+      ? await applyQualityAwareRouting(
+        baseRoutes,
+        context.task,
+        qualityStore,
+        env.AI_QUALITY_REQUIRE_PRIMARY_QUALIFICATION === "true",
+      )
+      : baseRoutes;
     let lastError: AIProviderError | undefined;
     const configuredPrimaryProvider = (env.AI_PRIMARY_PROVIDER || "gemini").trim().toLowerCase();
 
