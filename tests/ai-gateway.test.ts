@@ -846,8 +846,10 @@ test("provider retries and schema repair share one operation budget and one post
   assert.match(route.slice(gateway, generation), /attemptBudget: aiAttemptBudget/);
   assert.match(route.slice(gateway, generation), /providerUsage\.totalTokens \+= result\.usage\.totalTokens/);
   assert.match(route.slice(metering, metering + 400), /p_idempotency_key: randomUUID\(\)/);
-  assert.match(route.slice(generation, metering), /catch \(providerError\)/);
-  assert.match(route.slice(generation, metering), /throw providerError/);
+  const handlerCatch = route.indexOf("} catch (error)", generation);
+  assert.ok(handlerCatch > metering, "provider failures are handled by the route boundary after the single charge site");
+  assert.match(route.slice(handlerCatch), /AI_PROVIDER_OVERLOADED/);
+  assert.match(route.slice(handlerCatch), /No Rexnora AI credit was charged/);
   assert.match(route.slice(metering), /Your AI credit was not charged/);
   assert.doesNotMatch(usageModule, /consume_ai_generation_usage/);
   assert.match(usageModule, /Provider token\/cost telemetry only/);
