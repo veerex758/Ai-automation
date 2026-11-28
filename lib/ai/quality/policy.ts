@@ -1,7 +1,7 @@
 import type { AITask } from "../types";
 import type { AIQualityMetrics, AIQualityThresholds } from "./types";
 
-export const AI_QUALITY_BENCHMARK_VERSION = "rexnora-quality-v1";
+export const AI_QUALITY_BENCHMARK_VERSION = "rexnora-quality-v2";
 export const AI_QUALITY_THRESHOLDS: Record<AITask, AIQualityThresholds> = {
   workflow_generation: { minimumSamples: 20, minimumRecoverySamples: 3, minimumTaskAccuracy: .9,
     minimumSchemaValidRate: .98, minimumWorkflowGraphCorrectness: .95, maximumP95LatencyMs: 20000,

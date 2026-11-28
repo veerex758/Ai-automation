@@ -105,8 +105,27 @@ const graphCases: AIQualityCase[] = Array.from({ length: 20 }, (_, i) => {
         typeof s.operationId === "string" && (s.kind === "trigger" || s.kind === "action") &&
         !!record(s.input));
       const edgeValid = edges.length >= 1 && edges.every((e) => !!e && ids.includes(e.source) && ids.includes(e.target));
-      const connected = edgeValid && steps.every((s) => s?.kind === "trigger" ||
-        edges.some((e) => e?.target === s?.id));
+      const triggerId = steps.find((s) => s?.kind === "trigger")?.id;
+      const reachable = new Set<unknown>([triggerId]);
+      for (let pass = 0; pass < steps.length; pass += 1) {
+        for (const edge of edges) if (reachable.has(edge?.source)) reachable.add(edge?.target);
+      }
+      const allReachable = steps.every((step) => reachable.has(step?.id));
+      const visited = new Set<unknown>();
+      const active = new Set<unknown>();
+      const hasCycle = (id: unknown): boolean => {
+        if (active.has(id)) return true;
+        if (visited.has(id)) return false;
+        visited.add(id);
+        active.add(id);
+        for (const edge of edges) {
+          if (edge?.source === id && hasCycle(edge.target)) return true;
+        }
+        active.delete(id);
+        return false;
+      };
+      const cyclic = steps.some((step) => hasCycle(step?.id));
+      const connected = edgeValid && typeof triggerId === "string" && allReachable && !cyclic;
       const action = steps.find((s) => s?.id === "notify-" + n);
       const actionInput = record(action?.input);
       const exactAction = action?.nodeId === "email" && action?.operationId === "send_email" &&

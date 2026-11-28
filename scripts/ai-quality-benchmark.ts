@@ -18,25 +18,26 @@ export type BenchmarkObservation = {
 export function summarizeBenchmark(observations: BenchmarkObservation[]): AIQualityMetrics {
   const rate = (values: number[]): number => values.length
     ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
-  const sortedLatency = observations.map((x) => x.latencyMs)
+  const taskObservations = observations.filter((x) => x.recoveryProbeSucceeded === undefined);
+  const sortedLatency = taskObservations.map((x) => x.latencyMs)
     .filter((x) => Number.isFinite(x) && x >= 0).sort((a, b) => a - b);
   const p95 = sortedLatency.length
     ? sortedLatency[Math.min(sortedLatency.length - 1, Math.ceil(sortedLatency.length * 0.95) - 1)]
     : Number.POSITIVE_INFINITY;
-  const successful = observations.filter((x) => x.taskCorrect);
+  const successful = taskObservations.filter((x) => x.taskCorrect);
   const successfulCosts = successful.map((x) => x.costUsd);
   const costCoverageComplete = successful.length > 0 &&
     successfulCosts.every((x) => typeof x === "number" && Number.isFinite(x) && x >= 0);
-  const schemaSamples = observations.filter((x) => x.schemaValid !== null);
-  const graphSamples = observations.filter((x) => x.workflowGraphCorrectness !== undefined);
-  const toolSamples = observations.filter((x) => x.toolCallAccuracy !== undefined);
+  const schemaSamples = taskObservations.filter((x) => x.schemaValid !== null);
+  const graphSamples = taskObservations.filter((x) => x.workflowGraphCorrectness !== undefined);
+  const toolSamples = taskObservations.filter((x) => x.toolCallAccuracy !== undefined);
   const recoverySamples = observations.filter((x) => x.recoveryProbeSucceeded !== undefined);
 
   return {
     schemaValidRate: schemaSamples.length ? rate(schemaSamples.map((x) => Number(x.schemaValid))) : null,
     workflowGraphCorrectness: graphSamples.length ? rate(graphSamples.map((x) => Number(x.workflowGraphCorrectness))) : null,
     toolCallAccuracy: toolSamples.length ? rate(toolSamples.map((x) => Number(x.toolCallAccuracy))) : null,
-    taskAccuracy: observations.length ? rate(observations.map((x) => Number(x.taskCorrect))) : 0,
+    taskAccuracy: taskObservations.length ? rate(taskObservations.map((x) => Number(x.taskCorrect))) : 0,
     p95LatencyMs: p95,
     costPerSuccessfulOperationUsd: costCoverageComplete
       ? successfulCosts.reduce((sum, value) => sum + (value as number), 0) / successful.length
@@ -49,7 +50,7 @@ export function summarizeBenchmark(observations: BenchmarkObservation[]): AIQual
 
 export function benchmarkDatasetSha256(cases: AIQualityCase[]): string {
   const stableDataset = cases.map(({ id, task, mode, prompt, expected, tools }) => ({
-    id, task, mode, prompt, expected, tools: tools ?? [],
+    id, task, mode, prompt, systemPrompt, expected, tools: tools ?? [],
   }));
   return createHash("sha256").update(JSON.stringify(stableDataset)).digest("hex");
 }
@@ -65,7 +66,7 @@ export function qualifyBenchmark(
   return {
     metrics,
     thresholds,
-    ...assessAIModelQualification(task, metrics, observations.length, recoverySampleCount, thresholds),
+    ...assessAIModelQualification(task, metrics, observations.length - recoverySampleCount, recoverySampleCount, thresholds),
     datasetSha256,
     benchmarkVersion: AI_QUALITY_BENCHMARK_VERSION,
     recoverySampleCount,

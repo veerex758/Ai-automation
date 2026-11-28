@@ -173,8 +173,9 @@ async function runRecoveryProbe(
 ): Promise<boolean> {
   const registry = new AIProviderRegistry();
   registry.register(faultOnce(provider));
+  const modelVariable = provider.id === "gemini" ? "GEMINI_AI_MODEL" : "GROQ_AI_MODEL";
   const probeEnv = {
-    ...env, NODE_ENV: "test", AI_PRIMARY_PROVIDER: provider.id, AI_FAILOVER_ORDER: "",
+    ...env, [modelVariable]: model, NODE_ENV: "test", AI_PRIMARY_PROVIDER: provider.id, AI_FAILOVER_ORDER: "",
     AI_CIRCUIT_FAILURE_THRESHOLD: "5",
   };
   const gateway = createAIGateway(

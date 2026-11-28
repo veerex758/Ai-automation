@@ -16,6 +16,18 @@ test("each AI task has twenty deterministic, independently gradable benchmark ca
     }
   }
 });
+test("workflow graph grader rejects cycles even when every step is connected", () => {
+  const benchmarkCase = getAIQualityCases("workflow_generation")[0];
+  const expected = benchmarkCase.expected as { registrySteps: Array<{ id: string }>; edges: Array<{ id: string; source: string; target: string; label: string }> };
+  const cyclic = {
+    ...expected,
+    edges: [...expected.edges, {
+      id: "reverse-edge", source: expected.registrySteps[1].id,
+      target: expected.registrySteps[0].id, label: "next",
+    }],
+  };
+  assert.equal(benchmarkCase.grade(cyclic).taskCorrect, false);
+});
 test("benchmark dataset fingerprint is stable and task-specific", () => {
   const lead = getAIQualityCases("lead_qualification");
   assert.equal(benchmarkDatasetSha256(lead), benchmarkDatasetSha256(lead));
@@ -35,6 +47,7 @@ test("recovery rate uses all controlled probes as its denominator", () => {
   assert.equal(result.recoverySampleCount, 4);
   assert.equal(result.metrics.recoveryRate, .75);
   assert.equal(result.metrics.taskAccuracy, 1);
+  assert.equal(result.metrics.p95LatencyMs, 119, "recovery probes must not affect measured p95 latency");
   assert.equal(result.metrics.costPerSuccessfulOperationUsd, .002);
 });
 test("partial missing cost data cannot produce a falsely cheap per-success cost", () => {
