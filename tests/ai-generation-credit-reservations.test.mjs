@@ -45,6 +45,7 @@ test("release is idempotent and never reverses a completed consumption", () => {
   assert.match(releaseBody, /already_consumed/);
   assert.match(releaseBody, /already_released/);
   assert.match(releaseBody, /status = 'released'/);
+  assert.match(releaseBody, /private\.record_ai_provider_usage_events/);
   assert.doesNotMatch(releaseBody, /delete from public\.workspace_usage|update public\.workspace_usage/);
 });
 
