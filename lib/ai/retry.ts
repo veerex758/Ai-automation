@@ -94,12 +94,19 @@ export function claimProviderAttempt(
     throw new AIProviderError({ provider, code: "AI_DEADLINE_EXCEEDED", message: "AI operation deadline was reached." });
   }
   if (!context.attemptBudget) return localProviderAttempt + 1;
-  if (context.attemptBudget.remainingProviderAttempts <= 0) {
+  const budget = context.attemptBudget;
+  const totalAttempts = budget.totalProviderAttempts ?? 0;
+  const providerAttempts = budget.providerAttempts ?? {};
+  const providerAttemptCount = providerAttempts[provider] ?? 0;
+  if (budget.remainingProviderAttempts <= 0 ||
+      (budget.maxProviderAttempts !== undefined && totalAttempts >= budget.maxProviderAttempts) ||
+      (budget.maxAttemptsPerProvider !== undefined && providerAttemptCount >= budget.maxAttemptsPerProvider)) {
     throw new AIProviderError({ provider, code: "AI_ATTEMPT_LIMIT_REACHED", message: "AI provider attempt limit was reached." });
   }
-  context.attemptBudget.remainingProviderAttempts -= 1;
-  context.attemptBudget.totalProviderAttempts = (context.attemptBudget.totalProviderAttempts ?? 0) + 1;
-  return context.attemptBudget.totalProviderAttempts;
+  budget.remainingProviderAttempts -= 1;
+  budget.totalProviderAttempts = totalAttempts + 1;
+  budget.providerAttempts = { ...providerAttempts, [provider]: providerAttemptCount + 1 };
+  return budget.totalProviderAttempts;
 }
 
 export async function withProviderRetries<T>(
