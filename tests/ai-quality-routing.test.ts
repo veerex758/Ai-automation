@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { assessAIModelQualification, AI_QUALITY_BENCHMARK_VERSION, AI_QUALITY_THRESHOLDS } from "../lib/ai/quality/policy";
 import { applyQualityAwareRouting } from "../lib/ai/quality/routing";
+import { fingerprintAIQualityCases, getAIQualityCases } from "../lib/ai/quality/benchmark-dataset";
 import type { AIModelQualification, AIModelQualityStore } from "../lib/ai/quality/types";
 import type { AIQualityMetrics } from "../lib/ai/quality/types";
 
@@ -11,7 +12,7 @@ const metrics: AIQualityMetrics = {
   recoveryRate: 1, successfulOperations: 20,
 };
 function q(provider: "gemini" | "groq", task: "workflow_generation" | "summarization", model: string): AIModelQualification {
-  return { provider, model, task, benchmarkVersion: AI_QUALITY_BENCHMARK_VERSION, datasetSha256: "a".repeat(64),
+  return { provider, model, task, benchmarkVersion: AI_QUALITY_BENCHMARK_VERSION, datasetSha256: fingerprintAIQualityCases(getAIQualityCases(task)),
     sampleCount: 20, recoverySampleCount: 4, metrics, thresholds: AI_QUALITY_THRESHOLDS[task],
     eligible: true, evaluatedAt: new Date().toISOString() };
 }
@@ -94,4 +95,49 @@ test("without any qualified model the configured primary remains the sole compat
   assert.equal(out.length, 1);
   assert.equal(out[0].provider.id, "gemini");
   assert.deepEqual(out[0].fallbackModels, []);
+});
+
+
+test("routing rejects a qualification for an obsolete dataset fingerprint", async () => {
+  const stale = { ...q("groq", "summarization", "llama"), datasetSha256: "a".repeat(64) };
+  const store: AIModelQualityStore = {
+    listEligibleModels: async () => [stale],
+    recordEvaluation: async () => ({ eligible: true, reasons: [] }),
+  };
+  const routes = [
+    { provider: { id: "gemini" }, primaryModel: "gemini", fallbackModels: ["gemini-lite"] },
+    { provider: { id: "groq" }, primaryModel: "llama", fallbackModels: [] },
+  ] as never;
+  const out = await applyQualityAwareRouting(routes, "summarization", store);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].provider.id, "gemini");
+  assert.deepEqual(out[0].fallbackModels, []);
+});
+
+test("routing rejects an expired qualification", async () => {
+  const expired = {
+    ...q("groq", "summarization", "llama"),
+    evaluatedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+  const store: AIModelQualityStore = {
+    listEligibleModels: async () => [expired],
+    recordEvaluation: async () => ({ eligible: true, reasons: [] }),
+  };
+  const routes = [
+    { provider: { id: "gemini" }, primaryModel: "gemini", fallbackModels: [] },
+    { provider: { id: "groq" }, primaryModel: "llama", fallbackModels: [] },
+  ] as never;
+  const out = await applyQualityAwareRouting(routes, "summarization", store);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].provider.id, "gemini");
+});
+
+test("an unqualified fallback cannot become the compatibility primary when configured primary is unavailable", async () => {
+  const store: AIModelQualityStore = {
+    listEligibleModels: async () => [],
+    recordEvaluation: async () => ({ eligible: false, reasons: [] }),
+  };
+  const routes = [{ provider: { id: "groq" }, primaryModel: "llama", fallbackModels: [] }] as never;
+  const out = await applyQualityAwareRouting(routes, "summarization", store, false, "gemini");
+  assert.deepEqual(out, []);
 });

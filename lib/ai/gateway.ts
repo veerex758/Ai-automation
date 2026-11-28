@@ -221,6 +221,7 @@ export function createAIGateway(
         context.task,
         qualityStore,
         env.AI_QUALITY_REQUIRE_PRIMARY_QUALIFICATION === "true",
+        (env.AI_PRIMARY_PROVIDER || "gemini").trim().toLowerCase() as AIProviderId,
       )
       : baseRoutes;
     let lastError: AIProviderError | undefined;

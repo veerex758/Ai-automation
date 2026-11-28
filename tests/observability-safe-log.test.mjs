@@ -184,3 +184,44 @@ test("Gemini provider-attempt logs retain bounded diagnostics and omit request c
   assert.equal("providerAttempt" in bounded, false);
   assert.equal("retryAfterMs" in bounded, false);
 });
+
+
+test("safe operational logs retain Groq fallback identity without exposing request content", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation",
+    requestId,
+    route: "/api/ai/generate-workflow",
+    outcome: "failure",
+    statusCode: 503,
+    provider: "groq",
+    model: "openai/gpt-oss-120b",
+    fallbackUsed: true,
+    providerInputTokens: 33,
+    providerOutputTokens: 12,
+    providerTotalTokens: 45,
+    prompt: "private customer lead data",
+    apiKey: "private-groq-key",
+    rawResponse: { secret: "must not be logged" },
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.provider, "groq");
+  assert.equal(record.model, "openai/gpt-oss-120b");
+  assert.equal(record.fallbackUsed, true);
+  assert.equal(record.providerTotalTokens, 45);
+  assert.equal("prompt" in record, false);
+  assert.equal("apiKey" in record, false);
+  assert.equal("rawResponse" in record, false);
+});
+
+test("safe operational logs reject provider-model mismatches", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation",
+    provider: "groq",
+    model: "gemini-3.8-flash",
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.provider, "groq");
+  assert.equal("model" in record, false);
+});

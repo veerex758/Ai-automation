@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { AITask } from "../lib/ai/types";
 import type { AIQualityMetrics } from "../lib/ai/quality/types";
 import { AI_QUALITY_BENCHMARK_VERSION, AI_QUALITY_THRESHOLDS, assessAIModelQualification } from "../lib/ai/quality/policy";
+import { fingerprintAIQualityCases } from "../lib/ai/quality/benchmark-dataset";
 import type { AIQualityCase } from "../lib/ai/quality/benchmark-dataset";
 
 export type BenchmarkObservation = {
@@ -49,10 +50,7 @@ export function summarizeBenchmark(observations: BenchmarkObservation[]): AIQual
 }
 
 export function benchmarkDatasetSha256(cases: AIQualityCase[]): string {
-  const stableDataset = cases.map(({ id, task, mode, prompt, systemPrompt, expected, tools }) => ({
-    id, task, mode, prompt, systemPrompt, expected, tools: tools ?? [],
-  }));
-  return createHash("sha256").update(JSON.stringify(stableDataset)).digest("hex");
+  return fingerprintAIQualityCases(cases);
 }
 
 export function qualifyBenchmark(

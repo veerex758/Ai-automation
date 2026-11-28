@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AITask, AIToolDefinition, AIToolOutput } from "../types";
 
 export type AIQualityGrade = {
@@ -287,4 +288,17 @@ export const AI_QUALITY_TASKS: AITask[] = [
 
 export function getAIQualityCases(task: AITask): AIQualityCase[] {
   return AI_QUALITY_BENCHMARK_CASES.filter((benchmarkCase) => benchmarkCase.task === task);
+}
+
+
+/** Fingerprint only the deterministic model-facing benchmark contract, not grader code. */
+export function fingerprintAIQualityCases(cases: AIQualityCase[]): string {
+  const stableDataset = cases.map(({ id, task, mode, prompt, systemPrompt, expected, tools }) => ({
+    id, task, mode, prompt, systemPrompt, expected, tools: tools ?? [],
+  }));
+  return createHash("sha256").update(JSON.stringify(stableDataset)).digest("hex");
+}
+
+export function getAIQualityDatasetSha256(task: AITask): string {
+  return fingerprintAIQualityCases(getAIQualityCases(task));
 }

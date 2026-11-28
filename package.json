@@ -12,8 +12,8 @@
     "staging:smoke": "node scripts/staging-smoke.mjs",
     "validate:nodes": "tsx scripts/validate-nodes.ts",
     "report:providers": "tsx scripts/generate-provider-verification-report.ts",
-    "benchmark:ai-quality": "tsx scripts/run-ai-quality-benchmark.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "benchmark:ai-quality": "tsx scripts/run-ai-quality-benchmark.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
