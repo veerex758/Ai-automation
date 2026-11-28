@@ -38,12 +38,21 @@ test("generated IF branches receive bounded upper and lower lanes", () => {
   }
 });
 
-test("AI API distinguishes unknown registry operations from invalid registered-node input", () => {
+test("AI API rejects unknown nodes and revalidates one bounded schema repair before metering", () => {
   const route = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
   assert.match(route, /AI_NODE_NOT_REGISTERED/);
   assert.match(route, /AI_NODE_INPUT_INVALID/);
-  assert.match(route, /findOperation\(step\.nodeId, step\.operationId/);
-  assert.match(route, /inputValidation\.error\.issues/);
+  assert.match(route, /repairRegistryStepInputs/);
+  assert.match(route, /if \\(invalidInputs\\.length\\)/);
+  assert.match(route, /operation\\.inputSchema\\.safeParse\\(repairedInput\\)/);
+  assert.match(route, /AI_NODE_INPUT_REPAIR_FAILED/);
+  assert.match(route, /findOperation\\(step\\.nodeId, step\\.operationId/);
+  assert.match(route, /inputValidation\\.error\\.issues/);
   assert.match(route, /calculateGraphPositions/);
-  assert.doesNotMatch(route, /x: 160 \+ depth \* 320/);
+  assert.doesNotMatch(route, /x: 160 \\+ depth \\* 320/);
+
+  const validationIndex = route.indexOf("operation.inputSchema.safeParse(repairedInput)");
+  const meteringIndex = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
+  assert.ok(validationIndex > 0 && meteringIndex > validationIndex,
+    "AI credit metering must remain after repaired input is schema-validated");
 });
