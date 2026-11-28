@@ -57,6 +57,7 @@ test("settlement atomically inserts one credit, one generation and actual provid
   assert.match(consumeBody, /v_reservation\.status = 'consumed'/);
   assert.match(consumeBody, /'duplicate', true/);
   assert.match(consumeBody, /insert into public\.workspace_usage/);
+  assert.match(consumeBody, /v_period := v_reservation\.period_start/);
   assert.match(consumeBody, /'ai_generation'/);
   assert.match(consumeBody, /'ai_credit'/);
   assert.match(consumeBody, /insert into private\.ai_provider_usage_events/);
