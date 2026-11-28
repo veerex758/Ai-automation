@@ -8,7 +8,7 @@ import { claimProviderAttempt, DEFAULT_AI_RETRY_POLICY, withProviderRetries } fr
 import { EMPTY_AI_USAGE } from "./usage";
 import type {
   AIRequestContext, AIResult, AITextRequest, AIStructuredRequest, AIToolRequest,
-  AIToolOutput, AIProvider, AIProviderId,
+  AIToolOutput, AIProvider,
 } from "./types";
 
 const MAX_TOTAL_PROVIDER_ATTEMPTS = 8;
@@ -375,7 +375,7 @@ export function createAIGateway(
       return registry.list().map((provider) => ({
         id: provider.id,
         configured: provider.isConfigured(),
-        healthState: "shared-persistent" as const,
+        healthState: env.NODE_ENV === "test" ? "test-memory" as const : "shared-persistent" as const,
         capabilities: provider.capabilities,
       }));
     },
