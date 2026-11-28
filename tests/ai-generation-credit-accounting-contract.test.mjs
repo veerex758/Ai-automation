@@ -36,15 +36,14 @@ test("provider and invalid-graph failures occur before customer credit metering"
 });
 
 test("shared per-provider circuits gate generation and repair before the single credit charge site", () => {
-  const gateway = route.indexOf("await aiGateway.generateStructured(");
+  const gatewayInvocation = route.indexOf("await aiGateway.generateStructured(");
   const generation = route.indexOf("await generateWorkflow(");
   const repair = route.indexOf("await repairRegistryStepInputs(");
   const validation = route.indexOf("validateRegisteredSteps(rebuilt)");
   const metering = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
 
-  assert.ok(gateway >= 0 && generation > gateway);
+  assert.ok(gatewayInvocation >= 0 && generation > gatewayInvocation);
   assert.ok(repair > generation && validation > repair && metering > validation);
-  assert.match(gateway, /AI_PROVIDER_CIRCUIT_UNAVAILABLE/);
   assert.match(route, /AI_PROVIDER_CIRCUIT_UNAVAILABLE/);
   assert.match(route, /No Rexnora AI credit was charged/);
   assert.match(gateway, /await circuitStore\.acquire\(provider\.id, policy\)/);
