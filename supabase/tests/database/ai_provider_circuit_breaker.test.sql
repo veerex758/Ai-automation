@@ -160,5 +160,6 @@ select is(
   'late success from ordinary request cannot close an open circuit'
 );
 
+reset role;
 select * from finish();
 rollback;
