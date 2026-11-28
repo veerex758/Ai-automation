@@ -163,7 +163,10 @@ export function createAIGateway(
       if (deadlineAt !== undefined && deadlineAt <= Date.now()) {
         throw new AIProviderError({ provider: provider.id, code: "AI_DEADLINE_EXCEEDED", message: "AI operation deadline was reached." });
       }
-      if (context.attemptBudget && context.attemptBudget.remainingProviderAttempts <= 0) {
+      if (context.attemptBudget &&
+          (context.attemptBudget.remainingProviderAttempts <= 0 ||
+            (context.attemptBudget.maxProviderAttempts !== undefined &&
+              (context.attemptBudget.totalProviderAttempts ?? 0) >= context.attemptBudget.maxProviderAttempts))) {
         throw new AIProviderError({ provider: provider.id, code: "AI_ATTEMPT_LIMIT_REACHED", message: "AI provider attempt limit was reached." });
       }
 
