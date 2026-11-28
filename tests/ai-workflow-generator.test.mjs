@@ -232,7 +232,7 @@ test("provider retries 503 responses with bounded exponential backoff", async ()
     },
   });
   assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash"]);
-  assert.deepEqual(delays, [200]);
+  assert.deepEqual(delays, [250]);
   assert.equal(result.providerModelUsed, "gemini-3.8-flash");
   assert.equal(result.providerFallbackUsed, false);
 });
@@ -264,8 +264,8 @@ test("Gemini 3.5 Flash-Lite is used only after the primary model exhausts its bo
       };
     },
   });
-  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"]);
-  assert.deepEqual(delays, [200]);
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"]);
+  assert.deepEqual(delays, [250, 500]);
   assert.equal(result.providerModelUsed, "gemini-3.5-flash-lite");
   assert.equal(result.providerFallbackUsed, true);
 });
@@ -297,21 +297,28 @@ test("a primary-model timeout switches to the configured fallback without repeat
   assert.equal(result.providerFallbackUsed, true);
 });
 
-test("fallback is not attempted for authentication, quota, or non-overload provider errors", async () => {
+test("429 responses get one bounded jittered retry and never fan out to the fallback model", async () => {
   let calls = 0;
+  const models = [];
+  const delays = [];
   await assert.rejects(generateWorkflow({
     prompt: "Make a manual workflow",
-    env,
-    fetchImpl: async () => {
+    env: { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" },
+    randomImpl: () => 0.5,
+    sleepImpl: async (milliseconds) => { delays.push(milliseconds); },
+    fetchImpl: async (_url, options) => {
       calls += 1;
+      models.push(JSON.parse(options.body).model);
       return {
         ok: false, status: 429,
         headers: { get: () => null },
         json: async () => ({ error: { status: "RESOURCE_EXHAUSTED" } }),
       };
     },
-  }), /AI_RATE_LIMITED/);
-  assert.equal(calls, 1);
+  }), error => error.message === "AI_RATE_LIMITED" && error.providerStatus === 429 && error.providerAttempts === 2);
+  assert.equal(calls, 2);
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash"]);
+  assert.deepEqual(delays, [500]);
 });
 
 test("reports an exhausted primary and fallback 503 as a distinct temporary overload", async () => {
@@ -333,10 +340,69 @@ test("reports an exhausted primary and fallback 503 as a distinct temporary over
     },
   }), error => error.message === "AI_PROVIDER_OVERLOADED" &&
     error.providerStatus === 503 && error.providerModel === "gemini-3.5-flash-lite");
-  assert.equal(models.length, 3);
-  assert.equal(models[2], "gemini-3.5-flash-lite");
+  assert.equal(models.length, 4);
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"]);
 });
 
+
+test("provider honors Google RetryInfo retryDelay in a 429 body and retries the same model once", async () => {
+  const delays = [];
+  const models = [];
+  let calls = 0;
+  const result = await generateWorkflow({
+    prompt: "Make a manual workflow",
+    env: { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" },
+    randomImpl: () => 0,
+    sleepImpl: async milliseconds => { delays.push(milliseconds); },
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      models.push(JSON.parse(options.body).model);
+      if (calls === 1) return {
+        ok: false, status: 429,
+        headers: { get: () => null },
+        json: async () => ({ error: { status: "RESOURCE_EXHAUSTED", details: [
+          { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "2s" }
+        ] } }),
+      };
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+    },
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash"]);
+  assert.deepEqual(delays, [2000]);
+  assert.equal(result.providerFallbackUsed, false);
+});
+
+test("provider attempt telemetry records status, model, attempt and fallback safely", async () => {
+  const events = [];
+  const result = await generateWorkflow({
+    prompt: "Make a manual workflow",
+    env: { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" },
+    randomImpl: () => 0,
+    sleepImpl: async () => {},
+    onProviderAttempt: event => { events.push(event); },
+    fetchImpl: async (_url, options) => {
+      const model = JSON.parse(options.body).model;
+      if (model === "gemini-3.8-flash") return {
+        ok: false, status: 503,
+        headers: { get: name => name === "x-goog-request-id" ? "req-503" : null },
+        json: async () => ({ error: { status: "UNAVAILABLE" } }),
+      };
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+    },
+  });
+  assert.equal(result.providerFallbackUsed, true);
+  assert.equal(events.length, 4);
+  assert.deepEqual(events.map(event => [event.model, event.attempt, event.status]), [
+    ["gemini-3.8-flash", 1, 503],
+    ["gemini-3.8-flash", 2, 503],
+    ["gemini-3.8-flash", 3, 503],
+    ["gemini-3.5-flash-lite", 4, 200],
+  ]);
+  assert.equal(events[0].providerReason, "UNAVAILABLE");
+  assert.equal(events[0].providerRequestId, "req-503");
+  assert.equal(events[3].fallbackUsed, true);
+});
 
 test("provider honors a three-second Retry-After header within the bounded retry window", async () => {
   const delays = [];
