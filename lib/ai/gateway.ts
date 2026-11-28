@@ -137,6 +137,14 @@ export function createAIGateway(
       operationBudget.maxAttemptsPerProvider ?? MAX_PROVIDER_ATTEMPTS_PER_OPERATION,
       MAX_PROVIDER_ATTEMPTS_PER_OPERATION,
     );
+    if (operationBudget.remainingProviderAttempts <= 0 ||
+        (operationBudget.totalProviderAttempts ?? 0) >= operationBudget.maxProviderAttempts) {
+      throw new AIProviderError({
+        provider: "gemini",
+        code: "AI_ATTEMPT_LIMIT_REACHED",
+        message: "AI operation provider attempt limit was reached.",
+      });
+    }
     const providerAttemptCounts = operationBudget.providerAttempts ?? {};
     const excludedProviders = [
       ...(context.excludedProviders ?? []),
