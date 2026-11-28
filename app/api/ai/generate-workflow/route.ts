@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { generateWorkflow, repairRegistryStepInputs, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
@@ -115,10 +116,30 @@ export async function POST(request: NextRequest) {
       }, { status: 422 });
     }
 
-    const { data: circuitState, error: circuitStateError } = await supabase.rpc("get_ai_provider_circuit_state", {
+    let circuitClient: ReturnType<typeof createAdminClient>;
+    try {
+      circuitClient = createAdminClient();
+    } catch {
+      logOperationalEvent({
+        event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+        outcome: "failure", statusCode: 503, errorCode: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
+        provider: "gemini",
+      }, console.error);
+      return jsonResponse({
+        error: "Gemini provider protection is temporarily unavailable. No Rexnora AI credit was charged. Please retry shortly.",
+        errorCode: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
+      }, { status: 503 });
+    }
+
+    const { data: circuitState, error: circuitStateError } = await circuitClient.rpc("get_ai_provider_circuit_state", {
       p_provider: "gemini",
     });
     if (circuitStateError || !circuitState || typeof circuitState !== "object") {
+      logOperationalEvent({
+        event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+        outcome: "failure", statusCode: 503, errorCode: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
+        provider: "gemini",
+      }, console.error);
       return jsonResponse({
         error: "Gemini provider protection is temporarily unavailable. No Rexnora AI credit was charged. Please retry shortly.",
         errorCode: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
@@ -128,6 +149,11 @@ export async function POST(request: NextRequest) {
       const retryAfterMs = Number((circuitState as { retryAfterMs?: unknown }).retryAfterMs);
       const retryAfterSeconds = Number.isFinite(retryAfterMs) && retryAfterMs > 0
         ? Math.max(1, Math.ceil(retryAfterMs / 1000)) : 30;
+      logOperationalEvent({
+        event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+        outcome: "rejected", statusCode: 503, errorCode: "AI_PROVIDER_COOLDOWN",
+        provider: "gemini", providerStatus: 503, retryAfterMs: retryAfterSeconds * 1000,
+      }, console.warn);
       return jsonResponse({
         error: "Gemini is cooling down after temporary provider failures. Retry in about " + retryAfterSeconds + " seconds. No Rexnora AI credit was charged.",
         errorCode: "AI_PROVIDER_COOLDOWN",
@@ -180,7 +206,7 @@ export async function POST(request: NextRequest) {
       const transient = status === null || [408, 429, 500, 502, 503, 504].includes(status) ||
         ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE"].includes(code);
       if (transient) {
-        const { error: circuitWriteError } = await supabase.rpc("record_ai_provider_circuit_result", {
+        const { error: circuitWriteError } = await circuitClient.rpc("record_ai_provider_circuit_result", {
           p_provider: "gemini",
           p_success: false,
           p_status_code: status,
