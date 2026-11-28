@@ -1,5 +1,5 @@
 begin;
-select plan(39);
+select plan(42);
 
 select has_table('private','ai_generation_credit_reservations','logical AI credit reservation table exists');
 select has_table('private','ai_provider_usage_events','provider token/cost telemetry is stored separately');
@@ -17,13 +17,18 @@ select ok(has_function_privilege('authenticated','public.consume_ai_generation_u
 -- One user, two independent workspaces, and a second workspace with only one
 -- unconsumed AI credit left. All fixtures are rolled back at the end.
 insert into auth.users(id,aud,role,email,encrypted_password,created_at,updated_at) values
-  ('a5511111-1111-4111-8111-111111111111','authenticated','authenticated','phase5-owner@example.invalid','',now(),now())
+  ('a5511111-1111-4111-8111-111111111111','authenticated','authenticated','phase5-owner@example.invalid','',now(),now()),
+  ('a5522222-2222-4222-8222-222222222222','authenticated','authenticated','phase5-member@example.invalid','',now(),now())
 on conflict(id) do nothing;
 
 insert into public.workspaces(id,name,owner_id) values
   ('b5511111-1111-4111-8111-111111111111','Phase 5 Reservation Workspace','a5511111-1111-4111-8111-111111111111'),
   ('b5522222-2222-4222-8222-222222222222','Phase 5 Quota Guard Workspace','a5511111-1111-4111-8111-111111111111')
 on conflict(id) do nothing;
+
+insert into public.workspace_members(workspace_id,user_id,role) values
+  ('b5511111-1111-4111-8111-111111111111','a5522222-2222-4222-8222-222222222222','member')
+on conflict(workspace_id,user_id) do update set role='member';
 
 insert into public.workspace_subscriptions(workspace_id,plan_key,status) values
   ('b5511111-1111-4111-8111-111111111111','free','active'),
@@ -64,15 +69,47 @@ select is(
   'a duplicate logical request cannot create another reservation or provider run'
 );
 select throws_ok(
-  $$select public.reserve_ai_generation_usage(
+  $select public.reserve_ai_generation_usage(
     'b5511111-1111-4111-8111-111111111111',
     'c5511111-1111-4111-8111-111111111111',
     repeat('b',64)
-  )$$,
+  )$,
   '22023',
   'idempotency key reused with different AI operation input',
   'a logical operation ID cannot be reused with different request content'
 );
+set_config('request.jwt.claims','{"sub":"a5522222-2222-4222-8222-222222222222","role":"authenticated"}',true);
+select throws_ok(
+  $select public.reserve_ai_generation_usage(
+    'b5511111-1111-4111-8111-111111111111',
+    'c5511111-1111-4111-8111-111111111111',
+    repeat('a',64)
+  )$,
+  '42501',
+  'AI operation belongs to another user',
+  'another workspace member cannot take over a released or active operation ID'
+);
+select throws_ok(
+  $select public.release_ai_generation_usage(
+    'b5511111-1111-4111-8111-111111111111',
+    'c5511111-1111-4111-8111-111111111111',
+    'cross_user_release'
+  )$,
+  '42501',
+  'AI operation belongs to another user',
+  'another workspace member cannot release someone else reservation'
+);
+select throws_ok(
+  $select public.consume_ai_generation_usage(
+    'b5511111-1111-4111-8111-111111111111',
+    'c5511111-1111-4111-8111-111111111111',
+    '[]'::jsonb
+  )$,
+  '42501',
+  'AI operation belongs to another user',
+  'another workspace member cannot settle someone else reservation'
+);
+select set_config('request.jwt.claims','{"sub":"a5511111-1111-4111-8111-111111111111","role":"authenticated"}',true);
 select is(
   public.release_ai_generation_usage(
     'b5511111-1111-4111-8111-111111111111',
