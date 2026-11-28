@@ -96,7 +96,7 @@ export default function PlaybookControlRoomPage() {
     <DashboardSidebar activePage="playbooks" />
     <section className="dashboard-main">
       <header className="dashboard-topbar">
-        <div className="breadcrumbs">Workspace <span>/</span><Link href="/dashboard/playbooks/new">Playbooks</Link><span>/</span><strong>Control Room</strong></div>
+        <div className="breadcrumbs">Workspace <span>/</span><Link href="/dashboard/playbooks">Playbooks</Link><span>/</span><strong>Control Room</strong></div>
         <span className="environment-badge">Versioned Playbook</span>
       </header>
       <div className="dashboard-content playbook-content">

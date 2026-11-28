@@ -188,7 +188,7 @@ export default function NewPlaybookPage() {
     <DashboardSidebar activePage="playbooks" />
     <section className="dashboard-main">
       <header className="dashboard-topbar">
-        <div className="breadcrumbs">Workspace <span>/</span><strong>Playbooks</strong></div>
+        <div className="breadcrumbs">Workspace <span>/</span><Link href="/dashboard/playbooks">Playbooks</Link><span>/</span><strong>New</strong></div>
         <span className="environment-badge">Draft setup · no execution</span>
       </header>
       <div className="dashboard-content playbook-content">
