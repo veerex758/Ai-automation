@@ -122,3 +122,39 @@ test("workflow generation logs the selected Gemini fallback without sensitive da
   }, value => { output = value; });
   assert.equal(JSON.parse(output).errorCode, "AI_PROVIDER_OVERLOADED");
 });
+
+
+test("Gemini provider-attempt logs retain bounded diagnostics and omit request content", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation",
+    requestId,
+    route: "/api/ai/generate-workflow",
+    outcome: "failure",
+    statusCode: 503,
+    provider: "gemini",
+    model: "gemini-3.8-flash",
+    providerStatus: 503,
+    providerAttempt: 2,
+    retryAfterMs: 1500,
+    providerRequestId: "google-request-1",
+    prompt: "private property enquiry",
+    apiKey: "secret",
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.providerAttempt, 2);
+  assert.equal(record.retryAfterMs, 1500);
+  assert.equal(record.providerStatus, 503);
+  assert.equal("prompt" in record, false);
+  assert.equal("apiKey" in record, false);
+  logOperationalEvent({
+    event: "workflow_generation",
+    errorCode: "AI_PROVIDER_COOLDOWN",
+    providerAttempt: -1,
+    retryAfterMs: "secret",
+  }, value => { output = value; });
+  const bounded = JSON.parse(output);
+  assert.equal(bounded.errorCode, "AI_PROVIDER_COOLDOWN");
+  assert.equal("providerAttempt" in bounded, false);
+  assert.equal("retryAfterMs" in bounded, false);
+});
