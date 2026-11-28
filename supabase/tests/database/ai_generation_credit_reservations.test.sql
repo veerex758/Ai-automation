@@ -78,7 +78,7 @@ select throws_ok(
   'idempotency key reused with different AI operation input',
   'a logical operation ID cannot be reused with different request content'
 );
-set_config('request.jwt.claims','{"sub":"a5522222-2222-4222-8222-222222222222","role":"authenticated"}',true);
+select set_config('request.jwt.claims','{"sub":"a5522222-2222-4222-8222-222222222222","role":"authenticated"}',true);
 select throws_ok(
   $select public.reserve_ai_generation_usage(
     'b5511111-1111-4111-8111-111111111111',
@@ -87,7 +87,7 @@ select throws_ok(
   )$,
   '42501',
   'AI operation belongs to another user',
-  'another workspace member cannot take over a released or active operation ID'
+  'another workspace member cannot take over another user's active operation ID'
 );
 select throws_ok(
   $select public.release_ai_generation_usage(
