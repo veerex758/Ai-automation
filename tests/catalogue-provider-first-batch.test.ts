@@ -237,20 +237,16 @@ test("Pipedrive, Zoho CRM, and Freshsales accept only exact upstream references 
     assert.equal(create.inputSchema.safeParse({ ...createReferenceInput, displayName: "invented" }).success, false, provider + " create must reject unknown fields");
     assert.equal(create.inputSchema.safeParse({ ...createReferenceInput, email: "invalid" }).success, false, provider + " create must reject invalid literal emails");
 
+    let networkCalled = false;
     const context = {
-      credentials: {},
+      credentials: { [provider]: { accessToken: "test-token", domain: "example.myfreshworks.com" } },
       logger,
-      http: { async request() { throw new Error("unresolved references must not reach the provider"); } },
+      http: { async request() { networkCalled = true; throw new Error("unresolved references must not reach the provider"); } },
       previousOutputs: {},
     };
-    await assert.rejects(
-      () => search.run(context, { email: validReference }),
-      /ZodError/
-    );
-    await assert.rejects(
-      () => create.run(context, createReferenceInput),
-      /ZodError/
-    );
+    await assert.rejects(() => search.run(context, { email: validReference }));
+    await assert.rejects(() => create.run(context, createReferenceInput));
+    assert.equal(networkCalled, false, provider + " runtime handlers must reject unresolved references before network access");
   }
 });
 
