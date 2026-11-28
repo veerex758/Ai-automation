@@ -174,24 +174,31 @@ test("Gemini cancellation and missing credentials fail with standard error codes
   );
 });
 
-test("default routing enables Gemini only and retains Gemini model fallback", () => {
+test("default routing prefers configured Gemini and retains Groq as an alternate", () => {
   const registry = createDefaultAIProviderRegistry(env);
   const route = routeAIRequest("workflow_generation", registry, env);
   assert.equal(route.provider.id, "gemini");
   assert.equal(route.primaryModel, "gemini-test-model");
   assert.deepEqual(route.fallbackModels, ["gemini-test-fallback"]);
-  assert.deepEqual(registry.list().map((provider) => provider.id), ["gemini"]);
+  assert.deepEqual(registry.list().map((provider) => provider.id), ["gemini", "groq"]);
 });
 
-test("Groq and Cloudflare implement the provider contract but remain disabled before their release gates", async () => {
-  for (const provider of [createGroqProvider(), createCloudflareProvider()]) {
-    assert.equal(provider.isConfigured(), false);
-    assert.equal(provider.capabilities.structuredOutput, false);
-    await assert.rejects(
-      provider.generateText({ prompt: "Do not route this." }, { ...context, task: "summarization" }),
-      (error: unknown) => error instanceof AIProviderError && error.code === "AI_PROVIDER_DISABLED",
-    );
-  }
+test("Groq is available only with a server key while Cloudflare remains explicitly disabled", async () => {
+  const groq = createGroqProvider({ env: { NODE_ENV: "test" } });
+  const cloudflare = createCloudflareProvider();
+  assert.equal(groq.isConfigured(), false);
+  assert.equal(groq.capabilities.structuredOutput, true);
+  assert.equal(groq.capabilities.toolCalling, true);
+  assert.equal(cloudflare.isConfigured(), false);
+  assert.equal(cloudflare.capabilities.structuredOutput, false);
+  await assert.rejects(
+    groq.generateText({ prompt: "No key." }, { ...context, task: "summarization" }),
+    (error: unknown) => error instanceof AIProviderError && error.code === "AI_NOT_CONFIGURED",
+  );
+  await assert.rejects(
+    cloudflare.generateText({ prompt: "Not enabled." }, { ...context, task: "summarization" }),
+    (error: unknown) => error instanceof AIProviderError && error.code === "AI_PROVIDER_DISABLED",
+  );
 });
 
 test("gateway uses the same registry and operation context for a successful structured request", async () => {
@@ -309,7 +316,70 @@ test("gateway never uses the Gemini model fallback after a rate-limit response",
   assert.deepEqual(attemptNumbers, [1, 2]);
 });
 
-test("dashboard components never call AI providers directly or contain server-side AI keys", () => {
+
+
+test("gateway fails over from invalid provider credentials to the configured Groq provider", async () => {
+  const attempts: Array<{ provider?: string; status: number; fallbackUsed: boolean }> = [];
+  const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret", GROQ_AI_MODEL: "openai/gpt-oss-120b" };
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: fakeFetch({ error: { message: "invalid key" } }, 401),
+  }));
+  registry.register(createGroqProvider({
+    env: groqEnv,
+    fetchImpl: fakeFetch({
+      choices: [{ message: { content: "Groq answered." }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
+    }),
+  }));
+  const gateway = createAIGateway(registry, { ...env, ...groqEnv });
+  const budget = { remainingProviderAttempts: 8, totalProviderAttempts: 0, deadlineAt: Date.now() + 5_000 };
+  const result = await gateway.generateText(
+    { prompt: "Answer briefly." },
+    {
+      ...context,
+      task: "summarization",
+      attemptBudget: budget,
+      deadlineAt: budget.deadlineAt,
+      onProviderAttempt: (event) => attempts.push({
+        provider: event.provider,
+        status: event.status,
+        fallbackUsed: event.fallbackUsed,
+      }),
+    },
+  );
+
+  assert.equal(result.output, "Groq answered.");
+  assert.equal(result.provider, "groq");
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(budget.totalProviderAttempts, 2);
+  assert.deepEqual(attempts.map((event) => event.provider), ["gemini", "groq"]);
+  assert.equal(attempts[1].fallbackUsed, true);
+  assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, false);
+});
+
+test("gateway does not route around invalid requests or safety rejections", async () => {
+  for (const failure of [
+    { status: 400, payload: { error: { message: "bad request" } }, code: "AI_INVALID_REQUEST" },
+    { status: 200, payload: { choices: [{ message: { content: "" }, finish_reason: "content_filter" }] }, code: "AI_SAFETY_REJECTED" },
+  ]) {
+    let groqCalls = 0;
+    const registry = new AIProviderRegistry();
+    registry.register(createGeminiProvider({ env, fetchImpl: fakeFetch(failure.payload, failure.status) }));
+    registry.register(createGroqProvider({
+      env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
+      fetchImpl: async () => { groqCalls += 1; return fakeFetch({ choices: [{ message: { content: "should not run" } }] })(); },
+    }));
+    const gateway = createAIGateway(registry, { ...env, GROQ_API_KEY: "test-groq-secret" });
+    await assert.rejects(
+      gateway.generateText({ prompt: "No bypass." }, { ...context, task: "summarization" }),
+      (error: unknown) => error instanceof AIProviderError && error.code === failure.code,
+    );
+    assert.equal(groqCalls, 0);
+  }
+});
+\ntest("dashboard components never call AI providers directly or contain server-side AI keys", () => {
   const root = join(process.cwd(), "app", "dashboard");
   const sourceFiles: string[] = [];
   const visit = (directory: string) => {
