@@ -24,21 +24,12 @@ function formatUpdatedAt(value: string): string {
   return new Date(value).toLocaleDateString();
 }
 
-function isPlaybookDefinition(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const playbook = (value as Record<string, unknown>).playbook;
-  if (!playbook || typeof playbook !== "object" || Array.isArray(playbook)) return false;
-  const candidate = playbook as Record<string, unknown>;
-  return candidate.schema === "rexnora.playbook" && candidate.schemaVersion === 1;
-}
-
 function presentWorkflow(row: {
   id: string;
   name: string;
   description: string;
   status: string;
   updated_at: string;
-  definition: unknown;
 }) {
   return {
     id: row.id,
@@ -50,7 +41,6 @@ function presentWorkflow(row: {
     updated: formatUpdatedAt(row.updated_at),
     icon: "✳",
     tone: "lime",
-    isPlaybook: isPlaybookDefinition(row.definition),
   };
 }
 
@@ -71,7 +61,7 @@ export async function GET() {
     }
     const { data, error } = await supabase
       .from("workflows")
-      .select("id, name, description, status, updated_at, definition")
+      .select("id, name, description, status, updated_at")
       .eq("workspace_id", workspace.id)
       .order("updated_at", { ascending: false });
 
@@ -81,9 +71,9 @@ export async function GET() {
       workflows: (data ?? []).map(presentWorkflow),
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    console.error("Failed to load Aivanta workflows:", error);
+    console.error("Failed to load Rexnora workflows:", error);
     return NextResponse.json(
-      { error: "Could not load workflows. Check the Aivanta database configuration and try again." },
+      { error: "Could not load workflows. Check the Rexnora database configuration and try again." },
       { status: 500, headers: { "Cache-Control": "private, no-store" } },
     );
   }
@@ -306,9 +296,9 @@ export async function POST(request: NextRequest) {
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
-    console.error("Failed to create Aivanta workflow:", error);
+    console.error("Failed to create Rexnora workflow:", error);
     return NextResponse.json(
-      { error: "Could not save this workflow. Check the Aivanta database configuration and try again." },
+      { error: "Could not save this workflow. Check the Rexnora database configuration and try again." },
       { status: 500, headers: { "Cache-Control": "private, no-store" } },
     );
   }
