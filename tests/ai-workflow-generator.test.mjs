@@ -373,6 +373,70 @@ test("provider honors Google RetryInfo retryDelay in a 429 body and retries the 
   assert.equal(result.providerFallbackUsed, false);
 });
 
+test("Gemini 503 retry delays grow exponentially with full jitter", async () => {
+  const delays = [];
+  let calls = 0;
+  const result = await generateWorkflow({
+    prompt: "Make a manual workflow",
+    env: { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" },
+    randomImpl: () => 0.5,
+    sleepImpl: async milliseconds => { delays.push(milliseconds); },
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      const model = JSON.parse(options.body).model;
+      if (model === "gemini-3.5-flash-lite") {
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(validDefinition) } }] }) };
+      }
+      return {
+        ok: false, status: 503,
+        headers: { get: () => null },
+        json: async () => ({ error: { status: "UNAVAILABLE" } }),
+      };
+    },
+  });
+  assert.equal(calls, 4);
+  assert.deepEqual(delays, [500, 1000]);
+  assert.equal(result.providerFallbackUsed, true);
+});
+
+test("Gemini transport failures are logged as attempts and do not fan out", async () => {
+  const events = [];
+  let calls = 0;
+  await assert.rejects(generateWorkflow({
+    prompt: "Make a manual workflow",
+    env,
+    onProviderAttempt: event => events.push(event),
+    fetchImpl: async () => {
+      calls += 1;
+      throw new Error("socket unavailable");
+    },
+  }), error => error.message === "AI_PROVIDER_UNAVAILABLE" && error.providerStatus === 502);
+  assert.equal(calls, 1);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].errorCode, "AI_PROVIDER_UNAVAILABLE");
+  assert.equal(events[0].status, 502);
+});
+
+test("a long Retry-After on 503 suppresses fallback instead of increasing provider pressure", async () => {
+  let calls = 0;
+  const delays = [];
+  await assert.rejects(generateWorkflow({
+    prompt: "Make a manual workflow",
+    env: { ...env, GEMINI_AI_MODEL: "gemini-3.8-flash" },
+    sleepImpl: async milliseconds => delays.push(milliseconds),
+    fetchImpl: async () => {
+      calls += 1;
+      return {
+        ok: false, status: 503,
+        headers: { get: name => name === "retry-after" ? "30" : null },
+        json: async () => ({ error: { status: "UNAVAILABLE" } }),
+      };
+    },
+  }), error => error.message === "AI_PROVIDER_OVERLOADED" && error.providerStatus === 503);
+  assert.equal(calls, 1);
+  assert.deepEqual(delays, []);
+});
+
 test("provider attempt telemetry records status, model, attempt and fallback safely", async () => {
   const events = [];
   const result = await generateWorkflow({
