@@ -40,6 +40,7 @@ export type AIUsage = {
 };
 
 export type AIProviderAttempt = {
+  provider?: AIProviderId;
   model: string;
   attempt: number;
   status: number;
@@ -79,6 +80,8 @@ export type AIRequestContext = {
   /** Gateway-managed attempt metadata; provider adapters must not change the operation ID. */
   providerAttempt?: number;
   fallbackUsed?: boolean;
+  /** Providers blocked by a shared circuit breaker for this request. */
+  excludedProviders?: AIProviderId[];
   /** Receives only provider/model/status metadata; never include prompts or response bodies. */
   onProviderAttempt?: (attempt: AIProviderAttempt) => void;
 };
