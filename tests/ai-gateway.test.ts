@@ -687,7 +687,7 @@ test("gateway retries provider timeouts within the shared deadline, then fails o
 
   const gateway = createAIGateway(registry, { ...timeoutEnv, ...groqEnv });
   const deadlineAt = Date.now() + 5_000;
-  const budget = { remainingProviderAttempts: 8, totalProviderAttempts: 0, deadlineAt };
+  const budget: import("../lib/ai/types").AIRequestBudget = { remainingProviderAttempts: 8, totalProviderAttempts: 0, deadlineAt };
   const result = await gateway.generateText(
     { prompt: "Recover within the operation deadline." },
     {
