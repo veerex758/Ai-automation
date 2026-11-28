@@ -1,5 +1,5 @@
 begin;
-select plan(17);
+select plan(18);
 
 -- The circuit breaker is global service state, never browser-readable.
 select ok(
@@ -35,9 +35,9 @@ select is(
   'one transient provider failure is recorded without opening the circuit'
 );
 select is(
-  public.record_ai_provider_circuit_result('gemini',false,503,0,false)->>'state',
+  public.record_ai_provider_circuit_result('gemini',false,503,0,false,2,0.5,5,300,30000,300000,300000)->>'state',
   'open',
-  'two consecutive transient provider failures open the circuit'
+  'configured two-failure threshold opens the circuit'
 );
 select ok(
   not (public.get_ai_provider_circuit_state('gemini')->>'allowed')::boolean,
@@ -53,16 +53,11 @@ select is(
   'open',
   'a rate-limit response opens the circuit immediately'
 );
-reset role;
 select ok(
-  (
-    select open_until > clock_timestamp() + interval '40 seconds'
-       and open_until < clock_timestamp() + interval '50 seconds'
-    from private.ai_provider_circuit_breakers
-    where provider='gemini'
-  ),
+  (public.get_ai_provider_circuit_state('gemini')->>'retryAfterMs')::bigint between 40000 and 50000,
   '429 cooldown respects the provider retry-after window'
 );
+reset role;
 
 -- Expire the cooldown and prove that exactly one half-open probe is leased.
 update private.ai_provider_circuit_breakers
