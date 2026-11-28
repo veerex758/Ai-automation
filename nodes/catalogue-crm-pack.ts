@@ -56,7 +56,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
       id: "execute", name: args.name + " action", description: args.description,
       inputSchema: args.input, outputSchema: args.output,
       async run(ctx, raw) {
-        const input = (args.runtimeInput ?? args.input).parse(raw);
+        const input = (args.runtimeInput ?? args.input).parse(raw) as z.infer<I>;
         return args.output.parse(await args.run(ctx, input));
       },
     }, ...(args.additionalActions ?? [])],
