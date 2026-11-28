@@ -103,3 +103,13 @@ test("workspace and team navigation is reachable from the shared workspace switc
   assert.match(sidebar, /className="workspace-switch" href="\/dashboard\/workspaces"/);
   assert.match(sections, /href="\/dashboard\/workspaces"/);
 });
+
+test("dashboard workflow requests handle empty and non-JSON responses without leaking JSON parse errors", () => {
+  assert.match(dashboard, /async function readJsonResponse<T>\(response: Response, failureLabel: string\)/);
+  assert.match(dashboard, /const body = await response\.text\(\)/);
+  assert.match(dashboard, /invalid response/);
+  assert.match(dashboard, /empty response/);
+  assert.doesNotMatch(dashboard, /const result = await response\.json\(\)/);
+  assert.match(dashboard, /workflowLoadError/);
+  assert.match(dashboard, /Try again/);
+});
