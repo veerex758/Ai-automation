@@ -408,6 +408,7 @@ test("gateway does not route around invalid requests or safety rejections", asyn
     { status: 400, payload: { error: { message: "bad request" } }, code: "AI_INVALID_REQUEST" },
     { status: 200, payload: { choices: [{ message: { content: "" }, finish_reason: "content_filter" }] }, code: "AI_SAFETY_REJECTED" },
     { status: 200, payload: { choices: [{ message: { content: "", refusal: "I cannot assist with that request." }, finish_reason: "stop" }] }, code: "AI_SAFETY_REJECTED" },
+    { status: 200, payload: { choices: [{ message: { content: "" }, finish_reason: "PROHIBITED_CONTENT" }] }, code: "AI_SAFETY_REJECTED" },
   ]) {
     let groqCalls = 0;
     const registry = new AIProviderRegistry();
