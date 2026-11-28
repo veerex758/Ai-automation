@@ -885,8 +885,8 @@ test("gateway fails over from malformed Gemini structured JSON to validated Groq
     { prompt: "Return a valid workflow plan.", validate: (value: unknown) => {
         assert.deepEqual(value, { registrySteps: [{ id: "start" }], edges: [] });
         return value;
-      },
-    },
+      } },
+    { ...context, task: "workflow_generation" },
   );
 
   assert.equal(result.provider, "groq");
