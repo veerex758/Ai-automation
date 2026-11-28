@@ -4,12 +4,13 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const path = (relative) => fileURLToPath(new URL(relative, import.meta.url));
-const [dashboard, sections, sidebar, agents, playbooks, connections, billing, layout] = await Promise.all([
+const [dashboard, sections, sidebar, agents, playbooks, playbookLibrary, connections, billing, layout] = await Promise.all([
   readFile(path("../app/dashboard/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/section-page.tsx"), "utf8"),
   readFile(path("../app/dashboard/dashboard-sidebar.tsx"), "utf8"),
   readFile(path("../app/dashboard/agents/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/playbooks/new/page.tsx"), "utf8"),
+  readFile(path("../app/dashboard/playbooks/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/connections/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/billing/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/layout.tsx"), "utf8"),
@@ -18,18 +19,21 @@ const [dashboard, sections, sidebar, agents, playbooks, connections, billing, la
 test("overview navigation exposes Playbooks as the only customer-facing workflow authoring entry", () => {
   for (const href of [
     "/dashboard", "/dashboard#workflows", "/dashboard/activity",
-    "/dashboard/playbooks/new", "/dashboard/agents", "/dashboard/templates",
+    "/dashboard/playbooks", "/dashboard/agents", "/dashboard/templates",
     "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
     "/dashboard/billing", "/dashboard/settings",
-  ]) assert.ok(dashboard.includes(href), "missing dashboard navigation destination: " + href);
-  assert.match(dashboard, /<Link key=\{item\.label\} href=\{item\.href\}/);
+  ]) assert.ok(sidebar.includes(href), "missing shared navigation destination: " + href);
+  assert.ok(sidebar.includes("key={item.key} href={item.href}"), "shared navigation must render its configured links");
   assert.match(dashboard, /id="workflows"/);
-  assert.doesNotMatch(dashboard, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
+  assert.doesNotMatch(sidebar, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
 });
 
-test("shared sidebar exposes Playbooks and no competing builder or assistant entry", () => {
-  assert.match(sidebar, /label: "Playbooks".*href: "\/dashboard\/playbooks\/new".*key: "playbooks"/);
+test("shared sidebar opens the saved Playbooks library and exposes no competing builder or assistant entry", () => {
+  assert.ok(sidebar.includes('label: "Playbooks", icon: "◇", href: "/dashboard/playbooks", key: "playbooks"'));
   assert.doesNotMatch(sidebar, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
+  assert.match(playbookLibrary, /<DashboardSidebar activePage="playbooks"/);
+  assert.match(playbookLibrary, /rexnora\.playbook/);
+  assert.match(playbookLibrary, /Open Control Room/);
   assert.match(playbooks, /<DashboardSidebar activePage="playbooks"/);
   assert.match(agents, /<DashboardSidebar activePage="agents"/);
   assert.match(connections, /<DashboardSidebar activePage="connections"/);

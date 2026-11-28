@@ -9,7 +9,7 @@ const groups = [
     { label: "Activity logs", icon: "◷", href: "/dashboard/activity", key: "activity" },
   ] },
   { label: "BUILD", items: [
-    { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks/new", key: "playbooks" },
+    { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks", key: "playbooks" },
     { label: "AI agents", icon: "✺", href: "/dashboard/agents", key: "agents" },
     { label: "Templates", icon: "▧", href: "/dashboard/templates", key: "templates" },
   ] },

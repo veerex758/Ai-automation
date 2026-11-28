@@ -11,3 +11,15 @@
 .re-match-results article small{font-size:11px;color:#9AA9BC;margin-top:4px}
 .re-match-results article>b{flex:0 0 auto;color:#DDE7F5;font-size:12px;white-space:nowrap}
 @media(max-width:520px){.re-match-results{padding:12px}.re-match-results article{gap:8px}.re-match-results article>b{font-size:11px}}
+
+
+/* Real-estate routes use the same labelled mobile workspace navigation. */
+@media(max-width:720px){
+  .re-shell{display:flex!important;flex-direction:column!important}
+  .re-shell>.sidebar{display:flex!important;width:100%!important;min-height:0!important;height:auto!important;box-sizing:border-box;padding:10px 12px 8px!important;flex-direction:column!important;overflow:visible!important}
+  .re-shell>.sidebar .dashboard-nav{display:flex!important;flex-direction:row!important;gap:7px!important;overflow-x:auto!important;overflow-y:hidden!important;padding-bottom:4px!important}
+  .re-shell>.sidebar .dashboard-nav-group{display:contents!important}
+  .re-shell>.sidebar .dashboard-nav .side-link{display:flex!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;gap:7px!important;padding:8px 10px!important;font-size:11px!important}
+  .re-shell>.sidebar .workspace-switch,.re-shell>.sidebar .sidebar-label,.re-shell>.sidebar .sidebar-bottom{display:none!important}
+  .re-shell>.dashboard-main{width:100%;min-width:0}
+}

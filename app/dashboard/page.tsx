@@ -4,28 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import "./dashboard.css";
+import DashboardSidebar from "./dashboard-sidebar";
 
 type Workflow = { id: string; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused" | "Archived"; runs: string; updated: string; icon: string; tone: string };
 
-const navItems = [
-  { label: "Overview", icon: "⌂", href: "/dashboard" },
-  { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
-  { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
-  { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks/new" },
-  { label: "AI agents", icon: "✺", href: "/dashboard/agents" },
-  { label: "Templates", icon: "▧", href: "/dashboard/templates" },
-  { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
-  { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
-  { label: "Real Estate", icon: "⌂", href: "/dashboard/real-estate" },
-  { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
-  { label: "Billing", icon: "◇", href: "/dashboard/billing" },
-  { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
-];
 
 export default function DashboardPage() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [activeNav, setActiveNav] = useState("Overview");
   const [filter, setFilter] = useState("All workflows");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -133,20 +119,10 @@ export default function DashboardPage() {
 
   return (
     <main className="app-shell dashboard-overview-page">
-      <aside className="sidebar">
-        <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark">a</span><span>Rexnora<span className="brand-period">.</span></span></Link>
-        <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
-        <div className="sidebar-label">WORKSPACE</div>
-        <nav className="side-nav" aria-label="Workspace navigation">
-          {navItems.map((item) => <Link key={item.label} href={item.href} className={activeNav === item.label ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
-        </nav>
-        <div className="sidebar-label tools-label">BUILD</div>
-        <button type="button" className="side-link" onClick={() => router.push("/dashboard/playbooks/new")}><span className="side-icon">＋</span>Create Playbook</button>
-        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
-      </aside>
+      <DashboardSidebar activePage="overview" workspaceName={workspaceName} />
 
       <section className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>{activeNav}</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Development</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
+        <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>Overview</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Workspace</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
         <div className="dashboard-content">
           <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={() => router.push("/dashboard/playbooks/new")}><span>＋</span> New Playbook</button></div>
 
@@ -173,11 +149,11 @@ export default function DashboardPage() {
 
           {notice && <div className="notice-bar" role="status"><span>ⓘ</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss notice">×</button></div>}
 
-          <div className="stats-grid">
-            <article className="stat-card"><div className="stat-heading">Total workflows <span className="stat-symbol">↗</span></div><div className="stat-number">{workflows.length.toString().padStart(2, "0")}<span className="stat-caption"> in workspace</span></div><div className="stat-bottom"><span className="stat-dot dot-lime" />Your automation library</div></article>
-            <article className="stat-card"><div className="stat-heading">Active workflows <span className="stat-symbol">◉</span></div><div className="stat-number">{workflows.filter((w) => w.status === "Active").length.toString().padStart(2, "0")}<span className="stat-caption"> enabled</span></div><div className="stat-bottom"><span className="stat-dot dot-green" />Ready when connected</div></article>
-            <article className="stat-card"><div className="stat-heading">Tasks processed <span className="stat-symbol">⌁</span></div><div className="stat-number">2,392<span className="stat-caption"> sample data</span></div><div className="stat-bottom"><span className="stat-dot dot-violet" />Illustrative dashboard metric</div></article>
-            <article className="stat-card"><div className="stat-heading">Time returned <span className="stat-symbol">◷</span></div><div className="stat-number">48.5<span className="stat-unit">h</span></div><div className="stat-bottom"><span className="stat-dot dot-blue" />Estimated sample data</div></article>
+          <div className="stats-grid" aria-label="Workspace workflow totals">
+            <article className="stat-card"><div className="stat-heading">Total workflows <span className="stat-symbol">↗</span></div><div className="stat-number">{workflows.length.toString().padStart(2, "0")}</div><div className="stat-bottom"><span className="stat-dot dot-lime" />Saved in this workspace</div></article>
+            <article className="stat-card"><div className="stat-heading">Active workflows <span className="stat-symbol">◉</span></div><div className="stat-number">{workflows.filter((w) => w.status === "Active").length.toString().padStart(2, "0")}</div><div className="stat-bottom"><span className="stat-dot dot-green" />Currently enabled</div></article>
+            <article className="stat-card"><div className="stat-heading">Draft workflows <span className="stat-symbol">◇</span></div><div className="stat-number">{workflows.filter((w) => w.status === "Draft").length.toString().padStart(2, "0")}</div><div className="stat-bottom"><span className="stat-dot dot-violet" />Not yet activated</div></article>
+            <article className="stat-card"><div className="stat-heading">Paused workflows <span className="stat-symbol">Ⅱ</span></div><div className="stat-number">{workflows.filter((w) => w.status === "Paused").length.toString().padStart(2, "0")}</div><div className="stat-bottom"><span className="stat-dot dot-blue" />Temporarily stopped</div></article>
           </div>
 
           <div className="section-title-row" id="workflows"><div><h2>Your workflows</h2><p>Manage the building blocks of your automated work.</p></div><button className="subtle-button" onClick={() => { setFilter("All workflows"); setSearch(""); }}>View all <span>↗</span></button></div>

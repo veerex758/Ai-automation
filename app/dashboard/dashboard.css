@@ -631,3 +631,54 @@
 .app-shell .help-card p,.app-shell .help-card a{color:#94A3B8!important}
 .app-shell .stat-symbol,.app-shell .quick-template-icon.lime{background:#172846!important;color:#8BB8FF!important}
 .app-shell .dot-lime,.app-shell .dot-green{background:#3B82F6!important}
+
+
+/* Consistent mobile workspace navigation: keep labels visible and allow horizontal scrolling. */
+@media(max-width:720px){
+  .app-shell{display:flex;flex-direction:column}
+  .app-shell>.sidebar,
+  .dashboard-overview-page .sidebar,
+  .re-shell .sidebar{
+    display:flex!important;box-sizing:border-box;width:100%;min-width:0;min-height:0;height:auto;
+    padding:10px 12px 8px!important;flex-direction:column!important;align-items:stretch!important;gap:7px;
+    overflow:visible!important;border-right:0!important;border-bottom:1px solid #2A2F3A!important;
+  }
+  .app-shell>.sidebar .dash-brand,
+  .dashboard-overview-page .sidebar .dash-brand,
+  .re-shell .sidebar .dash-brand{width:max-content;max-width:100%;padding:0 8px 5px!important;font-size:18px!important}
+  .app-shell>.sidebar .workspace-switch,
+  .app-shell>.sidebar .sidebar-bottom,
+  .app-shell>.sidebar .sidebar-label,
+  .dashboard-overview-page .sidebar .workspace-switch,
+  .dashboard-overview-page .sidebar .sidebar-bottom,
+  .dashboard-overview-page .sidebar .sidebar-label,
+  .re-shell .sidebar .workspace-switch,
+  .re-shell .sidebar .sidebar-bottom,
+  .re-shell .sidebar .sidebar-label{display:none!important}
+  .app-shell>.sidebar .dashboard-nav,
+  .dashboard-overview-page .sidebar .dashboard-nav,
+  .re-shell .sidebar .dashboard-nav{
+    display:flex!important;flex-direction:row!important;align-items:stretch!important;gap:7px!important;
+    overflow-x:auto!important;overflow-y:hidden!important;padding:0 0 4px!important;scrollbar-width:thin;
+  }
+  .app-shell>.sidebar .dashboard-nav-group,
+  .dashboard-overview-page .sidebar .dashboard-nav-group,
+  .re-shell .sidebar .dashboard-nav-group{display:contents!important}
+  .app-shell>.sidebar .dashboard-nav .side-link,
+  .dashboard-overview-page .sidebar .dashboard-nav .side-link,
+  .re-shell .sidebar .dashboard-nav .side-link{
+    display:flex!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;
+    justify-content:center!important;gap:7px!important;padding:8px 10px!important;
+    border:1px solid #2A2F3A!important;border-radius:8px!important;background:#111722!important;
+    color:#CBD5E1!important;font-size:11px!important;white-space:nowrap!important;
+  }
+  .app-shell>.sidebar .dashboard-nav .side-link[aria-current="page"],
+  .dashboard-overview-page .sidebar .dashboard-nav .side-link[aria-current="page"],
+  .re-shell .sidebar .dashboard-nav .side-link[aria-current="page"]{
+    border-color:#3B82F6!important;background:#172846!important;color:#DBEAFE!important;
+  }
+  .app-shell>.sidebar .dashboard-nav .side-icon,
+  .dashboard-overview-page .sidebar .dashboard-nav .side-icon,
+  .re-shell .sidebar .dashboard-nav .side-icon{width:auto!important;font-size:14px!important}
+  .app-shell>.dashboard-main,.app-shell .dashboard-main{width:100%;min-width:0}
+}

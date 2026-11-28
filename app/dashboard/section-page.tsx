@@ -54,7 +54,7 @@ async function loadAnalytics(): Promise<AnalyticsData | null> {
    succeeded: runs.filter(run => run.status === "succeeded").length,
    failed: runs.filter(run => run.status === "failed").length,
    running: runs.filter(run => ["running", "queued", "waiting"].includes(run.status)).length,
-   recent: runs.slice(0, 6).map(run => ({ ...run, name: names.get(run.workflow_id) ?? "Workflow" })),
+   recent: runs.slice(0, 20).map(run => ({ ...run, name: names.get(run.workflow_id) ?? "Workflow" })),
   };
  } catch {
   return null;
