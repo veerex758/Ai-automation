@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     const seen = new Set<string>();
     const invalidInputs: Array<{
       id: string; nodeId: string; operationId: string; kind: "trigger" | "action";
-      input: Record<string, unknown>; validationIssues: Array<{ path: (string | number)[]; code: string }>;
+      input: Record<string, unknown>; validationIssues: Array<{ path: string; code: string }>;
     }> = [];
     for (let index = 0; index < registrySteps.length; index++) {
       const step = registrySteps[index];
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
           kind: step.kind,
           input: step.input as Record<string, unknown>,
           validationIssues: inputValidation.error.issues.slice(0, 8).map((issue) => ({
-            path: issue.path,
+            path: issue.path.map(String).join("."),
             code: issue.code,
           })),
         });
