@@ -1,4 +1,5 @@
 import { createGeminiProvider } from "./providers/gemini";
+import { createGroqProvider } from "./providers/groq";
 import type { AIProvider, AIProviderId } from "./types";
 
 export class AIProviderRegistry {
@@ -18,9 +19,10 @@ export class AIProviderRegistry {
   }
 }
 
-/** Only Gemini is enabled in Phase 1. Disabled adapters are intentionally not registered. */
+/** Gemini is primary by default; Groq is the first configured alternate provider. */
 export function createDefaultAIProviderRegistry(env: Record<string, string | undefined> = process.env): AIProviderRegistry {
   const registry = new AIProviderRegistry();
   registry.register(createGeminiProvider({ env }));
+  registry.register(createGroqProvider({ env }));
   return registry;
 }
