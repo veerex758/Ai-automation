@@ -270,6 +270,12 @@ export function createAIGateway(
             throw circuitUnavailableError(provider.id);
           }
           if (!countAsFailure) throw caught;
+          // Preserve the gateway's one bounded 429 Retry-After retry for the
+          // already-admitted operation. The persistent circuit still excludes
+          // subsequent requests from other Vercel instances.
+          if (error.code === "AI_RATE_LIMITED" || Number(error.providerStatus ?? error.status) === 429) {
+            throw caught;
+          }
           if (snapshot.state === "open") {
             circuitOpenedDuringOperation = true;
             const remaining = snapshot.openUntil === undefined
