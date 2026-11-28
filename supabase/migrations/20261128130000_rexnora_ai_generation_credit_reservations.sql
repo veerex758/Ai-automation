@@ -324,7 +324,8 @@ begin
     raise exception 'workspace access denied' using errcode = '42501';
   end if;
   if p_workspace_id is null or p_operation_id is null
-     or length(v_reason) > 80 or v_reason !~ '^[a-zA-Z0-9_.-]{1,80}
+     or length(v_reason) > 80 or v_reason !~ '^[a-zA-Z0-9_.-]{1,80}$'
+     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array' then
     raise exception 'invalid AI generation release request' using errcode = '22023';
   end if;
 
@@ -436,9 +437,11 @@ begin
     raise exception 'workspace access denied' using errcode = '42501';
   end if;
   if p_workspace_id is null or p_operation_id is null
-     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array'
-     or jsonb_array_length(p_provider_usage) > 16 then
+     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array' then
     raise exception 'invalid AI generation settlement' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_provider_usage) > 16 then
+    raise exception 'too many provider usage records' using errcode = '22023';
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
