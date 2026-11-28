@@ -38,6 +38,7 @@ test("workflow generator delegates to the gateway without reading provider crede
     nodeCatalog: [],
     mode: "registry",
     env: { NODE_ENV: "test" },
+    onProviderAttempt: () => undefined,
     gatewayGenerateStructured: async (request: { task: string }) => {
       receivedTask = request.task;
       return {
@@ -203,7 +204,7 @@ test("gateway uses the same registry and operation context for a successful stru
     }),
   }));
   const gateway = createAIGateway(registry, env);
-  const budget = { remainingProviderAttempts: 3, deadlineAt: Date.now() + 5_000 };
+  const budget = { remainingProviderAttempts: 3, totalProviderAttempts: 0, deadlineAt: Date.now() + 5_000 };
   const result = await gateway.generateStructured(
     { systemPrompt: "Return a JSON object.", prompt: "Confirm." },
     { ...context, attemptBudget: budget, deadlineAt: budget.deadlineAt },
