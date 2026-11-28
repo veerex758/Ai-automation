@@ -120,7 +120,7 @@ const graphCases: AIQualityCase[] = Array.from({ length: 20 }, (_, i) => {
         visited.add(id);
         active.add(id);
         for (const edge of edges) {
-          if (edge?.source === id && hasCycle(edge.target)) return true;
+          if (edge && edge.source === id && hasCycle(edge.target)) return true;
         }
         active.delete(id);
         return false;

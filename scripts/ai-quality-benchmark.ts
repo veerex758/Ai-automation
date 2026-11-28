@@ -41,7 +41,7 @@ export function summarizeBenchmark(observations: BenchmarkObservation[]): AIQual
     taskAccuracy: taskObservations.length ? rate(taskObservations.map((x) => Number(x.taskCorrect))) : 0,
     p95LatencyMs: p95,
     costPerSuccessfulOperationUsd: costCoverageComplete
-      ? successfulCosts.reduce((sum, value) => sum + (value as number), 0) / successful.length
+      ? successfulCosts.reduce<number>((sum, value) => sum + (value as number), 0) / successful.length
       : null,
     recoveryRate: recoverySamples.length
       ? rate(recoverySamples.map((x) => Number(x.recoveryProbeSucceeded))) : 0,
