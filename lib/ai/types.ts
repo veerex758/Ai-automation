@@ -96,7 +96,7 @@ export type AITextRequest = {
 
 export type AIStructuredRequest<T = unknown> = AITextRequest & {
   schema?: JSONSchema;
-  validate?: (value: unknown) => T;
+  validate?: (value: unknown, provider?: AIProviderId) => T;
 };
 
 export type AIToolDefinition = {
