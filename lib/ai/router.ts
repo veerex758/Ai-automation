@@ -21,11 +21,11 @@ function capabilityForTask(task: AITask): keyof AIProvider["capabilities"] {
   return "text";
 }
 
-function configuredModel(value: string | undefined, fallback: string): string {
+function configuredModel(value: string | undefined, fallback: string, provider: AIProviderId): string {
   const model = (value || fallback).trim();
   if (!/^[a-zA-Z0-9._:/-]{1,100}$/.test(model)) {
     throw new AIProviderError({
-      provider: "gemini",
+      provider,
       code: "AI_INVALID_REQUEST",
       message: "AI model configuration is invalid.",
     });
@@ -52,7 +52,8 @@ export function routeAIRequests(
       message: "AI primary-provider configuration is invalid.",
     });
   }
-  const configuredOrder = (env.AI_FAILOVER_ORDER || "groq,cloudflare")
+  const defaultFailoverOrder = primaryValue === "groq" ? "gemini,cloudflare" : "groq,cloudflare";
+  const configuredOrder = (env.AI_FAILOVER_ORDER || defaultFailoverOrder)
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter((value): value is AIProviderId => allowedIds.includes(value as AIProviderId));
@@ -69,15 +70,15 @@ export function routeAIRequests(
     let primaryModel: string;
     let fallbackModels: string[];
     if (providerId === "gemini") {
-      primaryModel = configuredModel(env.GEMINI_AI_MODEL, DEFAULT_GEMINI_MODEL);
-      const fallback = configuredModel(env.GEMINI_FALLBACK_MODEL, DEFAULT_GEMINI_FALLBACK_MODEL);
+      primaryModel = configuredModel(env.GEMINI_AI_MODEL, DEFAULT_GEMINI_MODEL, providerId);
+      const fallback = configuredModel(env.GEMINI_FALLBACK_MODEL, DEFAULT_GEMINI_FALLBACK_MODEL, providerId);
       fallbackModels = fallback === primaryModel ? [] : [fallback];
     } else if (providerId === "groq") {
-      primaryModel = configuredModel(env.GROQ_AI_MODEL, DEFAULT_GROQ_MODEL);
-      const fallback = configuredModel(env.GROQ_FALLBACK_MODEL, DEFAULT_GROQ_FALLBACK_MODEL);
+      primaryModel = configuredModel(env.GROQ_AI_MODEL, DEFAULT_GROQ_MODEL, providerId);
+      const fallback = configuredModel(env.GROQ_FALLBACK_MODEL, DEFAULT_GROQ_FALLBACK_MODEL, providerId);
       fallbackModels = fallback === primaryModel ? [] : [fallback];
     } else {
-      primaryModel = configuredModel(env.CLOUDFLARE_AI_MODEL, "@cf/meta/llama-3.1-8b-instruct");
+      primaryModel = configuredModel(env.CLOUDFLARE_AI_MODEL, "@cf/meta/llama-3.1-8b-instruct", providerId);
       fallbackModels = [];
     }
     routes.push({ provider, primaryModel, fallbackModels });
