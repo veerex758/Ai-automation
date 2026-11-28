@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AIProviderError } from "../lib/ai/errors";
 import { createAIGateway } from "../lib/ai/gateway";
+import { InMemoryCircuitBreakerStore, DEFAULT_CIRCUIT_POLICY } from "../lib/ai/circuit-breaker";
 import { createDefaultAIProviderRegistry, AIProviderRegistry } from "../lib/ai/registry";
 import { routeAIRequest, routeAIRequests } from "../lib/ai/router";
 import { retryDelayMs } from "../lib/ai/retry";
@@ -896,4 +897,78 @@ test("gateway fails over from malformed Gemini structured JSON to validated Groq
   assert.deepEqual(result.usage, { inputTokens: 4, outputTokens: 5, totalTokens: 9 });
   assert.equal(geminiCalls, 1);
   assert.equal(groqCalls, 1);
+});
+
+
+test("rolling circuit failure rate opens only the affected provider and a successful probe restores it", async () => {
+  const store = new InMemoryCircuitBreakerStore();
+  const policy = {
+    ...DEFAULT_CIRCUIT_POLICY,
+    failureThreshold: 10,
+    failureRateThreshold: 0.5,
+    minimumRequests: 4,
+    baseCooldownMs: 1_000,
+    maxCooldownMs: 10_000,
+    probeLeaseMs: 100,
+  };
+
+  await store.record("gemini", { success: false, statusCode: 503, probe: false, policy });
+  await store.record("gemini", { success: true, probe: false, policy });
+  await store.record("gemini", { success: false, statusCode: 502, probe: false, policy });
+  const opened = await store.record("gemini", { success: false, statusCode: 504, probe: false, policy });
+  assert.equal(opened.state, "open");
+  assert.equal(opened.recentAttempts, 4);
+  assert.equal(opened.recentFailures, 3);
+  assert.equal(opened.recentFailureRate, 0.75);
+
+  const groq = await store.acquire("groq", policy);
+  assert.equal(groq.allowed, true);
+  assert.equal(groq.state, "closed");
+
+  const blocked = await store.acquire("gemini", policy);
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.state, "open");
+
+  const originalNow = Date.now;
+  let fakeNow = originalNow() + 2_000;
+  Date.now = () => fakeNow;
+  try {
+    const probe = await store.acquire("gemini", policy);
+    assert.equal(probe.allowed, true);
+    assert.equal(probe.probe, true);
+    assert.equal(probe.state, "half_open");
+
+    const competingProbe = await store.acquire("gemini", policy);
+    assert.equal(competingProbe.allowed, false);
+
+    const recovered = await store.record("gemini", { success: true, probe: true, policy });
+    assert.equal(recovered.state, "closed");
+    assert.equal(recovered.consecutiveFailures, 0);
+    assert.equal(recovered.recentFailureRate, 0);
+    assert.equal((await store.acquire("gemini", policy)).allowed, true);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("gateway fails closed rather than calling a provider when shared circuit storage is unavailable", async () => {
+  let providerCalls = 0;
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => {
+      providerCalls += 1;
+      return fakeFetch({ choices: [{ message: { content: "must not run" } }] })();
+    },
+  }));
+  const unavailableStore = {
+    acquire: async () => { throw new Error("shared state unavailable"); },
+    record: async () => { throw new Error("shared state unavailable"); },
+  };
+  const gateway = createAIGateway(registry, env, unavailableStore);
+  await assert.rejects(
+    gateway.generateText({ prompt: "Do not bypass shared health state." }, { ...context, task: "summarization" }),
+    (error: unknown) => error instanceof AIProviderError && error.code === "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
+  );
+  assert.equal(providerCalls, 0);
 });
