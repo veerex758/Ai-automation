@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assessAIModelQualification, AI_QUALITY_THRESHOLDS } from "../lib/ai/quality/policy";
+import { assessAIModelQualification, AI_QUALITY_BENCHMARK_VERSION, AI_QUALITY_THRESHOLDS } from "../lib/ai/quality/policy";
 import { applyQualityAwareRouting } from "../lib/ai/quality/routing";
 import type { AIModelQualification, AIModelQualityStore } from "../lib/ai/quality/types";
 import type { AIQualityMetrics } from "../lib/ai/quality/types";
@@ -11,7 +11,7 @@ const metrics: AIQualityMetrics = {
   recoveryRate: 1, successfulOperations: 20,
 };
 function q(provider: "gemini" | "groq", task: "workflow_generation" | "summarization", model: string): AIModelQualification {
-  return { provider, model, task, benchmarkVersion: "rexnora-quality-v1", datasetSha256: "a".repeat(64),
+  return { provider, model, task, benchmarkVersion: AI_QUALITY_BENCHMARK_VERSION, datasetSha256: "a".repeat(64),
     sampleCount: 20, recoverySampleCount: 4, metrics, thresholds: AI_QUALITY_THRESHOLDS[task],
     eligible: true, evaluatedAt: new Date().toISOString() };
 }

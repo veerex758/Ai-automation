@@ -49,7 +49,7 @@ export function summarizeBenchmark(observations: BenchmarkObservation[]): AIQual
 }
 
 export function benchmarkDatasetSha256(cases: AIQualityCase[]): string {
-  const stableDataset = cases.map(({ id, task, mode, prompt, expected, tools }) => ({
+  const stableDataset = cases.map(({ id, task, mode, prompt, systemPrompt, expected, tools }) => ({
     id, task, mode, prompt, systemPrompt, expected, tools: tools ?? [],
   }));
   return createHash("sha256").update(JSON.stringify(stableDataset)).digest("hex");

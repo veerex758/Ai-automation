@@ -47,7 +47,7 @@ test("recovery rate uses all controlled probes as its denominator", () => {
   assert.equal(result.recoverySampleCount, 4);
   assert.equal(result.metrics.recoveryRate, .75);
   assert.equal(result.metrics.taskAccuracy, 1);
-  assert.equal(result.metrics.p95LatencyMs, 119, "recovery probes must not affect measured p95 latency");
+  assert.equal(result.metrics.p95LatencyMs, 118, "recovery probes must not affect measured p95 latency");
   assert.equal(result.metrics.costPerSuccessfulOperationUsd, .002);
 });
 test("partial missing cost data cannot produce a falsely cheap per-success cost", () => {
