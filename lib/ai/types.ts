@@ -51,6 +51,10 @@ export type AIProviderAttempt = {
   providerReason?: string;
   providerType?: string;
   providerRequestId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  providerCostUsd?: number;
   fallbackUsed: boolean;
 };
 
@@ -89,7 +93,7 @@ export type AIRequestContext = {
   fallbackUsed?: boolean;
   /** Providers blocked by a shared circuit breaker for this request. */
   excludedProviders?: AIProviderId[];
-  /** Receives only provider/model/status metadata; never include prompts or response bodies. */
+  /** Receives provider/model/status and normalized usage counters only; never include prompts or response bodies. */
   onProviderAttempt?: (attempt: AIProviderAttempt) => void;
 };
 
