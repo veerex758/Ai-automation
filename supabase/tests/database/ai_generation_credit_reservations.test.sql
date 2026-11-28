@@ -1,5 +1,5 @@
 begin;
-select plan(33);
+select plan(34);
 
 select has_table('private','ai_generation_credit_reservations','logical AI credit reservation table exists');
 select has_table('private','ai_provider_usage_events','provider token/cost telemetry is stored separately');
@@ -8,7 +8,8 @@ select ok((select relrowsecurity from pg_class where oid='private.ai_provider_us
 select ok(not has_table_privilege('authenticated','private.ai_generation_credit_reservations','SELECT'),'browser users cannot inspect reservation rows');
 select ok(not has_table_privilege('authenticated','private.ai_provider_usage_events','SELECT'),'browser users cannot read provider telemetry rows');
 select ok(not has_function_privilege('anon','public.reserve_ai_generation_usage(uuid,uuid,text)','EXECUTE'),'anonymous users cannot reserve AI credits');
-select ok(not has_function_privilege('anon','public.release_ai_generation_usage(uuid,uuid,text)','EXECUTE'),'anonymous users cannot release AI credits');
+select ok(not has_function_privilege('anon','public.release_ai_generation_usage(uuid,uuid,text,jsonb)','EXECUTE'),'anonymous users cannot release AI credits');
+select ok(has_function_privilege('authenticated','public.release_ai_generation_usage(uuid,uuid,text,jsonb)','EXECUTE'),'authenticated workspace members can release their own reservations');
 select ok(not has_function_privilege('anon','public.consume_ai_generation_usage(uuid,uuid,jsonb)','EXECUTE'),'anonymous users cannot settle AI credits');
 select ok(has_function_privilege('authenticated','public.reserve_ai_generation_usage(uuid,uuid,text)','EXECUTE'),'authenticated workspace members can reserve through the RPC');
 
