@@ -211,6 +211,49 @@ test("Pipedrive search_contacts normalizes the persons search response", async (
   assert.deepEqual(result, { contacts: [{ contactId: "123", email: "person@example.test", firstName: "Ada", lastName: "Lovelace" }] });
 });
 
+
+test("Pipedrive, Zoho CRM, and Freshsales accept only exact upstream references during planning and require resolved values at runtime", async () => {
+  const providers = ["pipedrive", "zoho_crm", "freshsales"] as const;
+  const validReference = "{{qualify.email}}";
+  const invalidReference = "{{qualify.email}} extra";
+
+  for (const provider of providers) {
+    const search = findOperation(provider, "search_contacts", "action");
+    const create = findOperation(provider, "execute", "action");
+    assert.ok(search && create, provider + " CRM operations must be registered");
+
+    assert.equal(search.inputSchema.safeParse({ email: validReference }).success, true, provider + " search must accept an exact upstream email reference");
+    assert.equal(search.inputSchema.safeParse({ email: invalidReference }).success, false, provider + " search must reject malformed references");
+    assert.equal(search.inputSchema.safeParse({ email: "not-an-email" }).success, false, provider + " search must reject invalid literal emails");
+    assert.equal(search.inputSchema.safeParse({ email: validReference, query: "extra" }).success, false, provider + " search must reject extra fields");
+
+    const createReferenceInput = {
+      email: validReference,
+      firstName: "{{qualify.firstName}}",
+      lastName: "{{qualify.lastName}}",
+      phone: "{{qualify.phone}}",
+    };
+    assert.equal(create.inputSchema.safeParse(createReferenceInput).success, true, provider + " create must accept exact upstream field references");
+    assert.equal(create.inputSchema.safeParse({ ...createReferenceInput, displayName: "invented" }).success, false, provider + " create must reject unknown fields");
+    assert.equal(create.inputSchema.safeParse({ ...createReferenceInput, email: "invalid" }).success, false, provider + " create must reject invalid literal emails");
+
+    const context = {
+      credentials: {},
+      logger,
+      http: { async request() { throw new Error("unresolved references must not reach the provider"); } },
+      previousOutputs: {},
+    };
+    await assert.rejects(
+      () => search.run(context, { email: validReference }),
+      /ZodError/
+    );
+    await assert.rejects(
+      () => create.run(context, createReferenceInput),
+      /ZodError/
+    );
+  }
+});
+
 test("Zoho CRM search_contacts maps provider contact fields", async () => {
   let request: any;
   const operation = findOperation("zoho_crm", "search_contacts", "action");
