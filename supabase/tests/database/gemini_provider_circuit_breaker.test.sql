@@ -1,5 +1,5 @@
 begin;
-select plan(16);
+select plan(17);
 
 -- The circuit breaker is global service state, never browser-readable.
 select ok(
@@ -70,13 +70,15 @@ set open_until=clock_timestamp() - interval '1 second', probe_until=null
 where provider='gemini';
 
 set local role service_role;
+create temporary table gemini_probe_result as
+select public.get_ai_provider_circuit_state('gemini') as result;
 select is(
-  public.get_ai_provider_circuit_state('gemini')->>'state',
+  (select result->>'state' from gemini_probe_result),
   'half_open',
   'expired circuit enters half-open state for a probe'
 );
 select ok(
-  (public.get_ai_provider_circuit_state('gemini')->>'allowed')::boolean,
+  (select (result->>'allowed')::boolean from gemini_probe_result),
   'first half-open caller receives the probe lease'
 );
 select ok(
