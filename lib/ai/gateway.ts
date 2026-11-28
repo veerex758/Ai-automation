@@ -149,11 +149,12 @@ export function createAIGateway(
     ];
     const routes = routeAIRequests(context.task, registry, env, [...new Set(excludedProviders)]);
     let lastError: AIProviderError | undefined;
+    const configuredPrimaryProvider = (env.AI_PRIMARY_PROVIDER || "gemini").trim().toLowerCase();
 
     for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
       const route = routes[routeIndex];
       const provider = route.provider;
-      const providerFallback = routeIndex > 0;
+      const providerFallback = provider.id !== configuredPrimaryProvider;
 
       if (context.signal?.aborted) {
         throw new AIProviderError({ provider: provider.id, code: "AI_CANCELLED", message: "AI request was cancelled." });
