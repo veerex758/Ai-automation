@@ -611,7 +611,7 @@ test("long Retry-After prevents same-provider model fallback and routes to Groq"
   assert.equal(geminiCalls, 1);
 });
 
-\ntest("dashboard components never call AI providers directly or contain server-side AI keys", () => {
+test("dashboard components never call AI providers directly or contain server-side AI keys", () => {
   const root = join(process.cwd(), "app", "dashboard");
   const sourceFiles: string[] = [];
   const visit = (directory: string) => {
