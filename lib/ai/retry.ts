@@ -149,6 +149,9 @@ export async function withProviderRetries<T>(
         const wait = error.retryAfterMs ?? 0;
         if (rateLimitRetries < policy.maxRateLimitRetries && wait <= policy.maxInlineWaitMs) {
           const delay = retryDelayMs(rateLimitRetries + 1, wait, policy);
+          // Preserve time for another provider: do not sleep through the
+          // remaining operation deadline merely to retry this provider.
+          if (remainingDeadline(context) <= delay + 25) break;
           rateLimitRetries += 1;
           await sleep(delay, context);
           continue;
@@ -169,7 +172,11 @@ export async function withProviderRetries<T>(
       }
       if (error.retryAfterMs !== undefined && error.retryAfterMs > policy.maxInlineWaitMs) break;
       if (attempt < policy.maxAttempts) {
-        await sleep(retryDelayMs(attempt, error.retryAfterMs, policy), context);
+        const delay = retryDelayMs(attempt, error.retryAfterMs, policy);
+        // If this backoff would consume the time left, return the transient
+        // provider error so the gateway can fail over immediately.
+        if (remainingDeadline(context) <= delay + 25) break;
+        await sleep(delay, context);
         continue;
       }
       break;
