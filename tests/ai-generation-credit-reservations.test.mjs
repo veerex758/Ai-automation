@@ -62,7 +62,8 @@ test("settlement atomically inserts one credit, one generation and actual provid
   assert.match(consumeBody, /p_provider_usage/);
   assert.match(consumeBody, /provider_cost_usd/);
   assert.match(consumeBody, /update private\.ai_generation_credit_reservations/);
-  assert.match(consumeBody, /on conflict|unique/);
+  assert.match(consumeBody, /metadata.*idempotency_key/s);
+  assert.match(consumeBody, /already consumed/);
 });
 
 test("all workspace AI spend paths account for outstanding reservations", () => {
