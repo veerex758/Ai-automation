@@ -9,8 +9,7 @@ create table if not exists private.ai_model_qualifications(
  primary key(provider,model,task,benchmark_version)
 );
 alter table private.ai_model_qualifications enable row level security;
-revoke all on private.ai_model_qualifications from public,anon,authenticated;
-grant select,insert,update on private.ai_model_qualifications to service_role;
+revoke all on private.ai_model_qualifications from public,anon,authenticated,service_role;
 create or replace function public.record_ai_model_evaluation(p_evaluation jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,private,public as $$
 declare v jsonb:=p_evaluation; m jsonb:=v->'metrics'; t jsonb:=v->'thresholds'; reasons jsonb:='[]'::jsonb; ok boolean;

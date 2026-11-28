@@ -60,7 +60,7 @@ test("partial missing cost data cannot produce a falsely cheap per-success cost"
 test("benchmark migration restricts table and RPC access to service_role", () => {
   const sql = readFileSync(join(process.cwd(), "supabase/migrations/20261128130000_rexnora_ai_model_quality_qualification.sql"), "utf8");
   assert.match(sql, /enable row level security/i);
-  assert.match(sql, /revoke all on private\.ai_model_qualifications from public,anon,authenticated/i);
+  assert.match(sql, /revoke all on private\.ai_model_qualifications from public,anon,authenticated,service_role/i);
   assert.match(sql, /auth\.role\(\)<>'service_role'/i);
   assert.match(sql, /grant execute on function public\.record_ai_model_evaluation\(jsonb\) to service_role/i);
   assert.match(sql, /grant execute on function public\.list_eligible_ai_models\(text,text\) to service_role/i);
