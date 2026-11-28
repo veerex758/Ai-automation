@@ -367,42 +367,6 @@ begin
 end;
 $$;
 
-
-     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array' then
-    raise exception 'invalid AI generation release request' using errcode = '22023';
-  end if;
-
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(p_workspace_id::text, 0)
-  );
-
-  select status into v_status
-  from private.ai_generation_credit_reservations
-  where workspace_id = p_workspace_id and operation_id = p_operation_id
-  for update;
-
-  if not found then
-    return jsonb_build_object('released', false, 'duplicate', true, 'reason', 'reservation_not_found');
-  end if;
-  if v_status = 'consumed' then
-    return jsonb_build_object('released', false, 'duplicate', true, 'reason', 'already_consumed');
-  end if;
-  if v_status = 'released' then
-    return jsonb_build_object('released', true, 'duplicate', true, 'reason', 'already_released');
-  end if;
-
-  update private.ai_generation_credit_reservations
-  set status = 'released',
-      released_at = now(),
-      release_reason = v_reason,
-      updated_at = now()
-  where workspace_id = p_workspace_id and operation_id = p_operation_id
-    and status = 'reserved';
-
-  return jsonb_build_object('released', true, 'duplicate', false, 'reason', v_reason);
-end;
-$$;
-
 revoke all on function public.release_ai_generation_usage(uuid, uuid, text, jsonb) from public, anon;
 grant execute on function public.release_ai_generation_usage(uuid, uuid, text, jsonb) to authenticated;
 
@@ -437,11 +401,9 @@ begin
     raise exception 'workspace access denied' using errcode = '42501';
   end if;
   if p_workspace_id is null or p_operation_id is null
-     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array' then
+     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array'
+     or jsonb_array_length(p_provider_usage) > 16 then
     raise exception 'invalid AI generation settlement' using errcode = '22023';
-  end if;
-  if jsonb_array_length(p_provider_usage) > 16 then
-    raise exception 'too many provider usage records' using errcode = '22023';
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
