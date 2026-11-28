@@ -1,5 +1,5 @@
 begin;
-select plan(36);
+select plan(39);
 
 select has_table('private','ai_generation_credit_reservations','logical AI credit reservation table exists');
 select has_table('private','ai_provider_usage_events','provider token/cost telemetry is stored separately');
@@ -250,6 +250,43 @@ select is(
      and provider='gemini' and input_tokens=7 and output_tokens=9),
   1,
   'provider cost ledger keeps invalid-output usage separate from customer billing'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a5511111-1111-4111-8111-111111111111","role":"authenticated"}',true);
+select is(
+  public.reserve_ai_generation_usage(
+    'b5511111-1111-4111-8111-111111111111',
+    'c5544444-4444-4444-8444-444444444444',
+    repeat('e',64)
+  )->>'allowed',
+  'true',
+  'a generation can reserve in the current quota month'
+);
+reset role;
+update private.ai_generation_credit_reservations
+set period_start = (date_trunc('month',now()) - interval '1 month')::date
+where workspace_id='b5511111-1111-4111-8111-111111111111'
+  and operation_id='c5544444-4444-4444-8444-444444444444';
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a5511111-1111-4111-8111-111111111111","role":"authenticated"}',true);
+select is(
+  public.consume_ai_generation_usage(
+    'b5511111-1111-4111-8111-111111111111',
+    'c5544444-4444-4444-8444-444444444444',
+    '[]'::jsonb
+  )->>'allowed',
+  'true',
+  'a reserved operation can settle after the quota month changes'
+);
+reset role;
+select is(
+  (select period_start from public.workspace_usage
+   where workspace_id='b5511111-1111-4111-8111-111111111111'
+     and metric='ai_credit'
+     and metadata->>'operation_id'='c5544444-4444-4444-8444-444444444444'),
+  (date_trunc('month',now()) - interval '1 month')::date,
+  'settlement is posted to the same quota month that authorized the reservation'
 );
 
 select * from finish();
