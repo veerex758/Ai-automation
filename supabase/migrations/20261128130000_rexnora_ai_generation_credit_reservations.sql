@@ -425,6 +425,10 @@ begin
     return jsonb_build_object('allowed', false, 'reason', 'reservation_not_active');
   end if;
 
+  -- Keep settlement in the quota period that authorized the hold, even if a
+  -- request happens to finish across a month boundary.
+  v_period := v_reservation.period_start;
+
   select
     case when pending_plan_key is not null and pending_plan_effective_at <= now()
       then pending_plan_key else plan_key end,
