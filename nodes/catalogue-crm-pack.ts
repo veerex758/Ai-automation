@@ -270,6 +270,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     description: "Creates an Apollo contact using the workspace API key and returns the created contact ID.",
     auth: { type: "apiKey", credentialKey: "apiKey" },
     input: contactInput,
+    runtimeInput: contactRuntimeInput,
     output: contactOutput,
     async run(ctx, input) {
       const key = secret(ctx, "apollo", "apiKey");
