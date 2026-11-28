@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         prompt: args.prompt,
         maxOutputTokens: 2200,
         ...(args.task === "workflow_generation"
-          ? { validate: (value: unknown) => validateWorkflowPlannerEnvelope(value, "registry", "gemini") }
+          ? { validate: (value: unknown, provider) => validateWorkflowPlannerEnvelope(value, "registry", provider || "gemini") }
           : {}),
       },
       {
