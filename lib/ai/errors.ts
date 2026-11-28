@@ -111,7 +111,7 @@ export function classifyProviderError(args: {
     status,
     providerModel: args.providerModel,
     retryAfterMs: retryAfterMs(args.headers, args.payload),
-    providerRequestId: args.providerRequestId ?? args.headers?.get("x-request-id") ?? args.headers?.get("x-goog-request-id"),
+    providerRequestId: args.providerRequestId ?? args.headers?.get("x-request-id") ?? args.headers?.get("x-goog-request-id") ?? undefined,
     providerReason: typeof reason === "string" ? reason : undefined,
     providerType: type,
     retryable,
