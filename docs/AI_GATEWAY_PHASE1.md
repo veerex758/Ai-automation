@@ -14,7 +14,7 @@
 - Network failure: do not repeat the same unreachable request; try the next eligible provider.
 - 401/403: mark that provider's configuration unhealthy for a five-minute process-local cooldown and try the next eligible provider. The active workflow endpoint also uses the persistent Gemini Supabase circuit. The process-local cooldown for other providers is an optimisation, not a durable cross-instance health record.
 - 400/404/413/422 invalid requests: stop; do not send an identical invalid request to another provider.
-- Safety rejection: preserve the rejection and never bypass it by switching providers.
+- Safety rejection: preserve the rejection and never bypass it by switching providers. Both adapters check provider safety finish reasons, explicit refusal metadata, and clear refusal-text patterns before structured-output parsing.
 - Invalid response/JSON/output: do not repeat the identical request against the same provider; switch to one other eligible provider. The workflow API retains its one bounded, separate schema-repair pass for registered node inputs.
 - Cancellation, deadline exhaustion and attempt-budget exhaustion are terminal.
 
@@ -29,7 +29,7 @@
 
 ## Groq compatibility
 - The adapter uses Groq's OpenAI-compatible Chat Completions endpoint and server-side `GROQ_API_KEY`.
-- Default model is `openai/gpt-oss-120b`; `GROQ_AI_MODEL` and `GROQ_FALLBACK_MODEL` can override the models.
+- Default model is `openai/gpt-oss-120b`, with `openai/gpt-oss-20b` as the same-provider alternate; `GROQ_AI_MODEL` and `GROQ_FALLBACK_MODEL` can override them. Requests use the current `max_completion_tokens` parameter.
 - Structured requests use JSON-object mode and Rexnora validation. This does not claim provider-enforced JSON-schema conformance.
 - Text generation, structured JSON output, and tool-call response parsing are implemented. Tool calls are returned to the caller and are never executed inside the adapter.
 - Credentials, prompts, response bodies, and raw provider errors are not included in diagnostic events.
