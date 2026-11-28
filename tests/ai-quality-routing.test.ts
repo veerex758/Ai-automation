@@ -63,11 +63,11 @@ test("quality routing promotes a qualified alternate over an unqualified configu
 test("quality-ranked candidates are ordered by task score, then configured provider priority", async () => {
   const fastGroq = {
     ...q("groq", "summarization", "llama"),
-    metrics: { ...metrics, taskAccuracy: .95, p95LatencyMs: 500 },
+    metrics: { ...metrics, taskAccuracy: .95, p95LatencyMs: 2000 },
   };
   const accurateGemini = {
     ...q("gemini", "summarization", "gemini"),
-    metrics: { ...metrics, taskAccuracy: .99, p95LatencyMs: 1000 },
+    metrics: { ...metrics, taskAccuracy: .99, p95LatencyMs: 500 },
   };
   const store: AIModelQualityStore = {
     listEligibleModels: async () => [fastGroq, accurateGemini],
