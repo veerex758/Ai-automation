@@ -22,7 +22,7 @@ test("overview navigation exposes Playbooks as the only customer-facing workflow
     "/dashboard/playbooks", "/dashboard/agents", "/dashboard/templates",
     "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
     "/dashboard/billing", "/dashboard/settings",
-  ]) assert.ok(dashboard.includes(href), "missing dashboard navigation destination: " + href);
+  ]) assert.ok(sidebar.includes(href), "missing shared navigation destination: " + href);
   assert.match(dashboard, /<Link key=\{item\.label\} href=\{item\.href\}/);
   assert.match(dashboard, /id="workflows"/);
   assert.doesNotMatch(dashboard, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
