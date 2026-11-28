@@ -882,11 +882,7 @@ test("gateway fails over from malformed Gemini structured JSON to validated Groq
   }));
   const gateway = createAIGateway(registry, { ...env, ...groqEnv });
   const result = await gateway.generateStructured(
-    { prompt: "Return a valid workflow plan." },
-    {
-      ...context,
-      task: "workflow_generation",
-      validate: (value) => {
+    { prompt: "Return a valid workflow plan.", validate: (value: unknown) => {
         assert.deepEqual(value, { registrySteps: [{ id: "start" }], edges: [] });
         return value;
       },
