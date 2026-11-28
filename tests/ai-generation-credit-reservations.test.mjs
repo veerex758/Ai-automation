@@ -85,9 +85,11 @@ test("provider failures release reservations while the credit settlement remains
   const validation = route.indexOf("validateRegisteredSteps(rebuilt)");
   const consume = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
   const finallyBlock = route.lastIndexOf("} finally");
-  const release = route.indexOf('supabase.rpc("release_ai_generation_usage"');
+  const releaseRpc = route.indexOf('supabase.rpc("release_ai_generation_usage"');
+  const releaseFinally = route.indexOf("await releaseReservation();", finallyBlock);
   assert.ok(reserve > 0 && generation > reserve && validation > generation && consume > validation);
-  assert.ok(finallyBlock > consume && release > finallyBlock);
+  assert.ok(releaseRpc > reserve && releaseRpc < consume);
+  assert.ok(finallyBlock > consume && releaseFinally > finallyBlock);
   assert.match(route, /if \(releaseReservation && !reservationConsumed\)/);
   assert.equal((route.match(/consume_ai_generation_usage/g) || []).length, 1);
   assert.match(route, /p_provider_usage: Array\.from\(providerUsageByModel\.values\(\)\)/);
