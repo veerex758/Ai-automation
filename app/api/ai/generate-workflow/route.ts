@@ -141,43 +141,6 @@ export async function POST(request: NextRequest) {
     const { getOrCreateDefaultWorkspace } = await import("@/lib/supabase/workspace");
     const workspace = await getOrCreateDefaultWorkspace(supabase);
 
-    // Read the current allowance before calling Gemini so an exhausted account
-    // does not incur provider cost. The final consume RPC remains after graph
-    // validation and is the authoritative atomic charge for concurrent requests.
-    const { data: entitlement, error: entitlementError } = await supabase.rpc("get_workspace_entitlements", {
-      p_workspace_id: workspace.id,
-    });
-    if (entitlementError || !entitlement || typeof entitlement !== "object") {
-      return jsonResponse({
-        error: "Usage limits could not be checked. No Rexnora AI credit was charged.",
-        errorCode: "AI_USAGE_METERING_UNAVAILABLE",
-      }, { status: 503 });
-    }
-    const planStatus = String((entitlement as { status?: unknown }).status || "");
-    if (!["active", "trialing"].includes(planStatus)) {
-      return jsonResponse({
-        error: "Your workspace subscription is not active. No Rexnora AI credit was charged.",
-        errorCode: "AI_SUBSCRIPTION_INACTIVE",
-      }, { status: 402 });
-    }
-    const entitlementUsage = (entitlement as { usage?: { ai_credit?: unknown }; limits?: { ai_credit?: unknown } }).usage;
-    const entitlementLimits = (entitlement as { usage?: { ai_credit?: unknown }; limits?: { ai_credit?: unknown } }).limits;
-    const aiCreditsUsed = Number(entitlementUsage?.ai_credit);
-    const aiCreditLimit = Number(entitlementLimits?.ai_credit);
-    if (!Number.isSafeInteger(aiCreditsUsed) || aiCreditsUsed < 0 ||
-        !Number.isSafeInteger(aiCreditLimit) || aiCreditLimit < 1) {
-      return jsonResponse({
-        error: "Your AI usage allowance could not be verified. No Rexnora AI credit was charged.",
-        errorCode: "AI_USAGE_METERING_UNAVAILABLE",
-      }, { status: 503 });
-    }
-    if (aiCreditsUsed >= aiCreditLimit) {
-      return jsonResponse({
-        error: "Monthly AI generation limit reached. No Rexnora AI credit was charged.",
-        errorCode: "AI_CREDIT_LIMIT_REACHED",
-      }, { status: 402 });
-    }
-
     const nodeCatalog = getExecutableNodeCatalog();
     const unsupportedCapabilities = getUnsupportedRequestedCapabilities(body.prompt, nodeCatalog);
     if (unsupportedCapabilities.length) {
