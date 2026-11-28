@@ -520,6 +520,47 @@ test("network failures switch providers immediately without retrying the unreach
   assert.equal(budget.totalProviderAttempts, 2);
 });
 
+test("deadline skips an unaffordable Retry-After wait and preserves time for Groq failover", async () => {
+  let geminiCalls = 0;
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => {
+      geminiCalls += 1;
+      return new Response(JSON.stringify({ error: { status: "RESOURCE_EXHAUSTED" } }), {
+        status: 429,
+        headers: { "Retry-After": "3" },
+      });
+    },
+  }));
+  registry.register(createGroqProvider({
+    env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
+    fetchImpl: fakeFetch({
+      choices: [{ message: { content: "Used remaining deadline for failover." }, finish_reason: "stop" }],
+    }),
+  }));
+  const gateway = createAIGateway(registry, { ...env, GROQ_API_KEY: "test-groq-secret" });
+  const deadlineAt = Date.now() + 1_500;
+  const budget = {
+    remainingProviderAttempts: 4,
+    totalProviderAttempts: 0,
+    deadlineAt,
+  };
+  const result = await gateway.generateText(
+    { prompt: "Do not sleep through the request deadline." },
+    {
+      ...context,
+      task: "summarization",
+      deadlineAt,
+      attemptBudget: budget,
+    },
+  );
+  assert.equal(result.provider, "groq");
+  assert.equal(result.output, "Used remaining deadline for failover.");
+  assert.equal(geminiCalls, 1);
+  assert.equal(budget.totalProviderAttempts, 2);
+});
+
 test("long Retry-After prevents same-provider model fallback and routes to Groq", async () => {
   let geminiCalls = 0;
   const providerEnv = {
