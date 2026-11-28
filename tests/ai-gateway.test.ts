@@ -882,7 +882,10 @@ test("provider retries and schema repair share one operation budget and one post
   assert.match(route.slice(budget, gateway), /remainingProviderAttempts: 8/);
   assert.match(route.slice(gateway, generation), /attemptBudget: aiAttemptBudget/);
   assert.match(route.slice(gateway, generation), /providerUsage\.totalTokens \+= result\.usage\.totalTokens/);
-  assert.match(route.slice(metering, metering + 400), /p_idempotency_key: randomUUID\(\)/);
+  assert.match(route.slice(metering, metering + 500), /p_operation_id: operationId/);
+  assert.match(route.slice(metering, metering + 500), /p_provider_usage: Array\.from\(providerUsageByModel\.values\(\)\)/);
+  assert.match(route, /Idempotency-Key/);
+  assert.match(route, /supabase\.rpc\("reserve_ai_generation_usage"/);
   const handlerCatch = route.indexOf("} catch (error)", generation);
   assert.ok(handlerCatch > metering, "provider failures are handled by the route boundary after the single charge site");
   assert.match(route.slice(handlerCatch), /AI_PROVIDER_OVERLOADED/);
