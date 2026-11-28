@@ -88,7 +88,7 @@ export function routeAIRequests(
   if (!routes.length) {
     throw new AIProviderError({
       provider: primaryValue as AIProviderId,
-      code: excluded.length ? "AI_PROVIDER_DISABLED" : "AI_NOT_CONFIGURED",
+      code: excluded.size ? "AI_PROVIDER_DISABLED" : "AI_NOT_CONFIGURED",
       message: "No configured AI provider supports this task.",
     });
   }
