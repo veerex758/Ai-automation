@@ -492,6 +492,21 @@ test("gateway fails over from invalid provider credentials to the configured Gro
   assert.deepEqual(attempts.map((event) => event.provider), ["gemini", "groq"]);
   assert.equal(attempts[1].fallbackUsed, true);
   assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, false);
+
+  const isolatedRegistry = new AIProviderRegistry();
+  isolatedRegistry.register(createGeminiProvider({
+    env,
+    fetchImpl: fakeFetch({
+      choices: [{ message: { content: "Fresh gateway is healthy." }, finish_reason: "stop" }],
+    }),
+  }));
+  const isolatedGateway = createAIGateway(isolatedRegistry, env);
+  const isolatedResult = await isolatedGateway.generateText(
+    { prompt: "Check an independent gateway." },
+    { ...context, task: "summarization" },
+  );
+  assert.equal(isolatedResult.provider, "gemini");
+  assert.equal(isolatedGateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, true);
 });
 
 test("network failures switch providers immediately without retrying the unreachable host", async () => {
