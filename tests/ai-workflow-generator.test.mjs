@@ -1,12 +1,52 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateWorkflow, extractJson } from "../lib/workflows/ai-workflow-generator.cjs";
+import { generateWorkflow, repairRegistryStepInputs, extractJson } from "../lib/workflows/ai-workflow-generator.cjs";
 const validDefinition = { version: 1, edges: [], nodes: [{ id: "trigger-1", type: "trigger", title: "Start manually", description: "Start event", settings: { event: "manual" } }] };
 const env = { GEMINI_API_KEY: "test-secret", GEMINI_API_BASE_URL: "https://ai.example.test/v1", GEMINI_AI_MODEL: "gemini-test-model", NODE_ENV: "test" };
 const fakeFetch = (payload, status = 200) => async (_url, options) => {
   assert.equal(options.headers.Authorization, "Bearer test-secret");
   return { ok: status >= 200 && status < 300, status, json: async () => payload };
 };
+
+const exactReferenceSchema = { type: "string", pattern: "exact-workflow-output-reference" };
+const emailOrReferenceSchema = {
+  anyOf: [
+    { type: "string", format: "email", maxLength: 254 },
+    exactReferenceSchema,
+  ],
+};
+function crmNodeCatalog(provider) {
+  const createInputSchema = {
+    type: "object",
+    properties: {
+      email: emailOrReferenceSchema,
+      firstName: { anyOf: [{ type: "string", minLength: 1, maxLength: 100 }, exactReferenceSchema] },
+      lastName: { anyOf: [{ type: "string", minLength: 1, maxLength: 100 }, exactReferenceSchema] },
+      phone: { anyOf: [{ type: "string", maxLength: 40 }, exactReferenceSchema] },
+    },
+    required: ["email", "firstName", "lastName"],
+    additionalProperties: false,
+  };
+  return [{
+    id: provider,
+    name: provider,
+    triggers: [],
+    actions: [
+      { id: "execute", name: "Create contact", description: "Create a CRM contact.", inputSchema: createInputSchema },
+      {
+        id: "search_contacts",
+        name: "Search contacts by email",
+        description: "Search by exact email.",
+        inputSchema: {
+          type: "object",
+          properties: { email: emailOrReferenceSchema },
+          required: ["email"],
+          additionalProperties: false,
+        },
+      },
+    ],
+  }];
+}
 test("extracts JSON and optional markdown fences safely", () => {
   const fence = String.fromCharCode(96).repeat(3);
   assert.deepEqual(extractJson(JSON.stringify(validDefinition)), validDefinition);
@@ -334,7 +374,7 @@ test("real-estate starter rules stay in the trusted system prompt, separate from
   const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], edges: [] };
   const result = await generateWorkflow({
     prompt: businessOutcome,
-    nodeCatalog: [],
+    nodeCatalog: crmNodeCatalog("zoho_crm"),
     mode: "registry",
     starterType: "real_estate",
     crmProvider: "zoho_crm",
