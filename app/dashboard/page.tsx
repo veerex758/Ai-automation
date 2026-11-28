@@ -122,7 +122,7 @@ export default function DashboardPage() {
       <DashboardSidebar activePage="overview" workspaceName={workspaceName} />
 
       <section className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>Overview</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Staging / Preview</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
+        <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span> <strong>Overview</strong></div><div className="topbar-right"><span className="environment-badge"><i /> Workspace</span><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}>♧</button><span className="top-avatar">R</span></div></header>
         <div className="dashboard-content">
           <div className="welcome-row"><div><div className="dash-eyebrow"><span className="pulse" /> YOUR AUTOMATION SPACE</div><h1>Good work starts here<span>.</span></h1><p>A clear view of your workflows, what’s running, and what’s next.</p></div><button type="button" className="create-button" onClick={() => router.push("/dashboard/playbooks/new")}><span>＋</span> New Playbook</button></div>
 
