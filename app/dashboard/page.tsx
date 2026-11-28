@@ -17,7 +17,6 @@ const navItems = [
   { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
   { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
   { label: "Real Estate", icon: "⌂", href: "/dashboard/real-estate" },
-  { label: "Workspace & team", icon: "♙", href: "/dashboard/workspaces" },
   { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
   { label: "Billing", icon: "◇", href: "/dashboard/billing" },
   { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
@@ -136,14 +135,14 @@ export default function DashboardPage() {
     <main className="app-shell dashboard-overview-page">
       <aside className="sidebar">
         <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark">a</span><span>Rexnora<span className="brand-period">.</span></span></Link>
-        <Link className="workspace-switch" href="/dashboard/workspaces" aria-label="Manage workspaces and team"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></Link>
+        <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
           {navItems.map((item) => <Link key={item.label} href={item.href} className={activeNav === item.label ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
         </nav>
         <div className="sidebar-label tools-label">BUILD</div>
         <button type="button" className="side-link" onClick={() => router.push("/dashboard/playbooks/new")}><span className="side-icon">＋</span>Create Playbook</button>
-        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><button className="profile-button"><span className="profile-avatar">R</span><span><strong>Workspace owner</strong><small>Starter account</small></span><span className="switch-chevron">•••</span></button></div>
+        <div className="sidebar-bottom"><div className="help-card"><span className="help-icon">✳</span><strong>New to automation?</strong><p>Start small. Build confidence with one workflow at a time.</p><Link href="/#how-it-works">Explore the basics ↗</Link></div><Link className="profile-button" href="/dashboard/workspaces"><span className="profile-avatar">R</span><span><strong>Workspace settings</strong><small>Members and access</small></span><span className="switch-chevron">↗</span></Link></div>
       </aside>
 
       <section className="dashboard-main">
