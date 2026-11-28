@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     : randomUUID();
   const invalidOperationId = Boolean(suppliedOperationId) && !IDEMPOTENCY_UUID.test(suppliedOperationId);
   const startedAt = Date.now();
-  let releaseReservation: (() => Promise<void>) | null = null;
+  let releaseReservation: (() => Promise<{ released?: boolean; duplicate?: boolean; reason?: string }>) | null = null;
   let reservationConsumed = false;
   let latestSuccessfulProvider = "gemini";
   let latestSuccessfulModel = "";
@@ -255,13 +255,19 @@ export async function POST(request: NextRequest) {
     // This is a hold, not a billing event. The finally block releases it on every
     // early return/exception until validated output is atomically settled below.
     releaseReservation = async () => {
-      const { error } = await supabase.rpc("release_ai_generation_usage", {
+      const { data, error } = await supabase.rpc("release_ai_generation_usage", {
         p_workspace_id: workspace.id,
         p_operation_id: operationId,
         p_release_reason: "generation_not_settled",
         p_provider_usage: Array.from(providerUsageByModel.values()),
       });
       if (error) throw new Error("AI_CREDIT_RESERVATION_RELEASE_FAILED");
+      const releaseResult = data && typeof data === "object"
+        ? data as { released?: boolean; duplicate?: boolean; reason?: string }
+        : {};
+      if (releaseResult.reason === "already_consumed") reservationConsumed = true;
+      releaseReservation = null;
+      return releaseResult;
     };
 
     const onProviderAttempt = (attempt: {
@@ -518,12 +524,34 @@ export async function POST(request: NextRequest) {
       p_provider_usage: Array.from(providerUsageByModel.values()),
     });
     if (usageError) {
-      return jsonResponse({
-        error: "Usage settlement is unavailable. Your AI credit was not charged. The reservation will be released.",
-        errorCode: "AI_USAGE_METERING_UNAVAILABLE",
-      }, { status: 503 });
+      try {
+        const releaseResult = await releaseReservation?.();
+        if (releaseResult?.reason !== "already_consumed") {
+          if (releaseResult?.released === true || releaseResult?.reason === "already_released") {
+            return jsonResponse({
+              error: "AI usage settlement failed. The reservation was released and no customer AI credit was charged. Retry with the same operation key.",
+              errorCode: "AI_USAGE_METERING_UNAVAILABLE",
+              operationId,
+            }, { status: 503 });
+          }
+          return jsonResponse({
+            error: "Rexnora could not confirm whether this operation was settled. Reuse the same Idempotency-Key; do not start a new operation.",
+            errorCode: "AI_USAGE_SETTLEMENT_UNKNOWN",
+            operationId,
+          }, { status: 503 });
+        }
+        // The settlement transaction committed but its response was lost.
+        // release() observed the consumed row, so return the validated result
+        // without creating another customer usage row.
+      } catch {
+        return jsonResponse({
+          error: "Rexnora could not confirm whether this operation was settled. Reuse the same Idempotency-Key; do not start a new operation.",
+          errorCode: "AI_USAGE_SETTLEMENT_UNKNOWN",
+          operationId,
+        }, { status: 503 });
+      }
     }
-    if (!usage?.allowed) {
+    if (!usageError && !usage?.allowed) {
       if (usage?.duplicate === true) {
         reservationConsumed = true;
         releaseReservation = null;
