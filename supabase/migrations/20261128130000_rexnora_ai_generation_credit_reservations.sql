@@ -350,6 +350,10 @@ begin
     return jsonb_build_object('released', true, 'duplicate', true, 'reason', 'already_released');
   end if;
 
+  v_provider_count := private.record_ai_provider_usage_events(
+    p_workspace_id, p_operation_id, p_provider_usage
+  );
+
   update private.ai_generation_credit_reservations
   set status = 'released',
       released_at = now(),
