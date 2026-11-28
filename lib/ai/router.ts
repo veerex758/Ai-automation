@@ -52,7 +52,8 @@ export function routeAIRequests(
       message: "AI primary-provider configuration is invalid.",
     });
   }
-  const defaultFailoverOrder = primaryValue === "groq" ? "gemini,cloudflare" : "groq,cloudflare";
+  const defaultFailoverOrder = primaryValue === "groq" ? "gemini,cloudflare"
+    : primaryValue === "cloudflare" ? "gemini,groq" : "groq,cloudflare";
   const configuredOrder = (env.AI_FAILOVER_ORDER || defaultFailoverOrder)
     .split(",")
     .map((value) => value.trim().toLowerCase())
