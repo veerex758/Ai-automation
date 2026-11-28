@@ -69,42 +69,42 @@ select is(
   'a duplicate logical request cannot create another reservation or provider run'
 );
 select throws_ok(
-  $select public.reserve_ai_generation_usage(
+  $query$select public.reserve_ai_generation_usage(
     'b5511111-1111-4111-8111-111111111111',
     'c5511111-1111-4111-8111-111111111111',
     repeat('b',64)
-  )$,
+  )$query$,
   '22023',
   'idempotency key reused with different AI operation input',
   'a logical operation ID cannot be reused with different request content'
 );
 select set_config('request.jwt.claims','{"sub":"a5522222-2222-4222-8222-222222222222","role":"authenticated"}',true);
 select throws_ok(
-  $select public.reserve_ai_generation_usage(
+  $query$select public.reserve_ai_generation_usage(
     'b5511111-1111-4111-8111-111111111111',
     'c5511111-1111-4111-8111-111111111111',
     repeat('a',64)
-  )$,
+  )$query$,
   '42501',
   'AI operation belongs to another user',
   'another workspace member cannot take over another user's active operation ID'
 );
 select throws_ok(
-  $select public.release_ai_generation_usage(
+  $query$select public.release_ai_generation_usage(
     'b5511111-1111-4111-8111-111111111111',
     'c5511111-1111-4111-8111-111111111111',
     'cross_user_release'
-  )$,
+  )$query$,
   '42501',
   'AI operation belongs to another user',
   'another workspace member cannot release someone else reservation'
 );
 select throws_ok(
-  $select public.consume_ai_generation_usage(
+  $query$select public.consume_ai_generation_usage(
     'b5511111-1111-4111-8111-111111111111',
     'c5511111-1111-4111-8111-111111111111',
     '[]'::jsonb
-  )$,
+  )$query$,
   '42501',
   'AI operation belongs to another user',
   'another workspace member cannot settle someone else reservation'
