@@ -9,12 +9,13 @@ const store = readFileSync(new URL("../lib/ai/circuit-breaker.ts", import.meta.u
 const route = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
 
 test("shared circuit state is persisted independently for every platform AI provider", () => {
-  assert.match(migration, /create table if not exists private\.ai_provider_circuit_breakers/);
+  assert.match(baseMigration, /create table if not exists private\.ai_provider_circuit_breakers/);
+  assert.match(baseMigration, /alter table private\.ai_provider_circuit_breakers enable row level security/);
+  assert.match(baseMigration, /revoke all on private\.ai_provider_circuit_breakers from public, anon, authenticated, service_role/);
   assert.match(migration, /provider in \('gemini', 'groq', 'cloudflare'\)/);
   assert.match(migration, /values \('gemini'\), \('groq'\), \('cloudflare'\)/);
   assert.match(migration, /create table if not exists private\.ai_provider_circuit_events/);
   assert.match(migration, /on private\.ai_provider_circuit_events\(provider, occurred_at desc\)/);
-  assert.match(migration, /alter table private\.ai_provider_circuit_breakers enable row level security/);
   assert.match(migration, /alter table private\.ai_provider_circuit_events enable row level security/);
   assert.match(store, /class SupabaseCircuitBreakerStore/);
   assert.match(gateway, /new SupabaseCircuitBreakerStore\(\)/);
