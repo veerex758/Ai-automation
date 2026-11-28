@@ -909,7 +909,6 @@ test("rolling circuit failure rate opens only the affected provider and a succes
     minimumRequests: 4,
     baseCooldownMs: 1_000,
     maxCooldownMs: 10_000,
-    probeLeaseMs: 100,
   };
 
   await store.record("gemini", { success: false, statusCode: 503, probe: false, policy });
