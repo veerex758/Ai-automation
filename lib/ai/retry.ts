@@ -145,6 +145,12 @@ export async function withProviderRetries<T>(
       lastError = error;
       const status = Number(error.providerStatus ?? error.status);
 
+      // The shared circuit has already excluded this provider, or its state
+      // could not be verified. Never retry locally around either condition.
+      if (error.code === "AI_PROVIDER_COOLDOWN" || error.code === "AI_PROVIDER_CIRCUIT_UNAVAILABLE") {
+        throw attachAttemptCount(error, context, localProviderAttempt);
+      }
+
       if (status === 429 || error.code === "AI_RATE_LIMITED") {
         const wait = error.retryAfterMs ?? 0;
         if (rateLimitRetries < policy.maxRateLimitRetries && wait <= policy.maxInlineWaitMs) {
