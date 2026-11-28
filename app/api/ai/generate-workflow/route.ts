@@ -7,6 +7,7 @@ import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
+import { calculateGraphPositions } from "@/lib/workflows/graph-layout.cjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -129,7 +130,23 @@ export async function POST(request: NextRequest) {
       seen.add(step.id);
       if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
       const operation = findOperation(step.nodeId, step.operationId, step.kind as "trigger" | "action");
-      if (!operation || !operation.inputSchema.safeParse(step.input).success) return jsonResponse({ error: "The generated plan contains invalid node input. Try a simpler request." }, { status: 422 });
+      if (!operation) {
+        return jsonResponse({
+          error: "Gemini selected " + step.nodeId + "." + step.operationId + ", which is not in Rexnora's executable node registry. No draft was saved and no AI credit was charged. Retry with registered integrations only.",
+          errorCode: "AI_NODE_NOT_REGISTERED",
+        }, { status: 422 });
+      }
+      const inputValidation = operation.inputSchema.safeParse(step.input);
+      if (!inputValidation.success) {
+        return jsonResponse({
+          error: "Gemini supplied invalid input for the registered operation " + step.nodeId + "." + step.operationId + ". The input does not match that operation's schema. No draft was saved and no AI credit was charged.",
+          errorCode: "AI_NODE_INPUT_INVALID",
+          validationIssues: inputValidation.error.issues.slice(0, 8).map((issue) => ({
+            path: issue.path.map(String).join("."),
+            code: issue.code,
+          })),
+        }, { status: 422 });
+      }
     }
     let definition: { version: 1; nodes: Array<Record<string, unknown>>; edges?: Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }> };
     let executableSteps = registrySteps;
@@ -186,34 +203,10 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-      const graphDepthById = new Map<string, number>();
-      const graphLaneById = new Map<string, number>();
-      // Lay the graph out left-to-right. IF true/false edges split into upper
-      // and lower lanes; following actions inherit their branch lane.
-      const unresolvedGraphSteps = new Set((registrySteps as Array<{ id: string }>).map((step) => step.id));
-      // Resolve parents before children so layout is independent of the order
-      // in which the model happened to list its registered steps.
-      for (let pass = 0; pass < registrySteps.length && unresolvedGraphSteps.size > 0; pass += 1) {
-        let resolvedAny = false;
-        for (const step of registrySteps as Array<{ id: string }>) {
-          if (!unresolvedGraphSteps.has(step.id)) continue;
-          const incoming = edges.filter((edge) => edge.target === step.id);
-          if (incoming.some((edge) => !graphDepthById.has(edge.source))) continue;
-          const depth = incoming.length
-            ? Math.max(...incoming.map((edge) => graphDepthById.get(edge.source) ?? 0)) + 1
-            : 0;
-          const lanes = incoming.map((edge) => {
-            const sourceLane = graphLaneById.get(edge.source) ?? 0;
-            return sourceLane + (edge.label === "true" ? -1 : edge.label === "false" ? 1 : 0);
-          });
-          const lane = lanes.length ? lanes.reduce((sum, value) => sum + value, 0) / lanes.length : 0;
-          graphDepthById.set(step.id, depth);
-          graphLaneById.set(step.id, Math.max(-1, Math.min(1, lane)));
-          unresolvedGraphSteps.delete(step.id);
-          resolvedAny = true;
-        }
-        if (!resolvedAny) break;
-      }
+      const graphPositions = calculateGraphPositions(
+        registrySteps as Array<{ id: string }>,
+        edges,
+      );
       const graphNodes = registrySteps.map((raw) => {
         const step = raw as { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
         const provider = nodeCatalog.find((item) => item.id === step.nodeId);
@@ -225,8 +218,7 @@ export async function POST(request: NextRequest) {
           : isCondition
             ? { field: String(step.input.value ?? ""), operator: conditionOperator, value: step.input.compareTo === undefined ? "" : String(step.input.compareTo) }
             : { provider: "internal", operation: "create_task" };
-        const depth = graphDepthById.get(step.id) ?? 0;
-        const lane = graphLaneById.get(step.id) ?? 0;
+        const position = graphPositions.get(step.id) ?? { x: 160, y: 330 };
         return {
           id: step.id,
           type: step.kind === "trigger" ? "trigger" : isCondition ? "condition" : "action",
@@ -236,7 +228,7 @@ export async function POST(request: NextRequest) {
           registryNodeId: step.nodeId,
           registryOperationId: step.operationId,
           registryInput: step.input,
-          position: { x: 160 + depth * 320, y: 330 + lane * 220 },
+          position,
         };
       });
       definition = { version: 1, nodes: graphNodes, edges };
