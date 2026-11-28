@@ -192,7 +192,7 @@ export function createGroqProvider(options: { env?: GroqEnv; fetchImpl?: FetchLi
     async generateText(input: AITextRequest, context: AIRequestContext): Promise<AIResult<string>> {
       const result = await request({
         temperature: input.temperature ?? 0.2,
-        max_tokens: input.maxOutputTokens ?? 1600,
+        max_completion_tokens: input.maxOutputTokens ?? 1600,
         messages: messages(input),
       }, context, input.model);
       try {
@@ -209,7 +209,7 @@ export function createGroqProvider(options: { env?: GroqEnv; fetchImpl?: FetchLi
       const schemaHint = input.schema ? "\n\nReturn JSON conforming to this schema:\n" + JSON.stringify(input.schema) : "";
       const result = await request({
         temperature: input.temperature ?? 0.2,
-        max_tokens: input.maxOutputTokens ?? 2200,
+        max_completion_tokens: input.maxOutputTokens ?? 2200,
         response_format: { type: "json_object" },
         messages: messages({ ...input, systemPrompt: (input.systemPrompt ?? "") + schemaHint }),
       }, context, input.model);
@@ -228,7 +228,7 @@ export function createGroqProvider(options: { env?: GroqEnv; fetchImpl?: FetchLi
       if (!input.tools.length) throw new AIProviderError({ provider: "groq", code: "AI_INVALID_REQUEST", message: "At least one tool definition is required." });
       const result = await request({
         temperature: input.temperature ?? 0.2,
-        max_tokens: input.maxOutputTokens ?? 1800,
+        max_completion_tokens: input.maxOutputTokens ?? 1800,
         messages: messages(input),
         tools: input.tools.map((tool) => ({
           type: "function",
