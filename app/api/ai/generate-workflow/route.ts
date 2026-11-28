@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
   let circuitClient: ReturnType<typeof createAdminClient> | undefined;
   const excludedProviders = new Set<"gemini" | "groq" | "cloudflare">();
   let latestSuccessfulProvider = "gemini";
+  let latestSuccessfulModel = "";
   let lastGeminiCircuitAttempt: { status: number; retryAfterMs?: number; errorCode?: string } | undefined;
   let providerAttemptObserver: ((attempt: {
     provider?: string; model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
@@ -219,7 +220,10 @@ export async function POST(request: NextRequest) {
       if (provider === "gemini") lastGeminiCircuitAttempt = {
         status, retryAfterMs: attempt.retryAfterMs, errorCode: attempt.errorCode || providerCode,
       };
-      if (!failure && status < 400) latestSuccessfulProvider = provider;
+      if (!failure && status < 400) {
+        latestSuccessfulProvider = provider;
+        latestSuccessfulModel = typeof attempt.model === "string" ? attempt.model : latestSuccessfulModel;
+      }
       logOperationalEvent({
         event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
         outcome: failure ? "failure" : "success",
@@ -254,14 +258,16 @@ export async function POST(request: NextRequest) {
       const status = providerError && typeof providerError === "object" && "providerStatus" in providerError
         ? Number((providerError as { providerStatus?: unknown }).providerStatus) : null;
       const code = providerError instanceof Error ? providerError.message : "";
-      const transient = (status !== null && [408, 429, 500, 502, 503, 504].includes(status)) ||
-        ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE"].includes(code);
-      if (circuitClient && lastGeminiCircuitAttempt &&
-          (transient || lastGeminiCircuitAttempt.errorCode === "AI_PROVIDER_AUTH_ERROR")) {
+      const geminiStatus = Number(lastGeminiCircuitAttempt?.status);
+      const geminiTransient = [408, 429, 500, 502, 503, 504].includes(geminiStatus) ||
+        ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE"].includes(lastGeminiCircuitAttempt?.errorCode || "");
+      const geminiAuthFailure = [401, 403].includes(geminiStatus) ||
+        lastGeminiCircuitAttempt?.errorCode === "AI_PROVIDER_AUTH_ERROR";
+      if (circuitClient && lastGeminiCircuitAttempt && (geminiTransient || geminiAuthFailure)) {
         const { error: circuitWriteError } = await circuitClient.rpc("record_ai_provider_circuit_result", {
           p_provider: "gemini",
           p_success: false,
-          p_status_code: lastGeminiCircuitAttempt.status || status,
+          p_status_code: geminiStatus,
           p_retry_after_ms: Math.max(0, Number(lastGeminiCircuitAttempt.retryAfterMs) || 0),
           p_probe: circuitProbe,
         });
@@ -277,18 +283,23 @@ export async function POST(request: NextRequest) {
     }
 
     if (circuitClient && lastGeminiCircuitAttempt) {
-      const geminiSucceeded = lastGeminiCircuitAttempt.status < 400 &&
+      const geminiStatus = Number(lastGeminiCircuitAttempt.status);
+      const geminiSucceeded = geminiStatus > 0 && geminiStatus < 400 &&
         !lastGeminiCircuitAttempt.errorCode;
-      const { error: circuitResetError } = await circuitClient.rpc("record_ai_provider_circuit_result", {
-        p_provider: "gemini",
-        p_success: geminiSucceeded,
-        ...(geminiSucceeded ? {} : {
-          p_status_code: lastGeminiCircuitAttempt.status,
-          p_retry_after_ms: Math.max(0, Number(lastGeminiCircuitAttempt.retryAfterMs) || 0),
-        }),
-        p_probe: circuitProbe,
-      });
-      if (circuitResetError) {
+      const geminiInfraFailure = [408, 429, 500, 502, 503, 504].includes(geminiStatus) ||
+        [401, 403].includes(geminiStatus) ||
+        ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE", "AI_PROVIDER_AUTH_ERROR"].includes(lastGeminiCircuitAttempt.errorCode || "");
+      if (geminiSucceeded || geminiInfraFailure) {
+        const { error: circuitResetError } = await circuitClient.rpc("record_ai_provider_circuit_result", {
+          p_provider: "gemini",
+          p_success: geminiSucceeded,
+          ...(geminiSucceeded ? {} : {
+            p_status_code: geminiStatus,
+            p_retry_after_ms: Math.max(0, Number(lastGeminiCircuitAttempt.retryAfterMs) || 0),
+          }),
+          p_probe: circuitProbe,
+        });
+        if (circuitResetError) {
         logOperationalEvent({
           event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
           outcome: "failure", statusCode: 503, errorCode: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
@@ -525,7 +536,7 @@ export async function POST(request: NextRequest) {
       event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
       outcome: "success", statusCode: 200,
       durationMs: Math.max(0, Date.now() - startedAt),
-      provider: latestSuccessfulProvider, model: providerModelUsed || (latestSuccessfulProvider === "groq"
+      provider: latestSuccessfulProvider, model: latestSuccessfulModel || providerModelUsed || (latestSuccessfulProvider === "groq"
         ? (process.env.GROQ_AI_MODEL || "openai/gpt-oss-120b").trim()
         : (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim()),
       fallbackUsed: providerFallbackUsed === true,
@@ -537,17 +548,17 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
-      AI_NOT_CONFIGURED: { status: 503, message: "Gemini workflow generation is not configured. Add the server-side GEMINI_API_KEY. No Rexnora AI credit was charged." },
+      AI_NOT_CONFIGURED: { status: 503, message: "No configured AI provider is available for this task. Check the server-side provider keys. No Rexnora AI credit was charged." },
       AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid. No Rexnora AI credit was charged." },
       AI_PROMPT_REQUIRED: { status: 400, message: "Describe the workflow you want to create." },
       AI_PROMPT_TOO_LONG: { status: 400, message: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` },
-      AI_TIMEOUT: { status: 504, message: "Gemini did not respond within the request time limit. No Rexnora AI credit was charged. Please try again." },
-      AI_PROVIDER_UNAVAILABLE: { status: 502, message: "Gemini could not be reached. No Rexnora AI credit was charged. Please try again." },
-      AI_PROVIDER_OVERLOADED: { status: 503, message: "Gemini is temporarily overloaded after bounded retries. No Rexnora AI credit was charged. Please try again shortly." },
+      AI_TIMEOUT: { status: 504, message: "The available AI providers did not respond within the request time limit. No Rexnora AI credit was charged. Please try again." },
+      AI_PROVIDER_UNAVAILABLE: { status: 502, message: "The available AI providers could not be reached. No Rexnora AI credit was charged. Please try again." },
+      AI_PROVIDER_OVERLOADED: { status: 503, message: "The available AI providers are temporarily overloaded after bounded retries. No Rexnora AI credit was charged. Please try again shortly." },
       AI_PROVIDER_COOLDOWN: { status: 503, message: "Gemini is cooling down after temporary provider failures. No Rexnora AI credit was charged." },
       AI_PROVIDER_CIRCUIT_UNAVAILABLE: { status: 503, message: "Gemini provider protection is temporarily unavailable. No Rexnora AI credit was charged. Please retry shortly." },
-      AI_PROVIDER_AUTH_ERROR: { status: 502, message: "Gemini rejected its server credentials. This is a server configuration issue; no Rexnora AI credit was charged." },
-      AI_RATE_LIMITED: { status: 429, message: "Gemini's rate limit was reached. No Rexnora AI credit was charged. Wait a moment and try again." },
+      AI_PROVIDER_AUTH_ERROR: { status: 502, message: "The available AI provider credentials were rejected. This is a server configuration issue; no Rexnora AI credit was charged." },
+      AI_RATE_LIMITED: { status: 429, message: "The available AI providers reached their rate limits. No Rexnora AI credit was charged. Wait a moment and try again." },
       AI_PROVIDER_ERROR: { status: 502, message: "Gemini could not complete this request. No Rexnora AI credit was charged." },
       AI_INVALID_RESPONSE: { status: 502, message: "Gemini returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
       AI_EMPTY_RESPONSE: { status: 502, message: "Gemini returned no workflow. No Rexnora AI credit was charged. Please try again." },
