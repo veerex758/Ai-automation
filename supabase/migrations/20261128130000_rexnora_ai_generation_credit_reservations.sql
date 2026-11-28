@@ -352,7 +352,7 @@ begin
     v_provider_count := v_provider_count + 1;
     v_provider := v_item ->> 'provider';
     v_model := v_item ->> 'model';
-    if v_provider not in ('gemini', 'groq', 'cloudflare')
+    if v_provider is null or v_provider not in ('gemini', 'groq', 'cloudflare')
        or v_model is null or length(v_model) not between 1 and 128
        or coalesce(v_item ->> 'inputTokens', '') !~ '^[0-9]{1,18}$'
        or coalesce(v_item ->> 'outputTokens', '') !~ '^[0-9]{1,18}$'
