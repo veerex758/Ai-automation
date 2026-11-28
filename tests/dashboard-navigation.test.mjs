@@ -23,16 +23,16 @@ test("overview navigation exposes Playbooks as the only customer-facing workflow
     "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
     "/dashboard/billing", "/dashboard/settings",
   ]) assert.ok(sidebar.includes(href), "missing shared navigation destination: " + href);
-  assert.match(dashboard, /<Link key=\{item\.label\} href=\{item\.href\}/);
+  assert.ok(sidebar.includes("key={item.key} href={item.href}"), "shared navigation must render its configured links");
   assert.match(dashboard, /id="workflows"/);
-  assert.doesNotMatch(dashboard, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
+  assert.doesNotMatch(sidebar, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
 });
 
-test("shared sidebar exposes Playbooks and no competing builder or assistant entry", () => {
-  assert.match(sidebar, /label: "Playbooks".*href: "\/dashboard\/playbooks\/new".*key: "playbooks"/);
+test("shared sidebar opens the saved Playbooks library and exposes no competing builder or assistant entry", () => {
+  assert.ok(sidebar.includes('label: "Playbooks", icon: "◇", href: "/dashboard/playbooks", key: "playbooks"'));
   assert.doesNotMatch(sidebar, /href: "\/dashboard\/builder"|href: "\/dashboard\/ai-assistant"/);
   assert.match(playbookLibrary, /<DashboardSidebar activePage="playbooks"/);
-  assert.match(playbookLibrary, /rexnora\\.playbook/);
+  assert.match(playbookLibrary, /rexnora\.playbook/);
   assert.match(playbookLibrary, /Open Control Room/);
   assert.match(playbooks, /<DashboardSidebar activePage="playbooks"/);
   assert.match(agents, /<DashboardSidebar activePage="agents"/);
