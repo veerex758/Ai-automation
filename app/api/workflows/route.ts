@@ -30,6 +30,7 @@ function presentWorkflow(row: {
   description: string;
   status: string;
   updated_at: string;
+  definition?: unknown;
 }) {
   return {
     id: row.id,
@@ -41,7 +42,15 @@ function presentWorkflow(row: {
     updated: formatUpdatedAt(row.updated_at),
     icon: "✳",
     tone: "lime",
+    isPlaybook: isPlaybookDefinition(row.definition),
   };
+}
+
+function isPlaybookDefinition(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = (value as Record<string, unknown>).playbook;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+  return (candidate as Record<string, unknown>).schema === "rexnora.playbook";
 }
 
 export async function GET() {
@@ -61,7 +70,7 @@ export async function GET() {
     }
     const { data, error } = await supabase
       .from("workflows")
-      .select("id, name, description, status, updated_at")
+      .select("id, name, description, status, updated_at, definition")
       .eq("workspace_id", workspace.id)
       .order("updated_at", { ascending: false });
 

@@ -12,9 +12,9 @@ const [page, api, detail] = await Promise.all([
 
 test("Playbooks library only displays validated Playbook definitions from the authorized workflow list", () => {
   assert.match(api, /workflows\.view/);
-  assert.match(api, /definition: unknown/);
+  assert.match(api, /definition\?: unknown/);
   assert.match(api, /isPlaybook: isPlaybookDefinition\(row\.definition\)/);
-  assert.match(api, /candidate\.schema === "rexnora\.playbook"/);
+  assert.match(api, /candidate\.schema === "rexnora\.playbook"/);\n  assert.match(api, /select\("id, name, description, status, updated_at, definition"\)/);\n  assert.doesNotMatch(api.slice(api.indexOf("export async function GET"), api.indexOf("export async function POST")), /definition: row\.definition/);
   assert.match(page, /fetch\("\/api\/workflows"/);
   assert.match(page, /item\.isPlaybook === true/);
 });
