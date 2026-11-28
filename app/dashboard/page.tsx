@@ -11,12 +11,13 @@ const navItems = [
   { label: "Overview", icon: "⌂", href: "/dashboard" },
   { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
   { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
-  { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks" },
+  { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks/new" },
   { label: "AI agents", icon: "✺", href: "/dashboard/agents" },
   { label: "Templates", icon: "▧", href: "/dashboard/templates" },
   { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
   { label: "Connected accounts", icon: "↗", href: "/dashboard/connections" },
   { label: "Real Estate", icon: "⌂", href: "/dashboard/real-estate" },
+  { label: "Workspace & team", icon: "♙", href: "/dashboard/workspaces" },
   { label: "Analytics", icon: "▥", href: "/dashboard/analytics" },
   { label: "Billing", icon: "◇", href: "/dashboard/billing" },
   { label: "Settings", icon: "⚙", href: "/dashboard/settings" },
@@ -135,7 +136,7 @@ export default function DashboardPage() {
     <main className="app-shell dashboard-overview-page">
       <aside className="sidebar">
         <Link className="dash-brand" href="/" aria-label="Rexnora home"><span className="brand-mark">a</span><span>Rexnora<span className="brand-period">.</span></span></Link>
-        <div className="workspace-switch"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></div>
+        <Link className="workspace-switch" href="/dashboard/workspaces" aria-label="Manage workspaces and team"><span className="workspace-avatar">A</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Free workspace</small></span><span className="switch-chevron">⌄</span></Link>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="side-nav" aria-label="Workspace navigation">
           {navItems.map((item) => <Link key={item.label} href={item.href} className={activeNav === item.label ? "side-link selected" : "side-link"}><span className="side-icon">{item.icon}</span>{item.label}</Link>)}
