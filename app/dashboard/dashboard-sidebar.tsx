@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type ActivePage = "overview" | "workflows" | "playbooks" | "agents" | "templates" | "integrations" | "connections" | "analytics" | "activity" | "billing" | "settings" | "realestate";
+type ActivePage = "overview" | "workflows" | "playbooks" | "agents" | "templates" | "integrations" | "connections" | "analytics" | "activity" | "billing" | "settings" | "realestate" | "workspaces";
 
 const groups = [
   { label: "WORKSPACE", items: [
@@ -19,6 +19,7 @@ const groups = [
   ] },
   { label: "MANAGE", items: [
     { label: "Real Estate", icon: "⌂", href: "/dashboard/real-estate", key: "realestate" },
+    { label: "Workspace & team", icon: "♙", href: "/dashboard/workspaces", key: "workspaces" },
     { label: "Analytics", icon: "▥", href: "/dashboard/analytics", key: "analytics" },
     { label: "Billing", icon: "◇", href: "/dashboard/billing", key: "billing" },
     { label: "Settings", icon: "⚙", href: "/dashboard/settings", key: "settings" },
@@ -28,7 +29,7 @@ const groups = [
 export default function DashboardSidebar({ activePage, workspaceName = "Your workspace" }: { activePage: ActivePage; workspaceName?: string }) {
   return <aside className="sidebar">
     <Link className="dash-brand" href="/" aria-label="Rexnora home"><img src="/rexnora-lockup.svg" alt="Rexnora" style={{ width: "146px", height: "30px", objectFit: "contain" }} /></Link>
-    <div className="workspace-switch"><span className="workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></div>
+    <Link className="workspace-switch" href="/dashboard/workspaces" aria-label="Manage workspaces and team"><span className="workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span><span className="workspace-copy"><strong>{workspaceName}</strong><small>Workspace</small></span><span className="switch-chevron">⌄</span></Link>
     <nav className="side-nav dashboard-nav" aria-label="Workspace navigation">
       {groups.map(group => <section className="dashboard-nav-group" key={group.label} aria-label={group.label}>
         <div className="sidebar-label">{group.label}</div>

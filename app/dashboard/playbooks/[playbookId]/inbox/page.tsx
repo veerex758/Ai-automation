@@ -46,7 +46,7 @@ export default function PlaybookDecisionInboxPage(){
  return <main className="app-shell playbook-shell">
   <DashboardSidebar activePage="playbooks"/>
   <section className="dashboard-main">
-   <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><Link href={"/dashboard/playbooks/"+encodeURIComponent(playbookId)}>Control Room</Link><span>/</span><strong>Decision Inbox</strong></div><span className="environment-badge">Human approval required</span></header>
+   <header className="dashboard-topbar"><div className="breadcrumbs">Workspace <span>/</span><Link href="/dashboard/playbooks">Playbooks</Link><span>/</span><Link href={"/dashboard/playbooks/"+encodeURIComponent(playbookId)}>Control Room</Link><span>/</span><strong>Decision Inbox</strong></div><span className="environment-badge">Human approval required</span></header>
    <div className="dashboard-content playbook-content">
     <div className="playbook-heading"><div className="playbook-eyebrow">REXNORA PLAYBOOKS · DECISION INBOX</div><h1>Decisions waiting for you</h1><p>Review uncertain enquiries and actions marked Ask me first. Approval is tied to the exact Playbook version and operation; the system rechecks safety before resuming.</p></div>
     <div className="playbook-steps"><div className="playbook-step"><span>{pending}</span><div><strong>Pending decisions</strong><small>Waiting for your review</small></div></div><div className="playbook-step"><span>{items.length}</span><div><strong>Recent decisions</strong><small>Including resolved and expired items</small></div></div><div className="playbook-step"><span>7d</span><div><strong>Approval expiry</strong><small>Old requests must be reviewed again</small></div></div></div>

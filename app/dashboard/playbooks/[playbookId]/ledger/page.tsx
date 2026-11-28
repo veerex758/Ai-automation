@@ -42,7 +42,7 @@ export default function PlaybookOutcomeLedgerPage() {
     <DashboardSidebar activePage="playbooks" />
     <section className="dashboard-main">
       <header className="dashboard-topbar">
-        <div className="breadcrumbs">Workspace <span>/</span><Link href={"/dashboard/playbooks/" + encodeURIComponent(playbookId)}>Control Room</Link><span>/</span><strong>Outcome Ledger</strong></div>
+        <div className="breadcrumbs">Workspace <span>/</span><Link href="/dashboard/playbooks">Playbooks</Link><span>/</span><Link href={"/dashboard/playbooks/" + encodeURIComponent(playbookId)}>Control Room</Link><span>/</span><strong>Outcome Ledger</strong></div>
         <span className="environment-badge">Read-only history</span>
       </header>
       <div className="dashboard-content playbook-content">

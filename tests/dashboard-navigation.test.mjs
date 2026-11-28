@@ -21,7 +21,7 @@ test("overview navigation exposes Playbooks as the only customer-facing workflow
     "/dashboard", "/dashboard#workflows", "/dashboard/activity",
     "/dashboard/playbooks", "/dashboard/agents", "/dashboard/templates",
     "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
-    "/dashboard/billing", "/dashboard/settings",
+    "/dashboard/billing", "/dashboard/settings", "/dashboard/workspaces",
   ]) assert.ok(sidebar.includes(href), "missing shared navigation destination: " + href);
   assert.ok(sidebar.includes("key={item.key} href={item.href}"), "shared navigation must render its configured links");
   assert.match(dashboard, /id="workflows"/);
@@ -95,4 +95,11 @@ test("dashboard sends all new automation creation through outcome-first Playbook
   assert.doesNotMatch(dashboard, /workflowTemplates|createFromTemplate|openTemplateSetup|Create workflow/);
   assert.match(dashboard, /async function saveWorkflow[\s\S]*method: "PATCH"/);
   assert.match(dashboard, /Open builder/);
+});
+
+
+test("workspace and team navigation is reachable from the shared workspace switch", () => {
+  assert.match(sidebar, /key: "workspaces"/);
+  assert.match(sidebar, /className="workspace-switch" href="\/dashboard\/workspaces"/);
+  assert.match(sections, /href="\/dashboard\/workspaces"/);
 });
