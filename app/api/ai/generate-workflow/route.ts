@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { generateWorkflow, repairRegistryStepInputs, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
@@ -17,10 +17,18 @@ export const maxDuration = 60;
 
 const MAX_REAL_ESTATE_OUTCOME_LENGTH = 240;
 const REAL_ESTATE_CRM_PROVIDERS = new Set(["pipedrive", "zoho_crm", "freshsales"]);
+const IDEMPOTENCY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request.headers.get("x-request-id"));
+  const suppliedOperationId = request.headers.get("idempotency-key")?.trim() || "";
+  const operationId = suppliedOperationId && IDEMPOTENCY_UUID.test(suppliedOperationId)
+    ? suppliedOperationId.toLowerCase()
+    : randomUUID();
+  const invalidOperationId = Boolean(suppliedOperationId) && !IDEMPOTENCY_UUID.test(suppliedOperationId);
   const startedAt = Date.now();
+  let releaseReservation: (() => Promise<void>) | null = null;
+  let reservationConsumed = false;
   let latestSuccessfulProvider = "gemini";
   let latestSuccessfulModel = "";
   let latestAttemptProvider = "gemini";
@@ -35,6 +43,15 @@ export async function POST(request: NextRequest) {
     deadlineAt: startedAt + 54_000,
   };
   const providerUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const providerUsageByModel = new Map<string, {
+    provider: "gemini" | "groq" | "cloudflare";
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    providerCostUsd?: number;
+    fallbackUsed: boolean;
+  }>();
   const gatewayGenerateStructured = async (args: {
     task: "workflow_generation" | "workflow_schema_repair";
     systemPrompt: string;
@@ -51,7 +68,7 @@ export async function POST(request: NextRequest) {
       },
       {
         task: args.task,
-        operationId: requestId,
+        operationId,
         signal: request.signal,
         timeoutMs: 16_000,
         deadlineAt: aiAttemptBudget.deadlineAt,
@@ -62,6 +79,23 @@ export async function POST(request: NextRequest) {
     providerUsage.inputTokens += result.usage.inputTokens;
     providerUsage.outputTokens += result.usage.outputTokens;
     providerUsage.totalTokens += result.usage.totalTokens;
+    const usageKey = result.provider + "\\u0000" + result.model;
+    const recordedUsage = providerUsageByModel.get(usageKey) ?? {
+      provider: result.provider,
+      model: result.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      fallbackUsed: false,
+    };
+    recordedUsage.inputTokens += result.usage.inputTokens;
+    recordedUsage.outputTokens += result.usage.outputTokens;
+    recordedUsage.totalTokens += result.usage.totalTokens;
+    if (result.usage.providerCostUsd !== undefined) {
+      recordedUsage.providerCostUsd = (recordedUsage.providerCostUsd || 0) + result.usage.providerCostUsd;
+    }
+    recordedUsage.fallbackUsed ||= result.fallbackUsed;
+    providerUsageByModel.set(usageKey, recordedUsage);
     return {
       parsed: result.output,
       modelUsed: result.model,
@@ -72,10 +106,17 @@ export async function POST(request: NextRequest) {
   const jsonResponse = (body: unknown, init?: ResponseInit) => {
     const response = NextResponse.json(body, init);
     response.headers.set("x-request-id", requestId);
+    response.headers.set("x-operation-id", operationId);
     response.headers.set("Cache-Control", "no-store");
     return response;
   };
   try {
+    if (invalidOperationId) {
+      return jsonResponse({
+        error: "The Idempotency-Key header must be a UUID. Reuse the same key only when retrying the same AI operation.",
+        errorCode: "AI_IDEMPOTENCY_KEY_INVALID",
+      }, { status: 400 });
+    }
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -164,6 +205,58 @@ export async function POST(request: NextRequest) {
       }, { status: 422 });
     }
 
+    const requestFingerprint = createHash("sha256").update(JSON.stringify({
+      prompt: body.prompt.trim(),
+      starterType: starterType ?? null,
+      crmProvider: starterType === "real_estate" ? requestedCrmProvider : null,
+    })).digest("hex");
+    const { data: reservation, error: reservationError } = await supabase.rpc("reserve_ai_generation_usage", {
+      p_workspace_id: workspace.id,
+      p_operation_id: operationId,
+      p_request_fingerprint: requestFingerprint,
+    });
+    if (reservationError) {
+      return jsonResponse({
+        error: "AI credit authorization is unavailable. No Rexnora AI credit was charged. Please retry.",
+        errorCode: "AI_USAGE_METERING_UNAVAILABLE",
+      }, { status: 503 });
+    }
+    if (!reservation?.allowed) {
+      const reason = String(reservation?.reason || "");
+      if (reason === "operation_in_progress" || reason === "already_consumed") {
+        return jsonResponse({
+          error: reason === "operation_in_progress"
+            ? "This AI request is already processing. Do not start a second generation; retry with the same operation after it finishes."
+            : "This logical AI request has already been completed. Start a new request to generate another draft.",
+          errorCode: reason === "operation_in_progress" ? "AI_OPERATION_IN_PROGRESS" : "AI_OPERATION_ALREADY_COMPLETED",
+          operationId,
+        }, { status: 409 });
+      }
+      if (reason === "limit_reached" || reason === "subscription_inactive") {
+        return jsonResponse({
+          error: reason === "limit_reached"
+            ? "Monthly AI generation limit reached. No Rexnora AI credit was charged."
+            : "Your workspace subscription is not active. No Rexnora AI credit was charged.",
+          errorCode: reason === "limit_reached" ? "AI_CREDIT_LIMIT_REACHED" : "AI_SUBSCRIPTION_INACTIVE",
+        }, { status: 402 });
+      }
+      return jsonResponse({
+        error: "AI credit authorization could not be completed. No Rexnora AI credit was charged. Please retry.",
+        errorCode: "AI_USAGE_METERING_UNAVAILABLE",
+      }, { status: 503 });
+    }
+
+    // This is a hold, not a billing event. The finally block releases it on every
+    // early return/exception until validated output is atomically settled below.
+    releaseReservation = async () => {
+      const { error } = await supabase.rpc("release_ai_generation_usage", {
+        p_workspace_id: workspace.id,
+        p_operation_id: operationId,
+        p_release_reason: "generation_not_settled",
+      });
+      if (error) throw new Error("AI_CREDIT_RESERVATION_RELEASE_FAILED");
+    };
+
     const onProviderAttempt = (attempt: {
       provider?: string; model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
       providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
@@ -183,7 +276,7 @@ export async function POST(request: NextRequest) {
         latestSuccessfulModel = typeof attempt.model === "string" ? attempt.model : latestSuccessfulModel;
       }
       logOperationalEvent({
-        event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+        event: "workflow_generation", requestId, operationId, route: "/api/ai/generate-workflow",
         outcome: failure ? "failure" : "success",
         statusCode: Number.isSafeInteger(status) && status >= 400 ? status : failure ? 502 : 200,
         durationMs: Math.max(0, Date.now() - startedAt),
@@ -410,26 +503,41 @@ export async function POST(request: NextRequest) {
       if (!checked.steps) return jsonResponse({ error: checked.error || "The generated graph did not pass registry validation." }, { status: 422 });
       executableSteps = checked.steps;
     }
-    // Only bill a completed, registry-validated generation. Provider errors and
-    // malformed graphs return above this point without consuming a customer credit.
+    // Preserve the post-validation billing invariant. Every provider attempt and
+    // schema repair shares operationId and the single reservation created above.
     const { data: usage, error: usageError } = await supabase.rpc("consume_ai_generation_usage", {
       p_workspace_id: workspace.id,
-      p_idempotency_key: randomUUID(),
+      p_operation_id: operationId,
+      p_provider_usage: Array.from(providerUsageByModel.values()),
     });
     if (usageError) {
-      return jsonResponse({ error: "Usage metering is unavailable. Your AI credit was not charged.", errorCode: "AI_USAGE_METERING_UNAVAILABLE" }, { status: 503 });
+      return jsonResponse({
+        error: "Usage settlement is unavailable. Your AI credit was not charged. The reservation will be released.",
+        errorCode: "AI_USAGE_METERING_UNAVAILABLE",
+      }, { status: 503 });
     }
     if (!usage?.allowed) {
+      if (usage?.duplicate === true) {
+        reservationConsumed = true;
+        releaseReservation = null;
+        return jsonResponse({
+          error: "This logical AI request has already been settled. Start a new request to create another draft.",
+          errorCode: "AI_OPERATION_ALREADY_COMPLETED",
+          operationId,
+        }, { status: 409 });
+      }
       return jsonResponse({
         error: "Monthly AI generation limit reached. No AI credit was charged for this request.",
         errorCode: "AI_CREDIT_LIMIT_REACHED",
         entitlement: usage,
       }, { status: 402 });
     }
+    reservationConsumed = true;
+    releaseReservation = null;
 
     const { providerModelUsed, providerFallbackUsed, providerUsage, ...publicResult } = result;
     logOperationalEvent({
-      event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+      event: "workflow_generation", requestId, operationId, route: "/api/ai/generate-workflow",
       outcome: "success", statusCode: 200,
       durationMs: Math.max(0, Date.now() - startedAt),
       provider: latestSuccessfulProvider, model: latestSuccessfulModel || providerModelUsed || (latestSuccessfulProvider === "groq"
@@ -470,7 +578,7 @@ export async function POST(request: NextRequest) {
     const mapped = responses[code] || { status: 502, message: "Workflow generation failed safely. Please try again." };
     if (mapped.status >= 500 || (error && typeof error === "object" && "providerStatus" in error)) {
       logOperationalEvent({
-        event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+        event: "workflow_generation", requestId, operationId, route: "/api/ai/generate-workflow",
         outcome: "failure", statusCode: mapped.status,
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
@@ -496,5 +604,23 @@ export async function POST(request: NextRequest) {
       }
     }
     return response;
+  } finally {
+    if (releaseReservation && !reservationConsumed) {
+      try {
+        await releaseReservation();
+      } catch {
+        // Holds expire in the database if a release request cannot be delivered.
+        logOperationalEvent({
+          event: "workflow_generation",
+          requestId,
+          operationId,
+          route: "/api/ai/generate-workflow",
+          outcome: "failure",
+          statusCode: 503,
+          errorCode: "AI_USAGE_METERING_UNAVAILABLE",
+          durationMs: Math.max(0, Date.now() - startedAt),
+        }, console.error);
+      }
+    }
   }
 }
