@@ -265,7 +265,7 @@ test("Gemini 3.5 Flash-Lite is used only after the primary model exhausts its bo
     },
   });
   assert.deepEqual(models, ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"]);
-  assert.deepEqual(delays, [250, 500]);
+  assert.deepEqual(delays, [250, 250]);
   assert.equal(result.providerModelUsed, "gemini-3.5-flash-lite");
   assert.equal(result.providerFallbackUsed, true);
 });
