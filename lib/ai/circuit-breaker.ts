@@ -10,7 +10,6 @@ export type CircuitPolicy = {
   baseCooldownMs: number;
   maxCooldownMs: number;
   authCooldownMs: number;
-  probeLeaseMs: number;
 };
 
 export const DEFAULT_CIRCUIT_POLICY: CircuitPolicy = {
@@ -21,7 +20,6 @@ export const DEFAULT_CIRCUIT_POLICY: CircuitPolicy = {
   baseCooldownMs: 30_000,
   maxCooldownMs: 300_000,
   authCooldownMs: 300_000,
-  probeLeaseMs: 25_000,
 };
 
 export type CircuitAdmission = {
@@ -96,7 +94,7 @@ export class InMemoryCircuitBreakerStore implements ProviderCircuitBreakerStore 
         };
       }
       row.state = "half_open";
-      row.probeUntil = now + policy.probeLeaseMs;
+      row.probeUntil = now + 25_000;
       return {
         ...row, state: "half_open", allowed: true, probe: true, retryAfterMs: 0,
       };
