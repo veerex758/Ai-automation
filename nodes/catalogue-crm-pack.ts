@@ -25,8 +25,26 @@ async function call(ctx: NodeContext, provider: ProviderId, args: {
   return response.body as Record<string, unknown>;
 }
 
+const exactStepReference = z.string().max(140).regex(/^\\{\\{[a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})+\\}\\}$/);
+const emailInput = z.union([z.string().email().max(254), exactStepReference]);
+const nameInput = z.union([z.string().trim().min(1).max(100), exactStepReference]);
+const phoneInput = z.union([z.string().max(40), exactStepReference]);
+const contactInput = z.object({
+  email: emailInput,
+  firstName: nameInput,
+  lastName: nameInput,
+  phone: phoneInput.optional(),
+}).strict();
+const contactRuntimeInput = z.object({
+  email: z.string().email().max(254),
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+  phone: z.string().max(40).optional(),
+}).strict();
+const searchContactsInput = z.object({ email: emailInput }).strict();
+
 function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
-  id: ProviderId; name: string; description: string; input: I; output: O;
+  id: ProviderId; name: string; description: string; input: I; runtimeInput?: z.ZodTypeAny; output: O;
   auth?: NodeDefinition["auth"];
   run(ctx: NodeContext, input: z.infer<I>): Promise<unknown>;
   additionalActions?: NodeDefinition["actions"];
@@ -38,7 +56,7 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
       id: "execute", name: args.name + " action", description: args.description,
       inputSchema: args.input, outputSchema: args.output,
       async run(ctx, raw) {
-        const input = args.input.parse(raw);
+        const input = (args.runtimeInput ?? args.input).parse(raw);
         return args.output.parse(await args.run(ctx, input));
       },
     }, ...(args.additionalActions ?? [])],
@@ -120,6 +138,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     auth: { type: "oauth2", scopes: ["contacts:full"], refresh: "manual" },
     description: "Creates a Pipedrive person using the connected OAuth access token and returns the person ID.",
     input: contactInput,
+    runtimeInput: contactRuntimeInput,
     output: contactOutput,
     async run(ctx, input) {
       const token = secret(ctx, "pipedrive", "accessToken");
@@ -133,7 +152,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     additionalActions: [{
       id: "search_contacts", name: "Search persons by email",
       description: "Searches Pipedrive persons by email using the connected OAuth token and returns bounded contact fields.",
-      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      inputSchema: searchContactsInput, outputSchema: searchContactsOutput,
       async run(ctx, raw) {
         const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
         const token = secret(ctx, "pipedrive", "accessToken");
@@ -159,6 +178,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     auth: { type: "oauth2", scopes: ["ZohoCRM.modules.contacts.ALL"], refresh: "manual" },
     description: "Creates a Zoho CRM Contact using the connected OAuth access token and returns the provider record ID.",
     input: contactInput,
+    runtimeInput: contactRuntimeInput,
     output: contactOutput,
     async run(ctx, input) {
       const token = secret(ctx, "zoho_crm", "accessToken");
@@ -173,7 +193,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     additionalActions: [{
       id: "search_contacts", name: "Search contacts by email",
       description: "Searches Zoho CRM Contacts by exact email using the connected OAuth access token.",
-      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      inputSchema: searchContactsInput, outputSchema: searchContactsOutput,
       async run(ctx, raw) {
         const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
         const token = secret(ctx, "zoho_crm", "accessToken");
@@ -189,6 +209,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     auth: { type: "apiKey", credentialKey: "accessToken" },
     description: "Creates a Freshsales contact using the workspace access token and validated Freshsales account domain.",
     input: contactInput,
+    runtimeInput: contactRuntimeInput,
     output: contactOutput,
     async run(ctx, input) {
       const token = secret(ctx, "freshsales", "accessToken");
@@ -204,7 +225,7 @@ export const catalogueCrmNodes: NodeDefinition[] = [
     additionalActions: [{
       id: "search_contacts", name: "Search contacts by email",
       description: "Looks up Freshsales contacts by exact email through the account lookup API.",
-      inputSchema: z.object({ email: z.string().email().max(254) }).strict(), outputSchema: searchContactsOutput,
+      inputSchema: searchContactsInput, outputSchema: searchContactsOutput,
       async run(ctx, raw) {
         const input = z.object({ email: z.string().email().max(254) }).strict().parse(raw);
         const token = secret(ctx, "freshsales", "accessToken"), domain = secret(ctx, "freshsales", "domain");
