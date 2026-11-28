@@ -57,7 +57,7 @@ select is(
   'two transient failures remain below the configured threshold'
 );
 select is(
-  public.record_ai_provider_circuit_result('gemini',false,503,0,false,3,0.5,5,300,30000,300000,300000)->>'state',
+  public.record_ai_provider_circuit_result('gemini',false,503,0,false,3,0.5,5,300,1000,1000,1000)->>'state',
   'open',
   'three consecutive failures open Gemini circuit'
 );
@@ -113,14 +113,10 @@ select ok(
   (public.get_ai_provider_circuit_state('groq')->>'retryAfterMs')::bigint between 40000 and 50000,
   '429 cooldown honors Retry-After'
 );
-reset role;
+-- The deliberately short test cooldown expires without direct table access.
+select pg_sleep(1.1);
 
--- Expire Gemini cooldown and prove a single atomic half-open probe lease.
-update private.ai_provider_circuit_breakers
-set open_until=clock_timestamp() - interval '1 second', probe_until=null
-where provider='gemini';
-
-set local role service_role;
+-- Prove a single atomic half-open probe lease.
 create temporary table gemini_probe_admission as
 select public.get_ai_provider_circuit_state('gemini') as result;
 select is(
@@ -142,12 +138,9 @@ select is(
   'successful health probe closes the circuit'
 );
 
--- A failed health probe reopens the circuit and starts a fresh cooldown.
-reset role;
-update private.ai_provider_circuit_breakers
-set open_until=clock_timestamp() - interval '1 second', probe_until=null
-where provider='gemini';
-set local role service_role;
+-- A failed authentication check opens a short cooldown, then a probe may run.
+select public.record_ai_provider_circuit_result('gemini',false,401,0,false,3,0.5,5,300,1000,1000,1000);
+select pg_sleep(1.1);
 create temporary table gemini_failed_probe as
 select public.get_ai_provider_circuit_state('gemini') as result;
 select ok(
@@ -160,12 +153,7 @@ select is(
   'failed health probe reopens the circuit'
 );
 
--- A late ordinary success cannot erase a concurrent circuit opening.
-reset role;
-update private.ai_provider_circuit_breakers
-set open_until=clock_timestamp() + interval '1 minute', probe_until=null
-where provider='gemini';
-set local role service_role;
+-- A late ordinary success cannot erase the open circuit left by a failed probe.
 select is(
   public.record_ai_provider_circuit_result('gemini',true,null,0,false)->>'state',
   'open',
