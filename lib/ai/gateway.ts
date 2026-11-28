@@ -8,7 +8,7 @@ import { claimProviderAttempt, DEFAULT_AI_RETRY_POLICY, withProviderRetries } fr
 import { EMPTY_AI_USAGE } from "./usage";
 import type {
   AIRequestContext, AIResult, AITextRequest, AIStructuredRequest, AIToolRequest,
-  AIToolOutput, AIProvider,
+  AIToolOutput, AIProvider, AIProviderId,
 } from "./types";
 
 const MAX_TOTAL_PROVIDER_ATTEMPTS = 8;
