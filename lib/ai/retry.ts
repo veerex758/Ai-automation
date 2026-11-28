@@ -2,30 +2,36 @@ import { AIProviderError, normalizeProviderError } from "./errors";
 import type { AIProviderId, AIRequestContext } from "./types";
 
 export type RetryPolicy = {
+  /** Maximum calls to one provider for one gateway request. */
   maxAttempts: number;
+  /** 429 retries are separate and more conservative than transient 5xx retries. */
   maxRateLimitRetries: number;
   baseDelayMs: number;
   maxInlineWaitMs: number;
 };
 
 export const DEFAULT_AI_RETRY_POLICY: RetryPolicy = {
-  // Matches the current staging Gemini policy: three primary attempts, one 429 retry.
   maxAttempts: 3,
   maxRateLimitRetries: 1,
-  baseDelayMs: 1_000,
+  baseDelayMs: 500,
   maxInlineWaitMs: 6_000,
 };
 
+/** Full-jitter exponential backoff, never shorter than a provider Retry-After value. */
 export function retryDelayMs(
   attempt: number,
   retryAfterMs: number | undefined,
   policy: RetryPolicy = DEFAULT_AI_RETRY_POLICY,
   random: () => number = Math.random,
 ): number {
-  const ceiling = Math.min(policy.maxInlineWaitMs, policy.baseDelayMs * (2 ** Math.max(0, attempt - 1)));
+  const ceiling = Math.min(
+    policy.maxInlineWaitMs,
+    policy.baseDelayMs * (2 ** Math.max(0, attempt - 1)),
+  );
   const sample = Number(random());
   const value = Number.isFinite(sample) ? Math.max(0, Math.min(1, sample)) : 0.5;
-  return Math.min(policy.maxInlineWaitMs, Math.max(250, Math.floor(ceiling * value), retryAfterMs ?? 0));
+  const jitter = Math.floor(ceiling * value);
+  return Math.max(jitter, Math.max(0, retryAfterMs ?? 0));
 }
 
 function remainingDeadline(context: AIRequestContext): number {
@@ -43,8 +49,13 @@ function attachAttemptCount(
 }
 
 async function sleepWithinBudget(ms: number, context: AIRequestContext, provider: AIProviderId): Promise<void> {
-  if (remainingDeadline(context) <= ms) {
-    throw new AIProviderError({ provider, code: "AI_DEADLINE_EXCEEDED", message: "AI operation deadline prevents another retry." });
+  const delay = Math.max(0, ms);
+  if (remainingDeadline(context) <= delay + 25) {
+    throw new AIProviderError({
+      provider,
+      code: "AI_DEADLINE_EXCEEDED",
+      message: "AI operation deadline prevents another retry.",
+    });
   }
   if (context.signal?.aborted) {
     throw new AIProviderError({ provider, code: "AI_CANCELLED", message: "AI request was cancelled." });
@@ -57,7 +68,7 @@ async function sleepWithinBudget(ms: number, context: AIRequestContext, provider
       context.signal?.removeEventListener("abort", abort);
       resolve();
     };
-    const timer = setTimeout(finish, ms);
+    const timer = setTimeout(finish, delay);
     const abort = () => {
       if (settled) return;
       settled = true;
@@ -70,11 +81,18 @@ async function sleepWithinBudget(ms: number, context: AIRequestContext, provider
   });
 }
 
-function claimAttempt(
+/** Claim one provider call against the operation-wide shared budget. */
+export function claimProviderAttempt(
   provider: AIProviderId,
   context: AIRequestContext,
-  localProviderAttempt: number,
+  localProviderAttempt = context.providerAttempt ?? 0,
 ): number {
+  if (context.signal?.aborted) {
+    throw new AIProviderError({ provider, code: "AI_CANCELLED", message: "AI request was cancelled." });
+  }
+  if (remainingDeadline(context) <= 0) {
+    throw new AIProviderError({ provider, code: "AI_DEADLINE_EXCEEDED", message: "AI operation deadline was reached." });
+  }
   if (!context.attemptBudget) return localProviderAttempt + 1;
   if (context.attemptBudget.remainingProviderAttempts <= 0) {
     throw new AIProviderError({ provider, code: "AI_ATTEMPT_LIMIT_REACHED", message: "AI provider attempt limit was reached." });
@@ -103,44 +121,39 @@ export async function withProviderRetries<T>(
     if (remainingDeadline(context) <= 0) {
       throw attachAttemptCount(
         new AIProviderError({ provider, code: "AI_DEADLINE_EXCEEDED", message: "AI operation deadline was reached." }),
-        context, localProviderAttempt,
+        context,
+        localProviderAttempt,
       );
     }
 
-    const providerAttempt = claimAttempt(provider, context, localProviderAttempt);
+    const providerAttempt = claimProviderAttempt(provider, context, localProviderAttempt);
     localProviderAttempt = providerAttempt;
-    // Keep the latest attempt on the caller context so a later model fallback can
-    // continue the same operation-wide attempt sequence.
     context.providerAttempt = providerAttempt;
-    const attemptContext: AIRequestContext = {
-      ...context,
-      providerAttempt,
-      fallbackUsed: false,
-    };
+    const attemptContext: AIRequestContext = { ...context, providerAttempt, fallbackUsed: context.fallbackUsed === true };
 
     try {
       return await operation(attemptContext);
     } catch (caught) {
       const error = normalizeProviderError(caught, provider, context.signal);
       lastError = error;
-      const status = error.providerStatus ?? error.status;
+      const status = Number(error.providerStatus ?? error.status);
 
       if (status === 429 || error.code === "AI_RATE_LIMITED") {
         const wait = error.retryAfterMs ?? 0;
         if (rateLimitRetries < policy.maxRateLimitRetries && wait <= policy.maxInlineWaitMs) {
+          const delay = retryDelayMs(rateLimitRetries + 1, wait, policy);
           rateLimitRetries += 1;
-          await sleep(Math.max(wait, retryDelayMs(rateLimitRetries, wait, policy)), context);
+          await sleep(delay, context);
           continue;
         }
         throw attachAttemptCount(error, context, localProviderAttempt);
       }
 
-      const transientStatus = [408, 500, 502, 503, 504].includes(Number(status));
+      const transientStatus = [408, 500, 502, 503, 504].includes(status);
       const transient = transientStatus || error.code === "AI_TIMEOUT";
-      // A provider timeout moves to the eligible fallback model rather than
-      // repeating the same slow model. Network errors are retried if they have
-      // a transient HTTP classification, but the gateway will not fan them out.
-      if (!transient || error.code === "AI_TIMEOUT") {
+      // Connection failures and auth errors should move to another provider rather
+      // than repeat the same request against an unreachable or misconfigured host.
+      if (!transient) {
         throw attachAttemptCount(error, context, localProviderAttempt);
       }
       if (error.retryAfterMs !== undefined && error.retryAfterMs > policy.maxInlineWaitMs) break;
@@ -155,6 +168,8 @@ export async function withProviderRetries<T>(
   throw lastError
     ? attachAttemptCount(lastError, context, localProviderAttempt)
     : new AIProviderError({
-      provider, code: "AI_PROVIDER_ERROR", message: "AI provider attempts were exhausted.",
+      provider,
+      code: "AI_PROVIDER_ERROR",
+      message: "AI provider attempts were exhausted.",
     });
 }
