@@ -79,23 +79,6 @@ export async function POST(request: NextRequest) {
     providerUsage.inputTokens += result.usage.inputTokens;
     providerUsage.outputTokens += result.usage.outputTokens;
     providerUsage.totalTokens += result.usage.totalTokens;
-    const usageKey = result.provider + "\\u0000" + result.model;
-    const recordedUsage = providerUsageByModel.get(usageKey) ?? {
-      provider: result.provider,
-      model: result.model,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      fallbackUsed: false,
-    };
-    recordedUsage.inputTokens += result.usage.inputTokens;
-    recordedUsage.outputTokens += result.usage.outputTokens;
-    recordedUsage.totalTokens += result.usage.totalTokens;
-    if (result.usage.providerCostUsd !== undefined) {
-      recordedUsage.providerCostUsd = (recordedUsage.providerCostUsd || 0) + result.usage.providerCostUsd;
-    }
-    recordedUsage.fallbackUsed ||= result.fallbackUsed;
-    providerUsageByModel.set(usageKey, recordedUsage);
     return {
       parsed: result.output,
       modelUsed: result.model,
@@ -271,12 +254,39 @@ export async function POST(request: NextRequest) {
     };
 
     const onProviderAttempt = (attempt: {
-      provider?: string; model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
-      providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
+      provider?: "gemini" | "groq" | "cloudflare"; model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
+      providerReason?: string; providerType?: string; providerRequestId?: string;
+      inputTokens?: number; outputTokens?: number; totalTokens?: number; providerCostUsd?: number;
+      fallbackUsed?: boolean;
     }) => {
       const provider = attempt.provider || "gemini";
       latestAttemptProvider = provider;
       latestAttemptModel = typeof attempt.model === "string" ? attempt.model : latestAttemptModel;
+      if (typeof attempt.model === "string" &&
+          Number.isSafeInteger(attempt.inputTokens) && Number(attempt.inputTokens) >= 0 &&
+          Number.isSafeInteger(attempt.outputTokens) && Number(attempt.outputTokens) >= 0 &&
+          Number.isSafeInteger(attempt.totalTokens) && Number(attempt.totalTokens) >= 0) {
+        // Provider adapters report usage for every completed response, including
+        // content that is rejected by structured-output validation before fallback.
+        const usageKey = provider + "\\u0000" + attempt.model;
+        const recordedUsage = providerUsageByModel.get(usageKey) ?? {
+          provider,
+          model: attempt.model,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          fallbackUsed: false,
+        };
+        recordedUsage.inputTokens += Number(attempt.inputTokens);
+        recordedUsage.outputTokens += Number(attempt.outputTokens);
+        recordedUsage.totalTokens += Number(attempt.totalTokens);
+        if (typeof attempt.providerCostUsd === "number" &&
+            Number.isFinite(attempt.providerCostUsd) && attempt.providerCostUsd >= 0) {
+          recordedUsage.providerCostUsd = (recordedUsage.providerCostUsd || 0) + attempt.providerCostUsd;
+        }
+        recordedUsage.fallbackUsed ||= attempt.fallbackUsed === true;
+        providerUsageByModel.set(usageKey, recordedUsage);
+      }
       const status = Number(attempt.status);
       const failure = status >= 400 || Boolean(attempt.errorCode);
       const providerCode = attempt.errorCode ||
