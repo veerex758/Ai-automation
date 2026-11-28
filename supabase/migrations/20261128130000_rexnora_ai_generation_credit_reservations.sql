@@ -96,10 +96,6 @@ begin
 
   -- Expired reservations are released lazily, so a crashed server cannot hold
   -- quota forever. Expiry never creates a customer usage charge.
-  v_provider_count := private.record_ai_provider_usage_events(
-    p_workspace_id, p_operation_id, p_provider_usage
-  );
-
   update private.ai_generation_credit_reservations
   set status = 'released',
       released_at = now(),
@@ -252,9 +248,11 @@ declare
   v_fallback boolean;
   v_count integer := 0;
 begin
-  if p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array'
-     or jsonb_array_length(p_provider_usage) > 16 then
+  if p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array' then
     raise exception 'invalid provider usage telemetry' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_provider_usage) > 16 then
+    raise exception 'too many provider usage records' using errcode = '22023';
   end if;
 
   for v_item in select value from jsonb_array_elements(p_provider_usage)
@@ -326,8 +324,7 @@ begin
     raise exception 'workspace access denied' using errcode = '42501';
   end if;
   if p_workspace_id is null or p_operation_id is null
-     or length(v_reason) > 80 or v_reason !~ '^[a-zA-Z0-9_.-]{1,80}$'
-     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array' then
+     or length(v_reason) > 80 or v_reason !~ '^[a-zA-Z0-9_.-]{1,80}
     raise exception 'invalid AI generation release request' using errcode = '22023';
   end if;
 
@@ -366,6 +363,42 @@ begin
     'released', true, 'duplicate', false, 'reason', v_reason,
     'provider_usage_records', v_provider_count
   );
+end;
+$$;
+
+
+     or p_provider_usage is null or jsonb_typeof(p_provider_usage) <> 'array' then
+    raise exception 'invalid AI generation release request' using errcode = '22023';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_workspace_id::text, 0)
+  );
+
+  select status into v_status
+  from private.ai_generation_credit_reservations
+  where workspace_id = p_workspace_id and operation_id = p_operation_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('released', false, 'duplicate', true, 'reason', 'reservation_not_found');
+  end if;
+  if v_status = 'consumed' then
+    return jsonb_build_object('released', false, 'duplicate', true, 'reason', 'already_consumed');
+  end if;
+  if v_status = 'released' then
+    return jsonb_build_object('released', true, 'duplicate', true, 'reason', 'already_released');
+  end if;
+
+  update private.ai_generation_credit_reservations
+  set status = 'released',
+      released_at = now(),
+      release_reason = v_reason,
+      updated_at = now()
+  where workspace_id = p_workspace_id and operation_id = p_operation_id
+    and status = 'reserved';
+
+  return jsonb_build_object('released', true, 'duplicate', false, 'reason', v_reason);
 end;
 $$;
 
