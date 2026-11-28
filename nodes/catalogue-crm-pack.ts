@@ -63,12 +63,6 @@ function node<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(args: {
   };
 }
 
-const contactInput = z.object({
-  email: z.string().email().max(254),
-  firstName: z.string().trim().min(1).max(100),
-  lastName: z.string().trim().min(1).max(100),
-  phone: z.string().max(40).optional(),
-}).strict();
 const contactOutput = z.object({ contactId: z.string().min(1) }).strict();
 const searchContactsOutput = z.object({ contacts: z.array(z.object({ contactId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
 const searchLeadsOutput = z.object({ leads: z.array(z.object({ leadId: z.string(), email: z.string().optional(), firstName: z.string().optional(), lastName: z.string().optional() }).strict()).max(20) }).strict();
