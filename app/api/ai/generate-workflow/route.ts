@@ -255,9 +255,6 @@ export async function POST(request: NextRequest) {
         gatewayGenerateStructured,
       });
     } catch (providerError) {
-      const status = providerError && typeof providerError === "object" && "providerStatus" in providerError
-        ? Number((providerError as { providerStatus?: unknown }).providerStatus) : null;
-      const code = providerError instanceof Error ? providerError.message : "";
       const geminiStatus = Number(lastGeminiCircuitAttempt?.status);
       const geminiTransient = [408, 429, 500, 502, 503, 504].includes(geminiStatus) ||
         ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE"].includes(lastGeminiCircuitAttempt?.errorCode || "");
@@ -300,11 +297,12 @@ export async function POST(request: NextRequest) {
           p_probe: circuitProbe,
         });
         if (circuitResetError) {
-        logOperationalEvent({
-          event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
-          outcome: "failure", statusCode: 503, errorCode: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
-          provider: "gemini",
-        }, console.error);
+          logOperationalEvent({
+            event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
+            outcome: "failure", statusCode: 503, errorCode: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
+            provider: "gemini",
+          }, console.error);
+        }
       }
     }
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
