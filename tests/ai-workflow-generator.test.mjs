@@ -405,3 +405,97 @@ test("real-estate starter rejects unsupported starter types and CRM providers be
     /AI_INVALID_STARTER_CRM/
   );
 });
+
+test("real-estate prompt includes exact input contracts for each supported CRM", async () => {
+  for (const provider of ["pipedrive", "zoho_crm", "freshsales"]) {
+    let requestBody;
+    const plan = { registrySteps: [{ id: "start", nodeId: "manual", operationId: "start", kind: "trigger", input: {} }], edges: [] };
+    await generateWorkflow({
+      prompt: "Qualify property enquiries and sync only verified leads.",
+      nodeCatalog: crmNodeCatalog(provider),
+      mode: "registry",
+      starterType: "real_estate",
+      crmProvider: provider,
+      env,
+      fetchImpl: async (_url, options) => {
+        requestBody = JSON.parse(options.body);
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(plan) } }] }) };
+      },
+    });
+    const systemPrompt = requestBody.messages[0].content;
+    assert.match(systemPrompt, /EXACT CRM INPUT CONTRACT/);
+    assert.match(systemPrompt, /Selected CRM operation input schemas/);
+    assert.ok(systemPrompt.includes('"id":"' + provider + '"'));
+    assert.ok(systemPrompt.includes('"id":"search_contacts"'));
+    assert.ok(systemPrompt.includes('"id":"execute"'));
+    assert.ok(systemPrompt.includes('"additionalProperties":false'));
+    assert.ok(systemPrompt.includes("{{qualify.email}}"));
+  }
+});
+
+test("one bounded repair returns only the requested step inputs and includes the registered schema", async () => {
+  let calls = 0;
+  let requestBody;
+  const repairs = await repairRegistryStepInputs({
+    prompt: "Qualify a property lead and search Pipedrive by the lead email.",
+    nodeCatalog: crmNodeCatalog("pipedrive"),
+    invalidSteps: [{
+      id: "crm-search",
+      nodeId: "pipedrive",
+      operationId: "search_contacts",
+      kind: "action",
+      input: { query: "{{qualify.email}}" },
+      validationIssues: [{ path: ["email"], code: "invalid_type" }],
+    }],
+    env,
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      requestBody = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({
+            repairs: [{ id: "crm-search", input: { email: "{{qualify.email}}" } }],
+          }) } }],
+        }),
+      };
+    },
+  });
+  assert.equal(calls, 1);
+  assert.deepEqual(repairs, [{ id: "crm-search", input: { email: "{{qualify.email}}" } }]);
+  assert.match(requestBody.messages[0].content, /only schema-repair pass/i);
+  assert.match(requestBody.messages[0].content, /change only the input object/i);
+  const userContract = JSON.parse(requestBody.messages[1].content);
+  assert.equal(userContract.invalidOperationInputs[0].inputSchema.additionalProperties, false);
+  assert.equal(userContract.invalidOperationInputs[0].id, "crm-search");
+});
+
+test("schema repair rejects changed step identities and does not retry malformed repair responses", async () => {
+  let calls = 0;
+  await assert.rejects(repairRegistryStepInputs({
+    prompt: "Search a lead in Pipedrive.",
+    nodeCatalog: crmNodeCatalog("pipedrive"),
+    invalidSteps: [{
+      id: "crm-search",
+      nodeId: "pipedrive",
+      operationId: "search_contacts",
+      kind: "action",
+      input: { query: "wrong" },
+    }],
+    env,
+    fetchImpl: async () => {
+      calls += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({
+            repairs: [{ id: "different-step", input: { email: "person@example.test" } }],
+          }) } }],
+        }),
+      };
+    },
+  }), /AI_SCHEMA_REPAIR_INVALID_RESPONSE/);
+  assert.equal(calls, 1);
+});
