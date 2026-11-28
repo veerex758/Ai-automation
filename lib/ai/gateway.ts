@@ -155,6 +155,7 @@ export function createAIGateway(
   registry: AIProviderRegistry = defaultRegistry,
   env: Record<string, string | undefined> = process.env,
   suppliedCircuitStore?: ProviderCircuitBreakerStore,
+  suppliedQualityStore?: import("./quality/types").AIModelQualityStore,
 ) {
   // Unit tests/local isolated runs use deterministic memory. Every deployed
   // server environment uses shared Supabase state, not a Vercel instance map.
