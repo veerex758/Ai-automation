@@ -50,6 +50,9 @@ export default function WorkflowBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [aiDraftRetryPrompt, setAiDraftRetryPrompt] = useState("");
+  const [aiDraftRetryable, setAiDraftRetryable] = useState(false);
+  const [aiDraftGenerating, setAiDraftGenerating] = useState(false);
   const [versions, setVersions] = useState<WorkflowVersion[]>([]);
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
   const [validating, setValidating] = useState(false);
@@ -364,9 +367,13 @@ export default function WorkflowBuilderPage() {
     }));
   }
 
-  async function generateDraftOnCanvas() {
-    const prompt = window.prompt("Describe the workflow to draft:");
-    if (!prompt?.trim()) return;
+  async function generateDraftOnCanvas(retryPrompt?: string) {
+    const enteredPrompt = retryPrompt ?? window.prompt("Describe the workflow to draft:");
+    const prompt = enteredPrompt?.trim() ?? "";
+    if (!prompt || aiDraftGenerating) return;
+    setAiDraftRetryPrompt(prompt);
+    setAiDraftRetryable(false);
+    setAiDraftGenerating(true);
     setError(""); setNotice("Generating a reviewable draft…");
     try {
       const response = await fetch("/api/ai/generate-workflow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
@@ -374,8 +381,23 @@ export default function WorkflowBuilderPage() {
         definition?: Definition;
         registrySteps?: Array<{ id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> }>;
         error?: string;
+        errorCode?: string;
+        retryAfterSeconds?: number;
       };
-      if (!response.ok) throw new Error(payload.error || "AI could not create a draft.");
+      if (!response.ok) {
+        const retryableCodes = new Set([
+          "AI_PROVIDER_OVERLOADED", "AI_RATE_LIMITED", "AI_PROVIDER_COOLDOWN",
+          "AI_PROVIDER_CIRCUIT_UNAVAILABLE", "AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE",
+        ]);
+        const retryAfterHeader = Number(response.headers.get("Retry-After") || 0);
+        const retryAfterSeconds = Number(payload.retryAfterSeconds) > 0
+          ? Number(payload.retryAfterSeconds) : retryAfterHeader;
+        setAiDraftRetryable(retryableCodes.has(String(payload.errorCode)) || response.status === 429 || response.status >= 500);
+        const providerError = payload.error || "AI could not create a draft.";
+        throw new Error(retryAfterSeconds > 0
+          ? providerError + " Retry is available in about " + Math.ceil(retryAfterSeconds) + " seconds."
+          : providerError);
+      }
 
       // Registry generation returns executable, schema-validated steps separately
       // from its legacy placeholder definition. Build the canvas from those steps
@@ -418,8 +440,16 @@ export default function WorkflowBuilderPage() {
       if (!generated?.nodes?.length) throw new Error("AI could not create a reviewable workflow draft.");
       const normalized = { ...generated, edges: generated.edges ?? generated.nodes.slice(1).map((node, index) => ({ id: "ai-edge-" + index, source: generated.nodes[index].id, target: node.id, label: "next" as const })) };
       draftRevision.current += 1; setValidation(null); setDefinition(normalized); setSelectedId(normalized.nodes[0]?.id ?? "");
+      setAiDraftRetryPrompt("");
+      setAiDraftRetryable(false);
       setNotice("AI draft loaded onto the canvas. Review and edit it, then Save workflow; it has not been executed.");
-    } catch (e) { setError(e instanceof Error ? e.message : "AI draft generation failed."); setNotice(""); }
+    } catch (e) {
+      if (e instanceof TypeError) setAiDraftRetryable(true);
+      setError(e instanceof Error ? e.message : "AI draft generation failed.");
+      setNotice("");
+    } finally {
+      setAiDraftGenerating(false);
+    }
   }
 
   function addRegisteredNode(kind: "trigger" | "action", nodeId: string) {
@@ -671,7 +701,7 @@ export default function WorkflowBuilderPage() {
       <header className="builder-topbar">
         <Link href="/dashboard" className="builder-back" onClick={(event) => { if (isDirty && !window.confirm("You have unsaved workflow changes. Leave this page and discard them?")) event.preventDefault(); }}>← <span>Dashboard</span></Link>
         <div className="builder-breadcrumb"><span>Workflows</span><b>/</b><strong>{workflow?.name ?? "Workflow builder"}</strong></div>
-        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : `${workflow?.status ?? "Draft"} · v${workflow?.version ?? "—"}`}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating}>AI draft</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button>{workflow?.status === "active" ? <button className="builder-validate" onClick={() => void pauseWorkflow()} disabled={activating || isDirty}>{activating ? "Pausing…" : "Pause workflow"}</button> : <button className="builder-save" onClick={() => void activateWorkflow()} disabled={activating || isDirty || saving || validating || restoringVersion !== null}>{activating ? "Activating…" : "Activate workflow"}</button>}</div>
+        <div className="builder-top-actions"><a className="builder-test-link" href="#workflow-test-panel">Test workflow ↓</a><span className={`builder-draft ${isDirty ? "builder-draft-dirty" : ""}`}><i /> {isDirty ? "Unsaved changes" : `${workflow?.status ?? "Draft"} · v${workflow?.version ?? "—"}`}</span><button className="builder-validate" onClick={() => void generateDraftOnCanvas()} disabled={saving || validating || aiDraftGenerating}>{aiDraftGenerating ? "Generating…" : "AI draft"}</button><button className="builder-validate" onClick={() => void validateDraft()} disabled={validating || saving || restoringVersion !== null}>{validating ? "Checking…" : "Validate draft"}</button><button className="builder-save" onClick={() => void saveDefinition()} disabled={saving || validating || restoringVersion !== null}>{saving ? "Saving…" : restoringVersion !== null ? "Restoring…" : "Save workflow"} <span>↗</span></button>{workflow?.status === "active" ? <button className="builder-validate" onClick={() => void pauseWorkflow()} disabled={activating || isDirty}>{activating ? "Pausing…" : "Pause workflow"}</button> : <button className="builder-save" onClick={() => void activateWorkflow()} disabled={activating || isDirty || saving || validating || restoringVersion !== null}>{activating ? "Activating…" : "Activate workflow"}</button>}</div>
       </header>
 
       <div className="builder-layout">
@@ -679,7 +709,7 @@ export default function WorkflowBuilderPage() {
           <div className="builder-heading"><div><div className="builder-eyebrow">WORKFLOW DESIGNER</div><h1>{workflow?.name ?? "Workflow builder"}</h1><p>{workflow?.description || "Connect steps into a clear, repeatable process."}</p><a className="builder-test-link builder-test-link-prominent" href="#workflow-test-panel">↓ Find safe test panel</a></div><span className="builder-mode"><i /> Draft mode</span></div>
           {notice && <div className="builder-notice" role="status">{notice}</div>}
           {validation && <div className={`builder-validation ${validation.valid ? "validation-pass" : "validation-fail"}`} role="status"><span className="validation-mark">{validation.valid ? "✓" : "!"}</span><div><strong>{validation.valid ? "Draft checks passed" : "Draft needs attention"}</strong><p>{validation.message}</p>{validation.counts && <small>{validation.counts.triggers} trigger · {validation.counts.actions} actions · {validation.counts.conditions} conditions</small>}<small>Checked {new Date(validation.checkedAt).toLocaleTimeString()}</small></div></div>}
-          {error && <div className="builder-error-banner" role="alert">{error}</div>}
+          {error && <div className="builder-error-banner" role="alert"><span>{error}</span>{aiDraftRetryable && aiDraftRetryPrompt && <button type="button" className="builder-validate" onClick={() => void generateDraftOnCanvas(aiDraftRetryPrompt)} disabled={aiDraftGenerating}>{aiDraftGenerating ? "Retrying…" : "Retry AI draft"}</button>}</div>}
           {webhookProvision && <section className="builder-notice" role="status"><strong>Webhook endpoint created — copy these details now</strong><p>POST {typeof window !== "undefined" ? window.location.origin : ""}{webhookProvision.path}</p><p>Signing secret: <code>{webhookProvision.signingSecret}</code></p><p>{webhookProvision.signature.header}: {webhookProvision.signature.format}</p><p>Event ID header: {webhookProvision.signature.eventIdHeader} · Event type header: {webhookProvision.signature.eventTypeHeader}</p><p>Signed message: <code>{webhookProvision.signature.signedMessage}</code></p><button type="button" className="builder-validate" onClick={() => void navigator.clipboard.writeText((typeof window !== "undefined" ? window.location.origin : "") + webhookProvision.path)}>Copy webhook URL</button><button type="button" className="builder-validate" onClick={() => void navigator.clipboard.writeText(webhookProvision.signingSecret)}>Copy signing secret</button><small>The signing secret is shown once. Store it securely; refreshing this page will not reveal it again.</small></section>}
           <RunTestPanel
             workflowId={workflowId}
