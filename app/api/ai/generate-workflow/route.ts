@@ -216,6 +216,12 @@ export async function POST(request: NextRequest) {
       p_request_fingerprint: requestFingerprint,
     });
     if (reservationError) {
+      if (String(reservationError.message || "").includes("idempotency key reused with different AI operation input")) {
+        return jsonResponse({
+          error: "This Idempotency-Key was already used for different AI input. Start a new request with a fresh key.",
+          errorCode: "AI_IDEMPOTENCY_KEY_REUSED",
+        }, { status: 409 });
+      }
       return jsonResponse({
         error: "AI credit authorization is unavailable. No Rexnora AI credit was charged. Please retry.",
         errorCode: "AI_USAGE_METERING_UNAVAILABLE",
@@ -253,6 +259,7 @@ export async function POST(request: NextRequest) {
         p_workspace_id: workspace.id,
         p_operation_id: operationId,
         p_release_reason: "generation_not_settled",
+        p_provider_usage: Array.from(providerUsageByModel.values()),
       });
       if (error) throw new Error("AI_CREDIT_RESERVATION_RELEASE_FAILED");
     };
