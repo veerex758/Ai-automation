@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { calculateGraphPositions } from "../lib/workflows/graph-layout.cjs";
 
 const generator = readFileSync(new URL("../lib/workflows/ai-workflow-generator.cjs", import.meta.url), "utf8");
 const route = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
@@ -44,12 +45,54 @@ test("Graph Builder uses generated graph nodes and edges instead of replacing th
 });
 
 
-test("Gemini graphs receive a left-to-right layout with distinct upper and lower conditional lanes", () => {
-  assert.match(route, /graphDepthById/);
-  assert.match(route, /graphLaneById/);
-  assert.match(route, /edge\.label === "true" \? -1 : edge\.label === "false" \? 1/);
-  assert.match(route, /position: \{ x: 160 \+ depth \* 320, y: 330 \+ lane \* 220 \}/);
-  assert.match(builder, /function resolvePosition\(node: WorkflowNode, index: number, seen = new Set<string>\(\)\)/);
+test("generated graph layout keeps a maximum-depth 30-node chain within editor coordinate bounds", () => {
+  const steps = Array.from({ length: 30 }, (_, index) => ({ id: `step-${index}` }));
+  const edges = steps.slice(1).map((step, index) => ({
+    id: `edge-${index}`,
+    source: steps[index].id,
+    target: step.id,
+    label: "next",
+  }));
+
+  const positions = calculateGraphPositions(steps, edges);
+
+  assert.equal(positions.size, steps.length);
+  assert.equal(positions.get("step-0").x, 160);
+  assert.equal(positions.get("step-29").x, 2000);
+  for (const position of positions.values()) {
+    assert.ok(Number.isFinite(position.x));
+    assert.ok(Number.isFinite(position.y));
+    assert.ok(position.x >= 0 && position.x <= 2000);
+    assert.ok(position.y >= 0 && position.y <= 2000);
+  }
+});
+
+test("generated IF branches receive distinct bounded upper and lower lanes", () => {
+  const steps = ["trigger", "qualify", "condition", "yes", "no"].map((id) => ({ id }));
+  const edges = [
+    { id: "e1", source: "trigger", target: "qualify", label: "next" },
+    { id: "e2", source: "qualify", target: "condition", label: "next" },
+    { id: "e3", source: "condition", target: "yes", label: "true" },
+    { id: "e4", source: "condition", target: "no", label: "false" },
+  ];
+
+  const positions = calculateGraphPositions(steps, edges);
+  const condition = positions.get("condition");
+  const yes = positions.get("yes");
+  const no = positions.get("no");
+
+  assert.ok(yes.y < condition.y, "true branch should be above its IF node");
+  assert.ok(no.y > condition.y, "false branch should be below its IF node");
+  for (const position of positions.values()) {
+    assert.ok(position.x >= 0 && position.x <= 2000);
+    assert.ok(position.y >= 0 && position.y <= 2000);
+  }
+});
+
+test("AI generation uses the bounded graph layout helper", () => {
+  assert.match(route, /calculateGraphPositions/);
+  assert.match(route, /registrySteps as Array/);
+  assert.doesNotMatch(route, /position: \\{ x: 160 \\+ depth \\* 320/);
   assert.match(builder, /position: undefined/);
 });
 

@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
-import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
+import { generateWorkflow, repairRegistryStepInputs, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
+import { calculateGraphPositions } from "@/lib/workflows/graph-layout.cjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -120,16 +121,94 @@ export async function POST(request: NextRequest) {
       crmProvider: starterType === "real_estate" ? requestedCrmProvider as string : undefined,
     });
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
-    const registrySteps = result.registrySteps;
+    const registrySteps = result.registrySteps as Array<{
+      id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: unknown;
+      [key: string]: unknown;
+    }>;
     if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return jsonResponse({ error: "The generated plan did not pass registry validation." }, { status: 422 });
     const seen = new Set<string>();
+    const invalidInputs: Array<{
+      id: string; nodeId: string; operationId: string; kind: "trigger" | "action";
+      input: Record<string, unknown>; validationIssues: Array<{ path: string; code: string }>;
+    }> = [];
     for (let index = 0; index < registrySteps.length; index++) {
-      const step = registrySteps[index] as { id?: unknown; nodeId?: unknown; operationId?: unknown; kind?: unknown; input?: unknown };
-      if (!step || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) || typeof step.nodeId !== "string" || typeof step.operationId !== "string" || !["trigger", "action"].includes(String(step.kind)) || !step.input || typeof step.input !== "object" || Array.isArray(step.input)) return jsonResponse({ error: "The generated plan contains an invalid step envelope." }, { status: 422 });
+      const step = registrySteps[index];
+      if (!step || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) ||
+          typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
+          !["trigger", "action"].includes(String(step.kind)) ||
+          !step.input || typeof step.input !== "object" || Array.isArray(step.input)) {
+        return jsonResponse({ error: "The generated plan contains an invalid step envelope." }, { status: 422 });
+      }
       seen.add(step.id);
-      if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
-      const operation = findOperation(step.nodeId, step.operationId, step.kind as "trigger" | "action");
-      if (!operation || !operation.inputSchema.safeParse(step.input).success) return jsonResponse({ error: "The generated plan contains invalid node input. Try a simpler request." }, { status: 422 });
+      if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) {
+        return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
+      }
+      const operation = findOperation(step.nodeId, step.operationId, step.kind);
+      if (!operation) {
+        return jsonResponse({
+          error: "Gemini selected " + step.nodeId + "." + step.operationId + ", which is not in Rexnora's executable node registry. No draft was saved and no AI credit was charged. Retry with registered integrations only.",
+          errorCode: "AI_NODE_NOT_REGISTERED",
+        }, { status: 422 });
+      }
+      const inputValidation = operation.inputSchema.safeParse(step.input);
+      if (!inputValidation.success) {
+        invalidInputs.push({
+          id: step.id,
+          nodeId: step.nodeId,
+          operationId: step.operationId,
+          kind: step.kind,
+          input: step.input as Record<string, unknown>,
+          validationIssues: inputValidation.error.issues.slice(0, 8).map((issue) => ({
+            path: issue.path.map(String).join("."),
+            code: issue.code,
+          })),
+        });
+      }
+    }
+
+    // One bounded repair attempt is allowed only for schema-invalid inputs of
+    // operations that are already present in the executable registry. Node IDs,
+    // operation IDs, step count and graph edges remain immutable.
+    if (invalidInputs.length) {
+      let repairedInputs: Array<{ id: string; input: Record<string, unknown> }>;
+      try {
+        repairedInputs = await repairRegistryStepInputs({
+          prompt: body.prompt,
+          invalidSteps: invalidInputs,
+          nodeCatalog,
+        }) as Array<{ id: string; input: Record<string, unknown> }>;
+      } catch {
+        return jsonResponse({
+          error: "Gemini supplied invalid inputs for registered operations and the single schema-repair attempt did not produce a valid repair. No draft was saved and no AI credit was charged.",
+          errorCode: "AI_NODE_INPUT_REPAIR_FAILED",
+          invalidOperations: invalidInputs.map((step) => ({ stepId: step.id, nodeId: step.nodeId, operationId: step.operationId })),
+        }, { status: 422 });
+      }
+
+      const repairsById = new Map(repairedInputs.map((repair) => [repair.id, repair.input]));
+      if (repairsById.size !== invalidInputs.length || invalidInputs.some((step) => !repairsById.has(step.id))) {
+        return jsonResponse({
+          error: "Gemini's schema repair did not return exactly the invalid operation inputs. No draft was saved and no AI credit was charged.",
+          errorCode: "AI_NODE_INPUT_REPAIR_FAILED",
+        }, { status: 422 });
+      }
+      for (const step of registrySteps) {
+        const repairedInput = repairsById.get(step.id);
+        if (!repairedInput) continue;
+        const operation = findOperation(step.nodeId, step.operationId, step.kind);
+        if (!operation) {
+          return jsonResponse({ error: "A registry operation changed during schema repair. No draft was saved and no AI credit was charged.", errorCode: "AI_NODE_NOT_REGISTERED" }, { status: 422 });
+        }
+        const validation = operation.inputSchema.safeParse(repairedInput);
+        if (!validation.success) {
+          return jsonResponse({
+            error: "Gemini's single schema-repair attempt still returned invalid input for " + step.nodeId + "." + step.operationId + ". No draft was saved and no AI credit was charged.",
+            errorCode: "AI_NODE_INPUT_INVALID",
+            validationIssues: validation.error.issues.slice(0, 8).map((issue) => ({ path: issue.path.map(String).join("."), code: issue.code })),
+          }, { status: 422 });
+        }
+        step.input = validation.data;
+      }
     }
     let definition: { version: 1; nodes: Array<Record<string, unknown>>; edges?: Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }> };
     let executableSteps = registrySteps;
@@ -186,34 +265,10 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-      const graphDepthById = new Map<string, number>();
-      const graphLaneById = new Map<string, number>();
-      // Lay the graph out left-to-right. IF true/false edges split into upper
-      // and lower lanes; following actions inherit their branch lane.
-      const unresolvedGraphSteps = new Set((registrySteps as Array<{ id: string }>).map((step) => step.id));
-      // Resolve parents before children so layout is independent of the order
-      // in which the model happened to list its registered steps.
-      for (let pass = 0; pass < registrySteps.length && unresolvedGraphSteps.size > 0; pass += 1) {
-        let resolvedAny = false;
-        for (const step of registrySteps as Array<{ id: string }>) {
-          if (!unresolvedGraphSteps.has(step.id)) continue;
-          const incoming = edges.filter((edge) => edge.target === step.id);
-          if (incoming.some((edge) => !graphDepthById.has(edge.source))) continue;
-          const depth = incoming.length
-            ? Math.max(...incoming.map((edge) => graphDepthById.get(edge.source) ?? 0)) + 1
-            : 0;
-          const lanes = incoming.map((edge) => {
-            const sourceLane = graphLaneById.get(edge.source) ?? 0;
-            return sourceLane + (edge.label === "true" ? -1 : edge.label === "false" ? 1 : 0);
-          });
-          const lane = lanes.length ? lanes.reduce((sum, value) => sum + value, 0) / lanes.length : 0;
-          graphDepthById.set(step.id, depth);
-          graphLaneById.set(step.id, Math.max(-1, Math.min(1, lane)));
-          unresolvedGraphSteps.delete(step.id);
-          resolvedAny = true;
-        }
-        if (!resolvedAny) break;
-      }
+      const graphPositions = calculateGraphPositions(
+        registrySteps as Array<{ id: string }>,
+        edges,
+      );
       const graphNodes = registrySteps.map((raw) => {
         const step = raw as { id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: Record<string, unknown> };
         const provider = nodeCatalog.find((item) => item.id === step.nodeId);
@@ -225,8 +280,7 @@ export async function POST(request: NextRequest) {
           : isCondition
             ? { field: String(step.input.value ?? ""), operator: conditionOperator, value: step.input.compareTo === undefined ? "" : String(step.input.compareTo) }
             : { provider: "internal", operation: "create_task" };
-        const depth = graphDepthById.get(step.id) ?? 0;
-        const lane = graphLaneById.get(step.id) ?? 0;
+        const position = graphPositions.get(step.id) ?? { x: 160, y: 330 };
         return {
           id: step.id,
           type: step.kind === "trigger" ? "trigger" : isCondition ? "condition" : "action",
@@ -236,7 +290,7 @@ export async function POST(request: NextRequest) {
           registryNodeId: step.nodeId,
           registryOperationId: step.operationId,
           registryInput: step.input,
-          position: { x: 160 + depth * 320, y: 330 + lane * 220 },
+          position,
         };
       });
       definition = { version: 1, nodes: graphNodes, edges };
