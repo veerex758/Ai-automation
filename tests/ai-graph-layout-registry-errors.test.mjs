@@ -40,16 +40,16 @@ test("generated IF branches receive bounded upper and lower lanes", () => {
 
 test("AI API rejects unknown nodes and revalidates one bounded schema repair before metering", () => {
   const route = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", import.meta.url), "utf8");
-  assert.match(route, /AI_NODE_NOT_REGISTERED/);
-  assert.match(route, /AI_NODE_INPUT_INVALID/);
-  assert.match(route, /repairRegistryStepInputs/);
-  assert.match(route, /if \\(invalidInputs\\.length\\)/);
-  assert.match(route, /operation\\.inputSchema\\.safeParse\\(repairedInput\\)/);
-  assert.match(route, /AI_NODE_INPUT_REPAIR_FAILED/);
-  assert.match(route, /findOperation\\(step\\.nodeId, step\\.operationId/);
-  assert.match(route, /inputValidation\\.error\\.issues/);
-  assert.match(route, /calculateGraphPositions/);
-  assert.doesNotMatch(route, /x: 160 \\+ depth \\* 320/);
+  assert.ok(route.includes("AI_NODE_NOT_REGISTERED"));
+  assert.ok(route.includes("AI_NODE_INPUT_INVALID"));
+  assert.ok(route.includes("repairRegistryStepInputs"));
+  assert.ok(route.includes("if (invalidInputs.length)"));
+  assert.ok(route.includes("operation.inputSchema.safeParse(repairedInput)"));
+  assert.ok(route.includes("AI_NODE_INPUT_REPAIR_FAILED"));
+  assert.ok(route.includes("findOperation(step.nodeId, step.operationId, step.kind)"));
+  assert.ok(route.includes("inputValidation.error.issues"));
+  assert.ok(route.includes("calculateGraphPositions"));
+  assert.ok(!route.includes("x: 160 + depth * 320"));
 
   const validationIndex = route.indexOf("operation.inputSchema.safeParse(repairedInput)");
   const meteringIndex = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
