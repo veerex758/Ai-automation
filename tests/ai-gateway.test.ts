@@ -336,6 +336,73 @@ test("gateway never uses the Gemini model fallback after a rate-limit response",
 
 
 
+test("gateway carries per-provider ceilings across generation and later repair calls", async () => {
+  let geminiCalls = 0;
+  let groqCalls = 0;
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => {
+      geminiCalls += 1;
+      return fakeFetch({ choices: [{ message: { content: "Gemini should be skipped." } }] })();
+    },
+  }));
+  registry.register(createGroqProvider({
+    env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
+    fetchImpl: async () => {
+      groqCalls += 1;
+      return fakeFetch({ choices: [{ message: { content: "Groq used after Gemini's operation cap." } }] })();
+    },
+  }));
+  const gateway = createAIGateway(registry, { ...env, GROQ_API_KEY: "test-groq-secret" });
+  const budget = {
+    remainingProviderAttempts: 8,
+    totalProviderAttempts: 4,
+    maxProviderAttempts: 8,
+    maxAttemptsPerProvider: 4,
+    providerAttempts: { gemini: 4 },
+    deadlineAt: Date.now() + 5_000,
+  };
+  const result = await gateway.generateText(
+    { prompt: "Use the remaining provider." },
+    { ...context, task: "summarization", attemptBudget: budget, deadlineAt: budget.deadlineAt },
+  );
+  assert.equal(result.provider, "groq");
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(geminiCalls, 0);
+  assert.equal(groqCalls, 1);
+  assert.equal(budget.totalProviderAttempts, 5);
+});
+
+test("gateway does not exceed the operation-wide provider attempt cap", async () => {
+  let providerCalls = 0;
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => {
+      providerCalls += 1;
+      return fakeFetch({ choices: [{ message: { content: "Must not execute." } }] })();
+    },
+  }));
+  const gateway = createAIGateway(registry, env);
+  const budget = {
+    remainingProviderAttempts: 8,
+    totalProviderAttempts: 8,
+    maxProviderAttempts: 8,
+    maxAttemptsPerProvider: 4,
+    providerAttempts: { gemini: 4 },
+    deadlineAt: Date.now() + 5_000,
+  };
+  await assert.rejects(
+    gateway.generateText(
+      { prompt: "This exceeds the cap." },
+      { ...context, task: "summarization", attemptBudget: budget, deadlineAt: budget.deadlineAt },
+    ),
+    (error: unknown) => error instanceof AIProviderError && error.code === "AI_ATTEMPT_LIMIT_REACHED",
+  );
+  assert.equal(providerCalls, 0);
+});
+
 test("gateway fails over from invalid provider credentials to the configured Groq provider", async () => {
   const attempts: Array<{ provider?: string; status: number; fallbackUsed: boolean }> = [];
   const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret", GROQ_AI_MODEL: "openai/gpt-oss-120b" };
