@@ -6,6 +6,7 @@ const route = readFileSync(new URL("../app/api/ai/generate-workflow/route.ts", i
 const gateway = readFileSync(new URL("../lib/ai/gateway.ts", import.meta.url), "utf8");
 const circuitStore = readFileSync(new URL("../lib/ai/circuit-breaker.ts", import.meta.url), "utf8");
 const usageModule = readFileSync(new URL("../lib/ai/usage.ts", import.meta.url), "utf8");
+const reservationMigration = readFileSync(new URL("../supabase/migrations/20261128130000_rexnora_ai_generation_credit_reservations.sql", import.meta.url), "utf8");
 
 test("workflow generation reserves before provider work and consumes only after the complete graph validates", () => {
   const preflight = route.indexOf('supabase.rpc("get_workspace_entitlements"');
@@ -46,7 +47,7 @@ test("a failed or malformed generation releases the hold in finally without cons
   assert.ok(reserve >= 0 && consume > reserve);
   assert.ok(catchBlock > consume && finallyBlock > catchBlock && release > finallyBlock);
   assert.match(route, /if \(releaseReservation && !reservationConsumed\)/);
-  assert.match(route, /expires_at.*interval '10 minutes'/s);
+  assert.match(reservationMigration, /expires_at timestamptz not null default now\(\) \+ interval '10 minutes'/);
 });
 
 test("provider and invalid-graph failures occur before customer credit metering", () => {
