@@ -641,3 +641,215 @@ test("long Retry-After prevents same-provider model fallback and routes to Groq"
   });
   assert.deepEqual(violations, []);
 });
+
+
+test("gateway retries provider timeouts within the shared deadline, then fails over to Groq", async () => {
+  let geminiCalls = 0;
+  let groqCalls = 0;
+  const timeoutEnv = {
+    NODE_ENV: "test",
+    GEMINI_API_KEY: "test-gemini-secret",
+    GEMINI_AI_MODEL: "gemini-timeout-primary",
+  };
+  const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" };
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env: timeoutEnv,
+    fetchImpl: async (_input, init) => new Promise<Response>((_resolve, reject) => {
+      geminiCalls += 1;
+      const signal = init?.signal;
+      const rejectAsTimeout = () => {
+        const error = new Error("simulated provider timeout");
+        error.name = "AbortError";
+        reject(error);
+      };
+      if (!signal) {
+        reject(new Error("Expected the gateway to pass an abort signal."));
+        return;
+      }
+      if (signal.aborted) {
+        rejectAsTimeout();
+        return;
+      }
+      signal.addEventListener("abort", rejectAsTimeout, { once: true });
+    }),
+  }));
+  registry.register(createGroqProvider({
+    env: groqEnv,
+    fetchImpl: async () => {
+      groqCalls += 1;
+      return fakeFetch({
+        choices: [{ message: { content: "Recovered after Gemini timed out." }, finish_reason: "stop" }],
+      })();
+    },
+  }));
+
+  const gateway = createAIGateway(registry, { ...timeoutEnv, ...groqEnv });
+  const deadlineAt = Date.now() + 5_000;
+  const budget = { remainingProviderAttempts: 8, totalProviderAttempts: 0, deadlineAt };
+  const result = await gateway.generateText(
+    { prompt: "Recover within the operation deadline." },
+    {
+      ...context,
+      task: "summarization",
+      timeoutMs: 25,
+      deadlineAt,
+      attemptBudget: budget,
+    },
+  );
+
+  assert.equal(result.provider, "groq");
+  assert.equal(result.output, "Recovered after Gemini timed out.");
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(geminiCalls, 4, "three primary attempts plus one bounded same-provider model fallback");
+  assert.equal(groqCalls, 1);
+  assert.equal(budget.totalProviderAttempts, 5);
+  assert.equal(budget.providerAttempts?.gemini, 4);
+});
+
+test("provider authentication cooldown excludes Gemini until expiry, then allows recovery", async () => {
+  let geminiCalls = 0;
+  let groqCalls = 0;
+  let rejectGeminiAuth = true;
+  const originalNow = Date.now;
+  let fakeNow = originalNow();
+  Date.now = () => fakeNow;
+  try {
+    const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" };
+    const registry = new AIProviderRegistry();
+    registry.register(createGeminiProvider({
+      env,
+      fetchImpl: async () => {
+        geminiCalls += 1;
+        if (rejectGeminiAuth) {
+          return fakeFetch({ error: { message: "invalid key" } }, 401)();
+        }
+        return fakeFetch({
+          choices: [{ message: { content: "Gemini recovered after cooldown." }, finish_reason: "stop" }],
+        })();
+      },
+    }));
+    registry.register(createGroqProvider({
+      env: groqEnv,
+      fetchImpl: async () => {
+        groqCalls += 1;
+        return fakeFetch({
+          choices: [{ message: { content: "Groq handled the cooldown window." }, finish_reason: "stop" }],
+        })();
+      },
+    }));
+    const gateway = createAIGateway(registry, { ...env, ...groqEnv });
+
+    const first = await gateway.generateText(
+      { prompt: "Fail over after invalid credentials." },
+      { ...context, task: "summarization" },
+    );
+    assert.equal(first.provider, "groq");
+    assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, false);
+
+    const duringCooldown = await gateway.generateText(
+      { prompt: "Do not call the unhealthy provider again." },
+      { ...context, task: "summarization" },
+    );
+    assert.equal(duringCooldown.provider, "groq");
+    assert.equal(geminiCalls, 1);
+    assert.equal(groqCalls, 2);
+
+    fakeNow += 5 * 60_000 + 1;
+    rejectGeminiAuth = false;
+    const recovered = await gateway.generateText(
+      { prompt: "Try Gemini after the cooldown expires." },
+      { ...context, task: "summarization" },
+    );
+    assert.equal(recovered.provider, "gemini");
+    assert.equal(recovered.output, "Gemini recovered after cooldown.");
+    assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, true);
+    assert.equal(geminiCalls, 2);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("malformed Gemini tool output fails over to Groq without repeating the invalid output", async () => {
+  let geminiCalls = 0;
+  let groqCalls = 0;
+  const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" };
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => {
+      geminiCalls += 1;
+      return fakeFetch({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: "bad-call",
+              type: "function",
+              function: { name: "workflow.list", arguments: "{" },
+            }],
+          },
+          finish_reason: "tool_calls",
+        }],
+      })();
+    },
+  }));
+  registry.register(createGroqProvider({
+    env: groqEnv,
+    fetchImpl: async () => {
+      groqCalls += 1;
+      return fakeFetch({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              id: "good-call",
+              type: "function",
+              function: { name: "workflow.list", arguments: '{"limit":3}' },
+            }],
+          },
+          finish_reason: "tool_calls",
+        }],
+      })();
+    },
+  }));
+  const gateway = createAIGateway(registry, { ...env, ...groqEnv });
+  const result = await gateway.generateWithTools(
+    {
+      prompt: "List workflows.",
+      tools: [{ name: "workflow.list", description: "List workflows", parameters: { type: "object" } }],
+    },
+    { ...context, task: "agent_tool_calling" },
+  );
+
+  assert.equal(result.provider, "groq");
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(result.output.toolCalls[0].name, "workflow.list");
+  assert.deepEqual(result.output.toolCalls[0].arguments, { limit: 3 });
+  assert.equal(geminiCalls, 1);
+  assert.equal(groqCalls, 1);
+});
+
+test("provider retries and schema repair share one operation budget and one post-validation credit charge", () => {
+  const route = readFileSync(join(process.cwd(), "app/api/ai/generate-workflow/route.ts"), "utf8");
+  const usageModule = readFileSync(join(process.cwd(), "lib/ai/usage.ts"), "utf8");
+  const budget = route.indexOf("const aiAttemptBudget = {");
+  const gateway = route.indexOf("const gatewayGenerateStructured = async");
+  const generation = route.indexOf("await generateWorkflow(");
+  const repair = route.indexOf("await repairRegistryStepInputs(");
+  const validation = route.indexOf("validateRegisteredSteps(rebuilt)");
+  const metering = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
+  assert.ok(budget >= 0 && gateway > budget);
+  assert.ok(generation > gateway && repair > generation);
+  assert.ok(validation > repair && metering > validation);
+  assert.equal((route.match(/consume_ai_generation_usage/g) || []).length, 1);
+  assert.match(route.slice(budget, gateway), /remainingProviderAttempts: 8/);
+  assert.match(route.slice(gateway, generation), /attemptBudget: aiAttemptBudget/);
+  assert.match(route.slice(gateway, generation), /providerUsage\.totalTokens \+= result\.usage\.totalTokens/);
+  assert.match(route.slice(metering, metering + 400), /p_idempotency_key: randomUUID\(\)/);
+  assert.match(route.slice(generation, metering), /catch \(providerError\)/);
+  assert.match(route.slice(generation, metering), /throw providerError/);
+  assert.match(route.slice(metering), /Your AI credit was not charged/);
+  assert.doesNotMatch(usageModule, /consume_ai_generation_usage/);
+  assert.match(usageModule, /Provider token\/cost telemetry only/);
+});
