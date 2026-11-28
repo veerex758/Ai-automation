@@ -69,6 +69,9 @@ function canFailOver(error: AIProviderError): boolean {
 
 /** Try another model at the same provider only for transient infrastructure failures. */
 function canUseSameProviderModelFallback(error: AIProviderError): boolean {
+  if (error.retryAfterMs !== undefined && error.retryAfterMs > DEFAULT_AI_RETRY_POLICY.maxInlineWaitMs) {
+    return false;
+  }
   if ([
     "AI_RATE_LIMITED", "AI_PROVIDER_AUTH_ERROR", "AI_PROVIDER_UNAVAILABLE", "AI_NETWORK_ERROR",
     "AI_INVALID_REQUEST", "AI_INVALID_RESPONSE", "AI_INVALID_JSON", "AI_INVALID_OUTPUT",
