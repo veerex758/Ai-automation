@@ -425,6 +425,34 @@ test("gateway does not route around invalid requests or safety rejections", asyn
   }
 });
 
+test("Groq safety refusals remain terminal after failover from Gemini", async () => {
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => { throw new TypeError("fetch failed"); },
+  }));
+  registry.register(createGroqProvider({
+    env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
+    fetchImpl: fakeFetch({
+      choices: [{
+        message: {
+          content: "",
+          refusal: "I cannot assist with that request.",
+        },
+        finish_reason: "stop",
+      }],
+    }),
+  }));
+  const gateway = createAIGateway(registry, { ...env, GROQ_API_KEY: "test-groq-secret" });
+  await assert.rejects(
+    gateway.generateText(
+      { prompt: "Do not bypass a provider refusal." },
+      { ...context, task: "summarization" },
+    ),
+    (error: unknown) => error instanceof AIProviderError && error.code === "AI_SAFETY_REJECTED",
+  );
+});
+
 test("gateway fails over from invalid provider credentials to the configured Groq provider", async () => {
   const attempts: Array<{ provider?: string; status: number; fallbackUsed: boolean }> = [];
   const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret", GROQ_AI_MODEL: "openai/gpt-oss-120b" };
