@@ -25,7 +25,7 @@ async function call(ctx: NodeContext, provider: ProviderId, args: {
   return response.body as Record<string, unknown>;
 }
 
-const exactStepReference = z.string().max(140).regex(/^\\{\\{[a-zA-Z0-9_-]{1,64}(?:\\.[a-zA-Z0-9_-]{1,64})+\\}\\}$/);
+const exactStepReference = z.string().max(140).regex(/^\{\{[a-zA-Z0-9_-]{1,64}(?:\.[a-zA-Z0-9_-]{1,64})+\}\}$/);
 const emailInput = z.union([z.string().email().max(254), exactStepReference]);
 const nameInput = z.union([z.string().trim().min(1).max(100), exactStepReference]);
 const phoneInput = z.union([z.string().max(40), exactStepReference]);
