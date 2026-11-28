@@ -14,7 +14,7 @@ create table if not exists private.ai_provider_circuit_breakers (
 
 alter table private.ai_provider_circuit_breakers enable row level security;
 revoke all on private.ai_provider_circuit_breakers from public, anon, authenticated, service_role;
-grant usage on schema private to authenticated;
+grant usage on schema private to service_role;
 
 create or replace function private.get_ai_provider_circuit_state(p_provider text)
 returns jsonb
@@ -27,8 +27,8 @@ declare
   v_now timestamptz := clock_timestamp();
   v_retry_ms bigint;
 begin
-  if (select auth.uid()) is null then
-    raise exception 'authentication required' using errcode = '42501';
+  if coalesce((select auth.jwt() ->> 'role'), '') <> 'service_role' then
+    raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is distinct from 'gemini' then
     raise exception 'unsupported AI provider' using errcode = '22023';
@@ -97,8 +97,8 @@ declare
   v_should_open boolean;
   v_now timestamptz := clock_timestamp();
 begin
-  if (select auth.uid()) is null then
-    raise exception 'authentication required' using errcode = '42501';
+  if coalesce((select auth.jwt() ->> 'role'), '') <> 'service_role' then
+    raise exception 'service role required' using errcode = '42501';
   end if;
   if p_provider is distinct from 'gemini'
      or p_success is null
@@ -178,8 +178,8 @@ $$;
 
 revoke all on function private.get_ai_provider_circuit_state(text) from public, anon, authenticated, service_role;
 revoke all on function private.record_ai_provider_circuit_result(text, boolean, integer, bigint, boolean) from public, anon, authenticated, service_role;
-grant execute on function private.get_ai_provider_circuit_state(text) to authenticated;
-grant execute on function private.record_ai_provider_circuit_result(text, boolean, integer, bigint, boolean) to authenticated;
+grant execute on function private.get_ai_provider_circuit_state(text) to service_role;
+grant execute on function private.record_ai_provider_circuit_result(text, boolean, integer, bigint, boolean) to service_role;
 
 -- PostgREST exposes the public SECURITY INVOKER wrappers only. Privileged
 -- state mutation remains inside the unexposed private schema.
@@ -209,7 +209,7 @@ as $$
   );
 $$;
 
-revoke all on function public.get_ai_provider_circuit_state(text) from public, anon;
-revoke all on function public.record_ai_provider_circuit_result(text, boolean, integer, bigint, boolean) from public, anon;
-grant execute on function public.get_ai_provider_circuit_state(text) to authenticated;
-grant execute on function public.record_ai_provider_circuit_result(text, boolean, integer, bigint, boolean) to authenticated;
+revoke all on function public.get_ai_provider_circuit_state(text) from public, anon, authenticated;
+revoke all on function public.record_ai_provider_circuit_result(text, boolean, integer, bigint, boolean) from public, anon, authenticated;
+grant execute on function public.get_ai_provider_circuit_state(text) to service_role;
+grant execute on function public.record_ai_provider_circuit_result(text, boolean, integer, bigint, boolean) to service_role;
