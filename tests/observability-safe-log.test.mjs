@@ -225,3 +225,27 @@ test("safe operational logs reject provider-model mismatches", () => {
   assert.equal(record.provider, "groq");
   assert.equal("model" in record, false);
 });
+
+
+test("safe operational logs retain only validated logical operation UUIDs", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation",
+    requestId,
+    operationId: requestId,
+    route: "/api/ai/generate-workflow",
+    outcome: "success",
+    statusCode: 200,
+    prompt: "private customer workflow input",
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.operationId, requestId);
+  assert.equal("prompt" in record, false);
+
+  logOperationalEvent({
+    event: "workflow_generation",
+    operationId: "raw-customer-operation-key",
+  }, value => { output = value; });
+  const rejected = JSON.parse(output);
+  assert.equal("operationId" in rejected, false);
+});
