@@ -467,7 +467,7 @@ test("one bounded repair returns only the requested step inputs and includes the
   assert.match(requestBody.messages[0].content, /only schema-repair pass/i);
   assert.match(requestBody.messages[0].content, /change only the input object/i);
   const userMessage = requestBody.messages[1].content;
-  const repairPayload = userMessage.slice(userMessage.indexOf("\\n") + 1);
+  const repairPayload = userMessage.slice(userMessage.indexOf("\n") + 1);
   const userContract = JSON.parse(repairPayload);
   assert.equal(userContract.invalidOperationInputs[0].inputSchema.additionalProperties, false);
   assert.equal(userContract.invalidOperationInputs[0].id, "crm-search");
