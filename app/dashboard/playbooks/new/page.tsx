@@ -39,6 +39,9 @@ const RETRYABLE_GATEWAY_ERRORS = new Set([
   "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
   "AI_TIMEOUT",
   "AI_PROVIDER_UNAVAILABLE",
+  "AI_USAGE_METERING_UNAVAILABLE",
+  "AI_USAGE_SETTLEMENT_UNKNOWN",
+  "AI_OPERATION_IN_PROGRESS",
 ]);
 type Rule = { id: string; nodeId: string; name: string; rationale: string };
 type ActionPolicy = {
