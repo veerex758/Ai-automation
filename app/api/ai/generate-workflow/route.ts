@@ -489,7 +489,7 @@ export async function POST(request: NextRequest) {
       error: mapped.message,
       errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
     }, { status: mapped.status });
-    if (code === "AI_PROVIDER_COOLDOWN" && error && typeof error === "object" && "retryAfterMs" in error) {
+    if (error && typeof error === "object" && "retryAfterMs" in error) {
       const retryAfterMs = Number((error as { retryAfterMs?: unknown }).retryAfterMs);
       if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
         response.headers.set("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
