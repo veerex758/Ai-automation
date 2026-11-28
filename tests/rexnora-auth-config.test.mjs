@@ -30,11 +30,17 @@ test("Google OAuth start and connection routes share the server-only admin clien
 
 test("middleware accepts the same public Supabase key aliases as browser and server clients", async () => {
   const middleware = await read("../middleware.ts");
-  assert.match(middleware, /NEXT_PUBLIC_SUPABASE_URL\s*\?\?\s*process\.env\.NEXT_PUBLIC_CODED_SUPABASE_URL/);
-  assert.match(middleware, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY[\s\S]*NEXT_PUBLIC_CODED_SUPABASE_PUBLISHABLE_KEY[\s\S]*NEXT_PUBLIC_SUPABASE_ANON_KEY[\s\S]*NEXT_PUBLIC_CODED_SUPABASE_ANON_KEY/);
+  assert.match(
+    middleware,
+    /firstConfiguredValue\([\s\S]*process\.env\.NEXT_PUBLIC_SUPABASE_URL[\s\S]*process\.env\.NEXT_PUBLIC_CODED_SUPABASE_URL[\s\S]*process\.env\.CODED_SUPABASE_URL/,
+  );
+  assert.match(
+    middleware,
+    /firstConfiguredValue\([\s\S]*process\.env\.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY[\s\S]*process\.env\.NEXT_PUBLIC_CODED_SUPABASE_PUBLISHABLE_KEY[\s\S]*process\.env\.NEXT_PUBLIC_SUPABASE_ANON_KEY[\s\S]*process\.env\.NEXT_PUBLIC_CODED_SUPABASE_ANON_KEY[\s\S]*process\.env\.CODED_SUPABASE_PUBLISHABLE_KEY[\s\S]*process\.env\.CODED_SUPABASE_ANON_KEY/,
+  );
+  assert.match(middleware, /function firstConfiguredValue[\s\S]*value\.trim\(\)\.length > 0/);
   assert.match(middleware, /if \(!url \|\| !key\)/);
 });
-
 test("login and signup surface safe actionable errors without logging credentials or PII", async () => {
   const page = await read("../app/login/page.tsx");
   assert.match(page, /function safeAuthErrorMessage/);
