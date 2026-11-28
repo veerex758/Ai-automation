@@ -1,5 +1,5 @@
 begin;
-select no_plan();
+select plan(27);
 
 select ok(
   not has_function_privilege('anon','public.get_ai_provider_circuit_state(text)','EXECUTE'),
@@ -100,12 +100,7 @@ select is(
   'provider authentication failure opens only that provider circuit'
 );
 select ok(
-  (
-    select open_until > clock_timestamp() + interval '4 minutes'
-       and open_until < clock_timestamp() + interval '6 minutes'
-    from private.ai_provider_circuit_breakers
-    where provider='cloudflare'
-  ),
+  (public.get_ai_provider_circuit_state('cloudflare')->>'retryAfterMs')::bigint between 240000 and 360000,
   'authentication cooldown uses the configured five-minute default'
 );
 
@@ -114,16 +109,11 @@ select is(
   'open',
   '429 rate limit opens the provider circuit immediately'
 );
-reset role;
 select ok(
-  (
-    select open_until > clock_timestamp() + interval '40 seconds'
-       and open_until < clock_timestamp() + interval '50 seconds'
-    from private.ai_provider_circuit_breakers
-    where provider='groq'
-  ),
+  (public.get_ai_provider_circuit_state('groq')->>'retryAfterMs')::bigint between 40000 and 50000,
   '429 cooldown honors Retry-After'
 );
+reset role;
 
 -- Expire Gemini cooldown and prove a single atomic half-open probe lease.
 update private.ai_provider_circuit_breakers
