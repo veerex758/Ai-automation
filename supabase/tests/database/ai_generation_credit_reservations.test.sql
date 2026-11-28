@@ -1,5 +1,5 @@
 begin;
-select plan(30);
+select plan(33);
 
 select has_table('private','ai_generation_credit_reservations','logical AI credit reservation table exists');
 select has_table('private','ai_provider_usage_events','provider token/cost telemetry is stored separately');
@@ -211,6 +211,43 @@ select is(
   )->>'allowed',
   'true',
   'the released credit becomes available to the next authorized operation'
+);
+
+select is(
+  public.reserve_ai_generation_usage(
+    'b5511111-1111-4111-8111-111111111111',
+    'c5533333-3333-4333-8333-333333333333',
+    repeat('d',64)
+  )->>'allowed',
+  'true',
+  'a later logical operation can reserve an independent slot'
+);
+select is(
+  public.release_ai_generation_usage(
+    'b5511111-1111-4111-8111-111111111111',
+    'c5533333-3333-4333-8333-333333333333',
+    'invalid_output',
+    jsonb_build_array(
+      jsonb_build_object('provider','gemini','model','gemini-3.8-flash','inputTokens',7,'outputTokens',9,'totalTokens',16,'fallbackUsed',false)
+    )
+  )->>'provider_usage_records',
+  '1',
+  'invalid output releases customer quota but persists actual provider token usage'
+);
+select is(
+  (select count(*)::integer from public.workspace_usage
+   where workspace_id='b5511111-1111-4111-8111-111111111111' and metric='ai_credit'),
+  1,
+  'invalid output does not create a second customer credit charge'
+);
+reset role;
+select is(
+  (select count(*)::integer from private.ai_provider_usage_events
+   where workspace_id='b5511111-1111-4111-8111-111111111111'
+     and operation_id='c5533333-3333-4333-8333-333333333333'
+     and provider='gemini' and input_tokens=7 and output_tokens=9),
+  1,
+  'provider cost ledger keeps invalid-output usage separate from customer billing'
 );
 
 select * from finish();
