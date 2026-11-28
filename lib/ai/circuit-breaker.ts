@@ -1,4 +1,3 @@
-import { createAdminClient } from "../supabase/admin";
 import type { AIProviderId } from "./types";
 
 export type CircuitState = "closed" | "open" | "half_open";
@@ -170,16 +169,21 @@ export class InMemoryCircuitBreakerStore implements ProviderCircuitBreakerStore 
 }
 
 /** Shared service-role-only Supabase storage used by Vercel serverless instances. */
-export class SupabaseCircuitBreakerStore implements ProviderCircuitBreakerStore {
-  private client: ReturnType<typeof createAdminClient> | undefined;
+type AdminSupabaseClient = ReturnType<typeof import("../supabase/admin").createAdminClient>;
 
-  private getClient(): ReturnType<typeof createAdminClient> {
-    this.client ??= createAdminClient();
+export class SupabaseCircuitBreakerStore implements ProviderCircuitBreakerStore {
+  private client: AdminSupabaseClient | undefined;
+
+  private async getClient(): Promise<AdminSupabaseClient> {
+    if (!this.client) {
+      const { createAdminClient } = await import("../supabase/admin");
+      this.client = createAdminClient();
+    }
     return this.client;
   }
 
   async acquire(provider: AIProviderId, _policy: CircuitPolicy): Promise<CircuitAdmission> {
-    const { data, error } = await this.getClient().rpc("get_ai_provider_circuit_state", {
+    const { data, error } = await (await this.getClient()).rpc("get_ai_provider_circuit_state", {
       p_provider: provider,
     });
     if (error || !data || typeof data !== "object") {
@@ -202,7 +206,7 @@ export class SupabaseCircuitBreakerStore implements ProviderCircuitBreakerStore 
 
   async record(provider: AIProviderId, result: CircuitResult): Promise<CircuitSnapshot> {
     const { policy } = result;
-    const { data, error } = await this.getClient().rpc("record_ai_provider_circuit_result", {
+    const { data, error } = await (await this.getClient()).rpc("record_ai_provider_circuit_result", {
       p_provider: provider,
       p_success: result.success,
       p_status_code: result.statusCode ?? null,
