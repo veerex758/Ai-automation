@@ -631,3 +631,7 @@
 .app-shell .help-card p,.app-shell .help-card a{color:#94A3B8!important}
 .app-shell .stat-symbol,.app-shell .quick-template-icon.lime{background:#172846!important;color:#8BB8FF!important}
 .app-shell .dot-lime,.app-shell .dot-green{background:#3B82F6!important}
+
+/* These workspace shortcuts are links, not decorative controls. */
+.app-shell a.workspace-switch,.app-shell a.profile-button{color:inherit;text-decoration:none;cursor:pointer}
+.app-shell a.workspace-switch:focus-visible,.app-shell a.profile-button:focus-visible{outline:2px solid #7894bd;outline-offset:3px}
