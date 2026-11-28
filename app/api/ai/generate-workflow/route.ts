@@ -163,14 +163,15 @@ export async function POST(request: NextRequest) {
     circuitProbe = (circuitState as { probe?: unknown }).probe === true;
 
     const onProviderAttempt = (attempt: {
-      model?: string; attempt?: number; status?: number; retryAfterMs?: number;
+      model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
       providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
     }) => {
       const status = Number(attempt.status);
-      const providerCode = status === 429 ? "AI_RATE_LIMITED"
-        : status === 401 || status === 403 ? "AI_PROVIDER_AUTH_ERROR"
-        : status === 503 || status === 504 ? "AI_PROVIDER_OVERLOADED"
-        : status >= 400 ? "AI_PROVIDER_ERROR" : undefined;
+      const providerCode = attempt.errorCode ||
+        (status === 429 ? "AI_RATE_LIMITED"
+          : status === 401 || status === 403 ? "AI_PROVIDER_AUTH_ERROR"
+          : status === 503 ? "AI_PROVIDER_OVERLOADED"
+          : status >= 400 ? "AI_PROVIDER_ERROR" : undefined);
       logOperationalEvent({
         event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
         outcome: status >= 400 ? "failure" : "success",
