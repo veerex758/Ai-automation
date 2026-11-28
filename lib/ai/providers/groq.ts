@@ -151,7 +151,7 @@ export function createGroqProvider(options: { env?: GroqEnv; fetchImpl?: FetchLi
     const refusalField = typeof message.refusal === "string" && message.refusal.trim().length > 0;
     const responseText = typeof message.content === "string" ? message.content : "";
     const explicitRefusalText = /^\s*(?:i(?:'m| am) sorry[, ]*)?i (?:cannot|can't|won't|am unable to)\s+(?:help|assist|provide|comply|fulfil|fulfill)\b/i.test(responseText);
-    if (["content_filter", "safety"].includes(normalizedFinishReason || "") || refusalField || explicitRefusalText) {
+    if (["content_filter", "safety", "prohibited_content", "recitation", "blocklist", "spi", "image_safety", "blocked"].includes(normalizedFinishReason || "") || refusalField || explicitRefusalText) {
       throw new AIProviderError({ provider: "groq", code: "AI_SAFETY_REJECTED", message: "Groq declined the request for safety reasons." });
     }
     const text = typeof message.content === "string" ? message.content : "";
