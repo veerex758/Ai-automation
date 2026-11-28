@@ -890,7 +890,8 @@ test("provider retries and schema repair share one operation budget and one post
   assert.ok(handlerCatch > metering, "provider failures are handled by the route boundary after the single charge site");
   assert.match(route.slice(handlerCatch), /AI_PROVIDER_OVERLOADED/);
   assert.match(route.slice(handlerCatch), /No Rexnora AI credit was charged/);
-  assert.match(route.slice(metering), /Your AI credit was not charged/);
+  assert.match(route.slice(metering), /no customer AI credit was charged/i);
+  assert.match(route.slice(metering), /AI_USAGE_SETTLEMENT_UNKNOWN/);
   assert.doesNotMatch(usageModule, /consume_ai_generation_usage/);
   assert.match(usageModule, /Provider token\/cost telemetry only/);
 });
