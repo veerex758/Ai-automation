@@ -11,7 +11,7 @@ const navItems = [
   { label: "Overview", icon: "⌂", href: "/dashboard" },
   { label: "Workflows", icon: "↗", href: "/dashboard#workflows" },
   { label: "Activity logs", icon: "◷", href: "/dashboard/activity" },
-  { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks/new" },
+  { label: "Playbooks", icon: "◇", href: "/dashboard/playbooks" },
   { label: "AI agents", icon: "✺", href: "/dashboard/agents" },
   { label: "Templates", icon: "▧", href: "/dashboard/templates" },
   { label: "Integrations", icon: "⌘", href: "/dashboard/integrations" },
