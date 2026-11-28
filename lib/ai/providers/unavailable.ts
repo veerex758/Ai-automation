@@ -16,8 +16,8 @@ export function createUnavailableProvider(id: Exclude<AIProviderId, "gemini">, p
     id,
     capabilities: { text: false, structuredOutput: false, toolCalling: false },
     isConfigured: () => false,
-    async generateText(_request: AITextRequest, _context: AIRequestContext): Promise<AIResult<string>> { unavailable(); },
-    async generateStructured<T>(_request: AIStructuredRequest<T>, _context: AIRequestContext): Promise<AIResult<T>> { unavailable(); },
-    async generateWithTools(_request: AIToolRequest, _context: AIRequestContext): Promise<AIResult<AIToolOutput>> { unavailable(); },
+    async generateText(_request: AITextRequest, _context: AIRequestContext): Promise<AIResult<string>> { return unavailable(); },
+    async generateStructured<T>(_request: AIStructuredRequest<T>, _context: AIRequestContext): Promise<AIResult<T>> { return unavailable(); },
+    async generateWithTools(_request: AIToolRequest, _context: AIRequestContext): Promise<AIResult<AIToolOutput>> { return unavailable(); },
   };
 }
