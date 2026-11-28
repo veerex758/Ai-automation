@@ -20,27 +20,32 @@ type ProviderHealthEntry = { unhealthyUntil: number; reason: "AI_PROVIDER_AUTH_E
  * Supabase Gemini circuit; this map prevents repeated auth failures in warm
  * serverless instances and is deliberately not presented as durable storage.
  */
-const providerHealth = new Map<AIProviderId, ProviderHealthEntry>();
-
-function providerIsHealthy(provider: AIProviderId, now = Date.now()): boolean {
-  const entry = providerHealth.get(provider);
+function providerIsHealthy(
+  health: Map<AIProviderId, ProviderHealthEntry>,
+  provider: AIProviderId,
+  now = Date.now(),
+): boolean {
+  const entry = health.get(provider);
   if (!entry) return true;
   if (entry.unhealthyUntil <= now) {
-    providerHealth.delete(provider);
+    health.delete(provider);
     return true;
   }
   return false;
 }
 
-function markProviderConfigurationUnhealthy(provider: AIProviderId): void {
-  providerHealth.set(provider, {
+function markProviderConfigurationUnhealthy(
+  health: Map<AIProviderId, ProviderHealthEntry>,
+  provider: AIProviderId,
+): void {
+  health.set(provider, {
     unhealthyUntil: Date.now() + MAX_PROVIDER_CONFIGURATION_COOLDOWN_MS,
     reason: "AI_PROVIDER_AUTH_ERROR",
   });
 }
 
-function clearProviderHealth(provider: AIProviderId): void {
-  providerHealth.delete(provider);
+function clearProviderHealth(health: Map<AIProviderId, ProviderHealthEntry>, provider: AIProviderId): void {
+  health.delete(provider);
 }
 
 function isDeadlineOrCancellation(error: AIProviderError): boolean {
@@ -112,6 +117,8 @@ export function createAIGateway(
   registry: AIProviderRegistry = defaultRegistry,
   env: Record<string, string | undefined> = process.env,
 ) {
+  const providerHealth = new Map<AIProviderId, ProviderHealthEntry>();
+
   async function execute<T>(
     inputContext: AIRequestContext,
     invoke: (provider: AIProvider, model: string, attemptContext: AIRequestContext) => Promise<AIResult<T>>,
@@ -150,7 +157,7 @@ export function createAIGateway(
       ...(context.excludedProviders ?? []),
       ...registry.list()
         .filter((provider) =>
-          !providerIsHealthy(provider.id) ||
+          !providerIsHealthy(providerHealth, provider.id) ||
           (providerAttemptCounts[provider.id] ?? 0) >= operationBudget.maxAttemptsPerProvider!,
         )
         .map((provider) => provider.id),
@@ -190,7 +197,7 @@ export function createAIGateway(
           let error = normalizeProviderError(caught, provider.id, context.signal);
 
           if (error.code === "AI_PROVIDER_AUTH_ERROR") {
-            markProviderConfigurationUnhealthy(provider.id);
+            markProviderConfigurationUnhealthy(providerHealth, provider.id);
           }
 
           const fallbackModel = canUseSameProviderModelFallback(error) ? route.fallbackModels[0] : undefined;
@@ -202,7 +209,7 @@ export function createAIGateway(
                 providerAttempt: fallbackAttempt,
               }, provider.id, true);
               result = await invoke(provider, fallbackModel, fallbackContext);
-              clearProviderHealth(provider.id);
+              clearProviderHealth(providerHealth, provider.id);
               return {
                 ...result,
                 usage: result.usage ?? EMPTY_AI_USAGE,
@@ -210,13 +217,13 @@ export function createAIGateway(
               };
             } catch (fallbackError) {
               error = normalizeProviderError(fallbackError, provider.id, context.signal);
-              if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(provider.id);
+              if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(providerHealth, provider.id);
             }
           }
 
           if (!canFailOver(error)) throw error;
           lastError = error;
-          if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(provider.id);
+          if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(providerHealth, provider.id);
           if (context.signal?.aborted || (deadlineAt !== undefined && deadlineAt <= Date.now())) {
             throw new AIProviderError({
               provider: provider.id,
@@ -227,7 +234,7 @@ export function createAIGateway(
           continue;
         }
 
-        clearProviderHealth(provider.id);
+        clearProviderHealth(providerHealth, provider.id);
         return {
           ...result,
           usage: result.usage ?? EMPTY_AI_USAGE,
@@ -237,7 +244,7 @@ export function createAIGateway(
         const error = normalizeProviderError(caught, provider.id, context.signal);
         if (!canFailOver(error)) throw error;
         lastError = error;
-        if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(provider.id);
+        if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(providerHealth, provider.id);
       }
     }
 
@@ -262,7 +269,7 @@ export function createAIGateway(
       return registry.list().map((provider) => ({
         id: provider.id,
         configured: provider.isConfigured(),
-        healthy: providerIsHealthy(provider.id),
+        healthy: providerIsHealthy(providerHealth, provider.id),
         capabilities: provider.capabilities,
       }));
     },
