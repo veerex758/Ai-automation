@@ -151,8 +151,12 @@ export async function withProviderRetries<T>(
 
       const transientStatus = [408, 500, 502, 503, 504].includes(status);
       const transient = transientStatus || error.code === "AI_TIMEOUT";
-      // Connection failures and auth errors should move to another provider rather
-      // than repeat the same request against an unreachable or misconfigured host.
+      // A network/DNS/socket failure is not improved by retrying the same host,
+      // even when its normalized diagnostic status is 502.
+      if (["AI_PROVIDER_UNAVAILABLE", "AI_NETWORK_ERROR"].includes(error.code)) {
+        throw attachAttemptCount(error, context, localProviderAttempt);
+      }
+      // Auth and non-transient errors should move to another provider or stop.
       if (!transient) {
         throw attachAttemptCount(error, context, localProviderAttempt);
       }
