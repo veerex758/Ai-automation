@@ -6,6 +6,8 @@ export type AIRoute = {
   provider: AIProvider;
   primaryModel: string;
   fallbackModels: string[];
+  /** True when quality ranking promoted a qualified same-provider fallback model. */
+  selectedFallbackModel?: boolean;
 };
 
 const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";

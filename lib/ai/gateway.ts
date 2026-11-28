@@ -3,6 +3,8 @@ import { InMemoryCircuitBreakerStore, SupabaseCircuitBreakerStore } from "./circ
 import type { CircuitAdmission, CircuitPolicy, ProviderCircuitBreakerStore } from "./circuit-breaker";
 import { createDefaultAIProviderRegistry } from "./registry";
 import type { AIProviderRegistry } from "./registry";
+import { SupabaseAIModelQualityStore } from "./quality/store";
+import { applyQualityAwareRouting } from "./quality/routing";
 import { routeAIRequests } from "./router";
 import { claimProviderAttempt, DEFAULT_AI_RETRY_POLICY, withProviderRetries } from "./retry";
 import { EMPTY_AI_USAGE } from "./usage";
@@ -153,6 +155,7 @@ export function createAIGateway(
   registry: AIProviderRegistry = defaultRegistry,
   env: Record<string, string | undefined> = process.env,
   suppliedCircuitStore?: ProviderCircuitBreakerStore,
+  suppliedQualityStore?: import("./quality/types").AIModelQualityStore,
 ) {
   // Unit tests/local isolated runs use deterministic memory. Every deployed
   // server environment uses shared Supabase state, not a Vercel instance map.
@@ -206,14 +209,28 @@ export function createAIGateway(
         )
         .map((provider) => provider.id),
     ];
-    const routes = routeAIRequests(context.task, registry, env, [...new Set(excludedProviders)]);
+    const baseRoutes = routeAIRequests(context.task, registry, env, [...new Set(excludedProviders)]);
+    const qualityStore = suppliedQualityStore ?? (
+      env.NODE_ENV === "test" ? undefined : new SupabaseAIModelQualityStore()
+    );
+    // Existing gateway tests exercise provider/circuit failover independently.
+    // Production always applies persistent qualification before choosing alternatives.
+    const routes = qualityStore
+      ? await applyQualityAwareRouting(
+        baseRoutes,
+        context.task,
+        qualityStore,
+        env.AI_QUALITY_REQUIRE_PRIMARY_QUALIFICATION === "true",
+        (env.AI_PRIMARY_PROVIDER || "gemini").trim().toLowerCase() as AIProviderId,
+      )
+      : baseRoutes;
     let lastError: AIProviderError | undefined;
     const configuredPrimaryProvider = (env.AI_PRIMARY_PROVIDER || "gemini").trim().toLowerCase();
 
     for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
       const route = routes[routeIndex];
       const provider = route.provider;
-      const providerFallback = provider.id !== configuredPrimaryProvider;
+      const providerFallback = route.selectedFallbackModel === true || provider.id !== configuredPrimaryProvider;
 
       if (context.signal?.aborted) {
         throw new AIProviderError({ provider: provider.id, code: "AI_CANCELLED", message: "AI request was cancelled." });
