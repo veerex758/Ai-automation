@@ -11,7 +11,7 @@ export type AIRoute = {
 const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 const DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.5-flash-lite";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
-const DEFAULT_GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile";
+const DEFAULT_GROQ_FALLBACK_MODEL = "openai/gpt-oss-20b";
 
 function capabilityForTask(task: AITask): keyof AIProvider["capabilities"] {
   if (task === "agent_tool_calling") return "toolCalling";
