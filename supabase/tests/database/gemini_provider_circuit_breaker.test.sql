@@ -35,9 +35,9 @@ select is(
   'one transient provider failure is recorded without opening the circuit'
 );
 select is(
-  public.record_ai_provider_circuit_result('gemini',false,503,0,false)->>'state',
+  public.record_ai_provider_circuit_result('gemini',false,503,0,false,2,0.5,5,300,30000,300000,300000)->>'state',
   'open',
-  'two consecutive transient provider failures open the circuit'
+  'configured two-failure threshold opens the circuit'
 );
 select ok(
   not (public.get_ai_provider_circuit_state('gemini')->>'allowed')::boolean,
@@ -49,27 +49,19 @@ select ok(
 );
 
 select is(
-  public.record_ai_provider_circuit_result('gemini',false,429,45000,false)->>'state',
+  public.record_ai_provider_circuit_result('gemini',false,429,1000,false)->>'state',
   'open',
   'a rate-limit response opens the circuit immediately'
 );
-reset role;
 select ok(
-  (
-    select open_until > clock_timestamp() + interval '40 seconds'
-       and open_until < clock_timestamp() + interval '50 seconds'
-    from private.ai_provider_circuit_breakers
-    where provider='gemini'
-  ),
+  (public.get_ai_provider_circuit_state('gemini')->>'retryAfterMs')::bigint between 1 and 1000,
   '429 cooldown respects the provider retry-after window'
 );
+-- Wait for the short test-only Retry-After window to expire, retaining the
+-- service-role-only access path for the health probe.
+select pg_sleep(1.1);
 
--- Expire the cooldown and prove that exactly one half-open probe is leased.
-update private.ai_provider_circuit_breakers
-set open_until=clock_timestamp() - interval '1 second', probe_until=null
-where provider='gemini';
-
-set local role service_role;
+-- The expired cooldown grants exactly one half-open probe lease.
 create temporary table gemini_probe_result as
 select public.get_ai_provider_circuit_state('gemini') as result;
 select is(
@@ -96,18 +88,15 @@ select is(
   'subsequent requests proceed after successful probe'
 );
 
--- A late response from a request that started before the open transition
--- must not clear a newer cooldown.
-reset role;
-update private.ai_provider_circuit_breakers
-set consecutive_failures=2,open_until=clock_timestamp() + interval '1 minute',probe_until=null
-where provider='gemini';
-set local role service_role;
+-- A late success from an ordinary request must not close a newly opened
+-- authentication circuit.
+select public.record_ai_provider_circuit_result('gemini',false,401,0,false,2,0.5,5,300,30000,300000,1000);
 select is(
   public.record_ai_provider_circuit_result('gemini',true,null,0,false)->>'state',
   'open',
   'late success cannot close an already-open circuit'
 );
 
+reset role;
 select * from finish();
 rollback;

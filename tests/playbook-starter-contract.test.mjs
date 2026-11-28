@@ -8,7 +8,8 @@ const playbookStyles = readFileSync(new URL("../app/dashboard/playbooks/playbook
 
 test("real-estate Playbook outcome remains limited to 240 characters and sends no inline technical prompt", () => {
   assert.match(playbookPage, /maxLength=\{240\}/);
-  assert.match(playbookPage, /prompt:\s*outcome\.trim\(\),\s*starterType:\s*"real_estate",\s*crmProvider,/);
+  assert.match(playbookPage, /generateDraft\(outcome\.trim\(\), crmProvider\)/);
+  assert.match(playbookPage, /prompt:\s*prompt\.trim\(\),\s*starterType:\s*"real_estate",\s*crmProvider:\s*selectedCrmProvider,/);
   assert.doesNotMatch(playbookPage, /const prompt = \[/);
 });
 

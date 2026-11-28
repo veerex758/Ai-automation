@@ -26,6 +26,19 @@ type GeneratedDraft = {
   error?: string;
   errorCode?: string;
 };
+type RetryRequest = {
+  prompt: string;
+  crmProvider: "pipedrive" | "zoho_crm" | "freshsales";
+  retryAfterSeconds: number;
+};
+const RETRYABLE_GATEWAY_ERRORS = new Set([
+  "AI_PROVIDER_OVERLOADED",
+  "AI_RATE_LIMITED",
+  "AI_PROVIDER_COOLDOWN",
+  "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
+  "AI_TIMEOUT",
+  "AI_PROVIDER_UNAVAILABLE",
+]);
 type Rule = { id: string; nodeId: string; name: string; rationale: string };
 type ActionPolicy = {
   stepId: string;
@@ -58,28 +71,47 @@ export default function NewPlaybookPage() {
   const [notice, setNotice] = useState("");
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
 
-  async function generate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!outcome.trim() || generating) return;
+  async function generateDraft(prompt: string, selectedCrmProvider: typeof crmProvider) {
+    if (!prompt.trim() || generating) return;
     setGenerating(true);
     setError("");
     setNotice("");
     setDraft(null);
+    setRetryRequest(null);
     try {
       const response = await fetch("/api/ai/generate-workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify({
-          prompt: outcome.trim(),
+          prompt: prompt.trim(),
           starterType: "real_estate",
-          crmProvider,
+          crmProvider: selectedCrmProvider,
         }),
       });
-      const generated = await responseJson<GeneratedDraft>(response);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const failure = payload && typeof payload === "object" ? payload as { error?: unknown; errorCode?: unknown } : {};
+        const errorCode = typeof failure.errorCode === "string" ? failure.errorCode : "";
+        const retryAfterHeader = Number(response.headers.get("Retry-After") || 0);
+        if (RETRYABLE_GATEWAY_ERRORS.has(errorCode)) {
+          setRetryRequest({
+            prompt,
+            crmProvider: selectedCrmProvider,
+            retryAfterSeconds: Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+              ? Math.min(300, Math.ceil(retryAfterHeader))
+              : 0,
+          });
+        }
+        throw new Error(typeof failure.error === "string"
+          ? failure.error
+          : "The request could not be completed. No Playbook draft was saved.");
+      }
+      const generated = payload as GeneratedDraft;
       if (!generated.definition || !Array.isArray(generated.definition.nodes) ||
           !Array.isArray(generated.registrySteps) || generated.registrySteps.length === 0) {
-        throw new Error("Gemini did not return a complete registered workflow. No Playbook draft was saved.");
+        throw new Error("The AI provider did not return a complete registered workflow. No Playbook draft was saved.");
       }
       const hasStep = (nodeId: string, operationId: string, kind: "trigger" | "action") =>
         generated.registrySteps!.some((step) => step.kind === kind && step.nodeId === nodeId && step.operationId === operationId);
@@ -87,12 +119,12 @@ export default function NewPlaybookPage() {
       const crmSteps = generated.registrySteps.filter((step) =>
         step.kind === "action" && ["pipedrive", "zoho_crm", "freshsales"].includes(step.nodeId)
       );
-      const selectedCrmSteps = crmSteps.filter((step) => step.nodeId === crmProvider);
+      const selectedCrmSteps = crmSteps.filter((step) => step.nodeId === selectedCrmProvider);
       const crmSearchIndex = generated.registrySteps.findIndex((step) =>
-        step.kind === "action" && step.nodeId === crmProvider && step.operationId === "search_contacts"
+        step.kind === "action" && step.nodeId === selectedCrmProvider && step.operationId === "search_contacts"
       );
       const crmCreateIndex = generated.registrySteps.findIndex((step) =>
-        step.kind === "action" && step.nodeId === crmProvider && step.operationId === "execute"
+        step.kind === "action" && step.nodeId === selectedCrmProvider && step.operationId === "execute"
       );
       const requiredActionsPresent =
         hasStep("gemini", "qualify_real_estate_lead", "action") &&
@@ -103,7 +135,7 @@ export default function NewPlaybookPage() {
           crmSteps.length !== 2 || crmSearchIndex < 0 || crmCreateIndex <= crmSearchIndex) {
         throw new Error(
           "The real-estate starter is incomplete. It must include an intake trigger, Gemini qualification, an IF rule, approved agency email, an optional consent-gated WhatsApp template, and " +
-          crmProvider.replaceAll("_", " ") + " exact-email search followed by contact creation. No draft was saved; generate it again."
+          selectedCrmProvider.replaceAll("_", " ") + " exact-email search followed by contact creation. No draft was saved; generate it again."
         );
       }
       const generatedRules = generated.definition.nodes
@@ -131,6 +163,11 @@ export default function NewPlaybookPage() {
     } finally {
       setGenerating(false);
     }
+  }
+
+  async function generate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await generateDraft(outcome.trim(), crmProvider);
   }
 
   async function saveDraft() {
@@ -195,6 +232,7 @@ export default function NewPlaybookPage() {
         </div>
 
         {error && <div className="playbook-alert error" role="alert">{error}</div>}
+        {retryRequest && <div className="playbook-retry" role="group" aria-label="Retry AI generation"><p>{retryRequest.retryAfterSeconds > 0 ? `The provider asked us to wait about ${retryRequest.retryAfterSeconds} seconds before retrying.` : "The provider failure did not charge an AI credit. You can retry the same request."}</p><button className="playbook-primary" type="button" onClick={() => void generateDraft(retryRequest.prompt, retryRequest.crmProvider)} disabled={generating}>{generating ? "Retrying generation…" : "Retry AI generation"}</button></div>}
         {notice && <div className="playbook-alert" role="status">{notice}</div>}
 
         <section className="playbook-panel">
