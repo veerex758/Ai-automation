@@ -93,12 +93,15 @@ test("Gemini adapter implements structured generation and normalizes usage", asy
   assert.equal((requestBody?.messages as Array<{ role: string }>)[0].role, "system");
 });
 
-test("Gemini records structured-output validation failures without retrying malformed model output", async () => {
-  const diagnostics: Array<{ status: number; errorCode?: string }> = [];
+test("Gemini records token usage when structured-output validation rejects malformed model output", async () => {
+  const diagnostics: Array<{
+    status: number; errorCode?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number;
+  }> = [];
   const provider = createGeminiProvider({
     env,
     fetchImpl: fakeFetch({
       choices: [{ message: { content: "not-json" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 11, completion_tokens: 9, total_tokens: 20 },
     }),
   });
   await assert.rejects(
@@ -106,12 +109,46 @@ test("Gemini records structured-output validation failures without retrying malf
       { prompt: "Return JSON." },
       {
         ...context,
-        onProviderAttempt: (event) => diagnostics.push({ status: event.status, errorCode: event.errorCode }),
+        onProviderAttempt: (event) => diagnostics.push({
+          status: event.status, errorCode: event.errorCode,
+          inputTokens: event.inputTokens, outputTokens: event.outputTokens, totalTokens: event.totalTokens,
+        }),
       },
     ),
     (error: unknown) => error instanceof AIProviderError && error.code === "AI_INVALID_JSON",
   );
-  assert.deepEqual(diagnostics, [{ status: 200, errorCode: "AI_INVALID_JSON" }]);
+  assert.deepEqual(diagnostics, [{
+    status: 200, errorCode: "AI_INVALID_JSON", inputTokens: 11, outputTokens: 9, totalTokens: 20,
+  }]);
+});
+
+test("Groq records token usage when structured-output validation rejects malformed model output", async () => {
+  const diagnostics: Array<{
+    status: number; errorCode?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number;
+  }> = [];
+  const provider = createGroqProvider({
+    env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret", GROQ_AI_MODEL: "openai/gpt-oss-120b" },
+    fetchImpl: fakeFetch({
+      choices: [{ message: { content: "not-json" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 7, completion_tokens: 5, total_tokens: 12 },
+    }),
+  });
+  await assert.rejects(
+    provider.generateStructured(
+      { prompt: "Return JSON." },
+      {
+        ...context,
+        onProviderAttempt: (event) => diagnostics.push({
+          status: event.status, errorCode: event.errorCode,
+          inputTokens: event.inputTokens, outputTokens: event.outputTokens, totalTokens: event.totalTokens,
+        }),
+      },
+    ),
+    (error: unknown) => error instanceof AIProviderError && error.code === "AI_INVALID_JSON",
+  );
+  assert.deepEqual(diagnostics, [{
+    status: 200, errorCode: "AI_INVALID_JSON", inputTokens: 7, outputTokens: 5, totalTokens: 12,
+  }]);
 });
 
 test("Gemini adapter supports tool calls without executing them", async () => {
