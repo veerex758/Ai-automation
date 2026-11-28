@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
-import { generateWorkflow, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
+import { generateWorkflow, repairRegistryStepInputs, MAX_PROMPT_LENGTH } from "@/lib/workflows/ai-workflow-generator.cjs";
 import { getRequestId, logOperationalEvent } from "@/lib/observability/safe-log.cjs";
 import { findOperation, getExecutableNodeCatalog } from "@/nodes/registry";
 import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
@@ -121,15 +121,29 @@ export async function POST(request: NextRequest) {
       crmProvider: starterType === "real_estate" ? requestedCrmProvider as string : undefined,
     });
     if (!("registrySteps" in result)) return jsonResponse({ error: "The AI provider did not return a registry-backed workflow plan." }, { status: 422 });
-    const registrySteps = result.registrySteps;
+    const registrySteps = result.registrySteps as Array<{
+      id: string; nodeId: string; operationId: string; kind: "trigger" | "action"; input: unknown;
+      [key: string]: unknown;
+    }>;
     if (!Array.isArray(registrySteps) || registrySteps.length < 1 || registrySteps.length > 30) return jsonResponse({ error: "The generated plan did not pass registry validation." }, { status: 422 });
     const seen = new Set<string>();
+    const invalidInputs: Array<{
+      id: string; nodeId: string; operationId: string; kind: "trigger" | "action";
+      input: Record<string, unknown>; validationIssues: Array<{ path: (string | number)[]; code: string }>;
+    }> = [];
     for (let index = 0; index < registrySteps.length; index++) {
-      const step = registrySteps[index] as { id?: unknown; nodeId?: unknown; operationId?: unknown; kind?: unknown; input?: unknown };
-      if (!step || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) || typeof step.nodeId !== "string" || typeof step.operationId !== "string" || !["trigger", "action"].includes(String(step.kind)) || !step.input || typeof step.input !== "object" || Array.isArray(step.input)) return jsonResponse({ error: "The generated plan contains an invalid step envelope." }, { status: 422 });
+      const step = registrySteps[index];
+      if (!step || typeof step.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(step.id) || seen.has(step.id) ||
+          typeof step.nodeId !== "string" || typeof step.operationId !== "string" ||
+          !["trigger", "action"].includes(String(step.kind)) ||
+          !step.input || typeof step.input !== "object" || Array.isArray(step.input)) {
+        return jsonResponse({ error: "The generated plan contains an invalid step envelope." }, { status: 422 });
+      }
       seen.add(step.id);
-      if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
-      const operation = findOperation(step.nodeId, step.operationId, step.kind as "trigger" | "action");
+      if ((index === 0 && step.kind !== "trigger") || (index > 0 && step.kind !== "action")) {
+        return jsonResponse({ error: "A plan must start with one trigger followed by actions." }, { status: 422 });
+      }
+      const operation = findOperation(step.nodeId, step.operationId, step.kind);
       if (!operation) {
         return jsonResponse({
           error: "Gemini selected " + step.nodeId + "." + step.operationId + ", which is not in Rexnora's executable node registry. No draft was saved and no AI credit was charged. Retry with registered integrations only.",
@@ -138,14 +152,62 @@ export async function POST(request: NextRequest) {
       }
       const inputValidation = operation.inputSchema.safeParse(step.input);
       if (!inputValidation.success) {
-        return jsonResponse({
-          error: "Gemini supplied invalid input for the registered operation " + step.nodeId + "." + step.operationId + ". The input does not match that operation's schema. No draft was saved and no AI credit was charged.",
-          errorCode: "AI_NODE_INPUT_INVALID",
+        invalidInputs.push({
+          id: step.id,
+          nodeId: step.nodeId,
+          operationId: step.operationId,
+          kind: step.kind,
+          input: step.input as Record<string, unknown>,
           validationIssues: inputValidation.error.issues.slice(0, 8).map((issue) => ({
-            path: issue.path.map(String).join("."),
+            path: issue.path,
             code: issue.code,
           })),
+        });
+      }
+    }
+
+    // One bounded repair attempt is allowed only for schema-invalid inputs of
+    // operations that are already present in the executable registry. Node IDs,
+    // operation IDs, step count and graph edges remain immutable.
+    if (invalidInputs.length) {
+      let repairedInputs: Array<{ id: string; input: Record<string, unknown> }>;
+      try {
+        repairedInputs = await repairRegistryStepInputs({
+          prompt: body.prompt,
+          invalidSteps: invalidInputs,
+          nodeCatalog,
+        }) as Array<{ id: string; input: Record<string, unknown> }>;
+      } catch {
+        return jsonResponse({
+          error: "Gemini supplied invalid inputs for registered operations and the single schema-repair attempt did not produce a valid repair. No draft was saved and no AI credit was charged.",
+          errorCode: "AI_NODE_INPUT_REPAIR_FAILED",
+          invalidOperations: invalidInputs.map((step) => ({ stepId: step.id, nodeId: step.nodeId, operationId: step.operationId })),
         }, { status: 422 });
+      }
+
+      const repairsById = new Map(repairedInputs.map((repair) => [repair.id, repair.input]));
+      if (repairsById.size !== invalidInputs.length || invalidInputs.some((step) => !repairsById.has(step.id))) {
+        return jsonResponse({
+          error: "Gemini's schema repair did not return exactly the invalid operation inputs. No draft was saved and no AI credit was charged.",
+          errorCode: "AI_NODE_INPUT_REPAIR_FAILED",
+        }, { status: 422 });
+      }
+      for (const step of registrySteps) {
+        const repairedInput = repairsById.get(step.id);
+        if (!repairedInput) continue;
+        const operation = findOperation(step.nodeId, step.operationId, step.kind);
+        if (!operation) {
+          return jsonResponse({ error: "A registry operation changed during schema repair. No draft was saved and no AI credit was charged.", errorCode: "AI_NODE_NOT_REGISTERED" }, { status: 422 });
+        }
+        const validation = operation.inputSchema.safeParse(repairedInput);
+        if (!validation.success) {
+          return jsonResponse({
+            error: "Gemini's single schema-repair attempt still returned invalid input for " + step.nodeId + "." + step.operationId + ". No draft was saved and no AI credit was charged.",
+            errorCode: "AI_NODE_INPUT_INVALID",
+            validationIssues: validation.error.issues.slice(0, 8).map((issue) => ({ path: issue.path.map(String).join("."), code: issue.code })),
+          }, { status: 422 });
+        }
+        step.input = validation.data;
       }
     }
     let definition: { version: 1; nodes: Array<Record<string, unknown>>; edges?: Array<{ id: string; source: string; target: string; label: "next" | "true" | "false" }> };
