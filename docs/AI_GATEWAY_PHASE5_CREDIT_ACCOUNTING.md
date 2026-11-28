@@ -34,7 +34,9 @@ Reservation, settlement, release, generic AI-credit metering and agent-run meter
 
 For a successful validated generation, provider telemetry and the single customer charge are committed in the same database transaction.
 
-For an invalid or failed generation, any token usage returned by a provider is written by the release transaction, while customer `ai_credit` and `ai_generation` usage remains unchanged. If a later retry with the same operation ID succeeds, provider usage from the earlier attempt and the successful attempt is aggregated under that same provider/model record.
+Provider adapters report normalized token counters with each completed provider response, including a response rejected by structured-output parsing or validation before a fallback provider is called. The generation route aggregates those attempt-level counters by provider/model and uses them for settlement. It does not add the final accepted result a second time.
+
+For an invalid or failed generation, any token usage returned by a provider is written by the release transaction, while customer `ai_credit` and `ai_generation` usage remains unchanged. If a later retry with the same operation ID succeeds, provider usage from the earlier rejected attempt and the successful attempt is aggregated under that same provider/model record.
 
 Provider token/cost accounting is not subtracted from the user's credit balance and never triggers a second customer charge.
 
