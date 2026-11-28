@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+const baseMigration = readFileSync(new URL("../supabase/migrations/20261128100000_rexnora_gemini_provider_circuit_breaker.sql", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/20261128110000_rexnora_multi_provider_ai_circuit_breaker.sql", import.meta.url), "utf8");
 const gateway = readFileSync(new URL("../lib/ai/gateway.ts", import.meta.url), "utf8");
 const store = readFileSync(new URL("../lib/ai/circuit-breaker.ts", import.meta.url), "utf8");
