@@ -37,14 +37,46 @@ jobs:
             supabase init
           fi
 
-      - name: Select an isolated local Postgres port
+      - name: Select free local Postgres ports
         shell: bash
         run: |
           set -euo pipefail
-          # GitHub runners may have 54322 occupied by another local service.
-          # Keep this disposable migration replay isolated from the default port.
-          sed -i -E 's/^port = 54322$/port = 54382/; s/^shadow_port = 54320$/shadow_port = 54380/' supabase/config.toml
-          grep -E '^(port|shadow_port) = ' supabase/config.toml
+          # Hosted runners may already have common Supabase ports in use. Ask
+          # the OS for two currently free TCP ports instead of selecting fixed
+          # ports which can collide with unrelated runner services.
+          read -r db_port shadow_port < <(python3 - <<'PY'
+          import socket
+
+          ports = []
+          while len(ports) < 2:
+              with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                  sock.bind(("0.0.0.0", 0))
+                  port = sock.getsockname()[1]
+              if port not in ports:
+                  ports.append(port)
+          print(*ports)
+          PY
+          )
+          export DB_PORT="$db_port" SHADOW_PORT="$shadow_port"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          config = pathlib.Path("supabase/config.toml")
+          source = config.read_text()
+          match = re.search(r"(?ms)(^\[db\]\s*\n)(.*?)(?=^\[|\Z)", source)
+          if not match:
+              raise SystemExit("Could not find [db] section in Supabase config")
+          block = match.group(2)
+          block, db_count = re.subn(r"(?m)^port\s*=\s*\d+\s*$", f"port = {os.environ['DB_PORT']}", block, count=1)
+          block, shadow_count = re.subn(r"(?m)^shadow_port\s*=\s*\d+\s*$", f"shadow_port = {os.environ['SHADOW_PORT']}", block, count=1)
+          if db_count != 1 or shadow_count != 1:
+              raise SystemExit("Could not update the [db] and [db].shadow_port settings")
+          config.write_text(source[:match.start(2)] + block + source[match.end(2):])
+          print(f"Selected Supabase db port {os.environ['DB_PORT']} and shadow port {os.environ['SHADOW_PORT']}")
+          PY
+          grep -A12 '^\[db\]' supabase/config.toml
 
       - name: Start local Postgres
         run: supabase db start

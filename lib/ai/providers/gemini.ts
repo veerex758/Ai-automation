@@ -2,7 +2,7 @@ import { AIProviderError, classifyProviderError, normalizeProviderError } from "
 import { parseStructuredJson } from "../validation/workflow-schema";
 import { normalizeAIUsage, EMPTY_AI_USAGE } from "../usage";
 import type {
-  AIProvider, AIRequestContext, AIResult, AITextRequest,
+  AIProvider, AIRequestContext, AIResult, AIUsage, AITextRequest,
   AIStructuredRequest, AIToolRequest, AIToolOutput, AIToolCall,
   AIProviderAttempt,
 } from "../types";
@@ -146,7 +146,7 @@ export function createGeminiProvider(options: {
 
   function reportOutputResult(
     context: AIRequestContext,
-    result: { model: string; requestId?: string; status: number },
+    result: { model: string; requestId?: string; status: number; usage: AIUsage },
     error?: unknown,
   ): void {
     const code = error instanceof AIProviderError ? error.code : undefined;
@@ -155,6 +155,10 @@ export function createGeminiProvider(options: {
       attempt: context.providerAttempt ?? 1,
       status: result.status,
       providerRequestId: result.requestId,
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      totalTokens: result.usage.totalTokens,
+      ...(result.usage.providerCostUsd !== undefined ? { providerCostUsd: result.usage.providerCostUsd } : {}),
       ...(code ? { errorCode: code } : {}),
       fallbackUsed: context.fallbackUsed === true,
     });
