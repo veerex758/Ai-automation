@@ -399,22 +399,25 @@ test("Gemini 503 retry delays grow exponentially with full jitter", async () => 
   assert.equal(result.providerFallbackUsed, true);
 });
 
-test("Gemini transport failures are logged as attempts and do not fan out", async () => {
+test("Gemini transport failures get bounded retries, log every attempt and do not fan out", async () => {
   const events = [];
+  const delays = [];
   let calls = 0;
   await assert.rejects(generateWorkflow({
     prompt: "Make a manual workflow",
     env,
+    randomImpl: () => 0,
+    sleepImpl: async milliseconds => { delays.push(milliseconds); },
     onProviderAttempt: event => events.push(event),
     fetchImpl: async () => {
       calls += 1;
       throw new Error("socket unavailable");
     },
-  }), error => error.message === "AI_PROVIDER_UNAVAILABLE" && error.providerStatus === 502);
-  assert.equal(calls, 1);
-  assert.equal(events.length, 1);
-  assert.equal(events[0].errorCode, "AI_PROVIDER_UNAVAILABLE");
-  assert.equal(events[0].status, 502);
+  }), error => error.message === "AI_PROVIDER_UNAVAILABLE" && error.providerStatus === 502 && error.providerAttempts === 3);
+  assert.equal(calls, 3);
+  assert.deepEqual(delays, [250, 250]);
+  assert.equal(events.length, 3);
+  assert.ok(events.every(event => event.errorCode === "AI_PROVIDER_UNAVAILABLE" && event.status === 502));
 });
 
 test("a long Retry-After on 503 suppresses fallback instead of increasing provider pressure", async () => {
