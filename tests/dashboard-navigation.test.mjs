@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const path = (relative) => fileURLToPath(new URL(relative, import.meta.url));
-const [dashboard, sections, sidebar, agents, playbooks, playbookLibrary, connections, billing, layout] = await Promise.all([
+const [dashboard, sections, sidebar, agents, playbooks, playbookLibrary, connections, billing, layout, server, middleware, browser] = await Promise.all([
   readFile(path("../app/dashboard/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/section-page.tsx"), "utf8"),
   readFile(path("../app/dashboard/dashboard-sidebar.tsx"), "utf8"),
@@ -14,6 +14,9 @@ const [dashboard, sections, sidebar, agents, playbooks, playbookLibrary, connect
   readFile(path("../app/dashboard/connections/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/billing/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/layout.tsx"), "utf8"),
+  readFile(path("../lib/supabase/server.ts"), "utf8"),
+  readFile(path("../middleware.ts"), "utf8"),
+  readFile(path("../lib/supabase/client.ts"), "utf8"),
 ]);
 
 test("overview navigation exposes Playbooks as the only customer-facing workflow authoring entry", () => {
