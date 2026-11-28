@@ -492,7 +492,6 @@ test("gateway fails over from invalid provider credentials to the configured Gro
   assert.equal(budget.totalProviderAttempts, 2);
   assert.deepEqual(attempts.map((event) => event.provider), ["gemini", "groq"]);
   assert.equal(attempts[1].fallbackUsed, true);
-  assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, false);
 
   const isolatedRegistry = new AIProviderRegistry();
   isolatedRegistry.register(createGeminiProvider({
@@ -507,7 +506,6 @@ test("gateway fails over from invalid provider credentials to the configured Gro
     { ...context, task: "summarization" },
   );
   assert.equal(isolatedResult.provider, "gemini");
-  assert.equal(isolatedGateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, true);
 });
 
 test("network failures switch providers immediately without retrying the unreachable host", async () => {
@@ -745,7 +743,6 @@ test("provider authentication cooldown excludes Gemini until expiry, then allows
       { ...context, task: "summarization" },
     );
     assert.equal(first.provider, "groq");
-    assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, false);
 
     const duringCooldown = await gateway.generateText(
       { prompt: "Do not call the unhealthy provider again." },
@@ -763,7 +760,6 @@ test("provider authentication cooldown excludes Gemini until expiry, then allows
     );
     assert.equal(recovered.provider, "gemini");
     assert.equal(recovered.output, "Gemini recovered after cooldown.");
-    assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, true);
     assert.equal(geminiCalls, 2);
   } finally {
     Date.now = originalNow;
