@@ -21,8 +21,9 @@
 ## Hard limits
 - Default per-provider primary-model attempt limit: 3.
 - At most one same-provider alternate-model attempt.
-- Default operation-wide provider attempt budget: 8.
-- Workflow generation shares its existing 54-second deadline and 8-attempt budget across generation and schema repair.
+- Hard operation-wide provider attempt budget: 8 calls, even when a caller supplies a larger remaining budget.
+- Hard per-provider operation budget: 4 calls across all gateway invocations (at most 3 calls to the primary model plus 1 alternate-model call).
+- Workflow generation shares its existing 54-second deadline and both attempt caps across generation and schema repair.
 - Standalone gateway calls receive a 30-second default deadline and an 8-attempt budget when the caller does not supply one.
 - Provider candidates are de-duplicated and visited once per gateway request. The loop is finite; no recursive failover is used.
 
