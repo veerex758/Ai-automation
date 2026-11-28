@@ -391,6 +391,7 @@ export default function WorkflowBuilderPage() {
         const retryableCodes = new Set([
           "AI_PROVIDER_OVERLOADED", "AI_RATE_LIMITED", "AI_PROVIDER_COOLDOWN",
           "AI_PROVIDER_CIRCUIT_UNAVAILABLE", "AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE",
+          "AI_USAGE_METERING_UNAVAILABLE", "AI_USAGE_SETTLEMENT_UNKNOWN", "AI_OPERATION_IN_PROGRESS",
         ]);
         const retryAfterHeader = Number(response.headers.get("Retry-After") || 0);
         const retryAfterSeconds = Number(payload.retryAfterSeconds) > 0
