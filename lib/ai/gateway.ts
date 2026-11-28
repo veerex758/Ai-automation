@@ -3,6 +3,8 @@ import { InMemoryCircuitBreakerStore, SupabaseCircuitBreakerStore } from "./circ
 import type { CircuitAdmission, CircuitPolicy, ProviderCircuitBreakerStore } from "./circuit-breaker";
 import { createDefaultAIProviderRegistry } from "./registry";
 import type { AIProviderRegistry } from "./registry";
+import { SupabaseAIModelQualityStore } from "./quality/store";
+import { applyQualityAwareRouting } from "./quality/routing";
 import { routeAIRequests } from "./router";
 import { claimProviderAttempt, DEFAULT_AI_RETRY_POLICY, withProviderRetries } from "./retry";
 import { EMPTY_AI_USAGE } from "./usage";
@@ -206,7 +208,14 @@ export function createAIGateway(
         )
         .map((provider) => provider.id),
     ];
-    const routes = routeAIRequests(context.task, registry, env, [...new Set(excludedProviders)]);
+    const baseRoutes = routeAIRequests(context.task, registry, env, [...new Set(excludedProviders)]);
+    const qualityStore = new SupabaseAIModelQualityStore();
+    const routes = await applyQualityAwareRouting(
+      baseRoutes,
+      context.task,
+      qualityStore,
+      env.AI_QUALITY_REQUIRE_PRIMARY_QUALIFICATION === "true",
+    );
     let lastError: AIProviderError | undefined;
     const configuredPrimaryProvider = (env.AI_PRIMARY_PROVIDER || "gemini").trim().toLowerCase();
 
