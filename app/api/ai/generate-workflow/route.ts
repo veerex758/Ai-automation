@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
   const excludedProviders = new Set<"gemini" | "groq" | "cloudflare">();
   let latestSuccessfulProvider = "gemini";
   let latestSuccessfulModel = "";
+  let latestAttemptProvider = "gemini";
+  let latestAttemptModel = "";
   let lastGeminiCircuitAttempt: { status: number; retryAfterMs?: number; errorCode?: string } | undefined;
   let providerAttemptObserver: ((attempt: {
     provider?: string; model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
@@ -210,6 +212,8 @@ export async function POST(request: NextRequest) {
       providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
     }) => {
       const provider = attempt.provider || "gemini";
+      latestAttemptProvider = provider;
+      latestAttemptModel = typeof attempt.model === "string" ? attempt.model : latestAttemptModel;
       const status = Number(attempt.status);
       const failure = status >= 400 || Boolean(attempt.errorCode);
       const providerCode = attempt.errorCode ||
@@ -547,6 +551,7 @@ export async function POST(request: NextRequest) {
     const code = error instanceof Error ? error.message : "AI_PROVIDER_ERROR";
     const responses: Record<string, { status: number; message: string }> = {
       AI_NOT_CONFIGURED: { status: 503, message: "No configured AI provider is available for this task. Check the server-side provider keys. No Rexnora AI credit was charged." },
+      AI_PROVIDER_DISABLED: { status: 503, message: "No eligible AI provider is available for this request. No Rexnora AI credit was charged." },
       AI_CONFIGURATION_ERROR: { status: 503, message: "AI provider configuration is invalid. No Rexnora AI credit was charged." },
       AI_PROMPT_REQUIRED: { status: 400, message: "Describe the workflow you want to create." },
       AI_PROMPT_TOO_LONG: { status: 400, message: `Keep the description to ${MAX_PROMPT_LENGTH} characters or fewer.` },
@@ -557,10 +562,10 @@ export async function POST(request: NextRequest) {
       AI_PROVIDER_CIRCUIT_UNAVAILABLE: { status: 503, message: "Gemini provider protection is temporarily unavailable. No Rexnora AI credit was charged. Please retry shortly." },
       AI_PROVIDER_AUTH_ERROR: { status: 502, message: "The available AI provider credentials were rejected. This is a server configuration issue; no Rexnora AI credit was charged." },
       AI_RATE_LIMITED: { status: 429, message: "The available AI providers reached their rate limits. No Rexnora AI credit was charged. Wait a moment and try again." },
-      AI_PROVIDER_ERROR: { status: 502, message: "Gemini could not complete this request. No Rexnora AI credit was charged." },
-      AI_INVALID_RESPONSE: { status: 502, message: "Gemini returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
-      AI_EMPTY_RESPONSE: { status: 502, message: "Gemini returned no workflow. No Rexnora AI credit was charged. Please try again." },
-      AI_INVALID_JSON: { status: 502, message: "Gemini returned an invalid workflow format. No Rexnora AI credit was charged. Please try again." },
+      AI_PROVIDER_ERROR: { status: 502, message: "The available AI provider could not complete this request. No Rexnora AI credit was charged." },
+      AI_INVALID_RESPONSE: { status: 502, message: "The AI provider returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
+      AI_EMPTY_RESPONSE: { status: 502, message: "The AI provider returned no usable workflow content. No Rexnora AI credit was charged. Please try again." },
+      AI_INVALID_JSON: { status: 502, message: "The AI provider returned an invalid workflow format. No Rexnora AI credit was charged. Please try again." },
       AI_INVALID_OUTPUT: { status: 422, message: "The AI provider returned an output that Rexnora could not safely validate. No Rexnora AI credit was charged." },
       AI_INVALID_REQUEST: { status: 502, message: "The AI provider request configuration is invalid. No Rexnora AI credit was charged." },
       AI_SAFETY_REJECTED: { status: 422, message: "The AI provider declined this request for safety reasons. No Rexnora AI credit was charged." },
@@ -575,10 +580,10 @@ export async function POST(request: NextRequest) {
         outcome: "failure", statusCode: mapped.status,
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode: Object.hasOwn(responses, code) ? code : "AI_PROVIDER_ERROR",
-        provider: "gemini",
-        model: error && typeof error === "object" && "providerModel" in error && typeof (error as { providerModel?: unknown }).providerModel === "string"
+        provider: latestAttemptProvider,
+        model: latestAttemptModel || (error && typeof error === "object" && "providerModel" in error && typeof (error as { providerModel?: unknown }).providerModel === "string"
           ? (error as { providerModel: string }).providerModel
-          : (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
+          : (latestAttemptProvider === "groq" ? (process.env.GROQ_AI_MODEL || "openai/gpt-oss-120b").trim() : (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim())),
         providerStatus: error && typeof error === "object" && "providerStatus" in error ? Number((error as { providerStatus?: unknown }).providerStatus) : undefined,
         providerReason: error && typeof error === "object" && "providerReason" in error ? (error as { providerReason?: unknown }).providerReason : undefined,
         providerType: error && typeof error === "object" && "providerType" in error ? (error as { providerType?: unknown }).providerType : undefined,
