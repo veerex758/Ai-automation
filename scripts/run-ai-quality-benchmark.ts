@@ -33,7 +33,7 @@ function parseCli(argv: string[]): Cli {
   if (!AI_QUALITY_TASKS.includes(task as AITask)) {
     throw new Error("Pass --task=<" + AI_QUALITY_TASKS.join("|") + ">; use one task per benchmark run.");
   }
-  if (!["gemini", "groq", "cloudflare"].includes(provider)) throw new Error("Unsupported provider.");
+  if (!["gemini", "groq"].includes(provider)) throw new Error("Cloudflare benchmarking is disabled until its provider adapter and compatibility gates are enabled. Choose gemini or groq.");
   const recoveryProbes = Number(values.get("recovery-probes") ?? "3");
   if (!Number.isSafeInteger(recoveryProbes) || recoveryProbes < 3 || recoveryProbes > 10) {
     throw new Error("--recovery-probes must be an integer from 3 to 10.");
