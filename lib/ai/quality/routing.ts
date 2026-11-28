@@ -28,6 +28,11 @@ function qualityScore(row: AIModelQualification, task: AITask): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+/**
+ * Qualified candidates are ranked before routing. An unqualified configured
+ * primary is retained only as a last-resort compatibility route when there
+ * are no qualified candidates at all and strict-primary mode is disabled.
+ */
 export async function applyQualityAwareRouting(
   routes: AIRoute[], task: AITask, store: AIModelQualityStore, requirePrimary = false,
 ): Promise<AIRoute[]> {
@@ -38,21 +43,36 @@ export async function applyQualityAwareRouting(
   } catch {
     return requirePrimary ? [] : [{ ...routes[0], fallbackModels: [] }];
   }
-  const primary = routes[0];
-  const primaryQualification = qualified(rows, primary.provider.id, primary.primaryModel, task);
+
+  const configuredPrimary = routes[0];
+  const primaryQualification = qualified(rows, configuredPrimary.provider.id, configuredPrimary.primaryModel, task);
   if (requirePrimary && !primaryQualification) return [];
-  const primaryFallbacks = primary.fallbackModels.filter((model) =>
-    qualified(rows, primary.provider.id, model, task) !== null);
-  const alternates = routes.slice(1).flatMap((route) => {
-    const candidates = [route.primaryModel, ...route.fallbackModels]
+
+  const candidates = routes.flatMap((route) => {
+    const qualifiedModels = [route.primaryModel, ...route.fallbackModels]
       .map((model) => ({ model, qualification: qualified(rows, route.provider.id, model, task) }))
-      .filter((item): item is { model: string; qualification: AIModelQualification } => item.qualification !== null);
-    candidates.sort((a, b) => qualityScore(b.qualification, task) - qualityScore(a.qualification, task));
-    return candidates.length ? [{
-      ...route,
-      primaryModel: candidates[0].model,
-      fallbackModels: candidates.slice(1).map((item) => item.model),
-    }] : [];
+      .filter((item): item is { model: string; qualification: AIModelQualification } =>
+        item.qualification !== null);
+    qualifiedModels.sort((a, b) =>
+      qualityScore(b.qualification, task) - qualityScore(a.qualification, task));
+    if (!qualifiedModels.length) return [];
+    return [{
+      route,
+      models: qualifiedModels,
+      score: qualityScore(qualifiedModels[0].qualification, task),
+    }];
   });
-  return [{ ...primary, fallbackModels: primaryFallbacks }, ...alternates];
+
+  if (!candidates.length) {
+    return requirePrimary ? [] : [{ ...configuredPrimary, fallbackModels: [] }];
+  }
+
+  // Prefer the best measured provider/task result; ties retain configured provider priority.
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.map(({ route, models }) => ({
+    ...route,
+    primaryModel: models[0].model,
+    fallbackModels: models.slice(1).map((item) => item.model),
+    selectedFallbackModel: models[0].model !== route.primaryModel,
+  }));
 }

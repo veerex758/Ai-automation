@@ -229,7 +229,7 @@ export function createAIGateway(
     for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
       const route = routes[routeIndex];
       const provider = route.provider;
-      const providerFallback = provider.id !== configuredPrimaryProvider;
+      const providerFallback = route.selectedFallbackModel === true || provider.id !== configuredPrimaryProvider;
 
       if (context.signal?.aborted) {
         throw new AIProviderError({ provider: provider.id, code: "AI_CANCELLED", message: "AI request was cancelled." });
