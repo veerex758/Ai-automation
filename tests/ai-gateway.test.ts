@@ -377,6 +377,66 @@ test("gateway fails over from invalid provider credentials to the configured Gro
   assert.equal(gateway.listProviders().find((provider) => provider.id === "gemini")?.healthy, false);
 });
 
+test("network failures switch providers immediately without retrying the unreachable host", async () => {
+  let geminiCalls = 0;
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env,
+    fetchImpl: async () => {
+      geminiCalls += 1;
+      throw new TypeError("fetch failed");
+    },
+  }));
+  registry.register(createGroqProvider({
+    env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
+    fetchImpl: fakeFetch({ choices: [{ message: { content: "Recovered on Groq." }, finish_reason: "stop" }] }),
+  }));
+  const gateway = createAIGateway(registry, { ...env, GROQ_API_KEY: "test-groq-secret" });
+  const budget = { remainingProviderAttempts: 5, totalProviderAttempts: 0, deadlineAt: Date.now() + 5_000 };
+  const result = await gateway.generateText(
+    { prompt: "Recover." },
+    { ...context, task: "summarization", attemptBudget: budget, deadlineAt: budget.deadlineAt },
+  );
+  assert.equal(result.provider, "groq");
+  assert.equal(result.output, "Recovered on Groq.");
+  assert.equal(geminiCalls, 1);
+  assert.equal(budget.totalProviderAttempts, 2);
+});
+
+test("long Retry-After prevents same-provider model fallback and routes to Groq", async () => {
+  let geminiCalls = 0;
+  const providerEnv = {
+    ...env,
+    GEMINI_AI_MODEL: "gemini-primary",
+    GEMINI_FALLBACK_MODEL: "gemini-secondary",
+  };
+  const registry = new AIProviderRegistry();
+  registry.register(createGeminiProvider({
+    env: providerEnv,
+    fetchImpl: async () => {
+      geminiCalls += 1;
+      return new Response(JSON.stringify({ error: { status: "UNAVAILABLE" } }), {
+        status: 503,
+        headers: { "Retry-After": "60" },
+      });
+    },
+  }));
+  registry.register(createGroqProvider({
+    env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
+    fetchImpl: fakeFetch({ choices: [{ message: { content: "Switched providers." }, finish_reason: "stop" }] }),
+  }));
+  const gateway = createAIGateway(registry, {
+    ...providerEnv,
+    GROQ_API_KEY: "test-groq-secret",
+  });
+  const result = await gateway.generateText(
+    { prompt: "Switch on a long cooldown." },
+    { ...context, task: "summarization" },
+  );
+  assert.equal(result.provider, "groq");
+  assert.equal(geminiCalls, 1);
+});
+
 test("gateway does not route around invalid requests or safety rejections", async () => {
   for (const failure of [
     { status: 400, payload: { error: { message: "bad request" } }, code: "AI_INVALID_REQUEST" },
