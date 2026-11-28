@@ -10,6 +10,7 @@ import type {
 } from "./types";
 
 const MAX_TOTAL_PROVIDER_ATTEMPTS = 8;
+const MAX_PROVIDER_ATTEMPTS_PER_OPERATION = 4;
 const MAX_PROVIDER_CONFIGURATION_COOLDOWN_MS = 5 * 60_000;
 
 type ProviderHealthEntry = { unhealthyUntil: number; reason: "AI_PROVIDER_AUTH_ERROR" };
@@ -43,7 +44,7 @@ function clearProviderHealth(provider: AIProviderId): void {
 }
 
 function isDeadlineOrCancellation(error: AIProviderError): boolean {
-  return ["AI_CANCELLED", "AI_DEADLINE_EXCEEDED", "AI_ATTEMPT_LIMIT_REACHED"].includes(error.code);
+  return ["AI_CANCELLED", "AI_DEADLINE_EXCEEDED"].includes(error.code);
 }
 
 /** These errors must not be routed around. In particular, safety refusals stay refusals. */
@@ -64,6 +65,7 @@ function canFailOver(error: AIProviderError): boolean {
     "AI_EMPTY_RESPONSE",
     "AI_INVALID_JSON",
     "AI_INVALID_OUTPUT",
+    "AI_ATTEMPT_LIMIT_REACHED",
   ].includes(error.code) || [408, 429, 500, 502, 503, 504].includes(status);
 }
 
@@ -114,20 +116,36 @@ export function createAIGateway(
     inputContext: AIRequestContext,
     invoke: (provider: AIProvider, model: string, attemptContext: AIRequestContext) => Promise<AIResult<T>>,
   ): Promise<AIResult<T> & { fallbackUsed: boolean }> {
+    const deadlineAt = inputContext.deadlineAt ?? inputContext.attemptBudget?.deadlineAt ?? Date.now() + 30_000;
     const context = inputContext.attemptBudget
       ? inputContext
       : {
         ...inputContext,
-        deadlineAt: inputContext.deadlineAt ?? Date.now() + 30_000,
+        deadlineAt,
         attemptBudget: {
           remainingProviderAttempts: MAX_TOTAL_PROVIDER_ATTEMPTS,
           totalProviderAttempts: 0,
-          deadlineAt: inputContext.deadlineAt ?? Date.now() + 30_000,
+          deadlineAt,
         },
       };
+    const operationBudget = context.attemptBudget!;
+    operationBudget.maxProviderAttempts = Math.min(
+      operationBudget.maxProviderAttempts ?? MAX_TOTAL_PROVIDER_ATTEMPTS,
+      MAX_TOTAL_PROVIDER_ATTEMPTS,
+    );
+    operationBudget.maxAttemptsPerProvider = Math.min(
+      operationBudget.maxAttemptsPerProvider ?? MAX_PROVIDER_ATTEMPTS_PER_OPERATION,
+      MAX_PROVIDER_ATTEMPTS_PER_OPERATION,
+    );
+    const providerAttemptCounts = operationBudget.providerAttempts ?? {};
     const excludedProviders = [
       ...(context.excludedProviders ?? []),
-      ...registry.list().filter((provider) => !providerIsHealthy(provider.id)).map((provider) => provider.id),
+      ...registry.list()
+        .filter((provider) =>
+          !providerIsHealthy(provider.id) ||
+          (providerAttemptCounts[provider.id] ?? 0) >= operationBudget.maxAttemptsPerProvider!,
+        )
+        .map((provider) => provider.id),
     ];
     const routes = routeAIRequests(context.task, registry, env, [...new Set(excludedProviders)]);
     let lastError: AIProviderError | undefined;
