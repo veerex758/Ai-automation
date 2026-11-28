@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const path = (relative) => fileURLToPath(new URL(relative, import.meta.url));
-const [dashboard, sections, sidebar, agents, playbooks, playbookLibrary, connections, billing, layout] = await Promise.all([
+const [dashboard, sections, sidebar, agents, playbooks, playbookLibrary, connections, billing, layout, server, middleware, browser] = await Promise.all([
   readFile(path("../app/dashboard/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/section-page.tsx"), "utf8"),
   readFile(path("../app/dashboard/dashboard-sidebar.tsx"), "utf8"),
@@ -14,6 +14,9 @@ const [dashboard, sections, sidebar, agents, playbooks, playbookLibrary, connect
   readFile(path("../app/dashboard/connections/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/billing/page.tsx"), "utf8"),
   readFile(path("../app/dashboard/layout.tsx"), "utf8"),
+  readFile(path("../lib/supabase/server.ts"), "utf8"),
+  readFile(path("../middleware.ts"), "utf8"),
+  readFile(path("../lib/supabase/client.ts"), "utf8"),
 ]);
 
 test("overview navigation exposes Playbooks as the only customer-facing workflow authoring entry", () => {
@@ -21,7 +24,7 @@ test("overview navigation exposes Playbooks as the only customer-facing workflow
     "/dashboard", "/dashboard#workflows", "/dashboard/activity",
     "/dashboard/playbooks", "/dashboard/agents", "/dashboard/templates",
     "/dashboard/integrations", "/dashboard/connections", "/dashboard/analytics",
-    "/dashboard/billing", "/dashboard/settings",
+    "/dashboard/billing", "/dashboard/settings", "/dashboard/workspaces",
   ]) assert.ok(sidebar.includes(href), "missing shared navigation destination: " + href);
   assert.ok(sidebar.includes("key={item.key} href={item.href}"), "shared navigation must render its configured links");
   assert.match(dashboard, /id="workflows"/);
@@ -84,6 +87,13 @@ test("Supabase staging-only secret resolution ignores empty placeholder variable
   assert.match(admin, /isRexnoraStagingPreview/);
   assert.match(admin, /isRexnoraStagingPreview[\s\S]*CODED_SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(admin, /VERCEL_GIT_COMMIT_REF/);
+  for (const source of [server, middleware, browser]) {
+    assert.match(source, /firstConfiguredValue/);
+    assert.match(source, /\.trim\(\)\.length > 0/);
+  }
+  assert.match(server, /process\.env\.CODED_SUPABASE_URL/);
+  assert.match(server, /process\.env\.CODED_SUPABASE_ANON_KEY/);
+  assert.match(middleware, /process\.env\.CODED_SUPABASE_URL/);
 });
 
 
@@ -95,4 +105,21 @@ test("dashboard sends all new automation creation through outcome-first Playbook
   assert.doesNotMatch(dashboard, /workflowTemplates|createFromTemplate|openTemplateSetup|Create workflow/);
   assert.match(dashboard, /async function saveWorkflow[\s\S]*method: "PATCH"/);
   assert.match(dashboard, /Open builder/);
+});
+
+
+test("workspace and team navigation is reachable from the shared workspace switch", () => {
+  assert.match(sidebar, /key: "workspaces"/);
+  assert.match(sidebar, /className="workspace-switch" href="\/dashboard\/workspaces"/);
+  assert.match(sections, /href="\/dashboard\/workspaces"/);
+});
+
+test("dashboard workflow requests handle empty and non-JSON responses without leaking JSON parse errors", () => {
+  assert.match(dashboard, /async function readJsonResponse<T>\(response: Response, failureLabel: string\)/);
+  assert.match(dashboard, /const body = await response\.text\(\)/);
+  assert.match(dashboard, /invalid response/);
+  assert.match(dashboard, /empty response/);
+  assert.doesNotMatch(dashboard, /const result = await response\.json\(\)/);
+  assert.match(dashboard, /workflowLoadError/);
+  assert.match(dashboard, /Try again/);
 });

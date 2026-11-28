@@ -11,6 +11,7 @@ type WorkflowSummary = {
   description: string;
   status: string;
   updated: string;
+  isPlaybook?: boolean;
 };
 
 type PlaybookEntry = WorkflowSummary & {
@@ -70,6 +71,7 @@ export default function PlaybooksLibraryPage() {
         for (let offset = 0; offset < workflows.length; offset += batchSize) {
           const batch = workflows.slice(offset, offset + batchSize);
           const inspected = await Promise.all(batch.map(async (workflow) => {
+            if (workflow.isPlaybook !== true) return null;
             try {
               const definitionResponse = await fetch("/api/workflows/" + encodeURIComponent(workflow.id) + "/definition", {
                 cache: "no-store",

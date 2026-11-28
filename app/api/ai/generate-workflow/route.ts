@@ -354,7 +354,7 @@ export async function POST(request: NextRequest) {
       AI_INVALID_RESPONSE: { status: 502, message: "Gemini returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
       AI_EMPTY_RESPONSE: { status: 502, message: "Gemini returned no workflow. No Rexnora AI credit was charged. Please try again." },
       AI_INVALID_JSON: { status: 502, message: "Gemini returned an invalid workflow format. No Rexnora AI credit was charged. Please try again." },
-      AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Aivanta's safety and validation rules. No Rexnora AI credit was charged. Try describing a simpler workflow." },
+      AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Rexnora's safety and validation rules. No Rexnora AI credit was charged. Try describing a simpler workflow." },
     };
     const mapped = responses[code] || { status: 502, message: "Workflow generation failed safely. Please try again." };
     if (mapped.status >= 500 || (error && typeof error === "object" && "providerStatus" in error)) {

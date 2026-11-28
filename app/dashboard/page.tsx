@@ -8,6 +8,25 @@ import DashboardSidebar from "./dashboard-sidebar";
 
 type Workflow = { id: string; name: string; description: string; category: string; status: "Active" | "Draft" | "Paused" | "Archived"; runs: string; updated: string; icon: string; tone: string };
 
+type WorkflowResponse = { error?: string; workspace?: { name?: string }; workflows?: Workflow[] };
+type MutationResponse = { error?: string; workflow?: Workflow };
+
+async function readJsonResponse<T>(response: Response, failureLabel: string): Promise<T> {
+  const body = await response.text();
+  if (!body.trim()) {
+    throw new Error(response.ok
+      ? "The server returned an empty response. Please try again."
+      : `${failureLabel} (HTTP ${response.status}; empty response).`);
+  }
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new Error(response.ok
+      ? "The server returned an invalid response. Please try again."
+      : `${failureLabel} (HTTP ${response.status}; invalid response).`);
+  }
+}
+
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -23,29 +42,31 @@ export default function DashboardPage() {
   const [notice, setNotice] = useState("");
   const [workspaceName, setWorkspaceName] = useState("Your workspace");
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
+  const [workflowLoadError, setWorkflowLoadError] = useState("");
+  const [workflowReloadKey, setWorkflowReloadKey] = useState(0);
   const [savingWorkflow, setSavingWorkflow] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function loadWorkflows() {
+      setWorkflowLoadError("");
+      setLoadingWorkflows(true);
       try {
-        const response = await fetch("/api/workflows", { cache: "no-store" });
-        const result = await response.json();
+        const response = await fetch("/api/workflows", { cache: "no-store", headers: { Accept: "application/json" } });
+        const result = await readJsonResponse<WorkflowResponse>(response, "Could not load workflows");
         if (!response.ok) throw new Error(result.error || "Could not load your workflows.");
         if (cancelled) return;
         setWorkspaceName(result.workspace?.name || "Your workspace");
         setWorkflows(Array.isArray(result.workflows) ? result.workflows : []);
       } catch (caught) {
-        if (!cancelled) {
-          setNotice(caught instanceof Error ? caught.message : "Could not load your workflows.");
-        }
+        if (!cancelled) setWorkflowLoadError(caught instanceof Error ? caught.message : "Could not load your workflows.");
       } finally {
         if (!cancelled) setLoadingWorkflows(false);
       }
     }
     void loadWorkflows();
     return () => { cancelled = true; };
-  }, []);
+  }, [workflowReloadKey]);
 
   const visibleWorkflows = useMemo(() => workflows.filter((item) => {
     const matchesSearch = (item.name + " " + item.description + " " + item.category).toLowerCase().includes(search.toLowerCase());
@@ -76,7 +97,7 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description }),
       });
-      const result = await response.json();
+      const result = await readJsonResponse<MutationResponse>(response, "Could not save this workflow");
       if (!response.ok) throw new Error(result.error || "Could not save this workflow.");
 
       setWorkflows((current) => current.map((item) =>
@@ -105,7 +126,7 @@ export default function DashboardPage() {
     setNotice("");
     try {
       const response = await fetch(`/api/workflows/${workflow.id}`, { method: "DELETE" });
-      const result = await response.json();
+      const result = await readJsonResponse<{ error?: string }>(response, "Could not delete this workflow");
       if (!response.ok) throw new Error(result.error || "Could not delete this workflow.");
       setWorkflows((current) => current.filter((item) => item.id !== workflow.id));
       setNotice("Workflow deleted.");
@@ -162,7 +183,8 @@ export default function DashboardPage() {
           <div className="workflow-table"><div className="table-header"><span>WORKFLOW</span><span>STATUS</span><span>RUNS</span><span>LAST UPDATED</span><span /></div>
             {loadingWorkflows && <div className="empty-state"><span>◷</span><strong>Loading your workflows…</strong><p>Connecting to your Rexnora workspace.</p></div>}
             {!loadingWorkflows && visibleWorkflows.map((workflow) => <article className="workflow-row" key={workflow.id}><div className="workflow-name-cell"><span className={"workflow-app-icon " + workflow.tone}>{workflow.icon}</span><span className="workflow-name-copy"><strong>{workflow.name}</strong><small>{workflow.description || "No description yet"}</small></span></div><div><span className={"workflow-status status-" + workflow.status.toLowerCase()}><i />{workflow.status}</span></div><span className="run-count">{workflow.runs}</span><span className="updated-time">{workflow.updated}</span><div className="workflow-actions"><button className="row-menu" aria-label={"Workflow actions for " + workflow.name} aria-expanded={openMenuId === workflow.id} onClick={() => setOpenMenuId((current) => current === workflow.id ? null : workflow.id)}>{deletingWorkflowId === workflow.id ? "…" : "•••"}</button>{openMenuId === workflow.id && <div className="workflow-action-menu"><Link href={`/dashboard/workflows/${workflow.id}`} className="builder-action" onClick={() => setOpenMenuId(null)}>Open builder <span>↗</span></Link><button type="button" onClick={() => openEditModal(workflow)}>Edit details</button><button type="button" className="danger-action" onClick={() => void deleteWorkflow(workflow)}>Delete workflow</button></div>}</div></article>)}
-            {!loadingWorkflows && visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
+            {!loadingWorkflows && workflowLoadError && <div className="empty-state" role="alert"><span>!</span><strong>Could not load workflows</strong><p>{workflowLoadError}</p><button type="button" onClick={() => setWorkflowReloadKey((value) => value + 1)}>Try again</button></div>}
+            {!loadingWorkflows && !workflowLoadError && visibleWorkflows.length === 0 && <div className="empty-state"><span>⌕</span><strong>No workflows found</strong><p>Try another search or change your filters.</p><button onClick={() => { setFilter("All workflows"); setSearch(""); }}>Clear filters</button></div>}
           </div>
           <div className="dashboard-footnote"><span>ⓘ</span><p><strong>Your workspace is connected.</strong> Workflow drafts are saved to your Rexnora database. New automation is created through Playbooks. Activation checks the saved version, provider connections, permissions and runtime safety gates.</p></div>
         </div>
