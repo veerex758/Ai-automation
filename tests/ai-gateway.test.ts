@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { AIProviderError } from "../lib/ai/errors";
 import { createAIGateway } from "../lib/ai/gateway";
 import { createDefaultAIProviderRegistry, AIProviderRegistry } from "../lib/ai/registry";
-import { routeAIRequest } from "../lib/ai/router";
+import { routeAIRequest, routeAIRequests } from "../lib/ai/router";
+import { retryDelayMs } from "../lib/ai/retry";
 import { createGeminiProvider } from "../lib/ai/providers/gemini";
 import { createGroqProvider } from "../lib/ai/providers/groq";
 import { createCloudflareProvider } from "../lib/ai/providers/cloudflare";
@@ -181,6 +182,23 @@ test("default routing prefers configured Gemini and retains Groq as an alternate
   assert.equal(route.primaryModel, "gemini-test-model");
   assert.deepEqual(route.fallbackModels, ["gemini-test-fallback"]);
   assert.deepEqual(registry.list().map((provider) => provider.id), ["gemini", "groq"]);
+});
+
+test("failover order remains reversible when Groq or Cloudflare is configured as primary", () => {
+  const groqEnv = { ...env, GROQ_API_KEY: "test-groq-secret", AI_PRIMARY_PROVIDER: "groq" };
+  const groqRegistry = new AIProviderRegistry();
+  groqRegistry.register(createGeminiProvider({ env }));
+  groqRegistry.register(createGroqProvider({ env: groqEnv }));
+  assert.deepEqual(
+    routeAIRequests("summarization", groqRegistry, groqEnv).map((route) => route.provider.id),
+    ["groq", "gemini"],
+  );
+});
+
+test("retry delay honors Retry-After as a minimum while preserving jittered backoff", () => {
+  const policy = { maxAttempts: 3, maxRateLimitRetries: 1, baseDelayMs: 500, maxInlineWaitMs: 6_000 };
+  assert.equal(retryDelayMs(3, 1_750, policy, () => 0), 1_750);
+  assert.equal(retryDelayMs(3, 0, policy, () => 0.5), 1_000);
 });
 
 test("Groq is available only with a server key while Cloudflare remains explicitly disabled", async () => {
