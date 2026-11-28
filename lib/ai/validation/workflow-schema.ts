@@ -16,7 +16,7 @@ const LegacyDraftSchema = z.object({
 export function parseStructuredJson<T = unknown>(
   content: unknown,
   provider: AIProviderId,
-  validate?: (value: unknown) => T,
+  validate?: (value: unknown, provider?: AIProviderId) => T,
 ): T {
   if (typeof content !== "string" || !content.trim()) {
     throw new AIProviderError({ provider, code: "AI_EMPTY_RESPONSE", message: "AI provider returned no content." });
@@ -34,7 +34,7 @@ export function parseStructuredJson<T = unknown>(
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new AIProviderError({ provider, code: "AI_INVALID_OUTPUT", message: "Structured AI output must be a JSON object." });
   }
-  return validate ? validate(parsed) : parsed as T;
+  return validate ? validate(parsed, provider) : parsed as T;
 }
 
 /** Envelope validation only; registered-node input and graph validation remain in the authoritative workflow API route. */
