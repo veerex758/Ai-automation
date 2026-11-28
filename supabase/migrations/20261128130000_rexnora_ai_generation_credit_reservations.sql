@@ -112,6 +112,9 @@ begin
   for update;
 
   if found then
+    if v_existing.actor_user_id is not null and v_existing.actor_user_id <> v_actor then
+      raise exception 'AI operation belongs to another user' using errcode = '42501';
+    end if;
     if v_existing.request_fingerprint <> p_request_fingerprint then
       raise exception 'idempotency key reused with different AI operation input'
         using errcode = '22023';
@@ -316,11 +319,12 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_status text;
+  v_actor uuid := auth.uid();
+  v_reservation private.ai_generation_credit_reservations%rowtype;
   v_provider_count integer := 0;
   v_reason text := coalesce(nullif(p_release_reason, ''), 'request_failed');
 begin
-  if auth.uid() is null or not private.is_workspace_member(p_workspace_id) then
+  if v_actor is null or not private.is_workspace_member(p_workspace_id) then
     raise exception 'workspace access denied' using errcode = '42501';
   end if;
   if p_workspace_id is null or p_operation_id is null
@@ -333,7 +337,7 @@ begin
     pg_catalog.hashtextextended(p_workspace_id::text, 0)
   );
 
-  select status into v_status
+  select * into v_reservation
   from private.ai_generation_credit_reservations
   where workspace_id = p_workspace_id and operation_id = p_operation_id
   for update;
@@ -341,10 +345,13 @@ begin
   if not found then
     return jsonb_build_object('released', false, 'duplicate', true, 'reason', 'reservation_not_found');
   end if;
-  if v_status = 'consumed' then
+  if v_reservation.actor_user_id is not null and v_reservation.actor_user_id <> v_actor then
+    raise exception 'AI operation belongs to another user' using errcode = '42501';
+  end if;
+  if v_reservation.status = 'consumed' then
     return jsonb_build_object('released', false, 'duplicate', true, 'reason', 'already_consumed');
   end if;
-  if v_status = 'released' then
+  if v_reservation.status = 'released' then
     return jsonb_build_object('released', true, 'duplicate', true, 'reason', 'already_released');
   end if;
 
@@ -417,6 +424,9 @@ begin
 
   if not found then
     return jsonb_build_object('allowed', false, 'reason', 'reservation_not_found');
+  end if;
+  if v_reservation.actor_user_id is not null and v_reservation.actor_user_id <> v_actor then
+    raise exception 'AI operation belongs to another user' using errcode = '42501';
   end if;
   if v_reservation.status = 'consumed' then
     return jsonb_build_object('allowed', true, 'duplicate', true, 'operation_id', p_operation_id);
