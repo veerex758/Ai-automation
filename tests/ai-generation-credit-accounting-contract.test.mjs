@@ -108,7 +108,8 @@ test("shared AI provider attempts keep using the same operation identifier acros
 test("ambiguous settlement responses are resolved with the same operation reservation state", () => {
   assert.match(route, /AI_USAGE_SETTLEMENT_UNKNOWN/);
   assert.match(route, /releaseResult\?\.reason !== "already_consumed"/);
-  assert.match(route, /releaseResult\?\.reason === "already_consumed"/);
+  assert.match(route, /releaseResult\?\.released === true \|\| releaseResult\?\.reason === "already_released"/);
+  assert.match(route, /if \(releaseResult\?\.reason !== "already_consumed"\)/);
   assert.match(route, /Reuse the same Idempotency-Key/);
   assert.doesNotMatch(route, /Usage settlement is unavailable\. Your AI credit was not charged/);
 });
