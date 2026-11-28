@@ -97,6 +97,32 @@ test("successful workflow generation logs Gemini provider and model without prom
 });
 
 
+test("safe operational logs retain provider token totals but discard arbitrary sensitive values", () => {
+  let output = "";
+  logOperationalEvent({
+    event: "workflow_generation",
+    requestId,
+    route: "/api/ai/generate-workflow",
+    outcome: "success",
+    statusCode: 200,
+    provider: "gemini",
+    model: "gemini-3.8-flash",
+    providerInputTokens: 120,
+    providerOutputTokens: 45,
+    providerTotalTokens: 165,
+    prompt: "private lead prompt",
+    apiKey: "private-provider-key",
+    costDetails: { raw: "private" },
+  }, value => { output = value; });
+  const record = JSON.parse(output);
+  assert.equal(record.providerInputTokens, 120);
+  assert.equal(record.providerOutputTokens, 45);
+  assert.equal(record.providerTotalTokens, 165);
+  assert.equal("prompt" in record, false);
+  assert.equal("apiKey" in record, false);
+  assert.equal("costDetails" in record, false);
+});
+
 test("workflow generation logs the selected Gemini fallback without sensitive data", () => {
   let output = "";
   logOperationalEvent({

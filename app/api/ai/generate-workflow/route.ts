@@ -9,6 +9,8 @@ import { buildRegistrySteps } from "@/lib/workflows/build-registry-steps";
 import { validateRegisteredSteps } from "@/nodes/validate-steps";
 import { getUnsupportedRequestedCapabilities } from "@/lib/workflows/ai-request-capability-guard.cjs";
 import { calculateGraphPositions } from "@/lib/workflows/graph-layout.cjs";
+import { aiGateway } from "@/lib/ai/gateway";
+import { validateWorkflowPlannerEnvelope } from "@/lib/ai/validation/workflow-schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +23,50 @@ export async function POST(request: NextRequest) {
   const requestId = getRequestId(request.headers.get("x-request-id"));
   const startedAt = Date.now();
   let circuitProbe = false;
+  let providerAttemptObserver: ((attempt: {
+    model?: string; attempt?: number; status?: number; retryAfterMs?: number; errorCode?: string;
+    providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
+  }) => void) | undefined;
+  const aiAttemptBudget = {
+    remainingProviderAttempts: 8,
+    totalProviderAttempts: 0,
+    deadlineAt: startedAt + 54_000,
+  };
+  const providerUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const gatewayGenerateStructured = async (args: {
+    task: "workflow_generation" | "workflow_schema_repair";
+    systemPrompt: string;
+    prompt: string;
+  }) => {
+    const result = await aiGateway.generateStructured(
+      {
+        systemPrompt: args.systemPrompt,
+        prompt: args.prompt,
+        maxOutputTokens: 2200,
+        ...(args.task === "workflow_generation"
+          ? { validate: (value: unknown) => validateWorkflowPlannerEnvelope(value, "registry", "gemini") }
+          : {}),
+      },
+      {
+        task: args.task,
+        operationId: requestId,
+        signal: request.signal,
+        timeoutMs: 16_000,
+        deadlineAt: aiAttemptBudget.deadlineAt,
+        attemptBudget: aiAttemptBudget,
+        onProviderAttempt: (attempt) => providerAttemptObserver?.(attempt),
+      },
+    );
+    providerUsage.inputTokens += result.usage.inputTokens;
+    providerUsage.outputTokens += result.usage.outputTokens;
+    providerUsage.totalTokens += result.usage.totalTokens;
+    return {
+      parsed: result.output,
+      modelUsed: result.model,
+      fallbackUsed: result.fallbackUsed,
+      usage: providerUsage,
+    };
+  };
   const jsonResponse = (body: unknown, init?: ResponseInit) => {
     const response = NextResponse.json(body, init);
     response.headers.set("x-request-id", requestId);
@@ -167,6 +213,7 @@ export async function POST(request: NextRequest) {
       providerReason?: string; providerType?: string; providerRequestId?: string; fallbackUsed?: boolean;
     }) => {
       const status = Number(attempt.status);
+      const failure = status >= 400 || Boolean(attempt.errorCode);
       const providerCode = attempt.errorCode ||
         (status === 429 ? "AI_RATE_LIMITED"
           : status === 401 || status === 403 ? "AI_PROVIDER_AUTH_ERROR"
@@ -174,8 +221,8 @@ export async function POST(request: NextRequest) {
           : status >= 400 ? "AI_PROVIDER_ERROR" : undefined);
       logOperationalEvent({
         event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
-        outcome: status >= 400 ? "failure" : "success",
-        statusCode: Number.isSafeInteger(status) ? status : 502,
+        outcome: failure ? "failure" : "success",
+        statusCode: Number.isSafeInteger(status) && status >= 400 ? status : failure ? 502 : 200,
         durationMs: Math.max(0, Date.now() - startedAt),
         ...(providerCode ? { errorCode: providerCode } : {}),
         provider: "gemini",
@@ -189,6 +236,7 @@ export async function POST(request: NextRequest) {
         fallbackUsed: attempt.fallbackUsed === true,
       }, status >= 400 ? console.error : console.info);
     };
+    providerAttemptObserver = onProviderAttempt;
 
     let result: Awaited<ReturnType<typeof generateWorkflow>>;
     try {
@@ -199,12 +247,13 @@ export async function POST(request: NextRequest) {
         starterType: starterType === "real_estate" ? starterType : undefined,
         crmProvider: starterType === "real_estate" ? requestedCrmProvider as string : undefined,
         onProviderAttempt,
+        gatewayGenerateStructured,
       });
     } catch (providerError) {
       const status = providerError && typeof providerError === "object" && "providerStatus" in providerError
         ? Number((providerError as { providerStatus?: unknown }).providerStatus) : null;
       const code = providerError instanceof Error ? providerError.message : "";
-      const transient = status === null || [408, 429, 500, 502, 503, 504].includes(status) ||
+      const transient = (status !== null && [408, 429, 500, 502, 503, 504].includes(status)) ||
         ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE"].includes(code);
       if (transient) {
         const { error: circuitWriteError } = await circuitClient.rpc("record_ai_provider_circuit_result", {
@@ -292,12 +341,13 @@ export async function POST(request: NextRequest) {
           invalidSteps: invalidInputs,
           nodeCatalog,
           onProviderAttempt,
+          gatewayGenerateStructured,
         }) as Array<{ id: string; input: Record<string, unknown> }>;
       } catch (repairError) {
         const status = repairError && typeof repairError === "object" && "providerStatus" in repairError
           ? Number((repairError as { providerStatus?: unknown }).providerStatus) : null;
         const code = repairError instanceof Error ? repairError.message : "";
-        const transient = status === null || [408, 429, 500, 502, 503, 504].includes(status) ||
+        const transient = (status !== null && [408, 429, 500, 502, 503, 504].includes(status)) ||
           ["AI_TIMEOUT", "AI_PROVIDER_UNAVAILABLE"].includes(code);
         if (transient) {
           await supabase.rpc("record_ai_provider_circuit_result", {
@@ -458,13 +508,16 @@ export async function POST(request: NextRequest) {
       }, { status: 402 });
     }
 
-    const { providerModelUsed, providerFallbackUsed, ...publicResult } = result;
+    const { providerModelUsed, providerFallbackUsed, providerUsage, ...publicResult } = result;
     logOperationalEvent({
       event: "workflow_generation", requestId, route: "/api/ai/generate-workflow",
       outcome: "success", statusCode: 200,
       durationMs: Math.max(0, Date.now() - startedAt),
       provider: "gemini", model: providerModelUsed || (process.env.GEMINI_AI_MODEL || "gemini-3.8-flash").trim(),
       fallbackUsed: providerFallbackUsed === true,
+      providerInputTokens: providerUsage?.inputTokens,
+      providerOutputTokens: providerUsage?.outputTokens,
+      providerTotalTokens: providerUsage?.totalTokens,
     });
     return jsonResponse({ ...publicResult, definition, registrySteps: executableSteps, missingConnections: [], connectionStatusAvailable: false, readyToTest: false }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
@@ -485,6 +538,11 @@ export async function POST(request: NextRequest) {
       AI_INVALID_RESPONSE: { status: 502, message: "Gemini returned an unreadable response. No Rexnora AI credit was charged. Please try again." },
       AI_EMPTY_RESPONSE: { status: 502, message: "Gemini returned no workflow. No Rexnora AI credit was charged. Please try again." },
       AI_INVALID_JSON: { status: 502, message: "Gemini returned an invalid workflow format. No Rexnora AI credit was charged. Please try again." },
+      AI_INVALID_OUTPUT: { status: 422, message: "The AI provider returned an output that Rexnora could not safely validate. No Rexnora AI credit was charged." },
+      AI_INVALID_REQUEST: { status: 502, message: "The AI provider request configuration is invalid. No Rexnora AI credit was charged." },
+      AI_SAFETY_REJECTED: { status: 422, message: "The AI provider declined this request for safety reasons. No Rexnora AI credit was charged." },
+      AI_DEADLINE_EXCEEDED: { status: 504, message: "AI generation exceeded its request deadline. No Rexnora AI credit was charged. Please retry." },
+      AI_ATTEMPT_LIMIT_REACHED: { status: 503, message: "The AI provider attempt budget was exhausted. No Rexnora AI credit was charged. Please retry shortly." },
       AI_UNSAFE_WORKFLOW: { status: 422, message: "The generated workflow did not pass Rexnora's safety and validation rules. No Rexnora AI credit was charged. Try describing a simpler workflow." },
     };
     const mapped = responses[code] || { status: 502, message: "Workflow generation failed safely. Please try again." };
