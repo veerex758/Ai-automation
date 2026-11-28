@@ -403,6 +403,27 @@ test("gateway does not exceed the operation-wide provider attempt cap", async ()
   assert.equal(providerCalls, 0);
 });
 
+test("gateway does not route around invalid requests or safety rejections", async () => {
+  for (const failure of [
+    { status: 400, payload: { error: { message: "bad request" } }, code: "AI_INVALID_REQUEST" },
+    { status: 200, payload: { choices: [{ message: { content: "" }, finish_reason: "content_filter" }] }, code: "AI_SAFETY_REJECTED" },
+  ]) {
+    let groqCalls = 0;
+    const registry = new AIProviderRegistry();
+    registry.register(createGeminiProvider({ env, fetchImpl: fakeFetch(failure.payload, failure.status) }));
+    registry.register(createGroqProvider({
+      env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
+      fetchImpl: async () => { groqCalls += 1; return fakeFetch({ choices: [{ message: { content: "should not run" } }] })(); },
+    }));
+    const gateway = createAIGateway(registry, { ...env, GROQ_API_KEY: "test-groq-secret" });
+    await assert.rejects(
+      gateway.generateText({ prompt: "No bypass." }, { ...context, task: "summarization" }),
+      (error: unknown) => error instanceof AIProviderError && error.code === failure.code,
+    );
+    assert.equal(groqCalls, 0);
+  }
+});
+
 test("gateway fails over from invalid provider credentials to the configured Groq provider", async () => {
   const attempts: Array<{ provider?: string; status: number; fallbackUsed: boolean }> = [];
   const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret", GROQ_AI_MODEL: "openai/gpt-oss-120b" };
@@ -504,26 +525,6 @@ test("long Retry-After prevents same-provider model fallback and routes to Groq"
   assert.equal(geminiCalls, 1);
 });
 
-test("gateway does not route around invalid requests or safety rejections", async () => {
-  for (const failure of [
-    { status: 400, payload: { error: { message: "bad request" } }, code: "AI_INVALID_REQUEST" },
-    { status: 200, payload: { choices: [{ message: { content: "" }, finish_reason: "content_filter" }] }, code: "AI_SAFETY_REJECTED" },
-  ]) {
-    let groqCalls = 0;
-    const registry = new AIProviderRegistry();
-    registry.register(createGeminiProvider({ env, fetchImpl: fakeFetch(failure.payload, failure.status) }));
-    registry.register(createGroqProvider({
-      env: { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" },
-      fetchImpl: async () => { groqCalls += 1; return fakeFetch({ choices: [{ message: { content: "should not run" } }] })(); },
-    }));
-    const gateway = createAIGateway(registry, { ...env, GROQ_API_KEY: "test-groq-secret" });
-    await assert.rejects(
-      gateway.generateText({ prompt: "No bypass." }, { ...context, task: "summarization" }),
-      (error: unknown) => error instanceof AIProviderError && error.code === failure.code,
-    );
-    assert.equal(groqCalls, 0);
-  }
-});
 \ntest("dashboard components never call AI providers directly or contain server-side AI keys", () => {
   const root = join(process.cwd(), "app", "dashboard");
   const sourceFiles: string[] = [];
