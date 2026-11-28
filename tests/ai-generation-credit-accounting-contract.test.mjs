@@ -9,13 +9,13 @@ const usageModule = readFileSync(new URL("../lib/ai/usage.ts", import.meta.url),
 const reservationMigration = readFileSync(new URL("../supabase/migrations/20261128130000_rexnora_ai_generation_credit_reservations.sql", import.meta.url), "utf8");
 
 test("workflow generation reserves before provider work and consumes only after the complete graph validates", () => {
-  const preflight = route.indexOf('supabase.rpc("get_workspace_entitlements"');
   const reservation = route.indexOf('supabase.rpc("reserve_ai_generation_usage"');
   const generation = route.indexOf("await generateWorkflow(");
   const graphValidation = route.indexOf("validateRegisteredSteps(rebuilt)");
   const metering = route.indexOf('supabase.rpc("consume_ai_generation_usage"');
   const successLog = route.indexOf('outcome: "success"');
-  assert.ok(preflight >= 0 && reservation > preflight);
+  assert.equal(route.includes('supabase.rpc("get_workspace_entitlements"'), false);
+  assert.ok(reservation > 0);
   assert.ok(generation > reservation);
   assert.ok(graphValidation > generation);
   assert.ok(metering > graphValidation);
