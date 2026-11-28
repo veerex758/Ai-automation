@@ -4,7 +4,7 @@
     "deploymentEnabled": {
       "**": false,
       "main": true,
-      "stage3": true
+      "integration/saas-core-stage3-realestate-20261123": true
     }
   },
   "schedules": {
