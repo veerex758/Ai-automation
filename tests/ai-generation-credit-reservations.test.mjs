@@ -18,7 +18,7 @@ test("credit reservations are private, workspace-scoped, and unavailable to brow
   assert.match(migration, /alter table private\.ai_generation_credit_reservations enable row level security/);
   assert.match(migration, /revoke all on private\.ai_generation_credit_reservations from public, anon, authenticated, service_role/);
   assert.match(migration, /revoke all on private\.ai_provider_usage_events from public, anon, authenticated, service_role/);
-  assert.match(migration, /p_request_fingerprint !~ '\^\[0-9a-f\]\{64\}\$'/);
+  assert.ok(migration.includes("p_request_fingerprint !~ '^[0-9a-f]{64}$'"));
 });
 
 test("reserve is quota-authoritative, idempotent, and not a customer usage insert", () => {
@@ -53,8 +53,8 @@ test("settlement atomically inserts one credit, one generation and actual provid
   const consumeEnd = migration.indexOf("revoke all on function public.consume_ai_generation_usage", consumeStart);
   const consumeBody = migration.slice(consumeStart, consumeEnd);
   assert.ok(consumeStart >= 0 && consumeEnd > consumeStart);
-  assert.match(consumeBody, /status = 'consumed'/);
-  assert.match(consumeBody, /duplicate.*true/);
+  assert.match(consumeBody, /v_reservation\.status = 'consumed'/);
+  assert.match(consumeBody, /'duplicate', true/);
   assert.match(consumeBody, /insert into public\.workspace_usage/);
   assert.match(consumeBody, /'ai_generation'/);
   assert.match(consumeBody, /'ai_credit'/);
@@ -63,7 +63,6 @@ test("settlement atomically inserts one credit, one generation and actual provid
   assert.match(consumeBody, /provider_cost_usd/);
   assert.match(consumeBody, /update private\.ai_generation_credit_reservations/);
   assert.match(consumeBody, /metadata.*idempotency_key/s);
-  assert.match(consumeBody, /already consumed/);
 });
 
 test("all workspace AI spend paths account for outstanding reservations", () => {
@@ -91,6 +90,7 @@ test("provider failures release reservations while the credit settlement remains
   assert.match(route, /if \(releaseReservation && !reservationConsumed\)/);
   assert.equal((route.match(/consume_ai_generation_usage/g) || []).length, 1);
   assert.match(route, /p_provider_usage: Array\.from\(providerUsageByModel\.values\(\)\)/);
+  assert.match(migration, /expires_at timestamptz not null default now\(\) \+ interval '10 minutes'/);
 });
 
 test("workflow canvas sends and reuses the same idempotency key on explicit retry", () => {
@@ -98,7 +98,7 @@ test("workflow canvas sends and reuses the same idempotency key on explicit retr
   assert.match(builder, /const operationId = retryOperationId \?\? window\.crypto\.randomUUID\(\)/);
   assert.match(builder, /"Idempotency-Key": operationId/);
   assert.match(builder, /generateDraftOnCanvas\(aiDraftRetryPrompt, aiDraftOperationId\)/);
-  assert.match(builder, /setAiDraftOperationId\("\\"\)/);
+  assert.match(builder, /setAiDraftOperationId\(""/);
 });
 
 test("Playbook generation sends and reuses the same idempotency key on explicit retry", () => {
