@@ -1,4 +1,6 @@
 import { AIProviderError, normalizeProviderError } from "./errors";
+import { InMemoryCircuitBreakerStore, SupabaseCircuitBreakerStore } from "./circuit-breaker";
+import type { CircuitAdmission, CircuitPolicy, ProviderCircuitBreakerStore } from "./circuit-breaker";
 import { createDefaultAIProviderRegistry } from "./registry";
 import type { AIProviderRegistry } from "./registry";
 import { routeAIRequests } from "./router";
@@ -11,41 +13,55 @@ import type {
 
 const MAX_TOTAL_PROVIDER_ATTEMPTS = 8;
 const MAX_PROVIDER_ATTEMPTS_PER_OPERATION = 4;
-const MAX_PROVIDER_CONFIGURATION_COOLDOWN_MS = 5 * 60_000;
 
-type ProviderHealthEntry = { unhealthyUntil: number; reason: "AI_PROVIDER_AUTH_ERROR" };
-
-/**
- * Process-local circuit hint. The workflow endpoint also uses the persistent
- * Supabase Gemini circuit; this map prevents repeated auth failures in warm
- * serverless instances and is deliberately not presented as durable storage.
- */
-function providerIsHealthy(
-  health: Map<AIProviderId, ProviderHealthEntry>,
-  provider: AIProviderId,
-  now = Date.now(),
-): boolean {
-  const entry = health.get(provider);
-  if (!entry) return true;
-  if (entry.unhealthyUntil <= now) {
-    health.delete(provider);
-    return true;
-  }
-  return false;
+function boundedInteger(
+  env: Record<string, string | undefined>,
+  name: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const value = Number(env[name]);
+  return Number.isSafeInteger(value) ? Math.max(min, Math.min(max, value)) : fallback;
 }
 
-function markProviderConfigurationUnhealthy(
-  health: Map<AIProviderId, ProviderHealthEntry>,
-  provider: AIProviderId,
-): void {
-  health.set(provider, {
-    unhealthyUntil: Date.now() + MAX_PROVIDER_CONFIGURATION_COOLDOWN_MS,
-    reason: "AI_PROVIDER_AUTH_ERROR",
-  });
+function boundedRate(
+  env: Record<string, string | undefined>,
+  name: string,
+  fallback: number,
+): number {
+  const value = Number(env[name]);
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 }
 
-function clearProviderHealth(health: Map<AIProviderId, ProviderHealthEntry>, provider: AIProviderId): void {
-  health.delete(provider);
+function circuitPolicy(env: Record<string, string | undefined>): CircuitPolicy {
+  return {
+    failureThreshold: boundedInteger(env, "AI_CIRCUIT_FAILURE_THRESHOLD", 3, 1, 20),
+    failureRateThreshold: boundedRate(env, "AI_CIRCUIT_FAILURE_RATE_THRESHOLD", 0.5),
+    minimumRequests: boundedInteger(env, "AI_CIRCUIT_MINIMUM_REQUESTS", 5, 2, 100),
+    windowSeconds: boundedInteger(env, "AI_CIRCUIT_WINDOW_SECONDS", 300, 30, 3600),
+    baseCooldownMs: boundedInteger(env, "AI_CIRCUIT_BASE_COOLDOWN_MS", 30_000, 1_000, 300_000),
+    maxCooldownMs: boundedInteger(env, "AI_CIRCUIT_MAX_COOLDOWN_MS", 300_000, 1_000, 600_000),
+    authCooldownMs: boundedInteger(env, "AI_CIRCUIT_AUTH_COOLDOWN_MS", 300_000, 1_000, 600_000),
+    probeLeaseMs: boundedInteger(env, "AI_CIRCUIT_PROBE_LEASE_MS", 25_000, 5_000, 60_000),
+  };
+}
+
+function isCircuitFailure(error: AIProviderError): boolean {
+  if ([
+    "AI_PROVIDER_AUTH_ERROR",
+    "AI_RATE_LIMITED",
+    "AI_PROVIDER_OVERLOADED",
+    "AI_TIMEOUT",
+    "AI_PROVIDER_UNAVAILABLE",
+    "AI_NETWORK_ERROR",
+    "AI_INVALID_RESPONSE",
+    "AI_EMPTY_RESPONSE",
+    "AI_INVALID_JSON",
+    "AI_INVALID_OUTPUT",
+  ].includes(error.code)) return true;
+  const status = Number(error.providerStatus ?? error.status);
+  return [408, 429, 500, 502, 503, 504].includes(status);
 }
 
 function isDeadlineOrCancellation(error: AIProviderError): boolean {
@@ -71,6 +87,7 @@ function canFailOver(error: AIProviderError): boolean {
     "AI_INVALID_JSON",
     "AI_INVALID_OUTPUT",
     "AI_ATTEMPT_LIMIT_REACHED",
+    "AI_PROVIDER_COOLDOWN",
   ].includes(error.code) || [408, 429, 500, 502, 503, 504].includes(status);
 }
 
@@ -84,6 +101,7 @@ function canUseSameProviderModelFallback(error: AIProviderError): boolean {
     "AI_INVALID_REQUEST", "AI_INVALID_RESPONSE", "AI_INVALID_JSON", "AI_INVALID_OUTPUT",
     "AI_SAFETY_REJECTED", "AI_UNSAFE_WORKFLOW", "AI_EMPTY_RESPONSE",
     "AI_CANCELLED", "AI_DEADLINE_EXCEEDED", "AI_ATTEMPT_LIMIT_REACHED",
+    "AI_PROVIDER_COOLDOWN", "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
   ].includes(error.code)) return false;
   const status = Number(error.providerStatus ?? error.status);
   return error.code === "AI_TIMEOUT" || [408, 500, 502, 503, 504].includes(status);
@@ -111,13 +129,40 @@ function providerContext(
   };
 }
 
+function circuitUnavailableError(provider: AIProviderId): AIProviderError {
+  return new AIProviderError({
+    provider,
+    code: "AI_PROVIDER_CIRCUIT_UNAVAILABLE",
+    status: 503,
+    message: "Shared AI provider health storage is unavailable.",
+  });
+}
+
+function cooldownError(provider: AIProviderId, retryAfterMs: number): AIProviderError {
+  return new AIProviderError({
+    provider,
+    code: "AI_PROVIDER_COOLDOWN",
+    status: 503,
+    retryAfterMs: Math.max(1, retryAfterMs),
+    message: "AI provider is temporarily excluded by its shared health circuit.",
+  });
+}
+
 const defaultRegistry = createDefaultAIProviderRegistry();
 
 export function createAIGateway(
   registry: AIProviderRegistry = defaultRegistry,
   env: Record<string, string | undefined> = process.env,
+  suppliedCircuitStore?: ProviderCircuitBreakerStore,
 ) {
-  const providerHealth = new Map<AIProviderId, ProviderHealthEntry>();
+  // Unit tests/local isolated runs use deterministic memory. Every deployed
+  // server environment uses shared Supabase state, not a Vercel instance map.
+  const circuitStore = suppliedCircuitStore ?? (
+    env.NODE_ENV === "test"
+      ? new InMemoryCircuitBreakerStore()
+      : new SupabaseCircuitBreakerStore()
+  );
+  const policy = circuitPolicy(env);
 
   async function execute<T>(
     inputContext: AIRequestContext,
@@ -152,12 +197,12 @@ export function createAIGateway(
         message: "AI operation provider attempt limit was reached.",
       });
     }
+
     const providerAttemptCounts = operationBudget.providerAttempts ?? {};
     const excludedProviders = [
       ...(context.excludedProviders ?? []),
       ...registry.list()
         .filter((provider) =>
-          !providerIsHealthy(providerHealth, provider.id) ||
           (providerAttemptCounts[provider.id] ?? 0) >= operationBudget.maxAttemptsPerProvider!,
         )
         .map((provider) => provider.id),
@@ -174,8 +219,8 @@ export function createAIGateway(
       if (context.signal?.aborted) {
         throw new AIProviderError({ provider: provider.id, code: "AI_CANCELLED", message: "AI request was cancelled." });
       }
-      const deadlineAt = context.deadlineAt ?? context.attemptBudget?.deadlineAt;
-      if (deadlineAt !== undefined && deadlineAt <= Date.now()) {
+      const currentDeadline = context.deadlineAt ?? context.attemptBudget?.deadlineAt;
+      if (currentDeadline !== undefined && currentDeadline <= Date.now()) {
         throw new AIProviderError({ provider: provider.id, code: "AI_DEADLINE_EXCEEDED", message: "AI operation deadline was reached." });
       }
       if (context.attemptBudget &&
@@ -185,31 +230,96 @@ export function createAIGateway(
         throw new AIProviderError({ provider: provider.id, code: "AI_ATTEMPT_LIMIT_REACHED", message: "AI provider attempt limit was reached." });
       }
 
+      let admission: CircuitAdmission;
+      try {
+        admission = await circuitStore.acquire(provider.id, policy);
+      } catch {
+        // Never bypass shared-health storage failure with an uncoordinated local request.
+        throw circuitUnavailableError(provider.id);
+      }
+      if (!admission.allowed) {
+        lastError = cooldownError(provider.id, admission.retryAfterMs);
+        continue;
+      }
+
+      let circuitOpenedDuringOperation = false;
+      const invokeWithCircuit = async (
+        model: string,
+        attemptContext: AIRequestContext,
+      ): Promise<AIResult<T>> => {
+        if (circuitOpenedDuringOperation) {
+          throw cooldownError(provider.id, admission.retryAfterMs || policy.baseCooldownMs);
+        }
+
+        let result: AIResult<T>;
+        try {
+          result = await invoke(provider, model, attemptContext);
+        } catch (caught) {
+          const error = normalizeProviderError(caught, provider.id, context.signal);
+          const countAsFailure = isCircuitFailure(error);
+          let snapshot;
+          try {
+            snapshot = await circuitStore.record(provider.id, {
+              success: !countAsFailure,
+              statusCode: error.providerStatus ?? error.status ?? 200,
+              retryAfterMs: error.retryAfterMs,
+              probe: admission.probe,
+              policy,
+            });
+          } catch {
+            throw circuitUnavailableError(provider.id);
+          }
+          if (!countAsFailure) throw caught;
+          if (snapshot.state === "open") {
+            circuitOpenedDuringOperation = true;
+            const remaining = snapshot.openUntil === undefined
+              ? admission.retryAfterMs || policy.baseCooldownMs
+              : Math.max(1, snapshot.openUntil - Date.now());
+            throw cooldownError(provider.id, remaining);
+          }
+          throw caught;
+        }
+
+        try {
+          await circuitStore.record(provider.id, {
+            success: true,
+            probe: admission.probe,
+            policy,
+          });
+        } catch {
+          throw circuitUnavailableError(provider.id);
+        }
+        return result;
+      };
+
       try {
         let result: AIResult<T>;
         try {
-          result = await withProviderRetries(
-            provider.id,
-            providerContext(context, provider.id, providerFallback),
-            (attemptContext) => invoke(provider, route.primaryModel, attemptContext),
-          );
+          if (admission.probe) {
+            // A half-open lease permits one real health probe, no retry burst,
+            // and no alternate model on the same provider.
+            const probeAttempt = claimProviderAttempt(provider.id, context);
+            result = await invokeWithCircuit(
+              route.primaryModel,
+              providerContext({ ...context, providerAttempt: probeAttempt }, provider.id, providerFallback),
+            );
+          } else {
+            result = await withProviderRetries(
+              provider.id,
+              providerContext(context, provider.id, providerFallback),
+              (attemptContext) => invokeWithCircuit(route.primaryModel, attemptContext),
+            );
+          }
         } catch (caught) {
           let error = normalizeProviderError(caught, provider.id, context.signal);
-
-          if (error.code === "AI_PROVIDER_AUTH_ERROR") {
-            markProviderConfigurationUnhealthy(providerHealth, provider.id);
-          }
-
-          const fallbackModel = canUseSameProviderModelFallback(error) ? route.fallbackModels[0] : undefined;
-          if (fallbackModel) {
+          if (!admission.probe && canUseSameProviderModelFallback(error)) {
             try {
               const fallbackAttempt = claimProviderAttempt(provider.id, context);
               const fallbackContext = providerContext({
                 ...context,
                 providerAttempt: fallbackAttempt,
               }, provider.id, true);
-              result = await invoke(provider, fallbackModel, fallbackContext);
-              clearProviderHealth(providerHealth, provider.id);
+              result = await invokeWithCircuit(route.fallbackModels[0], fallbackContext);
               return {
                 ...result,
                 usage: result.usage ?? EMPTY_AI_USAGE,
@@ -217,14 +327,12 @@ export function createAIGateway(
               };
             } catch (fallbackError) {
               error = normalizeProviderError(fallbackError, provider.id, context.signal);
-              if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(providerHealth, provider.id);
             }
           }
 
           if (!canFailOver(error)) throw error;
           lastError = error;
-          if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(providerHealth, provider.id);
-          if (context.signal?.aborted || (deadlineAt !== undefined && deadlineAt <= Date.now())) {
+          if (context.signal?.aborted || (currentDeadline !== undefined && currentDeadline <= Date.now())) {
             throw new AIProviderError({
               provider: provider.id,
               code: context.signal?.aborted ? "AI_CANCELLED" : "AI_DEADLINE_EXCEEDED",
@@ -234,7 +342,6 @@ export function createAIGateway(
           continue;
         }
 
-        clearProviderHealth(providerHealth, provider.id);
         return {
           ...result,
           usage: result.usage ?? EMPTY_AI_USAGE,
@@ -244,7 +351,6 @@ export function createAIGateway(
         const error = normalizeProviderError(caught, provider.id, context.signal);
         if (!canFailOver(error)) throw error;
         lastError = error;
-        if (error.code === "AI_PROVIDER_AUTH_ERROR") markProviderConfigurationUnhealthy(providerHealth, provider.id);
       }
     }
 
@@ -269,7 +375,7 @@ export function createAIGateway(
       return registry.list().map((provider) => ({
         id: provider.id,
         configured: provider.isConfigured(),
-        healthy: providerIsHealthy(providerHealth, provider.id),
+        healthState: "shared-persistent" as const,
         capabilities: provider.capabilities,
       }));
     },
