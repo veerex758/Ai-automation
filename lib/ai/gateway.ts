@@ -43,7 +43,6 @@ function circuitPolicy(env: Record<string, string | undefined>): CircuitPolicy {
     baseCooldownMs: boundedInteger(env, "AI_CIRCUIT_BASE_COOLDOWN_MS", 30_000, 1_000, 300_000),
     maxCooldownMs: boundedInteger(env, "AI_CIRCUIT_MAX_COOLDOWN_MS", 300_000, 1_000, 600_000),
     authCooldownMs: boundedInteger(env, "AI_CIRCUIT_AUTH_COOLDOWN_MS", 300_000, 1_000, 600_000),
-    probeLeaseMs: boundedInteger(env, "AI_CIRCUIT_PROBE_LEASE_MS", 25_000, 5_000, 60_000),
   };
 }
 
