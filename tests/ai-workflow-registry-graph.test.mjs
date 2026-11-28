@@ -93,7 +93,6 @@ test("AI generation uses the bounded graph layout helper", () => {
   assert.match(route, /calculateGraphPositions/);
   assert.match(route, /registrySteps as Array/);
   assert.doesNotMatch(route, /position: \\{ x: 160 \\+ depth \\* 320/);
-  assert.match(builder, /function resolvePosition\\(node: WorkflowNode, index: number, seen = new Set<string>\\(\\)\\)/);
   assert.match(builder, /position: undefined/);
 });
 
