@@ -270,6 +270,7 @@ test("gateway retries transient overloads, then uses the approved Gemini model f
     ...env,
     GEMINI_AI_MODEL: "primary-model",
     GEMINI_FALLBACK_MODEL: "fallback-model",
+    AI_CIRCUIT_FAILURE_THRESHOLD: "4",
   });
   const budget = { remainingProviderAttempts: 5, totalProviderAttempts: 0, deadlineAt: Date.now() + 15_000 };
   const result = await gateway.generateStructured(
@@ -648,6 +649,7 @@ test("gateway retries provider timeouts within the shared deadline, then fails o
     NODE_ENV: "test",
     GEMINI_API_KEY: "test-gemini-secret",
     GEMINI_AI_MODEL: "gemini-timeout-primary",
+    AI_CIRCUIT_FAILURE_THRESHOLD: "5",
   };
   const groqEnv = { NODE_ENV: "test", GROQ_API_KEY: "test-groq-secret" };
   const registry = new AIProviderRegistry();
